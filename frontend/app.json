@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Mansakha",
+    "slug": "mansakha",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": ["android", "web"],
+    "android": {
+      "package": "in.gov.mosje.mansakha",
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
