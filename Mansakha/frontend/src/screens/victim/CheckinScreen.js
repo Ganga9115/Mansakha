@@ -1,82 +1,92 @@
-import React, { useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
+import { shadow } from '../../theme/shadow';
 import { useToast } from '../../context/ToastContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCheckin } from '../../services/hooks';
+import Card from '../../components/Card';
 import IconInput from '../../components/IconInput';
-import Button from '../../components/Button';
 
-// Section 4.1's sample conversational prompts, translated via LanguageContext
-// (the Victim App's chosen UI language - see LanguageSelectScreen). Real TTS
-// playback per prompt is a Section 9 accessibility REQUIREMENT ("TTS
-// playback of any on-screen prompt"), not optional - built here with
-// expo-speech. Voice INPUT (recording + transcription) is a bigger lift than
-// TTS output and isn't built in this pass - text input is the fully-working
-// path; that's a real gap, flagged as leftover, not silently skipped.
-
-// Minimal adaptive step, not a full branching questionnaire: a fixed
-// client-side keyword check (not a live AI call - that's the real scoring
-// pipeline's job, server-side, after submit) that surfaces one extra
-// targeted prompt when a response suggests something specific is going on,
-// instead of always exactly three fixed questions regardless of content.
-// English-only keyword list - a real limitation once the prompts themselves
-// are multilingual (a Hindi/Bengali/etc. response won't trip this heuristic
-// today), flagged rather than silently assumed to work in every language.
-const DISTRESS_KEYWORDS = [
-  'afraid', 'scared', 'threat', 'unsafe', 'hurt', 'hopeless', "can't sleep",
-  'cannot sleep', 'crying', 'alone', 'no one', 'give up', 'harm', 'panic',
-  'anxious', 'anxiety', 'terrified', 'nightmare', 'unsafe',
+const DISTRESS_TAGS = [
+  { id: 'anxious', label: 'Anxious / Panic', isHighRisk: true },
+  { id: 'afraid', label: 'Afraid / Unsafe', isHighRisk: true },
+  { id: 'cant_sleep', label: "Can't Sleep", isHighRisk: false },
+  { id: 'crying', label: 'Overwhelmed', isHighRisk: false },
+  { id: 'hopeless', label: 'Hopeless', isHighRisk: true },
+  { id: 'alone', label: 'Isolated / Alone', isHighRisk: false },
+  { id: 'calm', label: 'Calm / Safe', isHighRisk: false },
+  { id: 'exhausted', label: 'Physically Exhausted', isHighRisk: false },
 ];
 
-function hasDistressSignal(texts) {
-  const combined = texts.join(' ').toLowerCase();
-  return DISTRESS_KEYWORDS.some((kw) => combined.includes(kw));
-}
+const RATING_SCALE = [
+  { value: 1, label: 'Very Low', color: colors.success },
+  { value: 2, label: 'Low', color: colors.success },
+  { value: 3, label: 'Moderate', color: colors.warning },
+  { value: 4, label: 'High', color: colors.error },
+  { value: 5, label: 'Critical', color: colors.error },
+];
 
 export default function CheckinScreen({ navigation }) {
   const { t } = useLanguage();
-  const PROMPTS = [t('prompt1'), t('prompt2'), t('prompt3')];
-  const [responses, setResponses] = useState(PROMPTS.map(() => ''));
-  const [followUpResponse, setFollowUpResponse] = useState('');
-  const [showFollowUp, setShowFollowUp] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState({});
-  const checkin = useCheckin();
   const toast = useToast();
+  const checkin = useCheckin();
 
-  const updateResponse = (index, text) => {
-    setResponses((prev) => {
-      const next = prev.map((r, i) => (i === index ? text : r));
-      // Sticky once triggered - don't hide the follow-up again if they edit
-      // an earlier answer back to something milder mid-way through.
-      if (!showFollowUp && hasDistressSignal(next)) setShowFollowUp(true);
-      return next;
-    });
-    if (fieldErrors[index]) setFieldErrors((prev) => ({ ...prev, [index]: undefined }));
+  const [distressRating, setDistressRating] = useState(null);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const [optionalNote, setOptionalNote] = useState('');
+  const [error, setError] = useState(false);
+
+  // Resets the screen inputs back to original blank state whenever focused
+  useFocusEffect(
+    useCallback(() => {
+      setDistressRating(null);
+      setSelectedTags([]);
+      setOptionalNote('');
+      setError(false);
+    }, [])
+  );
+
+  const today = new Date();
+  const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
+  const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
+  const yearStr = `Year - ${today.getFullYear()}`;
+
+  const toggleTag = (tagId) => {
+    setSelectedTags((prev) =>
+      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+    );
   };
 
-  const speak = (text) => Speech.speak(text);
-  const followUpPrompt = t('followUpPrompt');
+  const speakGuide = () => {
+    Speech.speak("How are you feeling right now? Select your distress level and any keywords that describe your current state.");
+  };
 
   const handleSubmit = async () => {
-    const errors = {};
-    responses.forEach((r, i) => {
-      if (r.trim().length === 0) errors[i] = t('answerRequired');
-    });
-    if (showFollowUp && followUpResponse.trim().length === 0) errors.followUp = t('answerRequired');
-    if (Object.keys(errors).length > 0) {
-      setFieldErrors(errors);
+    if (!distressRating) {
+      setError(true);
+      toast.error('Please select your current distress level.');
       return;
     }
-    setFieldErrors({});
-    const allResponses = showFollowUp ? [...responses, followUpResponse] : responses;
+    setError(false);
+
+    const formattedResponses = [
+      `Distress Rating: ${distressRating}/5`,
+      `Selected Symptoms: ${selectedTags.length > 0 ? selectedTags.join(', ') : 'None selected'}`,
+      optionalNote.trim() ? `Note: ${optionalNote}` : 'No extra notes provided.',
+    ];
+
     try {
-      const result = await checkin.mutateAsync({ channel: 'Mobile App', responses: allResponses });
+      const result = await checkin.mutateAsync({
+        channel: 'Mobile App',
+        responses: formattedResponses,
+      });
       navigation.navigate('CheckinConfirmation', { alertTriggered: result.alertTriggered });
     } catch (err) {
       toast.error(err.message);
@@ -84,69 +94,292 @@ export default function CheckinScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>{t('checkinTitle')}</Text>
-      {PROMPTS.map((prompt, index) => (
-        <View key={prompt} style={styles.promptBlock}>
-          <View style={styles.promptRow}>
-            <Text style={styles.prompt}>{prompt}</Text>
-            <Pressable onPress={() => speak(prompt)} style={styles.speakButton} accessibilityLabel="Listen to this question">
-              <Feather name="volume-2" size={18} color={colors.primary} />
-            </Pressable>
+    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
+      {/* Top Header Banner */}
+      <View style={styles.topHeader}>
+        <View style={styles.headerLeft}>
+          <View style={styles.avatarContainer}>
+            <Feather name="heart" size={28} color={colors.primary} />
+            <View style={styles.avatarEditBadge}>
+              <Feather name="shield" size={10} color={colors.white} />
+            </View>
           </View>
+
+          <View style={styles.headerInfo}>
+            <View style={styles.pillBadge}>
+              <Text style={styles.pillText}>DAILY CHECK-IN</Text>
+            </View>
+            <Text style={styles.statusTitle}>Mansakha Care</Text>
+            <Text style={styles.subtext}>Quick well-being pulse</Text>
+          </View>
+        </View>
+
+        <Pressable style={styles.speakHeaderBtn} onPress={speakGuide}>
+          <Feather name="volume-2" size={18} color={colors.primary} />
+        </Pressable>
+      </View>
+
+      {/* Main Body Content */}
+      <View style={styles.contentBody}>
+        {/* Date Ticker */}
+        <View style={styles.dateTicker}>
+          <Text style={styles.tickerText}>{dayStr}</Text>
+          <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
+          <Text style={styles.tickerText}>{yearStr}</Text>
+        </View>
+
+        {/* Question 1: Rating Scale */}
+        <Text style={styles.sectionHeaderTitle}>1. HOW DISTRESSED ARE YOU FEELING?</Text>
+        <Card style={[styles.customCard, error && !distressRating && styles.cardError]}>
+          <Text style={styles.questionSubText}>Select a scale from 1 (Calm) to 5 (Severe Distress)</Text>
+
+          <View style={styles.ratingRow}>
+            {RATING_SCALE.map((item) => {
+              const isSelected = distressRating === item.value;
+              return (
+                <Pressable
+                  key={item.value}
+                  onPress={() => {
+                    setDistressRating(item.value);
+                    setError(false);
+                  }}
+                  style={[
+                    styles.ratingBox,
+                    isSelected && { backgroundColor: item.color, borderColor: item.color },
+                  ]}
+                >
+                  <Text style={[styles.ratingNumber, isSelected && styles.textWhite]}>
+                    {item.value}
+                  </Text>
+                  <Text style={[styles.ratingLabel, isSelected && styles.textWhite]}>
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+
+        {/* Question 2: Chip Tags */}
+        <Text style={styles.sectionHeaderTitle}>2. WHAT ARE YOU EXPERIENCING?</Text>
+        <Card style={styles.customCard}>
+          <Text style={styles.questionSubText}>Tap all words that match how you feel right now</Text>
+
+          <View style={styles.tagsContainer}>
+            {DISTRESS_TAGS.map((tag) => {
+              const isSelected = selectedTags.includes(tag.id);
+              return (
+                <Pressable
+                  key={tag.id}
+                  onPress={() => toggleTag(tag.id)}
+                  style={[
+                    styles.tagChip,
+                    isSelected && styles.tagChipSelected,
+                    isSelected && tag.isHighRisk && styles.tagChipHighRisk,
+                  ]}
+                >
+                  <Feather
+                    name={isSelected ? 'check-circle' : 'plus-circle'}
+                    size={14}
+                    color={isSelected ? colors.white : colors.primary}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text style={[styles.tagChipText, isSelected && styles.textWhite]}>
+                    {tag.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
+
+        {/* Question 3: Optional Text Field */}
+        <Text style={styles.sectionHeaderTitle}>3. ANYTHING ELSE ON YOUR MIND? (OPTIONAL)</Text>
+        <Card style={styles.customCard}>
           <IconInput
             icon="edit-3"
-            value={responses[index]}
-            onChangeText={(text) => updateResponse(index, text)}
+            value={optionalNote}
+            onChangeText={setOptionalNote}
             multiline
             numberOfLines={3}
-            placeholder={t('answerPlaceholder')}
-            error={fieldErrors[index]}
+            placeholder="Type optional thoughts here or leave blank..."
           />
-        </View>
-      ))}
+        </Card>
 
-      {showFollowUp && (
-        <View style={styles.promptBlock}>
-          <View style={styles.promptRow}>
-            <Text style={styles.prompt}>{followUpPrompt}</Text>
-            <Pressable onPress={() => speak(followUpPrompt)} style={styles.speakButton} accessibilityLabel="Listen to this question">
-              <Feather name="volume-2" size={18} color={colors.primary} />
-            </Pressable>
-          </View>
-          <IconInput
-            icon="edit-3"
-            value={followUpResponse}
-            onChangeText={setFollowUpResponse}
-            multiline
-            numberOfLines={3}
-            placeholder={t('answerPlaceholder')}
-            error={fieldErrors.followUp}
-          />
-        </View>
-      )}
-
-      <Button
-        title={t('submitCheckin')}
-        icon="check"
-        onPress={handleSubmit}
-        loading={checkin.isPending}
-        style={styles.submitButton}
-      />
+        {/* Submit Action Button */}
+        <Pressable
+          style={styles.primaryBtn}
+          onPress={handleSubmit}
+          disabled={checkin.isPending}
+        >
+          <Feather name="send" size={18} color={colors.white} style={{ marginRight: spacing.xs }} />
+          <Text style={styles.primaryBtnText}>
+            {checkin.isPending ? 'Submitting...' : 'Submit Check-in'}
+          </Text>
+        </Pressable>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.lg },
-  title: { ...typography.h1, color: colors.textPrimary, marginBottom: spacing.lg },
-  promptBlock: { marginBottom: spacing.lg },
-  promptRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.sm },
-  prompt: { ...typography.bodyStrong, color: colors.textPrimary, flex: 1 },
-  speakButton: {
-    width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.primaryLight,
-    alignItems: 'center', justifyContent: 'center', marginLeft: spacing.sm,
+  topHeader: {
+    backgroundColor: colors.primaryLight,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.xl,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
-  submitButton: { marginTop: spacing.sm },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  avatarContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+    position: 'relative',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.pill,
+    padding: 3,
+  },
+  headerInfo: { flex: 1 },
+  pillBadge: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
+  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  subtext: { ...typography.caption, color: colors.textSecondary },
+  speakHeaderBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contentBody: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    marginTop: -spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xxxl,
+  },
+  dateTicker: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.sm,
+  },
+  tickerText: { ...typography.bodyStrong, color: colors.primary },
+  tickerTextActive: { color: colors.error },
+  sectionHeaderTitle: {
+    ...typography.label,
+    color: colors.primaryDark,
+    marginBottom: spacing.xs,
+    letterSpacing: 1,
+    marginTop: spacing.xs,
+  },
+  customCard: {
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadow.card,
+  },
+  cardError: {
+    borderColor: colors.error,
+    borderWidth: 1.5,
+  },
+  questionSubText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    marginBottom: spacing.md,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  ratingBox: {
+    flex: 1,
+    marginHorizontal: 3,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  ratingNumber: {
+    ...typography.h3,
+    color: colors.textPrimary,
+  },
+  ratingLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.textSecondary,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  tagsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.xs,
+  },
+  tagChipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  tagChipHighRisk: {
+    backgroundColor: colors.error,
+    borderColor: colors.error,
+  },
+  tagChipText: {
+    ...typography.caption,
+    fontWeight: '600',
+    color: colors.primaryDark,
+  },
+  textWhite: {
+    color: colors.white,
+  },
+  primaryBtn: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.xl,
+    paddingVertical: spacing.md,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: spacing.xs,
+    ...shadow.card,
+  },
+  primaryBtnText: { ...typography.bodyStrong, color: colors.white, fontSize: 16 },
 });
