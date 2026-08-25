@@ -1,12 +1,3 @@
-# Excluded per project instructions - not part of the pushed codebase
-Documents/
-
-# Secrets - never commit real env files (only .env.example files are tracked)
-.env
-.env.*
-!.env.example
-!**/.env.example
-
 # Dependencies
 node_modules/
 
