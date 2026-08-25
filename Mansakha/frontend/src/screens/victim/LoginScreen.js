@@ -28,15 +28,18 @@ const THEME = {
 };
 
 function GoogleSignInButton({ onVerified, onError, setLoading }) {
-  const [, googleResponse, promptGoogleLogin] = Google.useAuthRequest({ clientId: GOOGLE_CLIENT_ID });
+  const [, googleResponse, promptGoogleLogin] = Google.useIdTokenAuthRequest({ clientId: GOOGLE_CLIENT_ID });
 
   React.useEffect(() => {
-    if (googleResponse?.type === 'success' && googleResponse.authentication?.idToken) {
+    // On web this flow returns the ID token in `params.id_token` (implicit
+    // flow), not `authentication.idToken` - that field is only populated by
+    // expo-auth-session's auto code-exchange path, which doesn't run here.
+    if (googleResponse?.type === 'success' && googleResponse.params?.id_token) {
       (async () => {
         onError(null);
         setLoading(true);
         try {
-          const data = await apiClient.post('/api/auth/victim/google', { idToken: googleResponse.authentication.idToken });
+          const data = await apiClient.post('/api/auth/victim/google', { idToken: googleResponse.params.id_token });
           await onVerified(data);
         } catch (err) {
           onError(err.message);
