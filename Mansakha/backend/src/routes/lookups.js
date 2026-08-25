@@ -10,9 +10,31 @@ const router = express.Router();
 // jurisdiction names, language names), unlike everything else in the API.
 router.use(generalApiLimiter);
 
+ //router.get('/case-types', async (req, res) => {
+ // const { data, error } = await supabase.from('case_types').select('case_type_id, name').order('name');
+  //if (error) return fail(res, 'Could not load case types', 500);
+  //return ok(res, { caseTypes: data || [] });
+//});
+
 router.get('/case-types', async (req, res) => {
-  const { data, error } = await supabase.from('case_types').select('case_type_id, name').order('name');
-  if (error) return fail(res, 'Could not load case types', 500);
+  const { data, error } = await supabase
+    .from('case_types')
+    .select('case_type_id, name')
+    .order('name');
+
+  if (error) {
+    console.log('CASE TYPES SUPABASE ERROR:', error);
+
+    return res.status(500).json({
+      success: false,
+      data: null,
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
+  }
+
   return ok(res, { caseTypes: data || [] });
 });
 
