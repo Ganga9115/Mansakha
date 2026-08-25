@@ -6,7 +6,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
-    "web": "expo start --web"
+    "web": "expo start --web --port 8081"
   },
   "dependencies": {
     "@expo-google-fonts/public-sans": "^0.4.2",
@@ -25,7 +25,6 @@
     "expo-speech": "~12.0.2",
     "expo-status-bar": "~1.12.1",
     "expo-web-browser": "~13.0.3",
-    "firebase": "^10.14.1",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-native": "0.74.5",

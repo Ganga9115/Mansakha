@@ -118,6 +118,10 @@ export default function VictimSignupScreen({ route, navigation }) {
   const [code, setCode] = useState('');
   const [requestId, setRequestId] = useState(null);
 
+  const [phone, setPhone] = useState('');
+  const [phoneCode, setPhoneCode] = useState('');
+  const [phoneRequestId, setPhoneRequestId] = useState(null);
+
   const [pendingToken, setPendingToken] = useState(route.params?.pendingToken || null);
   const [fullName, setFullName] = useState(route.params?.verifiedContact?.name || '');
   const [caseTypeId, setCaseTypeId] = useState('');
@@ -157,6 +161,39 @@ export default function VictimSignupScreen({ route, navigation }) {
     setLoading(true);
     try {
       const data = await apiClient.post('/api/auth/victim/otp/verify', { requestId, code });
+      if (data.registered) {
+        toast.info('An account already exists for this contact - signing you in.');
+        await login({ token: data.token, accountType: 'victim' });
+      } else {
+        setPendingToken(data.pendingToken);
+        if (data.verifiedContact?.name && !fullName) setFullName(data.verifiedContact.name);
+        setStep(2);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestPhoneOtp = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiClient.post('/api/auth/victim/phone-otp/request', { phone: `+91${phone}` });
+      setPhoneRequestId(data.requestId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyPhoneOtp = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiClient.post('/api/auth/victim/phone-otp/verify', { requestId: phoneRequestId, code: phoneCode });
       if (data.registered) {
         toast.info('An account already exists for this contact - signing you in.');
         await login({ token: data.token, accountType: 'victim' });
@@ -268,7 +305,29 @@ export default function VictimSignupScreen({ route, navigation }) {
                 )}
               </View>
             ) : (
-              <Text style={styles.notice}>Mobile OTP setup needed for this device - not wired up in this pass.</Text>
+              <View style={{ marginTop: 12 }}>
+                <IconInput
+                  icon="smartphone"
+                  prefix="+91"
+                  placeholder="Phone number"
+                  value={phone}
+                  onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
+                  keyboardType="phone-pad"
+                  editable={!phoneRequestId}
+                />
+                {!phoneRequestId ? (
+                  <Pressable style={styles.primaryBtn} onPress={requestPhoneOtp} disabled={loading}>
+                    <Text style={styles.primaryBtnText}>{loading ? 'Sending...' : 'Send Code'}</Text>
+                  </Pressable>
+                ) : (
+                  <>
+                    <IconInput icon="key" placeholder="6-digit code" value={phoneCode} onChangeText={setPhoneCode} keyboardType="number-pad" />
+                    <Pressable style={styles.primaryBtn} onPress={verifyPhoneOtp} disabled={loading}>
+                      <Text style={styles.primaryBtnText}>{loading ? 'Verifying...' : 'Verify & Continue'}</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
             )}
 
             {error && <Text style={styles.errorText}>{error}</Text>}

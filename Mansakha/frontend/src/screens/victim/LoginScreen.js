@@ -64,6 +64,10 @@ export default function LoginScreen({ navigation }) {
   const [code, setCode] = useState('');
   const [requestId, setRequestId] = useState(null);
 
+  const [phone, setPhone] = useState('');
+  const [phoneCode, setPhoneCode] = useState('');
+  const [phoneRequestId, setPhoneRequestId] = useState(null);
+
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -73,7 +77,11 @@ export default function LoginScreen({ navigation }) {
 
   const passwordLoginMutation = useVictimPasswordLogin();
 
-  const resetOtpFlow = () => { setEmail(''); setCode(''); setRequestId(null); setError(null); };
+  const resetOtpFlow = () => {
+    setEmail(''); setCode(''); setRequestId(null);
+    setPhone(''); setPhoneCode(''); setPhoneRequestId(null);
+    setError(null);
+  };
 
   const requestEmailOtp = async () => {
     setError(null);
@@ -93,6 +101,36 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       const data = await apiClient.post('/api/auth/victim/otp/verify', { requestId, code });
+      if (data.registered) {
+        await login({ token: data.token, accountType: 'victim' });
+      } else {
+        navigation.navigate('VictimSignup', { pendingToken: data.pendingToken, verifiedContact: data.verifiedContact });
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const requestPhoneOtp = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiClient.post('/api/auth/victim/phone-otp/request', { phone: `+91${phone}` });
+      setPhoneRequestId(data.requestId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyPhoneOtp = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      const data = await apiClient.post('/api/auth/victim/phone-otp/verify', { requestId: phoneRequestId, code: phoneCode });
       if (data.registered) {
         await login({ token: data.token, accountType: 'victim' });
       } else {
@@ -179,7 +217,29 @@ export default function LoginScreen({ navigation }) {
             )}
           </View>
         ) : (
-          <Text style={styles.notice}>Mobile OTP setup needed for this device - not wired up in this pass.</Text>
+          <View style={{ marginTop: 12 }}>
+            <IconInput
+              icon="smartphone"
+              prefix="+91"
+              placeholder="Phone number"
+              value={phone}
+              onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
+              keyboardType="phone-pad"
+              editable={!phoneRequestId}
+            />
+            {!phoneRequestId ? (
+              <Pressable style={styles.primaryBtn} onPress={requestPhoneOtp} disabled={loading}>
+                <Text style={styles.primaryBtnText}>{loading ? 'Sending...' : 'Send Code'}</Text>
+              </Pressable>
+            ) : (
+              <>
+                <IconInput icon="key" placeholder="6-digit code" value={phoneCode} onChangeText={setPhoneCode} keyboardType="number-pad" />
+                <Pressable style={styles.primaryBtn} onPress={verifyPhoneOtp} disabled={loading}>
+                  <Text style={styles.primaryBtnText}>{loading ? 'Verifying...' : 'Verify & Continue'}</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
         )}
 
         {error && <Text style={styles.errorText}>{error}</Text>}
@@ -214,7 +274,7 @@ export default function LoginScreen({ navigation }) {
       </View>
 
       <Pressable style={styles.linkRow} onPress={() => navigation.navigate('StaffLogin')}>
-        <Text style={styles.linkText}>Government / Staff login</Text>
+        <Text style={styles.linkText}>Counsellor / Admin Login</Text>
       </Pressable>
     </ScrollView>
   );

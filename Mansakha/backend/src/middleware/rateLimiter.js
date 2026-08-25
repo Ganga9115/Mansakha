@@ -15,7 +15,7 @@ const staffLoginLimiter = rateLimit({
 const victimOtpLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   limit: 5,
-  keyGenerator: (req) => req.body.mobile || req.body.email || req.ip,
+  keyGenerator: (req) => req.body.phone || req.body.email || req.ip,
   handler,
 });
 

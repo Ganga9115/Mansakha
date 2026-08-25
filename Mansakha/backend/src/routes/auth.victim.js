@@ -2,7 +2,9 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { OAuth2Client } = require('google-auth-library');
 const { supabase } = require('../db/supabaseClient');
-const { verifyFirebasePhoneToken } = require('../services/firebaseAdmin');
+const { issueEmailOtp, verifyEmailOtp } = require('../services/otpService');
+const { sendOtpEmail } = require('../services/mailer');
+const { sendPhoneOtp, checkPhoneOtp } = require('../services/twilioVerify');
 const { signToken, signPendingRegistrationToken, verifyJwt } = require('../utils/jwt');
 const { ok, fail } = require('../services/responseEnvelope');
 const { victimOtpLimiter } = require('../middleware/rateLimiter');
@@ -11,14 +13,15 @@ const router = express.Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_OAUTH_CLIENT_ID);
 
 // Dev-only fixed OTP for seeded dummy accounts (see db/seedDummyAccounts.js) -
-// lets the real email-OTP UI flow be tested with a memorable code instead of
-// needing access to a real inbox, without touching Supabase's actual email
-// delivery/quota for these specific addresses. Strictly gated to development;
-// production and any email not in this list always goes through real Supabase
-// OTP verification below, unchanged.
+// lets the real OTP UI flows be tested with a memorable code instead of needing
+// a real inbox or a Twilio-verified number, without touching SMTP/Twilio for
+// these specific contacts. Strictly gated to development; production and any
+// contact not in these lists always goes through real SMTP/Twilio below, unchanged.
 const DEV_DUMMY_OTP = '123456';
 const DEV_DUMMY_VICTIM_EMAILS = ['victim@gmail.com'];
+const DEV_DUMMY_VICTIM_PHONES = ['+919999999999'];
 const isDevDummyEmail = (email) => process.env.NODE_ENV === 'development' && DEV_DUMMY_VICTIM_EMAILS.includes(email);
+const isDevDummyPhone = (phone) => process.env.NODE_ENV === 'development' && DEV_DUMMY_VICTIM_PHONES.includes(phone);
 
 // Victim Login surface - Build Prompt Section 3: OTP via mobile, OTP via email, or
 // Gmail/Google OAuth. Victims self-register; there is no Ministry provisioning step.
@@ -50,20 +53,25 @@ async function issueVictimSession(res, victimId, verifiedContact) {
   return ok(res, { registered: true, token });
 }
 
-// Email OTP: uses Supabase Auth's built-in email OTP (Build Prompt Section 1) -
-// no separate email-sending service needed.
+// Email OTP: we own generation/storage/expiry ourselves (email_otp_codes,
+// services/otpService.js) and deliver via SMTP (services/mailer.js).
 router.post('/otp/request', victimOtpLimiter, async (req, res) => {
   const { email } = req.body;
   if (!email) return fail(res, 'email is required for email OTP', 400);
 
   if (isDevDummyEmail(email)) {
-    // No real Supabase send for the dummy account - nothing to deliver, the
-    // fixed code below is what /otp/verify will accept.
+    // No real send for the dummy account - nothing to deliver, the fixed code
+    // below is what /otp/verify will accept.
     return ok(res, { requestId: email }, `Dev mode: use code ${DEV_DUMMY_OTP}`);
   }
 
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
-  if (error) return fail(res, 'Could not send OTP', 500);
+  try {
+    const code = await issueEmailOtp(email);
+    await sendOtpEmail(email, code);
+  } catch (err) {
+    console.error('Email OTP send failed:', err.message);
+    return fail(res, 'Could not send OTP', 500);
+  }
 
   return ok(res, { requestId: email }, 'OTP sent to email');
 });
@@ -75,30 +83,54 @@ router.post('/otp/verify', async (req, res) => {
   if (isDevDummyEmail(requestId)) {
     if (code !== DEV_DUMMY_OTP) return fail(res, 'Invalid or expired code', 401);
   } else {
-    const { error } = await supabase.auth.verifyOtp({ email: requestId, token: code, type: 'email' });
-    if (error) return fail(res, 'Invalid or expired code', 401);
+    const valid = await verifyEmailOtp(requestId, code);
+    if (!valid) return fail(res, 'Invalid or expired code', 401);
   }
 
   const victimId = await findVictimByContact({ email: requestId });
   return issueVictimSession(res, victimId, { email: requestId, via: 'email_otp' });
 });
 
-// Mobile OTP: sending the SMS happens client-side via the Firebase Phone Auth SDK
-// (frontend/src/services/firebaseClient.js) - Firebase, not this backend, delivers
-// the SMS. This endpoint only verifies the resulting Firebase ID token server-side.
-router.post('/phone-otp/verify', async (req, res) => {
-  const { idToken } = req.body;
-  if (!idToken) return fail(res, 'idToken is required', 400);
+// Mobile OTP: Twilio Verify owns generation/storage/expiry/attempt-limiting on
+// its side (services/twilioVerify.js) - this backend only relays the phone
+// number and code to Twilio's API, no client-side SDK involved.
+router.post('/phone-otp/request', victimOtpLimiter, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return fail(res, 'phone is required for mobile OTP', 400);
 
-  let phoneNumber;
-  try {
-    phoneNumber = await verifyFirebasePhoneToken(idToken);
-  } catch (err) {
-    return fail(res, 'Invalid or expired phone verification', 401);
+  if (isDevDummyPhone(phone)) {
+    return ok(res, { requestId: phone }, `Dev mode: use code ${DEV_DUMMY_OTP}`);
   }
 
-  const victimId = await findVictimByContact({ phone: phoneNumber });
-  return issueVictimSession(res, victimId, { phone: phoneNumber, via: 'mobile_otp' });
+  try {
+    await sendPhoneOtp(phone);
+  } catch (err) {
+    console.error('Phone OTP send failed:', err.message);
+    return fail(res, 'Could not send OTP', 500);
+  }
+
+  return ok(res, { requestId: phone }, 'OTP sent to phone');
+});
+
+router.post('/phone-otp/verify', async (req, res) => {
+  const { requestId, code } = req.body;
+  if (!requestId || !code) return fail(res, 'requestId and code are required', 400);
+
+  if (isDevDummyPhone(requestId)) {
+    if (code !== DEV_DUMMY_OTP) return fail(res, 'Invalid or expired code', 401);
+  } else {
+    let approved;
+    try {
+      approved = await checkPhoneOtp(requestId, code);
+    } catch (err) {
+      console.error('Phone OTP check failed:', err.message);
+      return fail(res, 'Invalid or expired code', 401);
+    }
+    if (!approved) return fail(res, 'Invalid or expired code', 401);
+  }
+
+  const victimId = await findVictimByContact({ phone: requestId });
+  return issueVictimSession(res, victimId, { phone: requestId, via: 'mobile_otp' });
 });
 
 router.post('/google', async (req, res) => {
