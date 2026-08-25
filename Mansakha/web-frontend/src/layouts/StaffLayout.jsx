@@ -8,7 +8,12 @@ import {
   BarChart3,
   Settings,
   Search,
+  LogOut,
 } from 'lucide-react';
+import { logout } from '../services/auth';
+import { useMe } from '../services/hooks';
+
+const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
 
 const NAV_ITEMS_BY_SECTION = {
   counsellor: [
@@ -33,6 +38,7 @@ const NAV_ITEMS_BY_SECTION = {
 // Interventions vs. Workload) beyond Reports/Settings, which both share.
 export default function StaffLayout({ children, title = 'Dashboard', section = 'counsellor' }) {
   const navigate = useNavigate();
+  const { data: me } = useMe();
   const navItems = NAV_ITEMS_BY_SECTION[section] || NAV_ITEMS_BY_SECTION.counsellor;
   const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || '/staff/reports';
 
@@ -71,9 +77,18 @@ export default function StaffLayout({ children, title = 'Dashboard', section = '
           </nav>
         </div>
 
-        <div className="pt-4 border-t border-blue-400/30 flex items-center gap-2 text-xs text-blue-200">
-          <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-          <span>Secure Server Connected</span>
+        <div className="pt-4 border-t border-blue-400/30 space-y-3">
+          <button
+            onClick={() => { logout(); navigate('/staff/login'); }}
+            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-blue-100 hover:bg-white/10 transition text-sm"
+          >
+            <LogOut size={18} />
+            <span>Log Out</span>
+          </button>
+          <div className="flex items-center gap-2 text-xs text-blue-200 px-4">
+            <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+            <span>Secure Server Connected</span>
+          </div>
         </div>
       </aside>
 
@@ -107,12 +122,12 @@ export default function StaffLayout({ children, title = 'Dashboard', section = '
               className="flex items-center gap-3 border-l border-gray-200 pl-6 text-left focus:outline-none"
             >
               <img
-                src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100"
-                alt="Dr. Sarah Jenkins"
+                src={me?.profileImageUrl || FALLBACK_PHOTO}
+                alt={me?.fullName || 'Profile'}
                 className="w-9 h-9 rounded-full object-cover"
               />
               <div className="text-xs">
-                <p className="font-bold text-gray-800">Dr. Sarah Jenkins</p>
+                <p className="font-bold text-gray-800">{me?.fullName || 'Loading...'}</p>
                 <p className="text-gray-500">Senior Counsellor</p>
               </div>
             </button>

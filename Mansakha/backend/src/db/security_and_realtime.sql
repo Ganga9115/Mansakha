@@ -41,3 +41,12 @@ alter table email_otp_codes enable row level security;
 -- frontend/src/services/supabaseClient.js) - poll the Express alert endpoints
 -- instead, which already apply requireJurisdiction correctly.
 alter publication supabase_realtime add table alerts, alert_notifications;
+
+-- Storage bucket for staff profile photos (POST /api/me/profile-photo).
+-- Public read (photos aren't sensitive; showing them in a header/sidebar
+-- needs a plain URL) - writes only ever happen via the backend's
+-- service_role key, which bypasses storage RLS same as every other table,
+-- so no write policy is added here.
+insert into storage.buckets (id, name, public)
+values ('profile-photos', 'profile-photos', true)
+on conflict (id) do nothing;
