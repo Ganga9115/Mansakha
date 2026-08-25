@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import StaffLayout from '../../../layouts/StaffLayout';
 
 export default function Settings({ onNavigate }) {
   const [toggles, setToggles] = useState({
@@ -15,7 +15,7 @@ export default function Settings({ onNavigate }) {
   };
 
   return (
-    <DashboardLayout title="System Configuration & Preferences" activePage="Settings" onNavigate={onNavigate}>
+    <StaffLayout title="System Configuration & Preferences" activePage="Settings" onNavigate={onNavigate}>
       <div className="space-y-6 max-w-5xl">
         
         {/* COUNSELLOR PROFILE MATRIX */}
@@ -128,7 +128,7 @@ export default function Settings({ onNavigate }) {
         </div>
 
       </div>
-    </DashboardLayout>
+    </StaffLayout>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import StaffLayout from '../../../layouts/StaffLayout';
 import { Download } from 'lucide-react';
 
 export default function Reports() {
@@ -14,7 +14,7 @@ export default function Reports() {
   ];
 
   return (
-    <DashboardLayout title="Analytics & Operational Reports" activePage="Reports">
+    <StaffLayout title="Analytics & Operational Reports" activePage="Reports">
       <div className="space-y-6">
         
         {/* TOP CONTROLS & DATE FILTER */}
@@ -246,7 +246,7 @@ export default function Reports() {
         </div>
 
       </div>
-    </DashboardLayout>
+    </StaffLayout>
   );
 }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import StaffLayout from '../../../layouts/StaffLayout';
 import { 
   Search, 
   Calendar, 
@@ -21,7 +21,7 @@ export default function CaseQueue() {
   ];
 
   return (
-    <DashboardLayout title="Case Queue Management" activePage="Case Queue">
+    <StaffLayout title="Case Queue Management" activePage="Case Queue">
       <div className="space-y-6">
         
         {/* FILTER BAR */}
@@ -184,6 +184,6 @@ export default function CaseQueue() {
         </div>
 
       </div>
-    </DashboardLayout>
+    </StaffLayout>
   );
 }

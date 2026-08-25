@@ -1,10 +1,10 @@
 import React from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import StaffLayout from '../../../layouts/StaffLayout';
 import { ArrowUpRight } from 'lucide-react';
 
 export default function CaseDetail({ onNavigate }) {
   return (
-    <DashboardLayout title="Case File: V-2024-0847" activePage="Case Queue" onNavigate={onNavigate}>
+    <StaffLayout title="Case File: V-2024-0847" activePage="Case Queue" onNavigate={onNavigate}>
       <div className="space-y-6">
         
         {/* TOP SUMMARY HEADER */}
@@ -145,7 +145,7 @@ export default function CaseDetail({ onNavigate }) {
         </div>
 
       </div>
-    </DashboardLayout>
+    </StaffLayout>
   );
 }
 

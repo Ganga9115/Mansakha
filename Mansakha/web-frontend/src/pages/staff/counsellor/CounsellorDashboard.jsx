@@ -1,9 +1,9 @@
 import React from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import StaffLayout from '../../../layouts/StaffLayout';
 
 export default function CounsellorDashboard() {
   return (
-    <DashboardLayout title="Counsellor Dashboard">
+    <StaffLayout title="Counsellor Dashboard">
       <div className="space-y-6">
         
         {/* METRIC CARDS ROW */}
@@ -89,7 +89,7 @@ export default function CounsellorDashboard() {
         </div>
 
       </div>
-    </DashboardLayout>
+    </StaffLayout>
   );
 }
 

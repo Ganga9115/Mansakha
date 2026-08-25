@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import StaffLayout from '../../../layouts/StaffLayout';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 
 export default function Alerts({ onNavigate }) {
@@ -15,7 +15,7 @@ export default function Alerts({ onNavigate }) {
   ];
 
   return (
-    <DashboardLayout title="System Anomaly Alerts" activePage="Alerts" onNavigate={onNavigate}>
+    <StaffLayout title="System Anomaly Alerts" activePage="Alerts" onNavigate={onNavigate}>
       <div className="space-y-6">
         
         {/* FILTER BAR */}
@@ -128,6 +128,6 @@ export default function Alerts({ onNavigate }) {
         </div>
 
       </div>
-    </DashboardLayout>
+    </StaffLayout>
   );
 }

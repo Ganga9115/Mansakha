@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import DashboardLayout from '../components/DashboardLayout';
+import StaffLayout from '../../../layouts/StaffLayout';
 import { Calendar } from 'lucide-react';
 
 export default function LogIntervention() {
@@ -24,7 +24,7 @@ export default function LogIntervention() {
   };
 
   return (
-    <DashboardLayout title="Log New Intervention Protocol" activePage="Interventions">
+    <StaffLayout title="Log New Intervention Protocol" activePage="Interventions">
       <div className="space-y-6 max-w-6xl mx-auto">
         
         {/* TOP SUMMARY BANNER CARD */}
@@ -217,6 +217,6 @@ export default function LogIntervention() {
         </div>
 
       </div>
-    </DashboardLayout>
+    </StaffLayout>
   );
 }
