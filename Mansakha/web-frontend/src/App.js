@@ -1,6 +1,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+import RequireAuth from './components/RequireAuth';
+
 import StaffLoginPage from './pages/staff/Login';
 import CounsellorDashboard from './pages/staff/counsellor/CounsellorDashboard';
 import CaseQueue from './pages/staff/counsellor/CaseQueue';
@@ -24,21 +26,25 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/staff/login" replace />} />
 
-        {/* Staff (Counsellor + Administration) */}
+        {/* Staff - shared login, real backend */}
         <Route path="/staff/login" element={<StaffLoginPage />} />
-        <Route path="/staff/counsellor" element={<CounsellorDashboard />} />
-        <Route path="/staff/counsellor/case-queue" element={<CaseQueue />} />
-        <Route path="/staff/counsellor/case-detail/:id?" element={<CaseDetail />} />
-        <Route path="/staff/counsellor/interventions" element={<LogIntervention />} />
-        <Route path="/staff/counsellor/alerts" element={<AlertsFeed />} />
-        <Route path="/staff/administration" element={<AdminDashboard />} />
-        <Route path="/staff/administration/case-detail/:id?" element={<CaseDetail />} />
-        <Route path="/staff/administration/workload" element={<Workload />} />
-        <Route path="/staff/administration/alerts" element={<AdminAlerts />} />
-        <Route path="/staff/reports" element={<StaffReports />} />
-        <Route path="/staff/settings" element={<StaffSettings />} />
 
-        {/* Ministry */}
+        {/* Staff - Counsellor */}
+        <Route path="/staff/counsellor" element={<RequireAuth><CounsellorDashboard /></RequireAuth>} />
+        <Route path="/staff/counsellor/case-queue" element={<RequireAuth><CaseQueue /></RequireAuth>} />
+        <Route path="/staff/counsellor/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
+        <Route path="/staff/counsellor/interventions" element={<RequireAuth><LogIntervention /></RequireAuth>} />
+        <Route path="/staff/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
+
+        {/* Staff - Administration (pages themselves are still "Coming soon" stubs) */}
+        <Route path="/staff/administration" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
+        <Route path="/staff/administration/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
+        <Route path="/staff/administration/workload" element={<RequireAuth><Workload /></RequireAuth>} />
+        <Route path="/staff/administration/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
+        <Route path="/staff/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
+        <Route path="/staff/settings" element={<RequireAuth><StaffSettings /></RequireAuth>} />
+
+        {/* Ministry (unchanged stubs, out of this branch's scope) */}
         <Route path="/ministry/login" element={<MinistryLoginPage />} />
         <Route path="/ministry/staff-management" element={<StaffManagement />} />
         <Route path="/ministry/system-config" element={<SystemConfig />} />

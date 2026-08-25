@@ -1,91 +1,75 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
+import { useCounsellorDashboard, useCounsellorAlerts } from '../../../services/hooks';
+
+const STATUS_STYLE = {
+  Open: 'bg-rose-100 text-rose-700',
+  Acknowledged: 'bg-amber-100 text-amber-700',
+  Resolved: 'bg-emerald-100 text-emerald-700',
+};
+
+function timeAgo(iso) {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
 
 export default function CounsellorDashboard() {
+  const navigate = useNavigate();
+  const { data: counts, loading: countsLoading, error: countsError } = useCounsellorDashboard();
+  const { data: alertsData, loading: alertsLoading } = useCounsellorAlerts();
+  const openAlertCount = (alertsData?.alerts || []).filter((a) => a.status === 'Open').length;
+
   return (
     <StaffLayout title="Counsellor Dashboard">
       <div className="space-y-6">
-        
+
+        {countsError && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{countsError}</div>
+        )}
+
         {/* METRIC CARDS ROW */}
         <div className="grid grid-cols-6 gap-4">
-          <MetricCard label="TOTAL CASES" count="248" dotColor="bg-slate-600" />
-          <MetricCard label="LOW RISK" count="142" dotColor="bg-emerald-500" />
-          <MetricCard label="MODERATE RISK" count="68" dotColor="bg-amber-500" />
-          <MetricCard label="HIGH RISK" count="28" dotColor="bg-rose-500" />
-          <MetricCard label="CRITICAL" count="10" dotColor="bg-purple-600" />
-          <MetricCard label="OPEN ALERTS" count="15" dotColor="bg-[#519BCE]" />
+          <MetricCard label="TOTAL CASES" count={countsLoading ? '...' : counts?.total ?? 0} dotColor="bg-slate-600" />
+          <MetricCard label="LOW RISK" count={countsLoading ? '...' : counts?.low ?? 0} dotColor="bg-emerald-500" />
+          <MetricCard label="MODERATE RISK" count={countsLoading ? '...' : counts?.moderate ?? 0} dotColor="bg-amber-500" />
+          <MetricCard label="HIGH RISK" count={countsLoading ? '...' : counts?.high ?? 0} dotColor="bg-rose-500" />
+          <MetricCard label="CRITICAL" count={countsLoading ? '...' : counts?.critical ?? 0} dotColor="bg-purple-600" />
+          <MetricCard label="OPEN ALERTS" count={alertsLoading ? '...' : openAlertCount} dotColor="bg-[#519BCE]" />
         </div>
 
-        {/* MIDDLE SECTION - CHARTS */}
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm flex flex-col justify-between">
-            <h3 className="font-bold text-sm text-gray-800 mb-6">Distress Trend (6 Months)</h3>
-            <div className="h-44 relative flex flex-col justify-between">
-              <div className="absolute inset-0 flex flex-col justify-between text-[10px] text-gray-400 pointer-events-none">
-                <span>100</span>
-                <span>50</span>
-                <span>0</span>
-              </div>
-              <div className="pl-6 h-full flex items-end">
-                <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
-                  <path d="M 0 90 L 60 85 L 170 55 L 280 40 L 400 10" fill="none" stroke="#519BCE" strokeWidth="2.5" />
-                </svg>
-              </div>
-              <div className="pl-6 flex justify-between text-[11px] text-gray-500 pt-2">
-                <span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span><span>Sep</span>
-              </div>
-            </div>
+        {/* RECENT ALERTS */}
+        <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-bold text-sm text-gray-800">Recent Alerts</h3>
+            <button onClick={() => navigate('/staff/counsellor/alerts')} className="text-xs text-[#519BCE] font-medium hover:underline">
+              View All
+            </button>
           </div>
-
-          <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm flex flex-col justify-between">
-            <h3 className="font-bold text-sm text-gray-800 mb-2">Risk Distribution</h3>
-            <div className="flex items-center justify-around h-full">
-              <div className="relative w-36 h-36">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="14" fill="none" stroke="#22c55e" strokeWidth="4.5" strokeDasharray="57 100" />
-                  <circle cx="18" cy="18" r="14" fill="none" stroke="#f97316" strokeWidth="4.5" strokeDasharray="27 100" strokeDashoffset="-57" />
-                  <circle cx="18" cy="18" r="14" fill="none" stroke="#ef4444" strokeWidth="4.5" strokeDasharray="16 100" strokeDashoffset="-84" />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                  <span className="text-xl font-bold text-gray-800 leading-none">248</span>
-                  <span className="text-[10px] text-gray-400 mt-0.5">Total</span>
+          {alertsLoading ? (
+            <p className="text-xs text-gray-400">Loading...</p>
+          ) : (alertsData?.alerts || []).length === 0 ? (
+            <p className="text-xs text-gray-400">No alerts yet.</p>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {(alertsData.alerts || []).slice(0, 6).map((a) => (
+                <div key={a.alertId} className="py-3 flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-800">Case {a.victimId.slice(0, 8)}</span>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${STATUS_STYLE[a.status] || 'bg-gray-100 text-gray-600'}`}>
+                      {a.status}
+                    </span>
+                    <span className="text-gray-400 w-16 text-right">{timeAgo(a.triggeredAt)}</span>
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-2 text-xs text-gray-600 font-medium">
-                <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-600"></span><span>Low Risk (57%)</span></div>
-                <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber-500"></span><span>Moderate (27%)</span></div>
-                <div className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-red-600"></span><span>High/Critical (16%)</span></div>
-              </div>
+              ))}
             </div>
-          </div>
-        </div>
-
-        {/* BOTTOM SECTION */}
-        <div className="grid grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
-            <h3 className="font-bold text-sm text-gray-800 mb-6">Priority Cases by Type</h3>
-            <div className="space-y-4">
-              <BarRow label="Domestic Violence" count="12 active" fill="w-[80%] bg-red-600" />
-              <BarRow label="Human Trafficking" count="8 active" fill="w-[50%] bg-purple-900" />
-              <BarRow label="Severe Depression" count="14 active" fill="w-[90%] bg-red-600" />
-              <BarRow label="Self-Harm Risk" count="4 active" fill="w-[30%] bg-purple-900" />
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm flex flex-col justify-between">
-            <div>
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="font-bold text-sm text-gray-800">Recent Critical Alerts</h3>
-                <a href="#" className="text-xs text-[#519BCE] font-medium hover:underline">View All</a>
-              </div>
-              <div className="divide-y divide-gray-50">
-                <AlertRow id="V-2024-0847" type="Domestic Violence" status="Critical" statusBg="bg-rose-100 text-rose-700" time="12m ago" />
-                <AlertRow id="V-2024-0912" type="Self-Harm Alert" status="Critical" statusBg="bg-rose-100 text-rose-700" time="45m ago" />
-                <AlertRow id="V-2024-0511" type="Trafficking Suspect" status="High" statusBg="bg-rose-50 text-rose-600" time="2h ago" />
-                <AlertRow id="V-2024-1002" type="Severe Anxiety" status="Moderate" statusBg="bg-amber-100 text-amber-700" time="3h ago" />
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
       </div>
@@ -101,35 +85,6 @@ function MetricCard({ label, count, dotColor }) {
         <span className="text-[10px] font-bold text-gray-500 tracking-wider">{label}</span>
       </div>
       <span className="text-3xl font-bold text-gray-800 mt-3">{count}</span>
-    </div>
-  );
-}
-
-function BarRow({ label, count, fill }) {
-  return (
-    <div>
-      <div className="flex justify-between text-xs font-semibold mb-1 text-gray-700">
-        <span>{label}</span>
-        <span className="text-gray-400 font-normal">{count}</span>
-      </div>
-      <div className="h-2.5 w-full bg-gray-100 rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${fill}`}></div>
-      </div>
-    </div>
-  );
-}
-
-function AlertRow({ id, type, status, statusBg, time }) {
-  return (
-    <div className="py-3 flex items-center justify-between text-xs">
-      <div className="flex items-center gap-3">
-        <span className="font-bold text-gray-800">{id}</span>
-        <span className="text-gray-600">{type}</span>
-      </div>
-      <div className="flex items-center gap-3">
-        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${statusBg}`}>{status}</span>
-        <span className="text-gray-400 w-12 text-right">{time}</span>
-      </div>
     </div>
   );
 }

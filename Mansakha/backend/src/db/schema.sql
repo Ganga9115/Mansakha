@@ -92,6 +92,8 @@ create table officials (
   expo_push_token       text, -- set via PATCH /api/me/push-token once the
                                -- frontend registers a device (see
                                -- services/dispatchWorker.js) - null until then
+  profile_image_url     text, -- Supabase Storage public URL, set via
+                               -- POST /api/me/profile-photo - null until uploaded
   created_at            timestamptz not null default now()
 );
 
@@ -121,7 +123,12 @@ create table victims (
   expo_push_token    text, -- set via PATCH /api/me/push-token once the frontend
                             -- registers a device (see services/dispatchWorker.js) - null until then
   enrolled_at        timestamptz not null default now(),
-  status             text not null default 'active' check (status in ('active', 'inactive'))
+  status             text not null default 'active' check (status in ('active', 'inactive')),
+  -- Workload reporting only - does NOT gate case-queue visibility. Every
+  -- counsellor in a jurisdiction still sees every case in it (unchanged);
+  -- this just records who's primarily responsible for a case so workload
+  -- can be compared per counsellor, separate from jurisdiction-wide access.
+  assigned_counsellor_id uuid references officials(official_id)
 );
 
 -- PII kept separate from the scoring/alert pipeline, which only ever touches `victims`.
