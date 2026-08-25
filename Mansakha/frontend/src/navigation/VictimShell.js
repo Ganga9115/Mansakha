@@ -2,8 +2,12 @@ import React from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { Feather } from '@expo/vector-icons';
+
 import { colors } from '../theme/colors';
+import { typography } from '../theme/typography';
 import { getNavItemsForRole } from './roleNavConfig';
+
 import HomeScreen from '../screens/victim/HomeScreen';
 import CheckinScreen from '../screens/victim/CheckinScreen';
 import CheckinConfirmationScreen from '../screens/victim/CheckinConfirmationScreen';
@@ -14,8 +18,7 @@ import SettingsScreen from '../screens/victim/SettingsScreen';
 const Tab = createBottomTabNavigator();
 const CheckinStack = createNativeStackNavigator();
 
-// Check-in needs a nested stack so submitting can push a Confirmation screen
-// without leaving the tab; every other tab is a single screen.
+// Nested stack for Check-in flow (Check-in -> Confirmation)
 function CheckinTab() {
   return (
     <CheckinStack.Navigator screenOptions={{ headerShown: false }}>
@@ -25,30 +28,60 @@ function CheckinTab() {
   );
 }
 
-const SCREENS = { home: HomeScreen, checkin: CheckinTab, history: DistressHistoryScreen, support: SupportScreen, settings: SettingsScreen };
+const SCREENS = {
+  home: HomeScreen,
+  checkin: CheckinTab,
+  history: DistressHistoryScreen,
+  support: SupportScreen,
+  settings: SettingsScreen,
+};
 
-// Bottom tabs stay the navigation pattern on BOTH platforms - deliberately NOT a
-// sidebar listing feature names, since a victim's device (phone or a shared/public
-// browser) may not be private. That reasoning doesn't change between web and
-// Android, so it isn't platform-branched here.
-//
-// What DOES differ: on web, a full-bleed phone-width layout stretched across a
-// desktop browser reads as unfinished, not as a deliberate web presentation. So web
-// gets a centered, framed card on a neutral backdrop; Android renders full-bleed,
-// edge-to-edge, as a native app should.
+// Map screen keys to Feather icons
+const TAB_ICONS = {
+  home: 'home',
+  checkin: 'mic',
+  history: 'arrow-up-down',
+  support: 'file-text',
+  settings: 'user',
+};
+
 function TabNavigator() {
   const navItems = getNavItemsForRole('Victim');
+
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: true,
-        headerStyle: { backgroundColor: colors.primary },
-        headerTintColor: colors.onPrimary,
-        tabBarActiveTintColor: colors.primary,
-      }}
+      screenOptions={({ route }) => ({
+        headerShown: false, // Let custom screens handle their top titles
+        tabBarActiveTintColor: colors.primary,      // #519BCE Soft Blue
+        tabBarInactiveTintColor: colors.borderStrong, // #9D9D9D Soft Gray
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+          borderTopWidth: 1,
+          height: 64,
+          paddingBottom: 8,
+          paddingTop: 8,
+          elevation: 0,
+          shadowOpacity: 0,
+        },
+        tabBarLabelStyle: {
+          fontSize: typography.caption.fontSize,
+          fontFamily: typography.caption.fontFamily,
+          marginTop: 2,
+        },
+        tabBarIcon: ({ color, size }) => {
+          const iconName = TAB_ICONS[route.name] || 'circle';
+          return <Feather name={iconName} size={size || 22} color={color} />;
+        },
+      })}
     >
       {navItems.map((item) => (
-        <Tab.Screen key={item.key} name={item.key} component={SCREENS[item.key]} options={{ title: item.label }} />
+        <Tab.Screen
+          key={item.key}
+          name={item.key}
+          component={SCREENS[item.key]}
+          options={{ title: item.label }}
+        />
       ))}
     </Tab.Navigator>
   );
@@ -68,9 +101,18 @@ export default function VictimShell() {
 }
 
 const styles = StyleSheet.create({
-  webBackdrop: { flex: 1, alignItems: 'center', backgroundColor: colors.surface },
+  webBackdrop: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+  },
   webFrame: {
-    flex: 1, width: '100%', maxWidth: 480, backgroundColor: colors.background,
-    borderLeftWidth: 1, borderRightWidth: 1, borderColor: colors.border,
+    flex: 1,
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: colors.background,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.border,
   },
 });

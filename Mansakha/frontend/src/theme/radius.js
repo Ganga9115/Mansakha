@@ -1,1 +1,7 @@
-export const radius = { sm: 6, md: 8, lg: 12, xl: 16, pill: 999 };
+export const radius = { 
+  sm: 8, 
+  md: 12, 
+  lg: 16, 
+  xl: 20, 
+  pill: 999 
+};

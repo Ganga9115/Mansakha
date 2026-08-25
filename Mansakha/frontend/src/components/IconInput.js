@@ -9,13 +9,19 @@ import { typography } from '../theme/typography';
 // Icon-prefixed text input with an optional trailing action (used for the
 // password show/hide toggle) - @expo/vector-icons is already bundled with Expo,
 // not a new dependency. `error`: string shown as helper text + red border.
-export default function IconInput({ icon, trailingIcon, onTrailingPress, error, onFocus, onBlur, ...textInputProps }) {
+export default function IconInput({ icon, prefix, trailingIcon, onTrailingPress, error, onFocus, onBlur, ...textInputProps }) {
   const [focused, setFocused] = useState(false);
 
   return (
     <View style={styles.container}>
       <View style={[styles.wrapper, focused && styles.wrapperFocused, error && styles.wrapperError]}>
         <Feather name={icon} size={18} color={error ? colors.danger : colors.textSecondary} style={styles.leadingIcon} />
+        {!!prefix && (
+          <>
+            <Text style={styles.prefixText}>{prefix}</Text>
+            <View style={styles.prefixDivider} />
+          </>
+        )}
         <TextInput
           style={[styles.input, trailingIcon && styles.inputWithTrailing]}
           placeholderTextColor={colors.textSecondary}
@@ -49,6 +55,8 @@ const styles = StyleSheet.create({
   },
   wrapperError: { borderColor: colors.danger },
   leadingIcon: { marginRight: spacing.sm },
+  prefixText: { ...typography.body, color: colors.textPrimary, marginRight: spacing.sm },
+  prefixDivider: { width: 1, height: 20, backgroundColor: colors.border, marginRight: spacing.sm },
   input: {
     flex: 1, paddingVertical: 12, color: colors.textPrimary, ...typography.body,
     // react-native-web renders TextInput as a browser <input>, which gets its

@@ -1,44 +1,95 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
-import Button from '../../components/Button';
+import { shadow } from '../../theme/shadow';
 
-// Deliberately calm and reassuring - never shows a raw risk-level/score label
-// directly to the victim right after check-in. Showing something like "risk:
-// Critical" in this moment would be a trauma-informed misstep even though the doc
-// doesn't explicitly forbid it; distress trend is available separately in My
-// Distress History for whoever chooses to look at it.
-export default function CheckinConfirmationScreen({ navigation, route }) {
-  const alertTriggered = route.params?.alertTriggered;
+export default function CheckinConfirmationScreen({ navigation }) {
+  const handleGoHome = () => {
+    // 1. Pop all screens off the current stack back to the root CheckinScreen
+    if (navigation.canGoBack()) {
+      navigation.popToTop();
+    }
+    // 2. Switch to the Home screen tab
+    navigation.navigate('home');
+  };
 
   return (
     <View style={styles.container}>
-      <View style={styles.iconTile}>
-        <Feather name="check" size={32} color={colors.success} />
+      {/* Illustration Asset */}
+      <View style={styles.illustrationWrapper}>
+        <Image
+          source={require('../../assets/success-illustration.png')}
+          style={styles.illustration}
+          resizeMode="contain"
+        />
       </View>
-      <Text style={styles.title}>Thank you for checking in.</Text>
-      <Text style={styles.body}>
-        {alertTriggered
-          ? "We've let your counsellor know you might need extra support. Someone should reach out soon."
-          : 'Your response has been recorded.'}
-      </Text>
 
-      <Button title="Back to Home" icon="home" onPress={() => navigation.navigate('home')} style={styles.button} />
+      {/* Main Success Title */}
+      <Text style={styles.title}>SUCCESS!!</Text>
+
+      {/* Simplified Assessment Text */}
+      <Text style={styles.body}>Successfully completed the assessment</Text>
+
+      {/* Primary Action Button to Homescreen */}
+      <Pressable style={styles.primaryBtn} onPress={handleGoHome}>
+        <Text style={styles.primaryBtnText}>Go to Homescreen</Text>
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xxl, backgroundColor: colors.background },
-  iconTile: {
-    width: 72, height: 72, borderRadius: radius.pill, backgroundColor: colors.successLight,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.lg,
+  container: {
+    flex: 1,
+    backgroundColor: colors.primaryLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
   },
-  title: { ...typography.h2, color: colors.textPrimary, textAlign: 'center', marginBottom: spacing.sm },
-  body: { ...typography.body, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xxl, lineHeight: 22 },
-  button: { minWidth: 200 },
+  illustrationWrapper: {
+    width: 260,
+    height: 240,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: spacing.xl,
+  },
+  illustration: {
+    width: '100%',
+    height: '100%',
+  },
+  title: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: colors.primary,
+    textAlign: 'center',
+    letterSpacing: 1.5,
+    marginBottom: spacing.md,
+  },
+  body: {
+    ...typography.body,
+    color: colors.primary,
+    textAlign: 'center',
+    fontSize: 16,
+    fontWeight: '500',
+    marginBottom: spacing.xxxl,
+    paddingHorizontal: spacing.sm,
+  },
+  primaryBtn: {
+    width: '100%',
+    backgroundColor: '#8BCBF9',
+    borderRadius: radius.xl,
+    paddingVertical: spacing.md + 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.card,
+  },
+  primaryBtnText: {
+    ...typography.bodyStrong,
+    color: colors.white,
+    fontSize: 18,
+    fontWeight: '700',
+  },
 });

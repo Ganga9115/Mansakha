@@ -142,6 +142,20 @@ create table consent_records (
   revoked_at     timestamptz
 );
 
+-- Email OTP codes for victim login/signup, sent via SMTP (services/mailer.js) -
+-- replaces Supabase Auth's built-in email OTP. One active code per email: a new
+-- /otp/request upserts this row rather than accumulating history, since a code is
+-- irrelevant once expired, used, or superseded by a newer request. Backend-only
+-- (service_role key), never queried by the frontend directly - see
+-- security_and_realtime.sql for the matching deny-all RLS.
+create table email_otp_codes (
+  email       text primary key,
+  code_hash   text not null,
+  expires_at  timestamptz not null,
+  attempts    smallint not null default 0,
+  created_at  timestamptz not null default now()
+);
+
 -- ===== Interactions & AI signals (depend on victims, channels, signal_types) =====
 
 create table interactions (
