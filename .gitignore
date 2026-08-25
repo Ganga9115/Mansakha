@@ -1,7 +1,20 @@
-node_modules/
+# Excluded per project instructions - not part of the pushed codebase
+Documents/
+
+# Secrets - never commit real env files (only .env.example files are tracked)
 .env
-*.log
-.expo/
+.env.*
+!.env.example
+!**/.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
 dist/
 web-build/
+.expo/
+
+# Misc
+*.log
 .DS_Store
