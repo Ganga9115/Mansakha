@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { supabase } = require('../db/supabaseClient');
+const { withTransaction } = require('../db/pgPool');
 const { writeAuditLog } = require('../services/auditLog');
 const { verifyToken } = require('../middleware/verifyToken');
 const { requireRole } = require('../middleware/requireRole');
@@ -13,13 +14,13 @@ const router = express.Router();
 
 router.use(verifyToken, requireRole(['Ministry']), generalApiLimiter);
 
-const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Intake Admin'];
+const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
 // Section 6.2's new validation - an Administration account at district or
 // state level can't be created (or granted) where an active one already
 // exists for that exact jurisdiction. National Administration and Counsellor
-// have no stated limit; Data Intake Admin isn't jurisdiction-scoped at all.
+// have no stated limit; Data Operator isn't jurisdiction-scoped at all.
 async function checkJurisdictionLimit(roleName, jurisdictionId) {
   if (roleName !== 'Administration' || !jurisdictionId) return null;
 
@@ -81,7 +82,7 @@ router.post('/staff', async (req, res) => {
   if (!fullName || !email || !roleName || !password) return fail(res, 'fullName, email, roleName, and password are required', 400);
 
   // Server-side allowlist, not trusting client input: this endpoint can ONLY create
-  // Administration/Counsellor/Data Intake Admin accounts. A Ministry account is
+  // Administration/Counsellor/Data Operator accounts. A Ministry account is
   // seeded/manually provisioned (Section 3) and must never be creatable through
   // an API call, even if a client sent roleName: "Ministry".
   if (!CREATABLE_ROLES.includes(roleName)) {
@@ -98,27 +99,37 @@ router.post('/staff', async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 12);
 
-  const { data: official, error: officialError } = await supabase
-    .from('officials')
-    // staffId: the login screen's "State Admin ID"/"Counsellor ID"/etc. field -
-    // defaults to '1' (every account uses that placeholder for now, per explicit
-    // request) when Ministry doesn't send one.
-    .insert({ full_name: fullName, email, password_hash: passwordHash, must_change_password: true, staff_id: staffId || '1', provisioned_by: req.auth.officialId })
-    .select('official_id')
-    .single();
-  if (officialError) return fail(res, `Could not create account: ${officialError.message}`, 500);
+  // officials + official_roles in one transaction - an official row must never
+  // exist without a role assignment (that would be an account that can log in
+  // but has no permissions at all, previously possible if the second insert
+  // failed silently after the first succeeded).
+  let officialId;
+  try {
+    officialId = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        // staffId: the login screen's "State Admin ID"/"Counsellor ID"/etc. field -
+        // defaults to '1' (every account uses that placeholder for now, per explicit
+        // request) when Ministry doesn't send one.
+        `insert into officials (full_name, email, password_hash, must_change_password, staff_id, provisioned_by)
+         values ($1, $2, $3, true, $4, $5)
+         returning official_id`,
+        [fullName, email, passwordHash, staffId || '1', req.auth.officialId]
+      );
+      const id = rows[0].official_id;
+      await client.query(
+        `insert into official_roles (official_id, role_id, jurisdiction_id, assigned_by) values ($1, $2, $3, $4)`,
+        [id, roleRow.role_id, roleName === 'Administration' ? jurisdictionId : jurisdictionId || null, req.auth.officialId]
+      );
+      return id;
+    });
+  } catch (err) {
+    return fail(res, `Could not create account: ${err.message}`, 500);
+  }
 
-  await supabase.from('official_roles').insert({
-    official_id: official.official_id,
-    role_id: roleRow.role_id,
-    jurisdiction_id: roleName === 'Administration' ? jurisdictionId : jurisdictionId || null,
-    assigned_by: req.auth.officialId,
-  });
-
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'official', entityId: official.official_id });
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'official', entityId: officialId });
 
   // must_change_password forces them to replace it on first login.
-  return ok(res, { officialId: official.official_id }, 'Account created', 201);
+  return ok(res, { officialId }, 'Account created', 201);
 });
 
 // Deliberately name/phone only - email is the login identifier, so it stays

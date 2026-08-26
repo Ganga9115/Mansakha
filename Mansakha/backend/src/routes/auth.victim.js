@@ -11,7 +11,7 @@ const router = express.Router();
 // Victim Login surface - Feature Catalog Section 1.1, extended per explicit
 // request. Replaces the old OTP (mobile/email) + Google Sign-In +
 // self-registration model entirely: a victim record is now created BY staff
-// (District Admin - routes/admin.js, or Data Intake Admin -
+// (District Admin - routes/admin.js, or Data Operator -
 // routes/dataIntake.js), and a victim logs in with FOUR fields staff entered
 // for them - docket number, full name, mobile number, and a password
 // (fixed to 'Victim123' at creation, forced to change on first login via

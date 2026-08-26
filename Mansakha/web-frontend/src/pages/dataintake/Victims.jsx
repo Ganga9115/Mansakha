@@ -7,7 +7,7 @@ const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compens
 const STATUS_BADGE = { active: 'bg-emerald-100 text-emerald-700', inactive: 'bg-gray-100 text-gray-500' };
 
 // Feature Catalog Section 7 extension (explicit user request) - every victim
-// this Data Intake Admin flow has registered, with full detail and the
+// this Data Operator flow has registered, with full detail and the
 // ability to update case stage/status or delete a mistaken entry. Delete
 // only actually succeeds server-side for a victim with no case history yet
 // (see services/victimProvisioning.js's deleteVictim) - the error message

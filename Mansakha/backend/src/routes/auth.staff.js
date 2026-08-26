@@ -18,7 +18,7 @@ const router = express.Router();
 // one is meant, the same reason a shared login surface needs a role toggle at all.
 // Picking the role you don't actually hold fails here, not silently falls back to
 // whichever role happened to be first.
-const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Intake Admin'];
+const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Operator'];
 
 router.post('/login', staffLoginLimiter, async (req, res) => {
   const { email, password, roleName, staffId } = req.body;

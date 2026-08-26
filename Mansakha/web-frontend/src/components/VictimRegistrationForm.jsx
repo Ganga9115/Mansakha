@@ -3,7 +3,7 @@ import { Copy } from 'lucide-react';
 import { useCaseTypeOptions, useJurisdictionOptions } from '../services/hooks';
 
 // Shared by District Admin's VictimRegistration.jsx (jurisdiction locked to
-// the admin's own district) and Data Intake Admin's Dashboard.jsx
+// the admin's own district) and Data Operator's Dashboard.jsx
 // (jurisdiction open - not jurisdiction-locked, per the backend prompt's
 // non-scoped /api/data-intake/victims route) - same fields either way, only
 // whether State/District are editable differs.

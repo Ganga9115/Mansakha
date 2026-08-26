@@ -9,11 +9,11 @@ const { writeAuditLog } = require('../services/auditLog');
 
 const router = express.Router();
 
-router.use(verifyToken, requireRole(['Data Intake Admin']), generalApiLimiter);
+router.use(verifyToken, requireRole(['Data Operator']), generalApiLimiter);
 
 // Feature Catalog Section 7 - identical creation logic to District Admin's
 // POST /api/admin/victims (services/victimProvisioning.js), but deliberately
-// NOT jurisdiction-locked: Data Intake Admin is framed as an integration/
+// NOT jurisdiction-locked: Data Operator is framed as an integration/
 // intake role that can register a victim into any district, not a
 // district-operational one - so no requireJurisdiction here.
 router.post('/register-victim', async (req, res) => {
@@ -58,9 +58,9 @@ router.post('/fetch-case', async (req, res) => {
   });
 });
 
-// New "Victims" sidebar feature - every victim created via this Data Intake
-// Admin flow (auth_method = 'data_intake_admin'), not scoped to the specific
-// official who created it - Data Intake Admin isn't jurisdiction- or
+// New "Victims" sidebar feature - every victim created via this Data
+// Operator flow (auth_method = 'data_intake_admin'), not scoped to the specific
+// official who created it - Data Operator isn't jurisdiction- or
 // creator-scoped anywhere else either (Section 7), so this stays consistent
 // with that. Full detail (identity + case + jurisdiction), not just the
 // truncated fields Counsellor's case queue shows.

@@ -91,7 +91,7 @@ export default function App() {
         <Route path="/ministry/heatmap" element={<RequireAuth loginPath="/ministry/login"><Heatmap /></RequireAuth>} />
         <Route path="/ministry/reports" element={<RequireAuth loginPath="/ministry/login"><ReportsInbox /></RequireAuth>} />
 
-        {/* Data Intake & Integration Admin - signs in via the shared Staff
+        {/* Data Operator - signs in via the shared Staff
             Login (/login) alongside Counsellor/Administration, not a
             separate login page (that treatment is Ministry/Super Admin's
             alone). */}
