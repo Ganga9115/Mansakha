@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Switch, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -8,6 +8,9 @@ import {
   useConsentStatus,
   useLanguageOptions,
   useUpdateVictimLanguage,
+  useAssignedCounsellor,
+  useUpdateCounsellorPreference,
+  useUpdateSmsPreference,
 } from '../../services/hooks';
 import { apiClient } from '../../services/apiClient';
 import { colors } from '../../theme/colors';
@@ -41,15 +44,46 @@ function InfoTileRow({ icon, label, value, loading, iconColor = colors.primary, 
   );
 }
 
-export default function SettingsScreen() {
+export default function SettingsScreen({ navigation }) {
   const { logout, session } = useAuth();
   const toast = useToast();
   const dashboardQuery = useVictimDashboard();
   const consentQuery = useConsentStatus();
   const languagesQuery = useLanguageOptions();
   const updateLanguage = useUpdateVictimLanguage();
+  const assignedCounsellorQuery = useAssignedCounsellor();
+  const updateCounsellorPreference = useUpdateCounsellorPreference();
+  const updateSmsPreference = useUpdateSmsPreference();
   const [languageId, setLanguageId] = useState(null);
   const { tier, isDesktop } = useResponsive();
+
+  const optedForCounsellor = dashboardQuery.data?.optedForManualCounsellor ?? false;
+  const smsCheckinEnabled = dashboardQuery.data?.smsCheckinEnabled ?? false;
+  const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.officialId;
+
+  const handleToggleCounsellorPreference = async (value) => {
+    try {
+      await updateCounsellorPreference.mutateAsync(value);
+      toast.success(value ? 'You will now be matched with a human counsellor.' : 'Counsellor preference updated.');
+    } catch (err) {
+      toast.error(err.message || 'Could not update this preference.');
+    }
+  };
+
+  const handleToggleSmsPreference = async (value) => {
+    try {
+      await updateSmsPreference.mutateAsync(value);
+      toast.success(value ? 'SMS check-in prompts enabled.' : 'SMS check-in prompts disabled.');
+    } catch (err) {
+      toast.error(err.message || 'Could not update this preference.');
+    }
+  };
+
+  const handleCallCounsellor = () => {
+    const phone = assignedCounsellorQuery.data?.phone;
+    if (!phone) return;
+    Linking.openURL(`tel:${phone}`).catch(() => toast.error('Could not start a call on this device.'));
+  };
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -221,6 +255,65 @@ export default function SettingsScreen() {
             />
           </View>
         </Card>
+
+        {/* Communication Preferences */}
+        <Text style={styles.sectionHeaderTitle}>COMMUNICATION PREFERENCES</Text>
+        <Card style={styles.customCard}>
+          <View style={styles.toggleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardHeaderTitle}>Prefer a human counsellor</Text>
+              <Text style={styles.cardHeaderSubtitle}>Get matched with a counsellor for chat & calls</Text>
+            </View>
+            <Switch
+              value={optedForCounsellor}
+              onValueChange={handleToggleCounsellorPreference}
+              disabled={updateCounsellorPreference.isPending}
+              trackColor={{ true: colors.primary }}
+            />
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.toggleRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardHeaderTitle}>SMS check-in prompts</Text>
+              <Text style={styles.cardHeaderSubtitle}>Receive check-in reminders over SMS</Text>
+            </View>
+            <Switch
+              value={smsCheckinEnabled}
+              onValueChange={handleToggleSmsPreference}
+              disabled={updateSmsPreference.isPending}
+              trackColor={{ true: colors.primary }}
+            />
+          </View>
+        </Card>
+
+        {/* Your Counsellor - only shown once opted in AND assigned, never a
+            greyed-out/disabled version of this card. */}
+        {optedForCounsellor && hasAssignedCounsellor && (
+          <>
+            <Text style={styles.sectionHeaderTitle}>YOUR COUNSELLOR</Text>
+            <Card style={styles.customCard}>
+              <View style={styles.cardHeader}>
+                <View style={styles.accountIconTile}>
+                  <Feather name="user" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardHeaderTitle}>{assignedCounsellorQuery.data.fullName}</Text>
+                  <Text style={styles.cardHeaderSubtitle}>Assigned Counsellor</Text>
+                </View>
+              </View>
+              <View style={styles.buttonRow}>
+                <Pressable style={[styles.outlineBtn, styles.halfBtn]} onPress={() => navigation.navigate('CounsellorChat')}>
+                  <Feather name="message-circle" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
+                  <Text style={styles.outlineBtnText}>Message</Text>
+                </Pressable>
+                <Pressable style={[styles.outlineBtn, styles.halfBtn]} onPress={handleCallCounsellor}>
+                  <Feather name="phone" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
+                  <Text style={styles.outlineBtnText}>Call</Text>
+                </Pressable>
+              </View>
+            </Card>
+          </>
+        )}
 
         {/* Notifications & System Info Card */}
         <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>
@@ -425,8 +518,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   outlineBtnText: { ...typography.bodyStrong, color: colors.textPrimary },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs },
+  buttonRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
+  halfBtn: { flex: 1 },
   primaryBtnFilled: {
     backgroundColor: colors.primaryDark,
     borderRadius: radius.lg,

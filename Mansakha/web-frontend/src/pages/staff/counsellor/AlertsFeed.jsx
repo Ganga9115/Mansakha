@@ -62,13 +62,22 @@ export default function AlertsFeed() {
             <div
               key={item.alertId}
               className={`bg-white p-4 rounded-xl border transition flex items-center justify-between ${
-                item.status === 'Open' ? 'border-[#519BCE]/60 shadow-sm' : 'border-gray-200/80'
+                item.source === 'sos' || item.priority === 'urgent' ? 'border-l-4 border-l-rose-600 border-y border-r border-gray-200/80 shadow-sm'
+                  : item.status === 'Open' ? 'border-[#519BCE]/60 shadow-sm' : 'border-gray-200/80'
               }`}
             >
               <div className="flex items-center gap-4">
                 <span className={`w-2 h-2 rounded-full ${item.status === 'Open' ? 'bg-[#519BCE]' : 'bg-transparent'}`}></span>
                 <div>
-                  <h4 className="font-bold text-sm text-gray-800">Case {item.victimId.slice(0, 8)}</h4>
+                  <h4 className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                    Case {item.victimId.slice(0, 8)}
+                    {item.source === 'sos' && (
+                      <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-bold uppercase">SOS</span>
+                    )}
+                    {item.priority === 'urgent' && item.source !== 'sos' && (
+                      <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-bold uppercase">Urgent</span>
+                    )}
+                  </h4>
                   <p className="text-xs text-gray-500 mt-0.5">Triggered {timeAgo(item.triggeredAt)}</p>
                 </div>
               </div>

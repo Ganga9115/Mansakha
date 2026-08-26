@@ -63,7 +63,12 @@ export default function CaseQueue() {
                   <tr><td colSpan={5} className="py-8 text-center text-gray-400">No cases in this queue yet.</td></tr>
                 ) : cases.map((item) => (
                   <tr key={item.victimId} className="hover:bg-gray-50/70 transition">
-                    <td className="py-4 px-6 font-bold text-gray-800">Case {item.victimId.slice(0, 8)}</td>
+                    <td className="py-4 px-6">
+                    <p className="font-bold text-gray-800">Case {item.victimId.slice(0, 8)}</p>
+                    {item.caseBackground && (
+                      <p className="text-[11px] text-gray-400 mt-0.5 max-w-xs truncate">{item.caseBackground}</p>
+                    )}
+                  </td>
                     <td className="py-4 px-4 text-gray-700 font-medium">{item.caseStage || '-'}</td>
                     <td className="py-4 px-4">
                       {item.score != null ? (

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
-import { useCounsellorDashboard, useCounsellorAlerts } from '../../../services/hooks';
+import { useCounsellorDashboard, useCounsellorAlerts, useScheduledSessions } from '../../../services/hooks';
 
 const STATUS_STYLE = {
   Open: 'bg-rose-100 text-rose-700',
@@ -23,6 +23,7 @@ export default function CounsellorDashboard() {
   const navigate = useNavigate();
   const { data: counts, loading: countsLoading, error: countsError } = useCounsellorDashboard();
   const { data: alertsData, loading: alertsLoading } = useCounsellorAlerts();
+  const { data: scheduledData, loading: scheduledLoading } = useScheduledSessions();
   const openAlertCount = (alertsData?.alerts || []).filter((a) => a.status === 'Open').length;
 
   return (
@@ -59,13 +60,37 @@ export default function CounsellorDashboard() {
             <div className="divide-y divide-gray-50">
               {(alertsData.alerts || []).slice(0, 6).map((a) => (
                 <div key={a.alertId} className="py-3 flex items-center justify-between text-xs">
-                  <span className="font-bold text-gray-800">Case {a.victimId.slice(0, 8)}</span>
+                  <span className="font-bold text-gray-800 flex items-center gap-2">
+                    Case {a.victimId.slice(0, 8)}
+                    {a.source === 'sos' && (
+                      <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-bold uppercase">SOS</span>
+                    )}
+                  </span>
                   <div className="flex items-center gap-3">
                     <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${STATUS_STYLE[a.status] || 'bg-gray-100 text-gray-600'}`}>
                       {a.status}
                     </span>
                     <span className="text-gray-400 w-16 text-right">{timeAgo(a.triggeredAt)}</span>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* SCHEDULED COUNSELLINGS */}
+        <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
+          <h3 className="font-bold text-sm text-gray-800 mb-4">Scheduled Counsellings</h3>
+          {scheduledLoading ? (
+            <p className="text-xs text-gray-400">Loading...</p>
+          ) : (scheduledData?.sessions || []).length === 0 ? (
+            <p className="text-xs text-gray-400">No upcoming sessions.</p>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {scheduledData.sessions.map((s) => (
+                <div key={s.sessionId} className="py-3 flex items-center justify-between text-xs">
+                  <span className="font-bold text-gray-800">Case {s.victimId.slice(0, 8)}</span>
+                  <span className="text-gray-500">{new Date(s.scheduledAt).toLocaleString()}</span>
                 </div>
               ))}
             </div>

@@ -41,20 +41,13 @@ export default function OnboardingScreen({ navigation }) {
             <View style={styles.dot} />
           </View>
 
-          {/* Action Buttons */}
+          {/* Action Button */}
           <View style={styles.actionWrapper}>
             <Pressable
               style={styles.getStartedBtn}
-              onPress={() => navigation.navigate('VictimSignup')}
-            >
-              <Text style={styles.getStartedBtnText}>Get started</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.signInLink}
               onPress={() => navigation.navigate('VictimLogin')}
             >
-              <Text style={styles.signInLinkText}>Already have an account</Text>
+              <Text style={styles.getStartedBtnText}>Get started</Text>
             </Pressable>
           </View>
         </View>
@@ -175,14 +168,5 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
-  },
-  signInLink: {
-    marginTop: 16,
-    padding: 8,
-  },
-  signInLinkText: {
-    color: '#519BCE',
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
