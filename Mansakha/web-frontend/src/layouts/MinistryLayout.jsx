@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Users, Settings, FileText, LogOut, Search, Bell, User } from 'lucide-react';
 import { logout } from '../services/auth';
 
@@ -16,6 +16,13 @@ const NAV_ITEMS = [
 // product across every role.
 export default function MinistryLayout({ children, title = 'Ministry Console' }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Same icon as whichever sidebar item matches the current page, so the
+  // top bar always shows a page icon + name, matching the Victim app.
+  const activeNavItem = NAV_ITEMS.find(
+    (item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
+  );
+  const TitleIcon = activeNavItem?.icon;
 
   return (
     <div className="flex h-screen w-full bg-[#F8F9FA] text-gray-800 font-sans">
@@ -60,7 +67,10 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
       <div className="flex-1 flex flex-col overflow-y-auto">
         {/* Same palette as the Victim app's top bar */}
         <header className="h-16 bg-[#EBF4FA] border-b border-[#D6E8F5] px-8 flex items-center justify-between shrink-0">
-          <h2 className="text-xl font-bold text-[#3D5A80]">{title}</h2>
+          <div className="flex items-center gap-3">
+            {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80]" />}
+            <h2 className="text-xl font-bold text-[#3D5A80]">{title}</h2>
+          </div>
 
           <div className="flex items-center gap-6">
             <div className="relative">
