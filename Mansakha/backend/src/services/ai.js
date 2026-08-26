@@ -1,4 +1,4 @@
-const { callGemini } = require('./gemini');
+const { callGemini, callGeminiChat } = require('./gemini');
 const { computeDistressScore } = require('./scoring');
 const { supabase } = require('../db/supabaseClient');
 
@@ -62,4 +62,29 @@ async function analyzeInteraction(victimId, text) {
   return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId };
 }
 
-module.exports = { analyzeInteraction };
+const HIGH_RISK_HELP_POINTER = "\n\nIf things feel unsafe or overwhelming right now, please reach out to real support: call the NHAA Helpline at 14566 (24/7) or talk to your Counsellor through the Support section of this app.";
+
+// Feature Catalog Section 1.3 "AI Chat" - mirrors analyzeInteraction()'s
+// shape (same computeEngagementDelta + computeDistressScore calls, both
+// unchanged), sourced from callGeminiChat instead of callGemini, and
+// returns the extra `reply` field routes/victim.js's /chat sends back.
+async function analyzeChatMessage(victimId, text) {
+  const [{ sentimentRaw, emotion, reason, suggestedInterventionName, reply }, engagementDelta] = await Promise.all([
+    callGeminiChat(text),
+    computeEngagementDelta(victimId, text.length),
+  ]);
+
+  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, 0, emotion, engagementDelta);
+  const suggestedInterventionTypeId = await resolveInterventionTypeId(suggestedInterventionName);
+
+  // Deterministic safety net: don't rely solely on the model remembering to
+  // mention 14566 - computeDistressScore's real, tested threshold decides
+  // this, not the model's own judgment call.
+  const finalReply = (riskLevel === 'High' || riskLevel === 'Critical') && !reply.includes('14566')
+    ? `${reply}${HIGH_RISK_HELP_POINTER}`
+    : reply;
+
+  return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId, reply: finalReply };
+}
+
+module.exports = { analyzeInteraction, analyzeChatMessage };

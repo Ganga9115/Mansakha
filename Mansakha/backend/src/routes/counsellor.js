@@ -70,10 +70,12 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   // sort within one already-arbitrary page, not across the whole queue.
   const { data, error } = await supabase
     .from('victims')
-    .select('victim_id, case_stage, distress_scores(score_value, computed_at, risk_levels(name))')
+    .select('victim_id, case_stage, case_background, distress_scores(score_value, computed_at, risk_levels(name))')
     .in('jurisdiction_id', jurisdictionIds)
     .order('computed_at', { referencedTable: 'distress_scores', ascending: false });
   if (error) return fail(res, 'Could not load cases', 500);
+
+  const BACKSTORY_EXCERPT_LENGTH = 140; // Section 2.2: a truncated excerpt on the list, full text on Case Detail
 
   let cases = (data || []).map((v) => {
     const latest = v.distress_scores?.[0];
@@ -82,6 +84,9 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
       caseStage: v.case_stage,
       score: latest ? latest.score_value : null,
       riskLevel: latest ? latest.risk_levels.name : null,
+      caseBackground: v.case_background
+        ? (v.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${v.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : v.case_background)
+        : null,
     };
   });
 
@@ -104,6 +109,8 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
 // per Section 4.4's explicit "no intervention action for Administration."
 router.get('/cases/:victimId', requireRole(['Counsellor', 'Administration']), generalApiLimiter, requireJurisdiction(resolveVictimJurisdiction), async (req, res) => {
   const { victimId } = req.params;
+
+  const { data: victimRow } = await supabase.from('victims').select('case_background').eq('victim_id', victimId).maybeSingle();
 
   const { data: scores } = await supabase
     .from('distress_scores')
@@ -143,6 +150,7 @@ router.get('/cases/:victimId', requireRole(['Counsellor', 'Administration']), ge
     : 'insufficient_data';
 
   return ok(res, {
+    caseBackground: victimRow?.case_background || null,
     score: latest.score_value,
     previousScore: previous ? previous.score_value : null,
     trend,
@@ -220,14 +228,21 @@ router.get('/cases/:victimId/notes', requireRole(['Counsellor', 'Administration'
   const { victimId } = req.params;
   const { data, error } = await supabase
     .from('case_notes')
-    .select('note_id, note_text, created_at, officials(full_name)')
+    .select('note_id, note_text, authored_by, created_at, officials(full_name)')
     .eq('victim_id', victimId)
     .order('created_at', { ascending: false });
   if (error) return fail(res, 'Could not load case notes', 500);
 
   return ok(res, {
     notes: (data || []).map((n) => ({
-      noteId: n.note_id, noteText: n.note_text, createdAt: n.created_at, authorName: n.officials.full_name,
+      noteId: n.note_id,
+      noteText: n.note_text,
+      // Section 2.3: AI-drafted notes (authored_by: 'ai') have no official_id
+      // yet - officials is null for those (nullable FK), so authorName falls
+      // back to a fixed label instead of crashing on a null embed.
+      authoredBy: n.authored_by,
+      authorName: n.officials ? n.officials.full_name : 'Mansakha AI (drafted)',
+      createdAt: n.created_at,
     })),
   });
 });
@@ -253,24 +268,138 @@ router.post('/cases/:victimId/notes', requireRole(['Counsellor']), generalApiLim
 // (frontend/src/services/hooks.js) and rendered as a live list, not paged
 // through by the user, so a fixed recent-N cap is what Section 9's "don't
 // load thousands of rows at once" actually calls for here.
+//
+// Feature Catalog Section 2.2/2.4 "SOS alert" - a row here now backs EITHER
+// a distress-score alert OR an SOS event (alert_notifications.source),
+// never both (see schema.sql's XOR check constraint) - the response always
+// includes `source` so the frontend can render the distinct SOS badge.
 router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
   const { data, error } = await supabase
     .from('alert_notifications')
-    .select('alert_id, notified_at, alerts(victim_id, triggered_at, alert_statuses(name))')
+    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, victim_id, triggered_at, alert_statuses(name)), sos_events(sos_event_id, victim_id, triggered_at, resolved_at)')
     .eq('official_id', req.auth.officialId)
     .order('notified_at', { ascending: false })
     .limit(50);
   if (error) return fail(res, 'Could not load alerts', 500);
 
   return ok(res, {
-    alerts: (data || []).map((n) => ({
-      alertId: n.alert_id,
-      victimId: n.alerts.victim_id,
-      triggeredAt: n.alerts.triggered_at,
-      status: n.alerts.alert_statuses.name,
-      notifiedAt: n.notified_at,
-    })),
+    alerts: (data || []).map((n) => {
+      const isSos = n.source === 'sos';
+      return {
+        alertId: isSos ? n.sos_events.sos_event_id : n.alerts.alert_id,
+        source: n.source,
+        priority: n.priority,
+        autoAssigned: n.auto_assigned,
+        victimId: isSos ? n.sos_events.victim_id : n.alerts.victim_id,
+        triggeredAt: isSos ? n.sos_events.triggered_at : n.alerts.triggered_at,
+        status: isSos ? (n.sos_events.resolved_at ? 'Resolved' : 'Open') : n.alerts.alert_statuses.name,
+        notifiedAt: n.notified_at,
+      };
+    }),
   });
+});
+
+// Marks an SOS event resolved - the sos_events equivalent of acknowledging/
+// resolving a normal alert (which uses alert_statuses instead, since SOS
+// deliberately doesn't create an alerts row - see schema.sql).
+router.patch('/sos/:sosEventId/resolve', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
+  const { sosEventId } = req.params;
+
+  const { data, error } = await supabase
+    .from('sos_events')
+    .update({ resolved_at: new Date().toISOString(), resolved_by: req.auth.officialId })
+    .eq('sos_event_id', sosEventId)
+    .is('resolved_at', null)
+    .select('sos_event_id, victim_id')
+    .maybeSingle();
+  if (error) return fail(res, 'Could not resolve SOS event', 500);
+  if (!data) return fail(res, 'SOS event not found or already resolved', 404);
+
+  await writeAuditLog({ officialId: req.auth.officialId, victimId: data.victim_id, action: 'update', entityType: 'sos_event', entityId: sosEventId });
+
+  return ok(res, null, 'SOS event resolved');
+});
+
+// Feature Catalog Section 2.2 "Scheduled counsellings".
+router.get('/scheduled', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
+  const { data, error } = await supabase
+    .from('counselling_sessions')
+    .select('session_id, victim_id, scheduled_at, status')
+    .eq('counsellor_id', req.auth.officialId)
+    .eq('status', 'upcoming')
+    .order('scheduled_at', { ascending: true });
+  if (error) return fail(res, 'Could not load scheduled sessions', 500);
+
+  return ok(res, {
+    sessions: (data || []).map((s) => ({ sessionId: s.session_id, victimId: s.victim_id, scheduledAt: s.scheduled_at, status: s.status })),
+  });
+});
+
+router.post('/cases/:victimId/schedule', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveVictimJurisdiction), async (req, res) => {
+  const { victimId } = req.params;
+  const { scheduledAt } = req.body;
+  if (!scheduledAt) return fail(res, 'scheduledAt is required', 400);
+
+  const { data, error } = await supabase
+    .from('counselling_sessions')
+    .insert({ victim_id: victimId, counsellor_id: req.auth.officialId, scheduled_at: scheduledAt })
+    .select('session_id')
+    .single();
+  if (error) return fail(res, `Could not schedule session: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'create', entityType: 'counselling_session', entityId: data.session_id });
+
+  return ok(res, { sessionId: data.session_id }, 'Session scheduled', 201);
+});
+
+// Feature Catalog Section 2.3 "In-app chat with victim" - the Counsellor-side
+// mirror of routes/victim.js's /messages, same opt-in gating (checked here
+// via the victim's own row, not just trusted from the URL).
+async function requireOptedInVictim(req, res) {
+  const { victimId } = req.params;
+  const { data: victim } = await supabase
+    .from('victims')
+    .select('opted_for_manual_counsellor, assigned_counsellor_id')
+    .eq('victim_id', victimId)
+    .maybeSingle();
+  if (!victim || !victim.opted_for_manual_counsellor || victim.assigned_counsellor_id !== req.auth.officialId) {
+    fail(res, 'This victim has not opted in for chat with you', 403);
+    return false;
+  }
+  return true;
+}
+
+router.get('/cases/:victimId/messages', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveVictimJurisdiction), async (req, res) => {
+  if (!(await requireOptedInVictim(req, res))) return;
+  const { victimId } = req.params;
+
+  const { data, error } = await supabase
+    .from('messages')
+    .select('message_id, sender_type, body, sent_at')
+    .eq('victim_id', victimId)
+    .eq('official_id', req.auth.officialId)
+    .order('sent_at', { ascending: true });
+  if (error) return fail(res, 'Could not load messages', 500);
+
+  return ok(res, {
+    messages: (data || []).map((m) => ({ messageId: m.message_id, senderType: m.sender_type, body: m.body, sentAt: m.sent_at })),
+  });
+});
+
+router.post('/cases/:victimId/messages', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveVictimJurisdiction), async (req, res) => {
+  if (!(await requireOptedInVictim(req, res))) return;
+  const { victimId } = req.params;
+  const { body } = req.body;
+  if (!body || !body.trim()) return fail(res, 'body is required', 400);
+
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ victim_id: victimId, official_id: req.auth.officialId, sender_type: 'official', body: body.trim() })
+    .select('message_id, sent_at')
+    .single();
+  if (error) return fail(res, `Could not send message: ${error.message}`, 500);
+
+  return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
 });
 
 module.exports = router;

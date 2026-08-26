@@ -18,11 +18,13 @@ const router = express.Router();
 // one is meant, the same reason a shared login surface needs a role toggle at all.
 // Picking the role you don't actually hold fails here, not silently falls back to
 // whichever role happened to be first.
+const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Intake Admin'];
+
 router.post('/login', staffLoginLimiter, async (req, res) => {
   const { email, password, roleName } = req.body;
   if (!email || !password) return fail(res, 'email and password are required', 400);
-  if (!['Administration', 'Counsellor'].includes(roleName)) {
-    return fail(res, 'roleName must be Administration or Counsellor', 400);
+  if (!STAFF_LOGIN_ROLES.includes(roleName)) {
+    return fail(res, `roleName must be one of: ${STAFF_LOGIN_ROLES.join(', ')}`, 400);
   }
 
   const match = await findOfficialForLogin(email, [roleName]);
