@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../context/ToastContext';
 import { useSubmitConsent } from '../../services/hooks';
+import { authContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 
 const THEME = {
   bg: '#FFFFFF',
@@ -24,6 +26,7 @@ const CONSENT_ITEMS = [
 export default function ConsentScreen({ onConsented }) {
   const submitConsent = useSubmitConsent();
   const toast = useToast();
+  const { tier } = useResponsive();
 
   const handleConsent = async () => {
     try {
@@ -37,7 +40,10 @@ export default function ConsentScreen({ onConsented }) {
 
   return (
     <View style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { maxWidth: authContentWidth[tier], width: '100%', alignSelf: 'center' }]}
+        showsVerticalScrollIndicator={false}
+      >
         <Text style={styles.headerLabel}>Privacy Consent</Text>
         <Text style={styles.title}>Your Privacy Matters</Text>
         <Text style={styles.subtitle}>

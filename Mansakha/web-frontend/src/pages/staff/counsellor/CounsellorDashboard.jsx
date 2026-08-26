@@ -47,7 +47,7 @@ export default function CounsellorDashboard() {
         <div className="bg-white p-6 rounded-lg border border-gray-100 shadow-sm">
           <div className="flex justify-between items-center mb-4">
             <h3 className="font-bold text-sm text-gray-800">Recent Alerts</h3>
-            <button onClick={() => navigate('/staff/counsellor/alerts')} className="text-xs text-[#519BCE] font-medium hover:underline">
+            <button onClick={() => navigate('/counsellor/alerts')} className="text-xs text-[#519BCE] font-medium hover:underline">
               View All
             </button>
           </div>

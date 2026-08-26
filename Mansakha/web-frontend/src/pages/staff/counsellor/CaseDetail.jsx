@@ -92,7 +92,7 @@ export default function CaseDetail() {
               </button>
             )}
             <button
-              onClick={() => navigate(`/staff/counsellor/interventions?victimId=${victimId}${data.suggestedInterventionType ? `&suggested=${data.suggestedInterventionType.id}` : ''}`)}
+              onClick={() => navigate(`/counsellor/interventions?victimId=${victimId}${data.suggestedInterventionType ? `&suggested=${data.suggestedInterventionType.id}` : ''}`)}
               className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-[#519BCE]/10 transition"
             >
               Log Intervention

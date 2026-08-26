@@ -6,7 +6,7 @@ import { isAuthenticated } from '../services/auth';
 // checks token presence, not validity - an expired/invalid token still
 // reaches the page, which then fails its own API calls and surfaces that
 // error normally (no separate "verify token" round trip needed here).
-export default function RequireAuth({ children, loginPath = '/staff/login' }) {
+export default function RequireAuth({ children, loginPath = '/login' }) {
   if (!isAuthenticated()) return <Navigate to={loginPath} replace />;
   return children;
 }

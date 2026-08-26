@@ -1,57 +1,62 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet, SafeAreaView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { authContentWidth } from '../theme/layout';
+import { useResponsive } from '../hooks/useResponsive';
 
 export default function OnboardingScreen({ navigation }) {
+  const { tier } = useResponsive();
   return (
     <SafeAreaView style={styles.container}>
-      {/* Curved Blue Top Header */}
-      <View style={styles.headerBackground}>
-        <Text style={styles.brandTitle}>MANSAKHA</Text>
-        <Text style={styles.tagline}>Your trusted support & advocacy portal</Text>
+      <View style={{ flex: 1, width: '100%', maxWidth: authContentWidth[tier], alignSelf: 'center' }}>
+        {/* Curved Blue Top Header */}
+        <View style={styles.headerBackground}>
+          <Text style={styles.brandTitle}>MANSAKHA</Text>
+          <Text style={styles.tagline}>Your trusted support & advocacy portal</Text>
 
-        {/* Hero Graphic Badge */}
-        <View style={styles.heroIllustrationContainer}>
-          <View style={styles.illustrationCircle}>
-            <Feather name="shield" size={68} color="#0284C7" />
-            <View style={styles.floatingBadgeLeft}>
-              <Feather name="file-text" size={20} color="#38BDF8" />
-            </View>
-            <View style={styles.floatingBadgeRight}>
-              <Feather name="heart" size={20} color="#F43F5E" />
+          {/* Hero Graphic Badge */}
+          <View style={styles.heroIllustrationContainer}>
+            <View style={styles.illustrationCircle}>
+              <Feather name="shield" size={68} color="#0284C7" />
+              <View style={styles.floatingBadgeLeft}>
+                <Feather name="file-text" size={20} color="#38BDF8" />
+              </View>
+              <View style={styles.floatingBadgeRight}>
+                <Feather name="heart" size={20} color="#F43F5E" />
+              </View>
             </View>
           </View>
         </View>
-      </View>
 
-      {/* Main Content Area */}
-      <View style={styles.contentContainer}>
-        <Text style={styles.description}>
-          A secure companion for tracking case updates, legal assistance, and official rehabilitation support.
-        </Text>
+        {/* Main Content Area */}
+        <View style={styles.contentContainer}>
+          <Text style={styles.description}>
+            A secure companion for tracking case updates, legal assistance, and official rehabilitation support.
+          </Text>
 
-        {/* Carousel Pagination Dots */}
-        <View style={styles.paginationDots}>
-          <View style={styles.dot} />
-          <View style={[styles.dot, styles.activeDot]} />
-          <View style={styles.dot} />
-        </View>
+          {/* Carousel Pagination Dots */}
+          <View style={styles.paginationDots}>
+            <View style={styles.dot} />
+            <View style={[styles.dot, styles.activeDot]} />
+            <View style={styles.dot} />
+          </View>
 
-        {/* Action Buttons */}
-        <View style={styles.actionWrapper}>
-          <Pressable
-            style={styles.getStartedBtn}
-            onPress={() => navigation.navigate('VictimSignup')}
-          >
-            <Text style={styles.getStartedBtnText}>Get started</Text>
-          </Pressable>
+          {/* Action Buttons */}
+          <View style={styles.actionWrapper}>
+            <Pressable
+              style={styles.getStartedBtn}
+              onPress={() => navigation.navigate('VictimSignup')}
+            >
+              <Text style={styles.getStartedBtnText}>Get started</Text>
+            </Pressable>
 
-          <Pressable
-            style={styles.signInLink}
-            onPress={() => navigation.navigate('VictimLogin')}
-          >
-            <Text style={styles.signInLinkText}>Already have an account</Text>
-          </Pressable>
+            <Pressable
+              style={styles.signInLink}
+              onPress={() => navigation.navigate('VictimLogin')}
+            >
+              <Text style={styles.signInLinkText}>Already have an account</Text>
+            </Pressable>
+          </View>
         </View>
       </View>
     </SafeAreaView>

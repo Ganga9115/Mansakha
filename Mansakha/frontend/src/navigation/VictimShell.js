@@ -1,12 +1,16 @@
 import React from 'react';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Feather } from '@expo/vector-icons';
 
 import { colors } from '../theme/colors';
 import { typography } from '../theme/typography';
+import { tabletShellWidth, sidebarWidth } from '../theme/layout';
+import { useResponsive } from '../hooks/useResponsive';
 import { getNavItemsForRole } from './roleNavConfig';
+import SidebarNav from '../components/SidebarNav';
 
 import HomeScreen from '../screens/victim/HomeScreen';
 import CheckinScreen from '../screens/victim/CheckinScreen';
@@ -16,6 +20,7 @@ import SupportScreen from '../screens/victim/SupportScreen';
 import SettingsScreen from '../screens/victim/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
+const Drawer = createDrawerNavigator();
 const CheckinStack = createNativeStackNavigator();
 
 // Nested stack for Check-in flow (Check-in -> Confirmation)
@@ -36,11 +41,13 @@ const SCREENS = {
   settings: SettingsScreen,
 };
 
-// Map screen keys to Feather icons
+// Map screen keys to Feather icons - shared between the bottom tab bar
+// (mobile/tablet) and the sidebar (desktop) so the same icon appears
+// either way.
 const TAB_ICONS = {
   home: 'home',
   checkin: 'mic',
-  history: 'arrow-up-down',
+  history: 'bar-chart-2',
   support: 'file-text',
   settings: 'user',
 };
@@ -87,17 +94,56 @@ function TabNavigator() {
   );
 }
 
-export default function VictimShell() {
-  if (Platform.OS !== 'web') {
-    return <TabNavigator />;
-  }
+// Desktop tier: a permanent (non-overlay, non-swipeable) drawer used
+// purely as a left sidebar rail. Same routes/screens as TabNavigator -
+// only the navigation chrome differs.
+function DesktopNavigator() {
+  const navItems = getNavItemsForRole('Victim');
+
   return (
-    <View style={styles.webBackdrop}>
-      <View style={styles.webFrame}>
-        <TabNavigator />
-      </View>
-    </View>
+    <Drawer.Navigator
+      screenOptions={{
+        headerShown: false,
+        drawerType: 'permanent',
+        drawerStyle: {
+          width: sidebarWidth,
+          backgroundColor: colors.sidebarBg,
+          borderRightWidth: 0,
+        },
+        sceneContainerStyle: { backgroundColor: colors.background },
+      }}
+      drawerContent={(props) => <SidebarNav {...props} icons={TAB_ICONS} />}
+    >
+      {navItems.map((item) => (
+        <Drawer.Screen
+          key={item.key}
+          name={item.key}
+          component={SCREENS[item.key]}
+          options={{ title: item.label }}
+        />
+      ))}
+    </Drawer.Navigator>
   );
+}
+
+export default function VictimShell() {
+  const { tier } = useResponsive();
+
+  if (tier === 'desktop') {
+    return <DesktopNavigator />;
+  }
+
+  if (tier === 'tablet') {
+    return (
+      <View style={styles.webBackdrop}>
+        <View style={[styles.webFrame, { maxWidth: tabletShellWidth }]}>
+          <TabNavigator />
+        </View>
+      </View>
+    );
+  }
+
+  return <TabNavigator />;
 }
 
 const styles = StyleSheet.create({
@@ -109,7 +155,6 @@ const styles = StyleSheet.create({
   webFrame: {
     flex: 1,
     width: '100%',
-    maxWidth: 480,
     backgroundColor: colors.background,
     borderLeftWidth: 1,
     borderRightWidth: 1,

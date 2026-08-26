@@ -7,7 +7,10 @@ import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
+import { formContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
+import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useVictimDashboard } from '../../services/hooks';
 
@@ -25,6 +28,7 @@ function getLinkInfo(detail) {
 export default function SupportScreen() {
   const query = useVictimDashboard();
   const toast = useToast();
+  const { tier, isDesktop } = useResponsive();
 
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
@@ -42,27 +46,41 @@ export default function SupportScreen() {
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
       {/* Header Banner */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
-          <View style={styles.avatarContainer}>
-            <Feather name="phone-call" size={28} color={colors.primary} />
-            <View style={styles.avatarEditBadge}>
-              <Feather name="heart" size={10} color={colors.white} />
+          {isDesktop ? (
+            <Feather name="phone-call" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Feather name="phone-call" size={28} color={colors.primary} />
+              <View style={styles.avatarEditBadge}>
+                <Feather name="heart" size={10} color={colors.white} />
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.headerInfo}>
-            <View style={styles.pillBadge}>
-              <Text style={styles.pillText}>EMERGENCY & AID</Text>
-            </View>
+            {!isDesktop && (
+              <View style={styles.pillBadge}>
+                <Text style={styles.pillText}>EMERGENCY & AID</Text>
+              </View>
+            )}
             <Text style={styles.statusTitle}>Support Helpline</Text>
-            <Text style={styles.subtext}>Connect directly with experts</Text>
+            {!isDesktop && <Text style={styles.subtext}>Connect directly with experts</Text>}
           </View>
         </View>
+
+        {isDesktop && (
+          <DesktopHeaderActions
+            fullName={query.data?.fullName}
+            alertCount={query.data?.alerts?.length || 0}
+            onBellPress={() => {}}
+          />
+        )}
       </View>
 
       {/* Main Content Area */}
-      <View style={styles.contentBody}>
+      <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
         {/* Date Ticker */}
         <View style={styles.dateTicker}>
           <Text style={styles.tickerText}>{dayStr}</Text>
@@ -131,6 +149,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, alignItems: 'center' },
+  headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
     width: 56,
@@ -142,6 +162,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     position: 'relative',
   },
+  avatarContainerDesktop: { width: 40, height: 40 },
   avatarEditBadge: {
     position: 'absolute',
     bottom: 0,
@@ -170,6 +191,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
+  },
+  contentBodyDesktop: {
+    marginTop: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   dateTicker: {
     flexDirection: 'row',

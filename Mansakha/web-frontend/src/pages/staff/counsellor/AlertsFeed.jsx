@@ -78,7 +78,7 @@ export default function AlertsFeed() {
                   {item.status}
                 </span>
                 <button
-                  onClick={() => navigate(`/staff/counsellor/case-detail/${item.victimId}`)}
+                  onClick={() => navigate(`/counsellor/case-detail/${item.victimId}`)}
                   className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE]/10 rounded-lg text-xs font-medium transition"
                 >
                   Review details
