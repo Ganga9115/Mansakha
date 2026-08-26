@@ -32,7 +32,13 @@ alter table interventions enable row level security;
 alter table audit_log enable row level security;
 alter table case_notes enable row level security;
 alter table dispatch_queue enable row level security;
-alter table email_otp_codes enable row level security;
+alter table chat_messages enable row level security;
+alter table messages enable row level security;
+alter table wellness_content enable row level security;
+alter table journal_entries enable row level security;
+alter table counselling_sessions enable row level security;
+alter table reports enable row level security;
+alter table sos_events enable row level security;
 
 -- Realtime publication for the alerts tables. Safe to enable even with deny-all RLS
 -- above: Supabase Realtime enforces RLS on postgres_changes subscriptions, so an
