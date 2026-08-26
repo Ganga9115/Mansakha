@@ -403,16 +403,16 @@ router.post(
   async (req, res) => {
     const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground } = req.body;
     try {
-      const { victimId } = await createVictim({
+      const { victimId, temporaryPassword } = await createVictim({
         docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground,
         provisionedVia: 'district_admin',
       });
       await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'create', entityType: 'victim', entityId: victimId });
-      // docketNumber returned explicitly (not just victimId) - this is what
-      // the victim will need to log in, and the admin needs to hand it to
-      // them out-of-band, same reasoning as Ministry's temp-password return
-      // on staff creation (routes/ministry.js).
-      return ok(res, { victimId, docketNumber }, 'Victim record created', 201);
+      // docketNumber and temporaryPassword returned explicitly (not just
+      // victimId) - this is what the victim needs to log in, and the admin
+      // has to hand it to them out-of-band, same reasoning as Ministry's
+      // temp-password return on staff creation (routes/ministry.js).
+      return ok(res, { victimId, docketNumber, temporaryPassword }, 'Victim record created', 201);
     } catch (err) {
       if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
       throw err;

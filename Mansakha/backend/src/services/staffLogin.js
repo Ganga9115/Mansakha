@@ -8,7 +8,7 @@ const { supabase } = require('../db/supabaseClient');
 async function findOfficialForLogin(email, allowedRoleNames) {
   const { data: official, error } = await supabase
     .from('officials')
-    .select('official_id, email, password_hash, must_change_password')
+    .select('official_id, email, password_hash, must_change_password, staff_id')
     .eq('email', email)
     .single();
 

@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Linki
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useVictimLogin } from '../../services/hooks';
+import { apiClient } from '../../services/apiClient';
 import { authContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import IconInput from '../../components/IconInput';
@@ -26,13 +27,21 @@ export default function LoginScreen({ navigation }) {
   const [docketNumber, setDocketNumber] = useState('');
   const [fullName, setFullName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+
+  // First-login forced password change - same pattern as the Staff Login
+  // screen's mustChangePassword flow, just for the victim's 4th credential.
+  const [requirePasswordChange, setRequirePasswordChange] = useState(false);
+  const [tempToken, setTempToken] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
 
   const loginMutation = useVictimLogin();
 
   const handleLogin = async () => {
     setError(null);
-    if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim()) {
+    if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim() || !password.trim()) {
       setError('Please fill in all fields.');
       return;
     }
@@ -41,11 +50,33 @@ export default function LoginScreen({ navigation }) {
         docketNumber: docketNumber.trim(),
         fullName: fullName.trim(),
         contactNumber: contactNumber.trim(),
+        password: password.trim(),
       });
+      if (data.mustChangePassword) {
+        setTempToken(data.token);
+        setRequirePasswordChange(true);
+        return;
+      }
       await login({ token: data.token, accountType: 'victim' });
     } catch (err) {
       console.error('Login error:', err);
       setError(`Login failed: ${err.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    setError(null);
+    if (newPassword.length < 8) {
+      setError('Password must be at least 8 characters.');
+      return;
+    }
+    setChangingPassword(true);
+    try {
+      await apiClient.post('/api/auth/victim/change-password', { newPassword }, tempToken);
+      await login({ token: tempToken, accountType: 'victim' });
+    } catch (err) {
+      setError(err.message || 'Could not update password.');
+      setChangingPassword(false);
     }
   };
 
@@ -62,47 +93,64 @@ export default function LoginScreen({ navigation }) {
       </View>
 
       <View style={[styles.card, { maxWidth: authContentWidth[tier] }]}>
-        <IconInput icon="hash" placeholder="Docket ID" value={docketNumber} onChangeText={setDocketNumber} autoCapitalize="characters" />
-        <IconInput icon="user" placeholder="Full Name" value={fullName} onChangeText={setFullName} />
-        <IconInput icon="phone" placeholder="Mobile Number" value={contactNumber} onChangeText={setContactNumber} keyboardType="phone-pad" />
+        {!requirePasswordChange ? (
+          <>
+            <IconInput icon="hash" placeholder="Docket ID" value={docketNumber} onChangeText={setDocketNumber} autoCapitalize="characters" />
+            <IconInput icon="user" placeholder="Full Name" value={fullName} onChangeText={setFullName} />
+            <IconInput icon="phone" placeholder="Mobile Number" value={contactNumber} onChangeText={setContactNumber} keyboardType="phone-pad" />
+            <IconInput icon="lock" placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
 
-        {error && <Text style={styles.errorText}>{error}</Text>}
+            {error && <Text style={styles.errorText}>{error}</Text>}
 
-        <Pressable style={styles.primaryBtn} onPress={handleLogin} disabled={loginMutation.isPending}>
-          <Text style={styles.primaryBtnText}>{loginMutation.isPending ? 'Signing In...' : 'Sign In'}</Text>
-        </Pressable>
+            <Pressable style={styles.primaryBtn} onPress={handleLogin} disabled={loginMutation.isPending}>
+              <Text style={styles.primaryBtnText}>{loginMutation.isPending ? 'Signing In...' : 'Sign In'}</Text>
+            </Pressable>
 
-        <View style={styles.bannerInfo}>
-          <Feather name="shield" size={18} color={THEME.accentIcon} style={{ marginRight: 10 }} />
-          <Text style={styles.bannerText}>
-            Your data is fully encrypted and never shared without your explicit consent.
-          </Text>
-        </View>
+            <View style={styles.bannerInfo}>
+              <Feather name="shield" size={18} color={THEME.accentIcon} style={{ marginRight: 10 }} />
+              <Text style={styles.bannerText}>
+                Your data is fully encrypted and never shared without your explicit consent.
+              </Text>
+            </View>
 
-        <Text style={styles.notice}>
-          Don't have login details? Contact{' '}
-          <Text 
-            style={{ color: THEME.primaryDark, textDecorationLine: 'underline' }} 
-            onPress={() => Linking.openURL('https://www.dosje.gov.in/organisation/national-helpline-against-atrocities/')}
-          >
-            NHAA Portal
-          </Text>
-          {' '}or{' '}
-          <Text 
-            style={{ color: THEME.primaryDark, textDecorationLine: 'underline' }} 
-            onPress={() => {
-              if (Platform.OS !== 'web') {
-                Linking.openURL('tel:14566');
-              }
-            }}
-          >
-            14566
-          </Text>
-          {' '}to get registered.
-        </Text>
+            <Text style={styles.notice}>
+              Don't have login details? Contact{' '}
+              <Text
+                style={{ color: THEME.primaryDark, textDecorationLine: 'underline' }}
+                onPress={() => Linking.openURL('https://www.dosje.gov.in/organisation/national-helpline-against-atrocities/')}
+              >
+                NHAA Portal
+              </Text>
+              {' '}or{' '}
+              <Text
+                style={{ color: THEME.primaryDark, textDecorationLine: 'underline' }}
+                onPress={() => {
+                  if (Platform.OS !== 'web') {
+                    Linking.openURL('tel:14566');
+                  }
+                }}
+              >
+                14566
+              </Text>
+              {' '}to get registered.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.screenTitle}>Change Password</Text>
+            <Text style={[styles.screenSubtitle, { marginBottom: 16 }]}>
+              This is your first time signing in - set a new password to continue.
+            </Text>
+            <IconInput icon="lock" placeholder="New password (min 8 characters)" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+
+            <Pressable style={styles.primaryBtn} onPress={handleChangePassword} disabled={changingPassword}>
+              <Text style={styles.primaryBtnText}>{changingPassword ? 'Updating...' : 'Update & Continue'}</Text>
+            </Pressable>
+          </>
+        )}
       </View>
-
-
     </ScrollView>
   );
 }

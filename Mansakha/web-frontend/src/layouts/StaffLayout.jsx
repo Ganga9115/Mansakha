@@ -11,6 +11,7 @@ import {
   LogOut,
   UserPlus,
   FileSearch,
+  Users,
 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useCounsellorAlerts } from '../services/hooks';
@@ -51,6 +52,7 @@ const NAV_ITEMS_BY_SECTION = {
   ],
   dataintake: [
     { name: 'Register Victim', icon: UserPlus, path: '/dataintake' },
+    { name: 'Victims', icon: Users, path: '/dataintake/victims' },
     { name: 'Fetch Case Details', icon: FileSearch, path: '/dataintake/fetch-case' },
     { name: 'Profile', icon: Settings, path: '/dataintake/profile' },
   ],

@@ -1,24 +1,23 @@
 const express = require('express');
+const bcrypt = require('bcrypt');
 const { supabase } = require('../db/supabaseClient');
 const { signToken } = require('../utils/jwt');
 const { ok, fail } = require('../services/responseEnvelope');
+const { verifyToken } = require('../middleware/verifyToken');
 const { victimLoginLimiter, gpsLookupLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
-// Victim Login surface - Feature Catalog Section 1.1. Replaces the old OTP
-// (mobile/email) + Google Sign-In + self-registration model entirely: a
-// victim record is now created BY staff (District Admin - routes/admin.js,
-// or Data Intake Admin - routes/dataIntake.js), and a victim logs in with
-// the three identifying fields staff entered for them - docket number, full
-// name, and mobile number. No password, no OTP: knowing all three fields
-// (which only the victim and the provisioning official should know together)
-// IS the credential, matching how many Indian govt beneficiary-lookup
-// portals already work. Removed alongside this: otpService.js,
-// twilioVerify.js, mailer.js, the Google OAuth client, and the "forgot
-// password"/"change password" flow (there's no password left to change) -
-// none of the deleted files are referenced anywhere else (confirmed via a
-// repo-wide search before deletion).
+// Victim Login surface - Feature Catalog Section 1.1, extended per explicit
+// request. Replaces the old OTP (mobile/email) + Google Sign-In +
+// self-registration model entirely: a victim record is now created BY staff
+// (District Admin - routes/admin.js, or Data Intake Admin -
+// routes/dataIntake.js), and a victim logs in with FOUR fields staff entered
+// for them - docket number, full name, mobile number, and a password
+// (fixed to 'Victim123' at creation, forced to change on first login via
+// must_change_password, same pattern as officials). otpService.js,
+// twilioVerify.js, mailer.js, and the Google OAuth client stay removed -
+// nothing here revives them.
 
 // Escapes LIKE/ILIKE special characters so an exact case-insensitive match
 // can't be turned into a wildcard pattern by a crafted docketNumber (e.g. a
@@ -28,9 +27,9 @@ function escapeLikePattern(str) {
 }
 
 router.post('/login', victimLoginLimiter, async (req, res) => {
-  const { docketNumber, fullName, contactNumber } = req.body;
-  if (!docketNumber || !fullName || !contactNumber) {
-    return fail(res, 'docketNumber, fullName, and contactNumber are required', 400);
+  const { docketNumber, fullName, contactNumber, password } = req.body;
+  if (!docketNumber || !fullName || !contactNumber || !password) {
+    return fail(res, 'docketNumber, fullName, contactNumber, and password are required', 400);
   }
 
   // Same generic message for every failure reason - don't reveal which field was
@@ -40,10 +39,10 @@ router.post('/login', victimLoginLimiter, async (req, res) => {
   console.log('Login attempt:', { docketNumber, fullName, contactNumber });
   const { data: victim, error: victimError } = await supabase
     .from('victims')
-    .select('victim_id')
+    .select('victim_id, password_hash, must_change_password')
     .ilike('docket_number', escapeLikePattern(docketNumber.trim()))
     .maybeSingle();
-  
+
   if (victimError) console.error('Victim query error:', victimError);
   if (!victim) {
     console.log('Victim not found for docket:', docketNumber);
@@ -52,18 +51,48 @@ router.post('/login', victimLoginLimiter, async (req, res) => {
 
   const { data: identity, error: identityError } = await supabase.from('victim_identity').select('full_name, contact_number').eq('victim_id', victim.victim_id).maybeSingle();
   if (identityError) console.error('Identity query error:', identityError);
-  
-  if (!identity || 
+
+  if (!identity ||
       identity.full_name.trim().toLowerCase() !== fullName.trim().toLowerCase() ||
       (identity.contact_number || '').trim() !== contactNumber.trim()) {
     console.log('Identity mismatch:', identity, { providedName: fullName, providedPhone: contactNumber });
     return genericFailure();
   }
 
+  // 4th credential - same generic failure as a docket/name/contact mismatch,
+  // not a distinct "wrong password" message, so a valid 3-field guess can't
+  // be used to probe for the password separately.
+  const passwordOk = victim.password_hash && await bcrypt.compare(password, victim.password_hash);
+  if (!passwordOk) {
+    console.log('Password mismatch for victim:', victim.victim_id);
+    return genericFailure();
+  }
+
   console.log('Login successful for:', victim.victim_id);
 
   const token = signToken({ type: 'victim', victimId: victim.victim_id });
-  return ok(res, { token });
+  return ok(res, { token, mustChangePassword: victim.must_change_password });
+});
+
+// Re-added per explicit request (was removed when the login model dropped
+// passwords entirely, then reinstated when they came back as a 4th
+// credential). Mirrors routes/auth.staff.js's change-password route exactly.
+router.post('/change-password', verifyToken, async (req, res) => {
+  if (req.auth.type !== 'victim') return fail(res, 'Victim account required', 403);
+
+  const { newPassword } = req.body;
+  if (!newPassword || newPassword.length < 8) {
+    return fail(res, 'newPassword must be at least 8 characters', 400);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  const { error } = await supabase
+    .from('victims')
+    .update({ password_hash: passwordHash, must_change_password: false })
+    .eq('victim_id', req.auth.victimId);
+
+  if (error) return fail(res, 'Could not update password', 500);
+  return ok(res, null, 'Password updated');
 });
 
 // Loosely normalizes a jurisdiction name for comparison against OpenStreetMap's

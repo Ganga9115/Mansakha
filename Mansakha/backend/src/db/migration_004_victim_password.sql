@@ -1,0 +1,15 @@
+-- Mansakha migration 004: Victim password (4th login credential)
+--
+-- Run ONCE against the live Supabase project (SQL Editor -> New query -> paste
+-- -> Run). Same DDL limitation as migrations 002/003 - supabase-js's REST
+-- client can't run this.
+--
+-- Explicit user request: Victim login gains a 4th required credential
+-- alongside Docket ID + Full Name + Contact Number - a password, fixed to
+-- 'Victim123' for every victim a District/Data Intake Admin creates, with a
+-- forced change on first login (mirrors officials.must_change_password
+-- exactly). victims.password_hash already existed as an unused legacy
+-- column from the pre-docket OTP/password model - reactivated here rather
+-- than adding a new column, since it's the same field this time is really
+-- named for.
+alter table victims add column if not exists must_change_password boolean not null default true;

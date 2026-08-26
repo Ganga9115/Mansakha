@@ -96,6 +96,10 @@ create table officials (
   phone                 text,
   password_hash         text not null,
   must_change_password  boolean not null default true,
+  staff_id              text not null default '1', -- third required login credential
+                               -- (alongside email+password), labeled per role in the
+                               -- UI ("State Admin ID", "Counsellor ID", etc.) - '1'
+                               -- for every account until a real numbering scheme exists
   provisioned_by        uuid references officials(official_id),
   expo_push_token       text, -- set via PATCH /api/me/push-token once the
                                -- frontend registers a device (see
@@ -133,11 +137,14 @@ create table victims (
   -- rows created before this change; new rows only ever use the two staff-
   -- provisioning values.
   auth_method        text not null check (auth_method in ('mobile_otp', 'email_otp', 'google', 'district_admin', 'data_intake_admin')),
-  password_hash      text, -- LEGACY, unused by any current route - the OTP/password
-                            -- login model this backed was replaced by docket-based
-                            -- login (Section 1.1). Left in place rather than dropped
-                            -- (no live code writes or reads it); safe to drop in a
-                            -- later cleanup pass once confirmed nothing depends on it.
+  password_hash      text, -- REACTIVATED: a 4th required login credential alongside
+                            -- Docket ID + Full Name + Contact Number, per explicit
+                            -- request - every victim a District/Data Intake Admin
+                            -- creates gets password 'Victim123' (bcrypt-hashed here),
+                            -- with must_change_password below forcing a real one on
+                            -- first login. Column predates this and was briefly
+                            -- unused between the OTP-login removal and this change.
+  must_change_password boolean not null default true, -- mirrors officials.must_change_password
   expo_push_token    text, -- set via PATCH /api/me/push-token once the frontend
                             -- registers a device (see services/dispatchWorker.js) - null until then
   enrolled_at        timestamptz not null default now(),

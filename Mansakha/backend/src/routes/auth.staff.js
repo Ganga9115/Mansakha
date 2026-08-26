@@ -21,8 +21,8 @@ const router = express.Router();
 const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Intake Admin'];
 
 router.post('/login', staffLoginLimiter, async (req, res) => {
-  const { email, password, roleName } = req.body;
-  if (!email || !password) return fail(res, 'email and password are required', 400);
+  const { email, password, roleName, staffId } = req.body;
+  if (!email || !password || !staffId) return fail(res, 'email, password, and staffId are required', 400);
   if (!STAFF_LOGIN_ROLES.includes(roleName)) {
     return fail(res, `roleName must be one of: ${STAFF_LOGIN_ROLES.join(', ')}`, 400);
   }
@@ -32,6 +32,12 @@ router.post('/login', staffLoginLimiter, async (req, res) => {
 
   const passwordOk = await verifyPassword(password, match.official.password_hash);
   if (!passwordOk) return fail(res, 'Invalid credentials', 401);
+
+  // Third required credential (Feature Catalog: "State Admin ID" etc., all
+  // currently '1' - see migration_003_staff_id.sql). Same generic failure
+  // message as a bad password, not "wrong ID", so a valid email+password
+  // guess can't be used to probe for the right ID separately.
+  if (String(staffId).trim() !== match.official.staff_id) return fail(res, 'Invalid credentials', 401);
 
   const token = signToken({ type: 'official', officialId: match.official.official_id, selectedRole: roleName });
   return ok(res, { token, mustChangePassword: match.official.must_change_password });

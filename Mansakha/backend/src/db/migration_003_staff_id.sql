@@ -1,0 +1,18 @@
+-- Mansakha migration 003: Staff ID login field
+--
+-- Run ONCE against the live Supabase project (SQL Editor -> New query -> paste
+-- -> Run). supabase-js's REST client can't execute DDL, same reasoning as
+-- migration_002 - this has to be run directly against Postgres.
+--
+-- Explicit user request: every account the Ministry/Super Admin provisions
+-- (Administration, Counsellor, Data Intake Admin) gets a "Staff ID" - a
+-- third required login credential alongside email + password, labeled per
+-- role in the UI ("State Admin ID", "District Admin ID", "Counsellor ID",
+-- etc.), all set to '1' for now as a placeholder pending a real numbering
+-- scheme. Ministry itself is provisioned separately (seedSuperAdmin.js) and
+-- isn't in scope for this field.
+--
+-- text, not integer - "1" today, but a future real ID scheme may not stay
+-- purely numeric (e.g. a district code prefix), and there's no reason to
+-- force a second migration just to widen the type later.
+alter table officials add column if not exists staff_id text not null default '1';

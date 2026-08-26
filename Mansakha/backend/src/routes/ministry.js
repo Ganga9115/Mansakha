@@ -77,7 +77,7 @@ router.get('/staff', async (req, res) => {
 // shape consistent") with what Section 3/8 requires for Ministry to function at
 // all: nothing else can onboard staff without this.
 router.post('/staff', async (req, res) => {
-  const { fullName, email, roleName, jurisdictionId, password } = req.body;
+  const { fullName, email, roleName, jurisdictionId, password, staffId } = req.body;
   if (!fullName || !email || !roleName || !password) return fail(res, 'fullName, email, roleName, and password are required', 400);
 
   // Server-side allowlist, not trusting client input: this endpoint can ONLY create
@@ -100,7 +100,10 @@ router.post('/staff', async (req, res) => {
 
   const { data: official, error: officialError } = await supabase
     .from('officials')
-    .insert({ full_name: fullName, email, password_hash: passwordHash, must_change_password: true, provisioned_by: req.auth.officialId })
+    // staffId: the login screen's "State Admin ID"/"Counsellor ID"/etc. field -
+    // defaults to '1' (every account uses that placeholder for now, per explicit
+    // request) when Ministry doesn't send one.
+    .insert({ full_name: fullName, email, password_hash: passwordHash, must_change_password: true, staff_id: staffId || '1', provisioned_by: req.auth.officialId })
     .select('official_id')
     .single();
   if (officialError) return fail(res, `Could not create account: ${officialError.message}`, 500);

@@ -11,7 +11,8 @@
     "test": "node --test",
     "seed:super-admin": "node src/db/seedSuperAdmin.js",
     "seed:dummy": "node src/db/seedDummyAccounts.js",
-    "seed:demo": "node src/db/seedDemoData.js"
+    "seed:demo": "node src/db/seedDemoData.js",
+    "seed:all-admins": "node src/db/seedAllAdmins.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
