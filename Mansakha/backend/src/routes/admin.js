@@ -401,10 +401,10 @@ router.post(
   generalApiLimiter,
   requireJurisdiction((req) => req.body.jurisdictionId),
   async (req, res) => {
-    const { docketNumber, fullName, jurisdictionId, caseTypeId, caseStage, address, caseBackground } = req.body;
+    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground } = req.body;
     try {
       const { victimId } = await createVictim({
-        docketNumber, fullName, jurisdictionId, caseTypeId, caseStage, address, caseBackground,
+        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground,
         provisionedVia: 'district_admin',
       });
       await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'create', entityType: 'victim', entityId: victimId });

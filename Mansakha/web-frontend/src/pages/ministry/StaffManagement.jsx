@@ -22,6 +22,7 @@ export default function StaffManagement() {
   const [roleName, setRoleName] = useState('Counsellor');
   const [jurisdictionLevel, setJurisdictionLevel] = useState('district');
   const [jurisdictionId, setJurisdictionId] = useState('');
+  const [password, setPassword] = useState('');
   const [formError, setFormError] = useState(null);
 
   const jurisdictionQuery = useJurisdictionOptions(
@@ -39,11 +40,13 @@ export default function StaffManagement() {
         fullName: fullName.trim(),
         email: email.trim(),
         roleName,
+        password,
         jurisdictionId: roleName === 'Administration' ? jurisdictionId : undefined,
       });
       setShowForm(false);
       setFullName('');
       setEmail('');
+      setPassword('');
       setJurisdictionId('');
       refetch();
     } catch (err) {
@@ -87,6 +90,10 @@ export default function StaffManagement() {
               <select value={roleName} onChange={(e) => setRoleName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                 {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Temporary Password</label>
+              <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Required" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
             {roleName === 'Administration' && (
               <>

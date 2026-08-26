@@ -15,6 +15,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
 
   const [docketNumber, setDocketNumber] = useState('');
   const [fullName, setFullName] = useState('');
+  const [contactNumber, setContactNumber] = useState('');
   const [caseTypeId, setCaseTypeId] = useState('');
   const [caseStage, setCaseStage] = useState('');
   const [stateId, setStateId] = useState('');
@@ -32,7 +33,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
     setError(null);
     setCreatedDocket(null);
     const jurisdictionId = lockedJurisdictionId || districtId;
-    if (!docketNumber.trim() || !fullName.trim() || !caseTypeId || !caseStage || !jurisdictionId) {
+    if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim() || !caseTypeId || !caseStage || !jurisdictionId) {
       setError('Please fill in all fields.');
       return;
     }
@@ -40,6 +41,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
       const result = await onCreate({
         docketNumber: docketNumber.trim(),
         fullName: fullName.trim(),
+        contactNumber: contactNumber.trim(),
         jurisdictionId,
         caseTypeId,
         caseStage,
@@ -47,6 +49,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
       setCreatedDocket(result?.docketNumber || docketNumber.trim());
       setDocketNumber('');
       setFullName('');
+      setContactNumber('');
       setCaseTypeId('');
       setCaseStage('');
       setStateId('');
@@ -75,14 +78,26 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
         />
       </div>
 
-      <div>
-        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Full Name</label>
-        <input
-          type="text"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Full Name</label>
+          <input
+            type="text"
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+        </div>
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Mobile Number</label>
+          <input
+            type="text"
+            value={contactNumber}
+            onChange={(e) => setContactNumber(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            placeholder="e.g. 9876543210"
+          />
+        </div>
       </div>
 
       {lockedJurisdictionId ? (

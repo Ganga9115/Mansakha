@@ -47,7 +47,7 @@ export function useVictimLogin() {
 // district jurisdictionId, so the Login screen can pre-fill both dropdowns.
 // Unauthenticated (called before a session exists).
 export function useGpsLookup() {
-  return useMutation({ mutationFn: ({ lat, lng }) => apiClient.post('/api/victim/gps-lookup', { lat, lng }) });
+  return useMutation({ mutationFn: ({ lat, lng }) => apiClient.post('/api/auth/victim/gps-lookup', { lat, lng }) });
 }
 
 export function useVictimDashboard() {
