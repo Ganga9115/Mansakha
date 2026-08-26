@@ -31,12 +31,16 @@ export default function App() {
             or /stateadmin based on the account's own jurisdiction level. */}
         <Route path="/login" element={<StaffLoginPage />} />
 
-        {/* Counsellor */}
+        {/* Counsellor - Reports/Profile are role-prefixed like everything
+            else now, so which role's shell to show never has to be guessed
+            from a shared, prefix-less route. */}
         <Route path="/counsellor" element={<RequireAuth><CounsellorDashboard /></RequireAuth>} />
         <Route path="/counsellor/case-queue" element={<RequireAuth><CaseQueue /></RequireAuth>} />
         <Route path="/counsellor/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
         <Route path="/counsellor/interventions" element={<RequireAuth><LogIntervention /></RequireAuth>} />
         <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
+        <Route path="/counsellor/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
+        <Route path="/counsellor/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
 
         {/* District Admin / State Admin - same components as before ("Coming
             soon" stubs), reached via jurisdiction-specific URLs instead of
@@ -45,14 +49,15 @@ export default function App() {
         <Route path="/districtadmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
         <Route path="/districtadmin/workload" element={<RequireAuth><Workload /></RequireAuth>} />
         <Route path="/districtadmin/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
+        <Route path="/districtadmin/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
+        <Route path="/districtadmin/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
 
         <Route path="/stateadmin" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
         <Route path="/stateadmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
         <Route path="/stateadmin/workload" element={<RequireAuth><Workload /></RequireAuth>} />
         <Route path="/stateadmin/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
-
-        <Route path="/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
-        <Route path="/settings" element={<RequireAuth><StaffSettings /></RequireAuth>} />
+        <Route path="/stateadmin/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
+        <Route path="/stateadmin/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
 
         {/* Ministry (unchanged stubs, out of this branch's scope) */}
         <Route path="/ministry/login" element={<MinistryLoginPage />} />

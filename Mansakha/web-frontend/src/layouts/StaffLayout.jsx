@@ -22,8 +22,8 @@ function adminNavItems(prefix) {
     { name: 'Dashboard', icon: LayoutDashboard, path: `/${prefix}` },
     { name: 'Workload', icon: ListOrdered, path: `/${prefix}/workload` },
     { name: 'Alerts', icon: Bell, path: `/${prefix}/alerts` },
-    { name: 'Reports', icon: BarChart3, path: '/reports' },
-    { name: 'Settings', icon: Settings, path: '/settings' },
+    { name: 'Reports', icon: BarChart3, path: `/${prefix}/reports` },
+    { name: 'Profile', icon: Settings, path: `/${prefix}/profile` },
   ];
 }
 
@@ -33,8 +33,8 @@ const NAV_ITEMS_BY_SECTION = {
     { name: 'Case Queue', icon: ListOrdered, path: '/counsellor/case-queue' },
     { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
     { name: 'Interventions', icon: MessageSquare, path: '/counsellor/interventions' },
-    { name: 'Reports', icon: BarChart3, path: '/reports' },
-    { name: 'Settings', icon: Settings, path: '/settings' },
+    { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
+    { name: 'Profile', icon: Settings, path: '/counsellor/profile' },
   ],
   districtadmin: adminNavItems('districtadmin'),
   stateadmin: adminNavItems('stateadmin'),
@@ -53,21 +53,16 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
-  // /reports and /settings are shared, prefix-less routes - they can't be
-  // resolved from the URL, so they fall back to the logged-in account's own
-  // role/jurisdiction (from /api/me) instead of defaulting to Counsellor.
-  const meRole = me?.roles?.[0];
-  const sectionFromMe = !meRole ? 'counsellor'
-    : meRole.roleName !== 'Administration' ? 'counsellor'
-    : (meRole.jurisdictionLevel === 'state' || meRole.jurisdictionLevel === 'national') ? 'stateadmin'
-    : 'districtadmin';
+  // Every route is role-prefixed now (including Reports/Profile), so the
+  // section always resolves cleanly from the URL - no more guessing a
+  // shared, prefix-less route belongs to Counsellor by default.
   const resolvedSection = section
     || (location.pathname.startsWith('/districtadmin') ? 'districtadmin'
       : location.pathname.startsWith('/stateadmin') ? 'stateadmin'
-      : location.pathname.startsWith('/counsellor') ? 'counsellor'
-      : sectionFromMe);
+      : 'counsellor');
   const navItems = NAV_ITEMS_BY_SECTION[resolvedSection] || NAV_ITEMS_BY_SECTION.counsellor;
-  const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || '/reports';
+  const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || `/${resolvedSection}`;
+  const profilePath = navItems.find((item) => item.name === 'Profile')?.path || `/${resolvedSection}/profile`;
 
   return (
     <div className="flex h-screen w-full bg-[#F8F9FA] text-gray-800 font-sans">
@@ -143,7 +138,7 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
             </Link>
 
             <button
-              onClick={() => navigate('/settings')}
+              onClick={() => navigate(profilePath)}
               className="flex items-center gap-3 border-l border-[#D6E8F5] pl-6 text-left focus:outline-none"
             >
               <img
