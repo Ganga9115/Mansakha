@@ -8,11 +8,14 @@ import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
+import { formContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 import { useToast } from '../../context/ToastContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { useCheckin } from '../../services/hooks';
+import { useCheckin, useVictimDashboard } from '../../services/hooks';
 import Card from '../../components/Card';
 import IconInput from '../../components/IconInput';
+import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 
 const DISTRESS_TAGS = [
   { id: 'anxious', label: 'Anxious / Panic', isHighRisk: true },
@@ -37,6 +40,8 @@ export default function CheckinScreen({ navigation }) {
   const { t } = useLanguage();
   const toast = useToast();
   const checkin = useCheckin();
+  const dashboardQuery = useVictimDashboard();
+  const { tier, isDesktop } = useResponsive();
 
   const [distressRating, setDistressRating] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -96,31 +101,46 @@ export default function CheckinScreen({ navigation }) {
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
       {/* Top Header Banner */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
-          <View style={styles.avatarContainer}>
-            <Feather name="heart" size={28} color={colors.primary} />
-            <View style={styles.avatarEditBadge}>
-              <Feather name="shield" size={10} color={colors.white} />
+          {isDesktop ? (
+            <Feather name="heart" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Feather name="heart" size={28} color={colors.primary} />
+              <View style={styles.avatarEditBadge}>
+                <Feather name="shield" size={10} color={colors.white} />
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.headerInfo}>
-            <View style={styles.pillBadge}>
-              <Text style={styles.pillText}>DAILY CHECK-IN</Text>
-            </View>
+            {!isDesktop && (
+              <View style={styles.pillBadge}>
+                <Text style={styles.pillText}>DAILY CHECK-IN</Text>
+              </View>
+            )}
             <Text style={styles.statusTitle}>Mansakha Care</Text>
-            <Text style={styles.subtext}>Quick well-being pulse</Text>
+            {!isDesktop && <Text style={styles.subtext}>Quick well-being pulse</Text>}
           </View>
         </View>
 
-        <Pressable style={styles.speakHeaderBtn} onPress={speakGuide}>
-          <Feather name="volume-2" size={18} color={colors.primary} />
-        </Pressable>
+        <View style={styles.headerRightRow}>
+          <Pressable style={styles.speakHeaderBtn} onPress={speakGuide}>
+            <Feather name="volume-2" size={18} color={colors.primary} />
+          </Pressable>
+          {isDesktop && (
+            <DesktopHeaderActions
+              fullName={dashboardQuery.data?.fullName}
+              alertCount={dashboardQuery.data?.alerts?.length || 0}
+              onBellPress={() => {}}
+            />
+          )}
+        </View>
       </View>
 
       {/* Main Body Content */}
-      <View style={styles.contentBody}>
+      <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
         {/* Date Ticker */}
         <View style={styles.dateTicker}>
           <Text style={styles.tickerText}>{dayStr}</Text>
@@ -233,6 +253,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, alignItems: 'center' },
+  headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
     width: 56,
@@ -244,6 +266,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     position: 'relative',
   },
+  avatarContainerDesktop: { width: 40, height: 40 },
   avatarEditBadge: {
     position: 'absolute',
     bottom: 0,
@@ -264,6 +287,7 @@ const styles = StyleSheet.create({
   pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   statusTitle: { ...typography.h3, color: colors.primaryDark },
   subtext: { ...typography.caption, color: colors.textSecondary },
+  headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   speakHeaderBtn: {
     width: 40,
     height: 40,
@@ -280,6 +304,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
+  },
+  contentBodyDesktop: {
+    marginTop: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   dateTicker: {
     flexDirection: 'row',

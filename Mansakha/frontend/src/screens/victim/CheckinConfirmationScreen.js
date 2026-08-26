@@ -5,8 +5,11 @@ import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
+import { formContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export default function CheckinConfirmationScreen({ navigation }) {
+  const { tier } = useResponsive();
   const handleGoHome = () => {
     // 1. Pop all screens off the current stack back to the root CheckinScreen
     if (navigation.canGoBack()) {
@@ -18,25 +21,27 @@ export default function CheckinConfirmationScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Illustration Asset */}
-      <View style={styles.illustrationWrapper}>
-        <Image
-          source={require('../../assets/success-illustration.png')}
-          style={styles.illustration}
-          resizeMode="contain"
-        />
+      <View style={{ maxWidth: formContentWidth[tier], width: '100%', alignItems: 'center' }}>
+        {/* Illustration Asset */}
+        <View style={styles.illustrationWrapper}>
+          <Image
+            source={require('../../assets/success-illustration.png')}
+            style={styles.illustration}
+            resizeMode="contain"
+          />
+        </View>
+
+        {/* Main Success Title */}
+        <Text style={styles.title}>SUCCESS!!</Text>
+
+        {/* Simplified Assessment Text */}
+        <Text style={styles.body}>Successfully completed the assessment</Text>
+
+        {/* Primary Action Button to Homescreen */}
+        <Pressable style={styles.primaryBtn} onPress={handleGoHome}>
+          <Text style={styles.primaryBtnText}>Go to Homescreen</Text>
+        </Pressable>
       </View>
-
-      {/* Main Success Title */}
-      <Text style={styles.title}>SUCCESS!!</Text>
-
-      {/* Simplified Assessment Text */}
-      <Text style={styles.body}>Successfully completed the assessment</Text>
-
-      {/* Primary Action Button to Homescreen */}
-      <Pressable style={styles.primaryBtn} onPress={handleGoHome}>
-        <Text style={styles.primaryBtnText}>Go to Homescreen</Text>
-      </Pressable>
     </View>
   );
 }

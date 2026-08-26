@@ -18,7 +18,18 @@ export default function StaffLogin() {
     try {
       const data = await apiClient.post('/api/auth/staff/login', { email, password, roleName });
       setToken(data.token);
-      navigate(roleName === 'Counsellor' ? '/staff/counsellor' : '/staff/administration');
+
+      if (roleName === 'Counsellor') {
+        navigate('/counsellor');
+        return;
+      }
+
+      // Administration accounts route to /districtadmin or /stateadmin based
+      // on their own jurisdiction level - not a choice made at login, so it's
+      // looked up via /api/me rather than picked from the dropdown.
+      const me = await apiClient.get('/api/me', data.token);
+      const jurisdictionLevel = me.roles?.[0]?.jurisdictionLevel;
+      navigate(jurisdictionLevel === 'state' || jurisdictionLevel === 'national' ? '/stateadmin' : '/districtadmin');
     } catch (err) {
       setError(err.message);
     } finally {

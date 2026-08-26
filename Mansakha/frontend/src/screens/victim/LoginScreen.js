@@ -7,6 +7,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { apiClient } from '../../services/apiClient';
 import { useVictimPasswordLogin } from '../../services/hooks';
+import { authContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 import IconInput from '../../components/IconInput';
 import AuthModeSelect from '../../components/AuthModeSelect';
 
@@ -61,6 +63,7 @@ function GoogleSignInButton({ onVerified, onError, setLoading }) {
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
   const toast = useToast();
+  const { tier } = useResponsive();
 
   const [authMode, setAuthMode] = useState(AUTH_MODE.EMAIL_OTP);
   const [email, setEmail] = useState('');
@@ -173,7 +176,7 @@ export default function LoginScreen({ navigation }) {
         </Text>
       </View>
 
-      <View style={styles.card}>
+      <View style={[styles.card, { maxWidth: authContentWidth[tier] }]}>
         <AuthModeSelect
           options={[
             { value: AUTH_MODE.PASSWORD, label: 'Password', icon: 'lock' },

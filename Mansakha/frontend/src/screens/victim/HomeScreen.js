@@ -6,13 +6,17 @@ import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
+import { dashboardContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import RiskBadge from '../../components/RiskBadge';
+import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useVictimDashboard } from '../../services/hooks';
 
 export default function HomeScreen({ navigation }) {
   const query = useVictimDashboard();
+  const { tier, isDesktop } = useResponsive();
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
   const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
@@ -28,37 +32,53 @@ export default function HomeScreen({ navigation }) {
           return (
             <>
               {/* Top Profile Header */}
-              <View style={styles.topHeader}>
+              <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
                 <View style={styles.headerLeft}>
-                  <View style={styles.avatarContainer}>
-                    <Feather name="user" size={32} color={colors.primary} />
-                    <View style={styles.avatarEditBadge}>
-                      <Feather name="shield" size={10} color={colors.white} />
+                  {isDesktop ? (
+                    <Feather name="user" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+                  ) : (
+                    <View style={styles.avatarContainer}>
+                      <Feather name="user" size={32} color={colors.primary} />
+                      <View style={styles.avatarEditBadge}>
+                        <Feather name="shield" size={10} color={colors.white} />
+                      </View>
                     </View>
-                  </View>
+                  )}
 
                   <View style={styles.headerInfo}>
-                    <View style={styles.pillBadge}>
-                      <Text style={styles.pillText}>{data.caseStatus.caseStage}</Text>
-                    </View>
+                    {!isDesktop && (
+                      <View style={styles.pillBadge}>
+                        <Text style={styles.pillText}>{data.caseStatus.caseStage}</Text>
+                      </View>
+                    )}
                     <Text style={styles.statusTitle}>{data.caseStatus.status}</Text>
-                    <Text style={styles.subtext}>
-                      {data.nextCheckIn
-                        ? `Next: ${new Date(data.nextCheckIn).toLocaleDateString()}`
-                        : 'Active Portal'}
-                    </Text>
+                    {!isDesktop && (
+                      <Text style={styles.subtext}>
+                        {data.nextCheckIn
+                          ? `Next: ${new Date(data.nextCheckIn).toLocaleDateString()}`
+                          : 'Active Portal'}
+                      </Text>
+                    )}
                   </View>
                 </View>
 
                 <View style={styles.headerRight}>
-                  <Pressable style={styles.iconCircleBtn}>
-                    <Feather name="bell" size={18} color={colors.primaryDark} />
-                  </Pressable>
+                  {isDesktop ? (
+                    <DesktopHeaderActions
+                      fullName={data.fullName}
+                      alertCount={data.alerts.length}
+                      onBellPress={() => navigation?.navigate('support')}
+                    />
+                  ) : (
+                    <Pressable style={styles.iconCircleBtn}>
+                      <Feather name="bell" size={18} color={colors.primaryDark} />
+                    </Pressable>
+                  )}
                 </View>
               </View>
 
               {/* Main Rounded Body Area */}
-              <View style={styles.contentBody}>
+              <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
                 {/* Date Ticker */}
                 <View style={styles.dateTicker}>
                   <Text style={styles.tickerText}>{dayStr}</Text>
@@ -104,7 +124,7 @@ export default function HomeScreen({ navigation }) {
                 {/* 2x2 Quick Actions Grid */}
                 <View style={styles.gridContainer}>
                   <Pressable
-                    style={styles.gridCard}
+                    style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
                     onPress={() => navigation?.navigate('Chatbot')}
                   >
                     <View style={styles.gridIconCircle}>
@@ -115,7 +135,7 @@ export default function HomeScreen({ navigation }) {
                   </Pressable>
 
                   <Pressable
-                    style={styles.gridCard}
+                    style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
                     onPress={() => navigation?.navigate('Wellbeing')}
                   >
                     <View style={styles.gridIconCircle}>
@@ -126,7 +146,7 @@ export default function HomeScreen({ navigation }) {
                   </Pressable>
 
                   <Pressable
-                    style={styles.gridCard}
+                    style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
                     onPress={() => navigation?.navigate('Support')}
                   >
                     <View style={styles.gridIconCircle}>
@@ -137,7 +157,7 @@ export default function HomeScreen({ navigation }) {
                   </Pressable>
 
                   <Pressable
-                    style={styles.gridCard}
+                    style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
                     onPress={() => navigation?.navigate('HelpCenter')}
                   >
                     <View style={styles.gridIconCircle}>
@@ -184,6 +204,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  topHeaderDesktop: {
+    height: 64,
+    paddingTop: 0,
+    paddingBottom: 0,
+    alignItems: 'center',
+  },
+  headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
     width: 56,
@@ -195,6 +222,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     position: 'relative',
   },
+  avatarContainerDesktop: { width: 36, height: 36 },
   avatarEditBadge: {
     position: 'absolute',
     bottom: 0,
@@ -232,6 +260,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
+  },
+  contentBodyDesktop: {
+    marginTop: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   dateTicker: {
     flexDirection: 'row',
@@ -297,6 +330,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadow.card,
   },
+  gridCardDesktop: { width: '23%' },
   gridIconCircle: {
     width: 44,
     height: 44,

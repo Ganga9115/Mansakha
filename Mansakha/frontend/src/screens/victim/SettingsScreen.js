@@ -9,13 +9,18 @@ import {
   useLanguageOptions,
   useUpdateVictimLanguage,
 } from '../../services/hooks';
+import { apiClient } from '../../services/apiClient';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
+import { formContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import Dropdown from '../../components/Dropdown';
+import IconInput from '../../components/IconInput';
+import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import { Skeleton } from '../../components/Skeleton';
 
 function InfoTileRow({ icon, label, value, loading, iconColor = colors.primary, isLast = false }) {
@@ -44,6 +49,14 @@ export default function SettingsScreen() {
   const languagesQuery = useLanguageOptions();
   const updateLanguage = useUpdateVictimLanguage();
   const [languageId, setLanguageId] = useState(null);
+  const { tier, isDesktop } = useResponsive();
+
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(null);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
@@ -66,36 +79,75 @@ export default function SettingsScreen() {
     }
   };
 
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+    setPasswordSuccess(false);
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      await apiClient.post('/api/auth/victim/change-password', { newPassword }, session?.token);
+      setPasswordSuccess(true);
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => { setShowPasswordForm(false); setPasswordSuccess(false); }, 1500);
+    } catch (err) {
+      setPasswordError(err.message);
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
       {/* Blue Header Section */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
-          <View style={styles.avatarContainer}>
-            <Feather name="settings" size={28} color={colors.primary} />
-            <View style={styles.avatarEditBadge}>
-              <Feather name="sliders" size={10} color={colors.white} />
+          {isDesktop ? (
+            <Feather name="settings" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Feather name="settings" size={28} color={colors.primary} />
+              <View style={styles.avatarEditBadge}>
+                <Feather name="sliders" size={10} color={colors.white} />
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.headerInfo}>
-            <View style={styles.pillBadge}>
-              <Text style={styles.pillText}>PREFERENCES</Text>
-            </View>
+            {!isDesktop && (
+              <View style={styles.pillBadge}>
+                <Text style={styles.pillText}>PREFERENCES</Text>
+              </View>
+            )}
             <Text style={styles.statusTitle}>App Settings</Text>
-            <Text style={styles.subtext}>Manage account & choices</Text>
+            {!isDesktop && <Text style={styles.subtext}>Manage account & choices</Text>}
           </View>
         </View>
 
         <View style={styles.headerRight}>
-          <Pressable style={styles.iconCircleBtn} onPress={logout}>
-            <Feather name="log-out" size={18} color={colors.error} />
-          </Pressable>
+          {isDesktop ? (
+            <DesktopHeaderActions
+              fullName={dashboardQuery.data?.fullName}
+              alertCount={dashboardQuery.data?.alerts?.length || 0}
+              onBellPress={() => {}}
+            />
+          ) : (
+            <Pressable style={styles.iconCircleBtn} onPress={logout}>
+              <Feather name="log-out" size={18} color={colors.error} />
+            </Pressable>
+          )}
         </View>
       </View>
 
       {/* Main Rounded Body Area */}
-      <View style={styles.contentBody}>
+      <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
         {/* Date Ticker Bar */}
         <View style={styles.dateTicker}>
           <Text style={styles.tickerText}>{dayStr}</Text>
@@ -188,11 +240,56 @@ export default function SettingsScreen() {
           />
         </Card>
 
-        {/* Log Out Action Button */}
-        <Pressable style={styles.logoutBtn} onPress={logout}>
-          <Feather name="log-out" size={18} color={colors.error} style={{ marginRight: spacing.xs }} />
-          <Text style={styles.logoutText}>Log Out</Text>
-        </Pressable>
+        {/* Security Card - Reset Password */}
+        <Text style={styles.sectionHeaderTitle}>SECURITY</Text>
+        <Card style={styles.customCard}>
+          <View style={styles.cardHeader}>
+            <View style={styles.accountIconTile}>
+              <Feather name="lock" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardHeaderTitle}>Password</Text>
+              <Text style={styles.cardHeaderSubtitle}>Change the password used to sign in</Text>
+            </View>
+          </View>
+
+          <Pressable
+            onPress={() => setShowPasswordForm((v) => !v)}
+            style={[styles.outlineBtn, { marginTop: spacing.md }]}
+          >
+            <Text style={styles.outlineBtnText}>{showPasswordForm ? 'Cancel' : 'Reset Password'}</Text>
+          </Pressable>
+
+          {showPasswordForm && (
+            <View style={{ marginTop: spacing.md }}>
+              <IconInput
+                icon="lock"
+                placeholder="New password (min 8 characters)"
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+              />
+              <IconInput
+                icon="lock"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+              />
+              {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+              {passwordSuccess && <Text style={styles.successText}>Password updated.</Text>}
+              <Pressable
+                style={styles.primaryBtnFilled}
+                onPress={handleChangePassword}
+                disabled={passwordLoading}
+              >
+                <Text style={styles.primaryBtnFilledText}>
+                  {passwordLoading ? 'Updating...' : 'Confirm New Password'}
+                </Text>
+              </Pressable>
+            </View>
+          )}
+        </Card>
       </View>
     </ScrollView>
   );
@@ -209,6 +306,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  topHeaderDesktop: {
+    height: 64,
+    paddingTop: 0,
+    paddingBottom: 0,
+    alignItems: 'center',
+  },
+  headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
     width: 56,
@@ -220,6 +324,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     position: 'relative',
   },
+  avatarContainerDesktop: { width: 40, height: 40 },
   avatarEditBadge: {
     position: 'absolute',
     bottom: 0,
@@ -257,6 +362,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xxxl,
+  },
+  contentBodyDesktop: {
+    marginTop: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
   },
   dateTicker: {
     flexDirection: 'row',
@@ -309,16 +419,22 @@ const styles = StyleSheet.create({
   tileTextWrap: { flex: 1 },
   tileLabel: { ...typography.caption, color: colors.textSecondary, textTransform: 'uppercase' },
   tileValue: { ...typography.bodyStrong, color: colors.textPrimary, marginTop: 2 },
-  logoutBtn: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    paddingVertical: spacing.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing.md,
+  outlineBtn: {
     borderWidth: 1.5,
-    borderColor: colors.error,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
   },
-  logoutText: { ...typography.bodyStrong, color: colors.error, fontSize: 16 },
+  outlineBtnText: { ...typography.bodyStrong, color: colors.textPrimary },
+  primaryBtnFilled: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.sm,
+  },
+  primaryBtnFilledText: { ...typography.bodyStrong, color: colors.white },
+  errorText: { ...typography.caption, color: colors.error, marginTop: spacing.sm, textAlign: 'center' },
+  successText: { ...typography.caption, color: colors.success, marginTop: spacing.sm, textAlign: 'center' },
 });

@@ -87,7 +87,7 @@ export default function CaseQueue() {
                     </td>
                     <td className="py-4 px-6 text-right">
                       <button
-                        onClick={() => navigate(`/staff/counsellor/case-detail/${item.victimId}`)}
+                        onClick={() => navigate(`/counsellor/case-detail/${item.victimId}`)}
                         className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-medium transition"
                       >
                         View Case

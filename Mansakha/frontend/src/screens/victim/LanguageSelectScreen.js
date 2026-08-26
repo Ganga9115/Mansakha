@@ -3,6 +3,8 @@ import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useLanguage } from '../../context/LanguageContext';
 import { LANGUAGES, translate } from '../../i18n/strings';
+import { authContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 
 const THEME = {
   bg: '#F8F9FD',
@@ -17,6 +19,7 @@ const THEME = {
 
 export default function LanguageSelectScreen({ onSelected }) {
   const { setLanguage } = useLanguage();
+  const { tier } = useResponsive();
   const [selected, setSelected] = useState('en');
 
   const handleContinue = async () => {
@@ -25,7 +28,10 @@ export default function LanguageSelectScreen({ onSelected }) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.scrollContent, { maxWidth: authContentWidth[tier], width: '100%', alignSelf: 'center' }]}
+    >
       <Text style={styles.headerTitle}>Choose Language</Text>
       
       <Text style={styles.mainTitle}>{translate(selected, 'languageSelectTitle')}</Text>

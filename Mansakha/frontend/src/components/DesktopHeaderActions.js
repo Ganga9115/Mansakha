@@ -1,0 +1,87 @@
+import React from 'react';
+import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { colors } from '../theme/colors';
+import { spacing } from '../theme/spacing';
+import { radius } from '../theme/radius';
+import { typography } from '../theme/typography';
+
+// Desktop-tier top bar actions (search / notifications / profile) - sized
+// to match the Staff/Ministry web app's header exactly (256px search field,
+// bare bell icon, 36px avatar + two-line name/role chip) so every role's
+// top bar reads as the same component, just themed to its own colors.
+export default function DesktopHeaderActions({ fullName, roleLabel = 'Victim', alertCount = 0, onBellPress }) {
+  return (
+    <View style={styles.container}>
+      <View style={styles.searchWrap}>
+        <Feather name="search" size={16} color={colors.textSecondary} style={styles.searchIcon} />
+        <TextInput
+          placeholder="Search..."
+          placeholderTextColor={colors.textSecondary}
+          style={styles.searchInput}
+        />
+      </View>
+
+      <Pressable style={styles.bellBtn} onPress={onBellPress}>
+        <Feather name="bell" size={20} color={colors.primaryDark} />
+        {alertCount > 0 && <View style={styles.bellDot} />}
+      </Pressable>
+
+      <View style={styles.profileChip}>
+        <View style={styles.avatarCircle}>
+          <Feather name="user" size={18} color={colors.primary} />
+        </View>
+        <View>
+          <Text style={styles.profileName} numberOfLines={1}>{fullName || 'Loading...'}</Text>
+          <Text style={styles.profileRole} numberOfLines={1}>{roleLabel}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flexDirection: 'row', alignItems: 'center', gap: spacing.xl },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    height: 34,
+    width: 256,
+  },
+  searchIcon: { marginRight: spacing.sm },
+  searchInput: { flex: 1, fontSize: 13, color: colors.textPrimary, outlineStyle: 'none' },
+  bellBtn: { padding: spacing.xs, alignItems: 'center', justifyContent: 'center' },
+  bellDot: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    width: 8,
+    height: 8,
+    borderRadius: radius.pill,
+    backgroundColor: colors.danger,
+  },
+  profileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+    paddingLeft: spacing.lg,
+    maxWidth: 160,
+  },
+  avatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  profileName: { ...typography.bodyStrong, fontSize: 13, color: colors.textPrimary },
+  profileRole: { ...typography.caption, color: colors.textSecondary, marginTop: 1 },
+});

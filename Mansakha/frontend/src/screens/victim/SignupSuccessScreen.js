@@ -2,9 +2,12 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { authContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 
 export default function SignupSuccessScreen({ route }) {
   const { login } = useAuth();
+  const { tier } = useResponsive();
   const token = route.params?.token;
 
   const handleContinue = async () => {
@@ -16,7 +19,7 @@ export default function SignupSuccessScreen({ route }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
+      <View style={[styles.card, { maxWidth: authContentWidth[tier] }]}>
         {/* Celebration Illustration Graphic */}
         <View style={styles.illustrationWrapper}>
           <View style={styles.badgeBackground}>

@@ -12,6 +12,8 @@ import {
   useLanguageOptions,
   useVictimRegister,
 } from '../../services/hooks';
+import { authWizardContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 import IconInput from '../../components/IconInput';
 import AuthModeSelect from '../../components/AuthModeSelect';
 import Dropdown from '../../components/Dropdown';
@@ -113,6 +115,7 @@ const stepperStyles = StyleSheet.create({
 export default function VictimSignupScreen({ route, navigation }) {
   const { login } = useAuth();
   const toast = useToast();
+  const { tier } = useResponsive();
 
   const [step, setStep] = useState(route.params?.pendingToken ? 2 : 1);
   const [authMode, setAuthMode] = useState(AUTH_MODE.EMAIL_OTP);
@@ -278,9 +281,11 @@ export default function VictimSignupScreen({ route, navigation }) {
       </View>
 
       {/* Modern Horizontal Stepper */}
-      <HorizontalStepper currentStep={step} />
+      <View style={{ width: '100%', maxWidth: authWizardContentWidth[tier] }}>
+        <HorizontalStepper currentStep={step} />
+      </View>
 
-      <View style={styles.card}>
+      <View style={[styles.card, { maxWidth: authWizardContentWidth[tier] }]}>
         {step === 1 && (
           <View>
             <AuthModeSelect

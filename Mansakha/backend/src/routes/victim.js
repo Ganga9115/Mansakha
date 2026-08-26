@@ -36,6 +36,12 @@ router.get('/dashboard', verifyToken, requireVictim, generalApiLimiter, async (r
     .single();
   if (victimError || !victim) return fail(res, 'Victim record not found', 404);
 
+  const { data: identity } = await supabase
+    .from('victim_identity')
+    .select('full_name')
+    .eq('victim_id', victimId)
+    .maybeSingle();
+
   const { data: latestScore } = await supabase
     .from('distress_scores')
     .select('score_value, risk_level_id, computed_at, risk_levels(name)')
@@ -68,6 +74,7 @@ router.get('/dashboard', verifyToken, requireVictim, generalApiLimiter, async (r
   await writeAuditLog({ victimId, action: 'read', entityType: 'victim_dashboard', entityId: victimId });
 
   return ok(res, {
+    fullName: identity?.full_name || null,
     caseStatus: { status: victim.status, caseStage: victim.case_stage },
     preferredLanguageId: victim.preferred_language,
     currentDistressLevel: latestScore

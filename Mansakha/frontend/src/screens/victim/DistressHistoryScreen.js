@@ -6,10 +6,13 @@ import { spacing } from '../../theme/spacing';
 import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
+import { dashboardContentWidth } from '../../theme/layout';
+import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import RiskBadge from '../../components/RiskBadge';
+import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import { QueryBoundary } from '../../components/QueryStates';
-import { useDistressHistory } from '../../services/hooks';
+import { useDistressHistory, useVictimDashboard } from '../../services/hooks';
 
 const RISK_COLOR = {
   Low: colors.success,
@@ -82,71 +85,111 @@ function TrendChart({ scores }) {
 
 export default function DistressHistoryScreen() {
   const query = useDistressHistory();
+  const dashboardQuery = useVictimDashboard();
+  const { tier, isDesktop } = useResponsive();
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
   const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
   const yearStr = `Year - ${today.getFullYear()}`;
 
+  const keyExtractor = (item, index) => `${item.computedAt}-${index}`;
+  const renderItem = ({ item }) => (
+    <View style={styles.rowCard}>
+      <View style={styles.rowDateWrap}>
+        <View style={styles.calendarCircle}>
+          <Feather name="calendar" size={16} color={colors.primary} />
+        </View>
+        <View style={styles.rowDateText}>
+          <Text style={styles.scoreText}>Score: {item.score}/100</Text>
+          <Text style={styles.dateText}>{new Date(item.computedAt).toLocaleDateString()}</Text>
+        </View>
+      </View>
+      <RiskBadge riskLevel={item.riskLevel} />
+    </View>
+  );
+
+  const dateTicker = (
+    <View style={styles.dateTicker}>
+      <Text style={styles.tickerText}>{dayStr}</Text>
+      <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
+      <Text style={styles.tickerText}>{yearStr}</Text>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Top Profile Header */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
-          <View style={styles.avatarContainer}>
-            <Feather name="trending-up" size={28} color={colors.primary} />
-            <View style={styles.avatarEditBadge}>
-              <Feather name="activity" size={10} color={colors.white} />
+          {isDesktop ? (
+            <Feather name="trending-up" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Feather name="trending-up" size={28} color={colors.primary} />
+              <View style={styles.avatarEditBadge}>
+                <Feather name="activity" size={10} color={colors.white} />
+              </View>
             </View>
-          </View>
+          )}
 
           <View style={styles.headerInfo}>
-            <View style={styles.pillBadge}>
-              <Text style={styles.pillText}>ANALYTICS</Text>
-            </View>
+            {!isDesktop && (
+              <View style={styles.pillBadge}>
+                <Text style={styles.pillText}>ANALYTICS</Text>
+              </View>
+            )}
             <Text style={styles.statusTitle}>My Well-being</Text>
-            <Text style={styles.subtext}>Historical assessment records</Text>
+            {!isDesktop && <Text style={styles.subtext}>Historical assessment records</Text>}
           </View>
         </View>
+
+        {isDesktop && (
+          <DesktopHeaderActions
+            fullName={dashboardQuery.data?.fullName}
+            alertCount={dashboardQuery.data?.alerts?.length || 0}
+            onBellPress={() => {}}
+          />
+        )}
       </View>
 
       {/* Main Content Body */}
-      <View style={styles.contentBody}>
+      <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
         <QueryBoundary query={query} empty={(data) => !data?.scores?.length}>
-          {(data) => (
-            <FlatList
-              data={data.scores}
-              keyExtractor={(item, index) => `${item.computedAt}-${index}`}
-              contentContainerStyle={styles.list}
-              showsVerticalScrollIndicator={false}
-              ListHeaderComponent={
-                <View>
-                  {/* Date Ticker */}
-                  <View style={styles.dateTicker}>
-                    <Text style={styles.tickerText}>{dayStr}</Text>
-                    <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
-                    <Text style={styles.tickerText}>{yearStr}</Text>
-                  </View>
-
+          {(data) =>
+            isDesktop ? (
+              <View style={styles.desktopRow}>
+                <View style={styles.desktopChartCol}>
+                  {dateTicker}
                   <TrendChart scores={data.scores} />
+                </View>
+                <View style={styles.desktopListCol}>
                   <Text style={styles.sectionHeaderTitle}>PAST ASSESSMENTS</Text>
+                  <FlatList
+                    data={data.scores}
+                    keyExtractor={keyExtractor}
+                    contentContainerStyle={styles.list}
+                    showsVerticalScrollIndicator={false}
+                    renderItem={renderItem}
+                  />
                 </View>
-              }
-              renderItem={({ item }) => (
-                <View style={styles.rowCard}>
-                  <View style={styles.rowDateWrap}>
-                    <View style={styles.calendarCircle}>
-                      <Feather name="calendar" size={16} color={colors.primary} />
-                    </View>
-                    <View style={styles.rowDateText}>
-                      <Text style={styles.scoreText}>Score: {item.score}/100</Text>
-                      <Text style={styles.dateText}>{new Date(item.computedAt).toLocaleDateString()}</Text>
-                    </View>
+              </View>
+            ) : (
+              <FlatList
+                data={data.scores}
+                keyExtractor={keyExtractor}
+                contentContainerStyle={styles.list}
+                showsVerticalScrollIndicator={false}
+                ListHeaderComponent={
+                  <View>
+                    {dateTicker}
+                    <TrendChart scores={data.scores} />
+                    <Text style={styles.sectionHeaderTitle}>PAST ASSESSMENTS</Text>
                   </View>
-                  <RiskBadge riskLevel={item.riskLevel} />
-                </View>
-              )}
-            />
-          )}
+                }
+                renderItem={renderItem}
+              />
+            )
+          }
         </QueryBoundary>
       </View>
     </View>
@@ -163,6 +206,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, alignItems: 'center' },
+  headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
     width: 56,
@@ -174,6 +219,7 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     position: 'relative',
   },
+  avatarContainerDesktop: { width: 40, height: 40 },
   avatarEditBadge: {
     position: 'absolute',
     bottom: 0,
@@ -203,6 +249,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
   },
+  contentBodyDesktop: {
+    marginTop: 0,
+    borderTopLeftRadius: 0,
+    borderTopRightRadius: 0,
+  },
   dateTicker: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -212,6 +263,9 @@ const styles = StyleSheet.create({
   tickerText: { ...typography.bodyStrong, color: colors.primary },
   tickerTextActive: { color: colors.error },
   list: { paddingBottom: spacing.xxxl },
+  desktopRow: { flex: 1, flexDirection: 'row', gap: spacing.xl },
+  desktopChartCol: { width: 380 },
+  desktopListCol: { flex: 1 },
   sectionHeaderTitle: {
     ...typography.label,
     color: colors.primaryDark,

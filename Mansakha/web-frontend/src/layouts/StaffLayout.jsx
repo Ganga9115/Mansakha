@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   ListOrdered,
@@ -15,45 +15,74 @@ import { useMe } from '../services/hooks';
 
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
 
+// District/State Admin have identical nav shapes, only the URL prefix and
+// the underlying jurisdiction level differ.
+function adminNavItems(prefix) {
+  return [
+    { name: 'Dashboard', icon: LayoutDashboard, path: `/${prefix}` },
+    { name: 'Workload', icon: ListOrdered, path: `/${prefix}/workload` },
+    { name: 'Alerts', icon: Bell, path: `/${prefix}/alerts` },
+    { name: 'Reports', icon: BarChart3, path: '/reports' },
+    { name: 'Settings', icon: Settings, path: '/settings' },
+  ];
+}
+
 const NAV_ITEMS_BY_SECTION = {
   counsellor: [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/staff/counsellor' },
-    { name: 'Case Queue', icon: ListOrdered, path: '/staff/counsellor/case-queue' },
-    { name: 'Alerts', icon: Bell, path: '/staff/counsellor/alerts' },
-    { name: 'Interventions', icon: MessageSquare, path: '/staff/counsellor/interventions' },
-    { name: 'Reports', icon: BarChart3, path: '/staff/reports' },
-    { name: 'Settings', icon: Settings, path: '/staff/settings' },
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/counsellor' },
+    { name: 'Case Queue', icon: ListOrdered, path: '/counsellor/case-queue' },
+    { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
+    { name: 'Interventions', icon: MessageSquare, path: '/counsellor/interventions' },
+    { name: 'Reports', icon: BarChart3, path: '/reports' },
+    { name: 'Settings', icon: Settings, path: '/settings' },
   ],
-  administration: [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/staff/administration' },
-    { name: 'Workload', icon: ListOrdered, path: '/staff/administration/workload' },
-    { name: 'Alerts', icon: Bell, path: '/staff/administration/alerts' },
-    { name: 'Reports', icon: BarChart3, path: '/staff/reports' },
-    { name: 'Settings', icon: Settings, path: '/staff/settings' },
-  ],
+  districtadmin: adminNavItems('districtadmin'),
+  stateadmin: adminNavItems('stateadmin'),
 };
 
-// Shared shell for Counsellor and Administration - `section` picks which nav
-// set to show, since the two roles' screen sets don't overlap (Case Queue/
-// Interventions vs. Workload) beyond Reports/Settings, which both share.
-export default function StaffLayout({ children, title = 'Dashboard', section = 'counsellor' }) {
+const SECTION_LABELS = {
+  counsellor: 'Senior Counsellor',
+  districtadmin: 'District Administration',
+  stateadmin: 'State Administration',
+};
+
+// Shared shell for Counsellor, District Admin, and State Admin - `section`
+// picks which nav set to show; if not passed explicitly, it's derived from
+// the current URL so admin pages don't need to thread the prop through.
+export default function StaffLayout({ children, title = 'Dashboard', section }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { data: me } = useMe();
-  const navItems = NAV_ITEMS_BY_SECTION[section] || NAV_ITEMS_BY_SECTION.counsellor;
-  const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || '/staff/reports';
+  // /reports and /settings are shared, prefix-less routes - they can't be
+  // resolved from the URL, so they fall back to the logged-in account's own
+  // role/jurisdiction (from /api/me) instead of defaulting to Counsellor.
+  const meRole = me?.roles?.[0];
+  const sectionFromMe = !meRole ? 'counsellor'
+    : meRole.roleName !== 'Administration' ? 'counsellor'
+    : (meRole.jurisdictionLevel === 'state' || meRole.jurisdictionLevel === 'national') ? 'stateadmin'
+    : 'districtadmin';
+  const resolvedSection = section
+    || (location.pathname.startsWith('/districtadmin') ? 'districtadmin'
+      : location.pathname.startsWith('/stateadmin') ? 'stateadmin'
+      : location.pathname.startsWith('/counsellor') ? 'counsellor'
+      : sectionFromMe);
+  const navItems = NAV_ITEMS_BY_SECTION[resolvedSection] || NAV_ITEMS_BY_SECTION.counsellor;
+  const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || '/reports';
 
   return (
     <div className="flex h-screen w-full bg-[#F8F9FA] text-gray-800 font-sans">
 
       {/* PERSISTENT SIDEBAR */}
-      <aside className="w-64 bg-[#3D5A80] text-white flex flex-col justify-between p-6 shrink-0">
+      <aside className="w-64 bg-[#3D5A80] text-white flex flex-col justify-between shrink-0">
         <div>
-          <div className="mb-8">
-            <h1 className="text-2xl font-bold tracking-wide">Mansakha</h1>
-            <p className="text-xs text-blue-200 italic mt-0.5">Mind matters. We're listening.</p>
+          {/* Corner cell - same height as the header to its right, so the
+              two read as one continuous strip across the top. */}
+          <div className="h-16 flex flex-col justify-center px-6 border-b border-white/10">
+            <h1 className="text-xl font-bold tracking-wide leading-tight">Mansakha</h1>
+            <p className="text-[11px] text-blue-200 italic leading-tight">Mind matters. We're listening.</p>
           </div>
 
-          <nav className="space-y-2">
+          <nav className="space-y-2 p-6">
             {navItems.map((item) => {
               const Icon = item.icon;
               return (
@@ -77,49 +106,45 @@ export default function StaffLayout({ children, title = 'Dashboard', section = '
           </nav>
         </div>
 
-        <div className="pt-4 border-t border-blue-400/30 space-y-3">
+        <div className="px-6 pb-6 pt-4 border-t border-blue-400/30">
           <button
-            onClick={() => { logout(); navigate('/staff/login'); }}
+            onClick={() => { logout(); navigate('/login'); }}
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-blue-100 hover:bg-white/10 transition text-sm"
           >
             <LogOut size={18} />
             <span>Log Out</span>
           </button>
-          <div className="flex items-center gap-2 text-xs text-blue-200 px-4">
-            <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-            <span>Secure Server Connected</span>
-          </div>
         </div>
       </aside>
 
       {/* MAIN VIEW AREA */}
       <div className="flex-1 flex flex-col overflow-y-auto">
 
-        {/* PERSISTENT HEADER */}
-        <header className="h-16 bg-white border-b border-gray-200 px-8 flex items-center justify-between shrink-0">
-          <h2 className="text-xl font-bold text-gray-800">{title}</h2>
+        {/* PERSISTENT HEADER - same palette as the Victim app's top bar */}
+        <header className="h-16 bg-[#EBF4FA] border-b border-[#D6E8F5] px-8 flex items-center justify-between shrink-0">
+          <h2 className="text-xl font-bold text-[#3D5A80]">{title}</h2>
 
           <div className="flex items-center gap-6">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D5A80]/60" size={16} />
               <input
                 type="text"
                 placeholder="Search cases, alerts..."
-                className="pl-9 pr-4 py-1.5 bg-[#F8F9FA] rounded-md text-sm border-none focus:outline-none focus:ring-2 focus:ring-[#519BCE] w-64"
+                className="pl-9 pr-4 py-1.5 bg-white rounded-md text-sm border border-[#D6E8F5] focus:outline-none focus:ring-2 focus:ring-[#519BCE] w-64 text-[#3D5A80]"
               />
             </div>
 
             <Link
               to={alertsPath}
-              className="relative p-1 text-gray-500 hover:text-gray-700"
+              className="relative p-1 text-[#3D5A80] hover:opacity-70"
             >
               <Bell size={20} />
               <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
             </Link>
 
             <button
-              onClick={() => navigate('/staff/settings')}
-              className="flex items-center gap-3 border-l border-gray-200 pl-6 text-left focus:outline-none"
+              onClick={() => navigate('/settings')}
+              className="flex items-center gap-3 border-l border-[#D6E8F5] pl-6 text-left focus:outline-none"
             >
               <img
                 src={me?.profileImageUrl || FALLBACK_PHOTO}
@@ -127,8 +152,8 @@ export default function StaffLayout({ children, title = 'Dashboard', section = '
                 className="w-9 h-9 rounded-full object-cover"
               />
               <div className="text-xs">
-                <p className="font-bold text-gray-800">{me?.fullName || 'Loading...'}</p>
-                <p className="text-gray-500">Senior Counsellor</p>
+                <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
+                <p className="text-[#3D5A80]/70">{SECTION_LABELS[resolvedSection]}</p>
               </div>
             </button>
           </div>

@@ -31,7 +31,7 @@ export default function LogIntervention() {
     try {
       await logIntervention.mutate({ interventionTypeId, notes });
       setSubmitted(true);
-      setTimeout(() => navigate(`/staff/counsellor/case-detail/${victimId}`), 1200);
+      setTimeout(() => navigate(`/counsellor/case-detail/${victimId}`), 1200);
     } catch (err) {
       setError(err.message);
     }
@@ -105,7 +105,7 @@ export default function LogIntervention() {
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => navigate(`/staff/counsellor/case-detail/${victimId}`)}
+                onClick={() => navigate(`/counsellor/case-detail/${victimId}`)}
                 className="px-5 py-2.5 text-xs font-semibold text-gray-600 hover:text-gray-800 transition"
               >
                 Cancel

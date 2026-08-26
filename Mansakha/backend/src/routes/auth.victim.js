@@ -8,6 +8,7 @@ const { sendPhoneOtp, checkPhoneOtp } = require('../services/twilioVerify');
 const { signToken, signPendingRegistrationToken, verifyJwt } = require('../utils/jwt');
 const { ok, fail } = require('../services/responseEnvelope');
 const { victimOtpLimiter } = require('../middleware/rateLimiter');
+const { verifyToken } = require('../middleware/verifyToken');
 
 const router = express.Router();
 const googleClient = new OAuth2Client(process.env.GOOGLE_OAUTH_CLIENT_ID);
@@ -232,6 +233,27 @@ router.post('/login', async (req, res) => {
 
   const token = signToken({ type: 'victim', victimId });
   return ok(res, { token });
+});
+
+// Authenticated password change from Settings - distinct from the "forgot
+// password" case above, which stays OTP/Google recovery only. Mirrors
+// auth.staff.js's /change-password.
+router.post('/change-password', verifyToken, async (req, res) => {
+  if (req.auth.type !== 'victim') return fail(res, 'Victim account required', 403);
+
+  const { newPassword } = req.body;
+  if (!newPassword || newPassword.length < 8) {
+    return fail(res, 'newPassword must be at least 8 characters', 400);
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  const { error } = await supabase
+    .from('victims')
+    .update({ password_hash: passwordHash })
+    .eq('victim_id', req.auth.victimId);
+
+  if (error) return fail(res, 'Could not update password', 500);
+  return ok(res, null, 'Password updated');
 });
 
 module.exports = router;
