@@ -1,259 +1,122 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
-const { OAuth2Client } = require('google-auth-library');
 const { supabase } = require('../db/supabaseClient');
-const { issueEmailOtp, verifyEmailOtp } = require('../services/otpService');
-const { sendOtpEmail } = require('../services/mailer');
-const { sendPhoneOtp, checkPhoneOtp } = require('../services/twilioVerify');
-const { signToken, signPendingRegistrationToken, verifyJwt } = require('../utils/jwt');
+const { signToken } = require('../utils/jwt');
 const { ok, fail } = require('../services/responseEnvelope');
-const { victimOtpLimiter } = require('../middleware/rateLimiter');
-const { verifyToken } = require('../middleware/verifyToken');
+const { victimLoginLimiter, gpsLookupLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
-const googleClient = new OAuth2Client(process.env.GOOGLE_OAUTH_CLIENT_ID);
 
-// Dev-only fixed OTP for seeded dummy accounts (see db/seedDummyAccounts.js) -
-// lets the real OTP UI flows be tested with a memorable code instead of needing
-// a real inbox or a Twilio-verified number, without touching SMTP/Twilio for
-// these specific contacts. Strictly gated to development; production and any
-// contact not in these lists always goes through real SMTP/Twilio below, unchanged.
-const DEV_DUMMY_OTP = '123456';
-const DEV_DUMMY_VICTIM_EMAILS = ['victim@gmail.com'];
-const DEV_DUMMY_VICTIM_PHONES = ['+919999999999'];
-const isDevDummyEmail = (email) => process.env.NODE_ENV === 'development' && DEV_DUMMY_VICTIM_EMAILS.includes(email);
-const isDevDummyPhone = (phone) => process.env.NODE_ENV === 'development' && DEV_DUMMY_VICTIM_PHONES.includes(phone);
+// Victim Login surface - Feature Catalog Section 1.1. Replaces the old OTP
+// (mobile/email) + Google Sign-In + self-registration model entirely: a
+// victim record is now created BY staff (District Admin - routes/admin.js,
+// or Data Intake Admin - routes/dataIntake.js), and a victim logs in with
+// the four identifying fields staff entered for them - docket number, full
+// name, state, and district. No password, no OTP: knowing all four fields
+// (which only the victim and the provisioning official should know together)
+// IS the credential, matching how many Indian govt beneficiary-lookup
+// portals already work. Removed alongside this: otpService.js,
+// twilioVerify.js, mailer.js, the Google OAuth client, and the "forgot
+// password"/"change password" flow (there's no password left to change) -
+// none of the deleted files are referenced anywhere else (confirmed via a
+// repo-wide search before deletion).
 
-// Victim Login surface - Build Prompt Section 3: OTP via mobile, OTP via email, or
-// Gmail/Google OAuth. Victims self-register; there is no Ministry provisioning step.
-//
-// A verified contact that doesn't yet match an existing `victims` row is NOT
-// silently turned into a fake/placeholder victim record here - case_type,
-// jurisdiction, and docket number are real required fields the actual registration
-// screen (Victim Module, next build pass) needs to collect. This endpoint's job is
-// only to prove who the person is; `registered: false` tells the frontend to route
-// to registration instead of a dashboard.
-
-async function findVictimByContact({ email, phone }) {
-  let query = supabase.from('victim_identity').select('victim_id, contact_number, email');
-  if (email) query = query.eq('email', email);
-  if (phone) query = query.eq('contact_number', phone);
-  const { data } = await query.maybeSingle();
-  return data ? data.victim_id : null;
+// Escapes LIKE/ILIKE special characters so an exact case-insensitive match
+// can't be turned into a wildcard pattern by a crafted docketNumber (e.g. a
+// literal "%" or "_" in the input).
+function escapeLikePattern(str) {
+  return str.replace(/[%_\\]/g, '\\$&');
 }
 
-async function issueVictimSession(res, victimId, verifiedContact) {
-  if (!victimId) {
-    // Short-lived token proving exactly this contact was just verified - the
-    // only thing /register accepts as proof of identity, so a client can't
-    // register a victim record for a contact it never actually verified.
-    const pendingToken = signPendingRegistrationToken(verifiedContact);
-    return ok(res, { registered: false, verifiedContact, pendingToken }, 'Contact verified; registration required');
-  }
-  const token = signToken({ type: 'victim', victimId });
-  return ok(res, { registered: true, token });
-}
-
-// Email OTP: we own generation/storage/expiry ourselves (email_otp_codes,
-// services/otpService.js) and deliver via SMTP (services/mailer.js).
-router.post('/otp/request', victimOtpLimiter, async (req, res) => {
-  const { email } = req.body;
-  if (!email) return fail(res, 'email is required for email OTP', 400);
-
-  if (isDevDummyEmail(email)) {
-    // No real send for the dummy account - nothing to deliver, the fixed code
-    // below is what /otp/verify will accept.
-    return ok(res, { requestId: email }, `Dev mode: use code ${DEV_DUMMY_OTP}`);
+router.post('/login', victimLoginLimiter, async (req, res) => {
+  const { docketNumber, fullName, stateName, jurisdictionId } = req.body;
+  if (!docketNumber || !fullName || !stateName || !jurisdictionId) {
+    return fail(res, 'docketNumber, fullName, stateName, and jurisdictionId are required', 400);
   }
 
-  try {
-    const code = await issueEmailOtp(email);
-    await sendOtpEmail(email, code);
-  } catch (err) {
-    console.error('Email OTP send failed:', err.message);
-    return fail(res, 'Could not send OTP', 500);
-  }
+  // Same generic message for every failure reason (no match / wrong
+  // state / wrong district / wrong name) - don't reveal which field was
+  // wrong to something probing for a valid docket number.
+  const genericFailure = () => fail(res, 'No matching record found - check your details and try again', 401);
 
-  return ok(res, { requestId: email }, 'OTP sent to email');
-});
-
-router.post('/otp/verify', async (req, res) => {
-  const { requestId, code } = req.body;
-  if (!requestId || !code) return fail(res, 'requestId and code are required', 400);
-
-  if (isDevDummyEmail(requestId)) {
-    if (code !== DEV_DUMMY_OTP) return fail(res, 'Invalid or expired code', 401);
-  } else {
-    const valid = await verifyEmailOtp(requestId, code);
-    if (!valid) return fail(res, 'Invalid or expired code', 401);
-  }
-
-  const victimId = await findVictimByContact({ email: requestId });
-  return issueVictimSession(res, victimId, { email: requestId, via: 'email_otp' });
-});
-
-// Mobile OTP: Twilio Verify owns generation/storage/expiry/attempt-limiting on
-// its side (services/twilioVerify.js) - this backend only relays the phone
-// number and code to Twilio's API, no client-side SDK involved.
-router.post('/phone-otp/request', victimOtpLimiter, async (req, res) => {
-  const { phone } = req.body;
-  if (!phone) return fail(res, 'phone is required for mobile OTP', 400);
-
-  if (isDevDummyPhone(phone)) {
-    return ok(res, { requestId: phone }, `Dev mode: use code ${DEV_DUMMY_OTP}`);
-  }
-
-  try {
-    await sendPhoneOtp(phone);
-  } catch (err) {
-    console.error('Phone OTP send failed:', err.message);
-    return fail(res, 'Could not send OTP', 500);
-  }
-
-  return ok(res, { requestId: phone }, 'OTP sent to phone');
-});
-
-router.post('/phone-otp/verify', async (req, res) => {
-  const { requestId, code } = req.body;
-  if (!requestId || !code) return fail(res, 'requestId and code are required', 400);
-
-  if (isDevDummyPhone(requestId)) {
-    if (code !== DEV_DUMMY_OTP) return fail(res, 'Invalid or expired code', 401);
-  } else {
-    let approved;
-    try {
-      approved = await checkPhoneOtp(requestId, code);
-    } catch (err) {
-      console.error('Phone OTP check failed:', err.message);
-      return fail(res, 'Invalid or expired code', 401);
-    }
-    if (!approved) return fail(res, 'Invalid or expired code', 401);
-  }
-
-  const victimId = await findVictimByContact({ phone: requestId });
-  return issueVictimSession(res, victimId, { phone: requestId, via: 'mobile_otp' });
-});
-
-router.post('/google', async (req, res) => {
-  const { idToken } = req.body;
-  if (!idToken) return fail(res, 'idToken is required', 400);
-
-  let payload;
-  try {
-    const ticket = await googleClient.verifyIdToken({ idToken, audience: process.env.GOOGLE_OAUTH_CLIENT_ID });
-    payload = ticket.getPayload();
-  } catch (err) {
-    return fail(res, 'Invalid Google token', 401);
-  }
-
-  if (!payload || !payload.email) return fail(res, 'Google account has no email', 400);
-
-  const victimId = await findVictimByContact({ email: payload.email });
-  return issueVictimSession(res, victimId, { email: payload.email, name: payload.name, via: 'google' });
-});
-
-const VALID_CASE_STAGES = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
-
-// Completes registration for a contact that was JUST verified via one of the
-// routes above (OTP or Google) - the pendingToken is the only source of truth
-// for which email/phone this record gets, never the request body, so a
-// client can't register a victim record for a contact it never proved it owns.
-router.post('/register', async (req, res) => {
-  const { pendingToken, fullName, caseTypeId, jurisdictionId, caseStage, docketNumber, preferredLanguageId, address, password } = req.body;
-  if (!pendingToken) return fail(res, 'pendingToken is required', 400);
-
-  let payload;
-  try {
-    payload = verifyJwt(pendingToken);
-  } catch (err) {
-    return fail(res, 'Verification expired - please verify your contact again', 401);
-  }
-  if (payload.type !== 'victim_pending') return fail(res, 'Invalid registration token', 401);
-
-  if (!fullName || !caseTypeId || !jurisdictionId || !caseStage) {
-    return fail(res, 'fullName, caseTypeId, jurisdictionId, and caseStage are required', 400);
-  }
-  if (!VALID_CASE_STAGES.includes(caseStage)) return fail(res, `caseStage must be one of: ${VALID_CASE_STAGES.join(', ')}`, 400);
-
-  // Contact may already be registered (e.g. token reused after a previous
-  // registration in another tab) - re-check rather than trust the token alone.
-  const existingVictimId = await findVictimByContact({ email: payload.email, phone: payload.phone });
-  if (existingVictimId) return fail(res, 'This contact is already registered - please sign in instead', 409);
-
-  const passwordHash = password ? await bcrypt.hash(password, 12) : null;
-  const authMethod = payload.via || (payload.email ? 'email_otp' : 'mobile_otp');
-
-  const { data: victim, error: victimError } = await supabase
+  const { data: victim } = await supabase
     .from('victims')
-    .insert({
-      case_type_id: caseTypeId,
-      jurisdiction_id: jurisdictionId,
-      case_stage: caseStage,
-      docket_number: docketNumber || null,
-      preferred_language: preferredLanguageId || null,
-      auth_method: authMethod,
-      password_hash: passwordHash,
-    })
-    .select('victim_id')
-    .single();
-  if (victimError) return fail(res, `Could not complete registration: ${victimError.message}`, 500);
+    .select('victim_id, jurisdiction_id')
+    .ilike('docket_number', escapeLikePattern(docketNumber.trim()))
+    .maybeSingle();
+  if (!victim || victim.jurisdiction_id !== jurisdictionId) return genericFailure();
 
-  const { error: identityError } = await supabase.from('victim_identity').insert({
-    victim_id: victim.victim_id,
-    full_name: fullName,
-    contact_number: payload.phone || null,
-    email: payload.email || null,
-    address: address || null,
-  });
-  if (identityError) return fail(res, `Could not complete registration: ${identityError.message}`, 500);
+  // Confirm jurisdictionId really is a district under the claimed state -
+  // two plain queries, not a self-join embed (routes/lookups.js already
+  // found PostgREST's self-referencing-FK embed hint 404s for this table).
+  const { data: district } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', jurisdictionId).maybeSingle();
+  const { data: state } = district ? await supabase.from('jurisdictions').select('name').eq('jurisdiction_id', district.parent_id).maybeSingle() : { data: null };
+  if (!state || state.name.trim().toLowerCase() !== stateName.trim().toLowerCase()) return genericFailure();
+
+  const { data: identity } = await supabase.from('victim_identity').select('full_name').eq('victim_id', victim.victim_id).maybeSingle();
+  if (!identity || identity.full_name.trim().toLowerCase() !== fullName.trim().toLowerCase()) return genericFailure();
 
   const token = signToken({ type: 'victim', victimId: victim.victim_id });
-  return ok(res, { token }, 'Registration complete', 201);
-});
-
-// Password login - the OTP/Google routes above remain the account-recovery
-// path if a victim forgets this password, so there's no separate reset flow.
-router.post('/login', async (req, res) => {
-  const { identifier, password } = req.body;
-  if (!identifier || !password) return fail(res, 'identifier and password are required', 400);
-
-  const isEmail = identifier.includes('@');
-  const victimId = await findVictimByContact(isEmail ? { email: identifier } : { phone: identifier });
-
-  // Same generic message whether the contact doesn't exist or the password is
-  // wrong or no password was ever set - don't leak which case it was.
-  const genericFailure = () => fail(res, 'Invalid email/phone or password', 401);
-  if (!victimId) return genericFailure();
-
-  const { data: victim } = await supabase.from('victims').select('password_hash').eq('victim_id', victimId).single();
-  if (!victim || !victim.password_hash) return genericFailure();
-
-  const matches = await bcrypt.compare(password, victim.password_hash);
-  if (!matches) return genericFailure();
-
-  const token = signToken({ type: 'victim', victimId });
   return ok(res, { token });
 });
 
-// Authenticated password change from Settings - distinct from the "forgot
-// password" case above, which stays OTP/Google recovery only. Mirrors
-// auth.staff.js's /change-password.
-router.post('/change-password', verifyToken, async (req, res) => {
-  if (req.auth.type !== 'victim') return fail(res, 'Victim account required', 403);
+// Loosely normalizes a jurisdiction name for comparison against OpenStreetMap's
+// naming, which won't always exactly match our seeded names (e.g. "NCT of
+// Delhi" vs "Delhi", "Bengaluru Urban" vs "Bengaluru").
+function namesLooselyMatch(a, b) {
+  const normalize = (s) => (s || '').toLowerCase().replace(/\b(district|state|nct of|union territory of)\b/g, '').replace(/[^a-z]/g, '');
+  return normalize(a) === normalize(b) && normalize(a).length > 0;
+}
 
-  const { newPassword } = req.body;
-  if (!newPassword || newPassword.length < 8) {
-    return fail(res, 'newPassword must be at least 8 characters', 400);
+// Feature Catalog Section 1.1 - "Auto-detect State & District (GPS)". Public
+// (called pre-login, from the Login screen's optional convenience button),
+// rate-limited since it's an unauthenticated route making a third-party call
+// on the caller's behalf. Always responds 200 with nulls on any failure to
+// find/match a location - this is optional convenience, never a blocker, so
+// it should never surface as an error the victim has to dismiss.
+router.post('/gps-lookup', gpsLookupLimiter, async (req, res) => {
+  const { lat, lng } = req.body;
+  if (typeof lat !== 'number' || typeof lng !== 'number') {
+    return fail(res, 'lat and lng (numbers) are required', 400);
   }
 
-  const passwordHash = await bcrypt.hash(newPassword, 12);
-  const { error } = await supabase
-    .from('victims')
-    .update({ password_hash: passwordHash })
-    .eq('victim_id', req.auth.victimId);
+  let osm;
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=jsonv2&addressdetails=1`;
+    const osmRes = await fetch(url, {
+      // Nominatim's usage policy requires a real identifying User-Agent.
+      headers: { 'User-Agent': 'Mansakha-SIH26094/1.0 (victim GPS state/district lookup)' },
+    });
+    if (!osmRes.ok) throw new Error(`Nominatim error (${osmRes.status})`);
+    osm = await osmRes.json();
+  } catch (err) {
+    console.warn('GPS lookup: reverse-geocode failed, returning empty match:', err.message);
+    return ok(res, { stateName: null, jurisdictionId: null });
+  }
 
-  if (error) return fail(res, 'Could not update password', 500);
-  return ok(res, null, 'Password updated');
+  const address = osm?.address || {};
+  const osmState = address.state;
+  const osmDistrict = address.state_district || address.county || address.district;
+  if (!osmState) return ok(res, { stateName: null, jurisdictionId: null });
+
+  const { data: states } = await supabase.from('jurisdictions').select('jurisdiction_id, name').eq('level', 'state');
+  const matchedState = (states || []).find((s) => namesLooselyMatch(s.name, osmState));
+  if (!matchedState) {
+    console.warn(`GPS lookup: no seeded state matched OSM state "${osmState}"`);
+    return ok(res, { stateName: null, jurisdictionId: null });
+  }
+
+  let matchedJurisdictionId = null;
+  if (osmDistrict) {
+    const { data: districts } = await supabase
+      .from('jurisdictions')
+      .select('jurisdiction_id, name')
+      .eq('level', 'district')
+      .eq('parent_id', matchedState.jurisdiction_id);
+    const matchedDistrict = (districts || []).find((d) => namesLooselyMatch(d.name, osmDistrict));
+    matchedJurisdictionId = matchedDistrict ? matchedDistrict.jurisdiction_id : null;
+  }
+
+  return ok(res, { stateName: matchedState.name, jurisdictionId: matchedJurisdictionId });
 });
 
 module.exports = router;

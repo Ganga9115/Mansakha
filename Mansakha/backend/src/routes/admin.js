@@ -7,8 +7,55 @@ const { requireRole } = require('../middleware/requireRole');
 const { requireJurisdiction } = require('../middleware/requireJurisdiction');
 const { generalApiLimiter } = require('../middleware/rateLimiter');
 const { ok, fail } = require('../services/responseEnvelope');
+const { createVictim, updateVictim, ProvisioningError } = require('../services/victimProvisioning');
 
 const router = express.Router();
+
+// Average distress score for a set of jurisdictions within [sinceIso, untilIso)
+// - untilIso omitted means "up to now". Mirrors countVictimsByRisk's existing
+// query shape (fetch victims with embedded distress_scores, aggregate in JS)
+// rather than a reverse-embed filter, matching this file's established style.
+async function computeAverageScore(jurisdictionIds, sinceIso, untilIso) {
+  const { data: victims } = await supabase
+    .from('victims')
+    .select('distress_scores(score_value, computed_at)')
+    .in('jurisdiction_id', jurisdictionIds);
+
+  let sum = 0;
+  let count = 0;
+  for (const v of victims || []) {
+    for (const s of v.distress_scores || []) {
+      if (s.computed_at >= sinceIso && (!untilIso || s.computed_at < untilIso)) {
+        sum += s.score_value;
+        count += 1;
+      }
+    }
+  }
+  return count > 0 ? sum / count : null;
+}
+
+const TREND_PERIOD_DAYS = 30;
+const TREND_FLAT_THRESHOLD = 2; // point-difference below which a change reads as noise, not a real trend
+
+// Feature Catalog Section 4.3 "Rising-trend districts" - compares this
+// period's average score against the prior period's for the same
+// jurisdiction set. Small, bounded helper - not a new table, a derived fact
+// computed on read (same reasoning schema.sql already uses for disengagement).
+async function computeTrendDirection(jurisdictionIds) {
+  const now = Date.now();
+  const periodStart = new Date(now - TREND_PERIOD_DAYS * 86400000).toISOString();
+  const priorPeriodStart = new Date(now - 2 * TREND_PERIOD_DAYS * 86400000).toISOString();
+
+  const [currentAvg, priorAvg] = await Promise.all([
+    computeAverageScore(jurisdictionIds, periodStart, null),
+    computeAverageScore(jurisdictionIds, priorPeriodStart, periodStart),
+  ]);
+
+  if (currentAvg === null || priorAvg === null) return 'flat';
+  if (currentAvg > priorAvg + TREND_FLAT_THRESHOLD) return 'up';
+  if (currentAvg < priorAvg - TREND_FLAT_THRESHOLD) return 'down';
+  return 'flat';
+}
 
 // Ministry's own role has jurisdiction_id: null (unrestricted, per Section 3), so
 // the frontend needs some way to know which jurisdiction ID to load as Ministry's
@@ -90,7 +137,10 @@ router.get(
     for (const child of children) {
       const childDescendants = await getDescendantJurisdictionIds(child.jurisdiction_id);
       const { counts: childCounts } = await countVictimsByRisk(childDescendants);
-      breakdown.push({ jurisdictionId: child.jurisdiction_id, name: child.name, ...childCounts });
+      // Section 4.3 "Rising-trend districts" - a per-row indicator, not a
+      // separate list, so the frontend can sort/highlight in place.
+      const trendDirection = await computeTrendDirection(childDescendants);
+      breakdown.push({ jurisdictionId: child.jurisdiction_id, name: child.name, ...childCounts, trendDirection });
     }
 
     return ok(res, { tier: jurisdiction.level, ...counts, trends: breakdown });
@@ -243,6 +293,195 @@ router.get(
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.send(csv);
+  }
+);
+
+// Feature Catalog Section 5.2 "Policy-input trend lines" - a longitudinal
+// time series distinct from the current-snapshot stat tiles above. National/
+// State tiers only makes sense here (District's own DistressHistoryScreen-
+// style per-case detail already exists via Counsellor's case detail).
+router.get(
+  '/dashboard/:jurisdictionId/trend',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.params.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId } = req.params;
+    const months = Math.min(Math.max(Number(req.query.months) || 6, 1), 24);
+
+    const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
+    const { data: victims } = await supabase
+      .from('victims')
+      .select('distress_scores(score_value, computed_at)')
+      .in('jurisdiction_id', allDescendantIds);
+
+    const scoresByMonth = new Map(); // 'YYYY-MM' -> { sum, count }
+    for (const v of victims || []) {
+      for (const s of v.distress_scores || []) {
+        const monthKey = s.computed_at.slice(0, 7);
+        const bucket = scoresByMonth.get(monthKey) || { sum: 0, count: 0 };
+        bucket.sum += s.score_value;
+        bucket.count += 1;
+        scoresByMonth.set(monthKey, bucket);
+      }
+    }
+
+    const points = [];
+    const now = new Date();
+    for (let i = months - 1; i >= 0; i -= 1) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const bucket = scoresByMonth.get(monthKey);
+      points.push({ month: monthKey, averageScore: bucket ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null });
+    }
+
+    return ok(res, { points });
+  }
+);
+
+// Feature Catalog Section 3.5 "Edit victim record" - search-by-docket-number
+// for the Edit form to load a record into before PATCHing it. Jurisdiction-
+// checked on the FOUND victim's own jurisdiction (not derivable from the
+// query string up front), same reasoning as PATCH /victims/:victimId below.
+router.get('/victims', verifyToken, requireRole(['Administration', 'Ministry']), generalApiLimiter, async (req, res) => {
+  const { docketNumber } = req.query;
+  if (!docketNumber) return fail(res, 'docketNumber is required', 400);
+
+  const { data: victim } = await supabase
+    .from('victims')
+    .select('victim_id, docket_number, case_type_id, jurisdiction_id, case_stage, status')
+    .ilike('docket_number', String(docketNumber).trim().replace(/[%_\\]/g, '\\$&'))
+    .maybeSingle();
+  if (!victim) return ok(res, { victim: null });
+
+  // Same parent-chain walk requireJurisdiction() does, applied to the FOUND
+  // victim's jurisdiction (unknowable up front from just a docket number
+  // query string, which is why this route can't use that middleware
+  // directly) - so a State/National Admin can find victims anywhere in
+  // their own subtree, not just an exact district-id match.
+  if (!req.auth.roles.some((r) => r.roleName === 'Ministry')) {
+    const assignedIds = new Set(req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean));
+    let currentId = victim.jurisdiction_id;
+    let allowed = false;
+    while (currentId) {
+      if (assignedIds.has(currentId)) { allowed = true; break; }
+      const { data: node } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', currentId).maybeSingle();
+      currentId = node ? node.parent_id : null;
+    }
+    if (!allowed) return fail(res, 'Outside your assigned jurisdiction', 403);
+  }
+
+  const { data: identity } = await supabase.from('victim_identity').select('full_name, contact_number, address').eq('victim_id', victim.victim_id).maybeSingle();
+
+  return ok(res, {
+    victim: {
+      victimId: victim.victim_id,
+      docketNumber: victim.docket_number,
+      caseTypeId: victim.case_type_id,
+      jurisdictionId: victim.jurisdiction_id,
+      caseStage: victim.case_stage,
+      status: victim.status,
+      fullName: identity?.full_name || null,
+      contactNumber: identity?.contact_number || null,
+      address: identity?.address || null,
+    },
+  });
+});
+
+// Feature Catalog Section 3.5 - the write-side counterpart to auth.victim.js's
+// docket-based login (Section 1.1). requireJurisdiction on the BODY's
+// jurisdictionId (the district the new victim belongs to, not an existing
+// resource) is what actually enforces "a District Admin can only create
+// victims inside their own district."
+router.post(
+  '/victims',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.body.jurisdictionId),
+  async (req, res) => {
+    const { docketNumber, fullName, jurisdictionId, caseTypeId, caseStage, address, caseBackground } = req.body;
+    try {
+      const { victimId } = await createVictim({
+        docketNumber, fullName, jurisdictionId, caseTypeId, caseStage, address, caseBackground,
+        provisionedVia: 'district_admin',
+      });
+      await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'create', entityType: 'victim', entityId: victimId });
+      // docketNumber returned explicitly (not just victimId) - this is what
+      // the victim will need to log in, and the admin needs to hand it to
+      // them out-of-band, same reasoning as Ministry's temp-password return
+      // on staff creation (routes/ministry.js).
+      return ok(res, { victimId, docketNumber }, 'Victim record created', 201);
+    } catch (err) {
+      if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
+      throw err;
+    }
+  }
+);
+
+router.patch(
+  '/victims/:victimId',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction(async (req) => {
+    const { data } = await supabase.from('victims').select('jurisdiction_id').eq('victim_id', req.params.victimId).maybeSingle();
+    return data ? data.jurisdiction_id : null;
+  }),
+  async (req, res) => {
+    const { victimId } = req.params;
+    const { caseStage, address, contactNumber } = req.body;
+    try {
+      await updateVictim(victimId, { caseStage, address, contactNumber });
+      await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'update', entityType: 'victim', entityId: victimId });
+      return ok(res, null, 'Victim record updated');
+    } catch (err) {
+      if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
+      throw err;
+    }
+  }
+);
+
+// Feature Catalog Section 3.6/4.4 - snapshots the caller's own dashboard
+// numbers (the exact same computation /dashboard/:jurisdictionId already
+// does, so there's no separate aggregation query to keep in sync) into a
+// durable `reports` row Ministry can list (routes/ministry.js's inbox).
+router.post(
+  '/reports/generate',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.body.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId, periodStart, periodEnd } = req.body;
+    if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
+
+    const { data: jurisdiction, error: jError } = await supabase.from('jurisdictions').select('level, name').eq('jurisdiction_id', jurisdictionId).single();
+    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+
+    const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
+    const { counts } = await countVictimsByRisk(allDescendantIds);
+
+    const end = periodEnd ? new Date(periodEnd) : new Date();
+    const start = periodStart ? new Date(periodStart) : new Date(end.getTime() - TREND_PERIOD_DAYS * 86400000);
+
+    const { data, error } = await supabase
+      .from('reports')
+      .insert({
+        jurisdiction_id: jurisdictionId,
+        generated_by: req.auth.officialId,
+        period_start: start.toISOString(),
+        period_end: end.toISOString(),
+        snapshot: { jurisdictionName: jurisdiction.name, tier: jurisdiction.level, ...counts },
+      })
+      .select('report_id, generated_at')
+      .single();
+    if (error) return fail(res, `Could not generate report: ${error.message}`, 500);
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'report', entityId: data.report_id });
+
+    return ok(res, { reportId: data.report_id, generatedAt: data.generated_at }, 'Report generated - visible to Ministry', 201);
   }
 );
 

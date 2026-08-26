@@ -12,10 +12,34 @@ const staffLoginLimiter = rateLimit({
   handler,
 });
 
-const victimOtpLimiter = rateLimit({
+// Feature Catalog Section 1.1: docket+name+state+district is now a
+// guessable-secret login surface (no OTP step in front of it any more), so
+// it gets the same 10/15min/IP shape as staff login.
+const victimLoginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  keyGenerator: (req) => req.ip,
+  handler,
+});
+
+// GPS lookup is unauthenticated and makes a third-party (Nominatim) request
+// on the caller's behalf - a generous but real cap, not a guessable-secret
+// concern like the two limiters above.
+const gpsLookupLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  limit: 5,
-  keyGenerator: (req) => req.body.phone || req.body.email || req.ip,
+  limit: 20,
+  keyGenerator: (req) => req.ip,
+  handler,
+});
+
+// Feature Catalog Section 1.3: chat is turn-by-turn, so one back-and-forth
+// (or a retry-loop bug) can burn a meaningful chunk of the Gemini free
+// tier's shared 20/day quota in minutes - a purpose-specific guard
+// alongside generalApiLimiter, not a replacement for it.
+const victimChatLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 15,
+  keyGenerator: (req) => (req.auth ? req.auth.victimId : req.ip),
   handler,
 });
 
@@ -26,4 +50,4 @@ const generalApiLimiter = rateLimit({
   handler,
 });
 
-module.exports = { staffLoginLimiter, victimOtpLimiter, generalApiLimiter };
+module.exports = { staffLoginLimiter, victimLoginLimiter, gpsLookupLimiter, victimChatLimiter, generalApiLimiter };
