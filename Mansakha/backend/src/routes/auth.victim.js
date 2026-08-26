@@ -37,19 +37,30 @@ router.post('/login', victimLoginLimiter, async (req, res) => {
   // wrong to something probing for a valid docket number.
   const genericFailure = () => fail(res, 'No matching record found - check your details and try again', 401);
 
-  const { data: victim } = await supabase
+  console.log('Login attempt:', { docketNumber, fullName, contactNumber });
+  const { data: victim, error: victimError } = await supabase
     .from('victims')
     .select('victim_id')
     .ilike('docket_number', escapeLikePattern(docketNumber.trim()))
     .maybeSingle();
-  if (!victim) return genericFailure();
+  
+  if (victimError) console.error('Victim query error:', victimError);
+  if (!victim) {
+    console.log('Victim not found for docket:', docketNumber);
+    return genericFailure();
+  }
 
-  const { data: identity } = await supabase.from('victim_identity').select('full_name, contact_number').eq('victim_id', victim.victim_id).maybeSingle();
+  const { data: identity, error: identityError } = await supabase.from('victim_identity').select('full_name, contact_number').eq('victim_id', victim.victim_id).maybeSingle();
+  if (identityError) console.error('Identity query error:', identityError);
+  
   if (!identity || 
       identity.full_name.trim().toLowerCase() !== fullName.trim().toLowerCase() ||
       (identity.contact_number || '').trim() !== contactNumber.trim()) {
+    console.log('Identity mismatch:', identity, { providedName: fullName, providedPhone: contactNumber });
     return genericFailure();
   }
+
+  console.log('Login successful for:', victim.victim_id);
 
   const token = signToken({ type: 'victim', victimId: victim.victim_id });
   return ok(res, { token });
