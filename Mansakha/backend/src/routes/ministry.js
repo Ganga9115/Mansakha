@@ -77,8 +77,8 @@ router.get('/staff', async (req, res) => {
 // shape consistent") with what Section 3/8 requires for Ministry to function at
 // all: nothing else can onboard staff without this.
 router.post('/staff', async (req, res) => {
-  const { fullName, email, roleName, jurisdictionId } = req.body;
-  if (!fullName || !email || !roleName) return fail(res, 'fullName, email, and roleName are required', 400);
+  const { fullName, email, roleName, jurisdictionId, password } = req.body;
+  if (!fullName || !email || !roleName || !password) return fail(res, 'fullName, email, roleName, and password are required', 400);
 
   // Server-side allowlist, not trusting client input: this endpoint can ONLY create
   // Administration/Counsellor/Data Intake Admin accounts. A Ministry account is
@@ -96,8 +96,7 @@ router.post('/staff', async (req, res) => {
 
   const { data: roleRow } = await supabase.from('roles').select('role_id').eq('role_name', roleName).single();
 
-  const tempPassword = crypto.randomBytes(9).toString('base64url');
-  const passwordHash = await bcrypt.hash(tempPassword, 12);
+  const passwordHash = await bcrypt.hash(password, 12);
 
   const { data: official, error: officialError } = await supabase
     .from('officials')
@@ -115,10 +114,8 @@ router.post('/staff', async (req, res) => {
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'official', entityId: official.official_id });
 
-  // Temp password returned once, here, so the Ministry operator can hand it to the
-  // new official out-of-band - it's never retrievable again (only the hash is
-  // stored), and must_change_password forces them to replace it on first login.
-  return ok(res, { officialId: official.official_id, tempPassword }, 'Account created', 201);
+  // must_change_password forces them to replace it on first login.
+  return ok(res, { officialId: official.official_id }, 'Account created', 201);
 });
 
 // Deliberately name/phone only - email is the login identifier, so it stays

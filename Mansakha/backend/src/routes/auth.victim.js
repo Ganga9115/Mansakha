@@ -10,8 +10,8 @@ const router = express.Router();
 // (mobile/email) + Google Sign-In + self-registration model entirely: a
 // victim record is now created BY staff (District Admin - routes/admin.js,
 // or Data Intake Admin - routes/dataIntake.js), and a victim logs in with
-// the four identifying fields staff entered for them - docket number, full
-// name, state, and district. No password, no OTP: knowing all four fields
+// the three identifying fields staff entered for them - docket number, full
+// name, and mobile number. No password, no OTP: knowing all three fields
 // (which only the victim and the provisioning official should know together)
 // IS the credential, matching how many Indian govt beneficiary-lookup
 // portals already work. Removed alongside this: otpService.js,
@@ -28,32 +28,28 @@ function escapeLikePattern(str) {
 }
 
 router.post('/login', victimLoginLimiter, async (req, res) => {
-  const { docketNumber, fullName, stateName, jurisdictionId } = req.body;
-  if (!docketNumber || !fullName || !stateName || !jurisdictionId) {
-    return fail(res, 'docketNumber, fullName, stateName, and jurisdictionId are required', 400);
+  const { docketNumber, fullName, contactNumber } = req.body;
+  if (!docketNumber || !fullName || !contactNumber) {
+    return fail(res, 'docketNumber, fullName, and contactNumber are required', 400);
   }
 
-  // Same generic message for every failure reason (no match / wrong
-  // state / wrong district / wrong name) - don't reveal which field was
+  // Same generic message for every failure reason - don't reveal which field was
   // wrong to something probing for a valid docket number.
   const genericFailure = () => fail(res, 'No matching record found - check your details and try again', 401);
 
   const { data: victim } = await supabase
     .from('victims')
-    .select('victim_id, jurisdiction_id')
+    .select('victim_id')
     .ilike('docket_number', escapeLikePattern(docketNumber.trim()))
     .maybeSingle();
-  if (!victim || victim.jurisdiction_id !== jurisdictionId) return genericFailure();
+  if (!victim) return genericFailure();
 
-  // Confirm jurisdictionId really is a district under the claimed state -
-  // two plain queries, not a self-join embed (routes/lookups.js already
-  // found PostgREST's self-referencing-FK embed hint 404s for this table).
-  const { data: district } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', jurisdictionId).maybeSingle();
-  const { data: state } = district ? await supabase.from('jurisdictions').select('name').eq('jurisdiction_id', district.parent_id).maybeSingle() : { data: null };
-  if (!state || state.name.trim().toLowerCase() !== stateName.trim().toLowerCase()) return genericFailure();
-
-  const { data: identity } = await supabase.from('victim_identity').select('full_name').eq('victim_id', victim.victim_id).maybeSingle();
-  if (!identity || identity.full_name.trim().toLowerCase() !== fullName.trim().toLowerCase()) return genericFailure();
+  const { data: identity } = await supabase.from('victim_identity').select('full_name, contact_number').eq('victim_id', victim.victim_id).maybeSingle();
+  if (!identity || 
+      identity.full_name.trim().toLowerCase() !== fullName.trim().toLowerCase() ||
+      (identity.contact_number || '').trim() !== contactNumber.trim()) {
+    return genericFailure();
+  }
 
   const token = signToken({ type: 'victim', victimId: victim.victim_id });
   return ok(res, { token });
@@ -63,7 +59,10 @@ router.post('/login', victimLoginLimiter, async (req, res) => {
 // naming, which won't always exactly match our seeded names (e.g. "NCT of
 // Delhi" vs "Delhi", "Bengaluru Urban" vs "Bengaluru").
 function namesLooselyMatch(a, b) {
-  const normalize = (s) => (s || '').toLowerCase().replace(/\b(district|state|nct of|union territory of)\b/g, '').replace(/[^a-z]/g, '');
+  const normalize = (s) => (s || '').toLowerCase()
+    .replace(/\b(district|state|nct of|union territory of)\b/g, '')
+    .replace(/th/g, 't')
+    .replace(/[^a-z]/g, '');
   return normalize(a) === normalize(b) && normalize(a).length > 0;
 }
 
