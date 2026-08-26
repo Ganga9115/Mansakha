@@ -38,8 +38,8 @@ export function useLanguageOptions() {
 // a District Admin / Data Intake Admin, not self-registered.
 export function useVictimLogin() {
   return useMutation({
-    mutationFn: ({ docketNumber, fullName, stateName, jurisdictionId }) =>
-      apiClient.post('/api/auth/victim/login', { docketNumber, fullName, stateName, jurisdictionId }),
+    mutationFn: ({ docketNumber, fullName, contactNumber }) =>
+      apiClient.post('/api/auth/victim/login', { docketNumber, fullName, contactNumber }),
   });
 }
 

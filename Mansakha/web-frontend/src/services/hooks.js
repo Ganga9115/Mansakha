@@ -145,7 +145,7 @@ export function useCreateVictimDataIntake() {
   const mutate = async (payload) => {
     setLoading(true);
     try {
-      return await apiClient.post('/api/data-intake/victims', payload, token);
+      return await apiClient.post('/api/data-intake/register-victim', payload, token);
     } finally {
       setLoading(false);
     }

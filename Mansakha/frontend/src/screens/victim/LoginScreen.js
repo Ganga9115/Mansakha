@@ -44,7 +44,8 @@ export default function LoginScreen({ navigation }) {
       });
       await login({ token: data.token, accountType: 'victim' });
     } catch (err) {
-      setError('No matching record found - check your details and try again.');
+      console.error('Login error:', err);
+      setError(`Login failed: ${err.message || 'Unknown error'}`);
     }
   };
 
