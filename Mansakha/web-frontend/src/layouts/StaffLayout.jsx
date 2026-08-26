@@ -9,17 +9,22 @@ import {
   Settings,
   Search,
   LogOut,
+  UserPlus,
+  FileSearch,
 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useCounsellorAlerts } from '../services/hooks';
 
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
 
-// District/State Admin have identical nav shapes, only the URL prefix and
-// the underlying jurisdiction level differ.
-function adminNavItems(prefix) {
+// District/State Admin have near-identical nav shapes, only the URL prefix,
+// underlying jurisdiction level, and (District only) Victim Registration
+// differ. National Admin's Feature Catalog entry is Dashboard-only, so it
+// doesn't take this generator at all.
+function adminNavItems(prefix, extraItems = []) {
   return [
     { name: 'Dashboard', icon: LayoutDashboard, path: `/${prefix}` },
+    ...extraItems,
     { name: 'Workload', icon: ListOrdered, path: `/${prefix}/workload` },
     { name: 'Alerts', icon: Bell, path: `/${prefix}/alerts` },
     { name: 'Reports', icon: BarChart3, path: `/${prefix}/reports` },
@@ -36,14 +41,27 @@ const NAV_ITEMS_BY_SECTION = {
     { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
     { name: 'Profile', icon: Settings, path: '/counsellor/profile' },
   ],
-  districtadmin: adminNavItems('districtadmin'),
+  districtadmin: adminNavItems('districtadmin', [
+    { name: 'Register Victim', icon: UserPlus, path: '/districtadmin/register-victim' },
+  ]),
   stateadmin: adminNavItems('stateadmin'),
+  nationaladmin: [
+    { name: 'Dashboard', icon: LayoutDashboard, path: '/nationaladmin' },
+    { name: 'Profile', icon: Settings, path: '/nationaladmin/profile' },
+  ],
+  dataintake: [
+    { name: 'Register Victim', icon: UserPlus, path: '/dataintake' },
+    { name: 'Fetch Case Details', icon: FileSearch, path: '/dataintake/fetch-case' },
+    { name: 'Profile', icon: Settings, path: '/dataintake/profile' },
+  ],
 };
 
 const SECTION_LABELS = {
   counsellor: 'Senior Counsellor',
   districtadmin: 'District Administration',
   stateadmin: 'State Administration',
+  nationaladmin: 'National Administration',
+  dataintake: 'Data Intake Admin',
 };
 
 // Shared shell for Counsellor, District Admin, and State Admin - `section`
@@ -59,6 +77,8 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
   const resolvedSection = section
     || (location.pathname.startsWith('/districtadmin') ? 'districtadmin'
       : location.pathname.startsWith('/stateadmin') ? 'stateadmin'
+      : location.pathname.startsWith('/nationaladmin') ? 'nationaladmin'
+      : location.pathname.startsWith('/dataintake') ? 'dataintake'
       : 'counsellor');
   const navItems = NAV_ITEMS_BY_SECTION[resolvedSection] || NAV_ITEMS_BY_SECTION.counsellor;
   const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || `/${resolvedSection}`;

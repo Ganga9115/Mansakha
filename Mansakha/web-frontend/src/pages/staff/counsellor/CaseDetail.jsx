@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
-import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
-import { useCaseDetail, useCaseNotes, useAddCaseNote, useCompleteIntervention } from '../../../services/hooks';
+import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus } from 'lucide-react';
+import {
+  useCaseDetail,
+  useCaseNotes,
+  useAddCaseNote,
+  useCompleteIntervention,
+  useInterventionTypes,
+  useCaseMessages,
+  useSendCaseMessage,
+  useScheduleSession,
+} from '../../../services/hooks';
 
 const RISK_BADGE = {
   Critical: 'bg-purple-100 text-purple-700',
@@ -20,11 +29,27 @@ const TREND_META = {
 export default function CaseDetail() {
   const { id: victimId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { data, loading, error, refetch } = useCaseDetail(victimId);
   const notesQuery = useCaseNotes(victimId);
   const addNote = useAddCaseNote(victimId);
   const completeIntervention = useCompleteIntervention(victimId);
+  const interventionTypesQuery = useInterventionTypes();
+  const scheduleSession = useScheduleSession(victimId);
   const [noteText, setNoteText] = useState('');
+  const [showChat, setShowChat] = useState(false);
+  const [scheduleDate, setScheduleDate] = useState('');
+  const [scheduleStatus, setScheduleStatus] = useState(null);
+
+  // District/State Admin reach this same screen (App.js routes
+  // /districtadmin/case-detail/:id and /stateadmin/case-detail/:id here) for
+  // a read-only view - Administration never gets intervention-logging or
+  // note-composing actions, per the PS's explicit Counsellor/Administration
+  // split, so those controls are hidden (not disabled) outside /counsellor.
+  const section = location.pathname.startsWith('/districtadmin') ? 'districtadmin'
+    : location.pathname.startsWith('/stateadmin') ? 'stateadmin'
+    : 'counsellor';
+  const readOnly = section !== 'counsellor';
 
   const handleAddNote = async () => {
     if (!noteText.trim()) return;
@@ -38,18 +63,30 @@ export default function CaseDetail() {
     refetch();
   };
 
+  const handleSchedule = async () => {
+    if (!scheduleDate) return;
+    setScheduleStatus(null);
+    try {
+      await scheduleSession.mutate(new Date(scheduleDate).toISOString());
+      setScheduleStatus('Session scheduled.');
+      setScheduleDate('');
+    } catch (err) {
+      setScheduleStatus(err.message || 'Could not schedule this session.');
+    }
+  };
+
   if (loading) {
-    return <StaffLayout title="Case File" section="counsellor"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <StaffLayout title="Case File" section={section}><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
   }
   if (error) {
-    return <StaffLayout title="Case File" section="counsellor"><div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div></StaffLayout>;
+    return <StaffLayout title="Case File" section={section}><div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div></StaffLayout>;
   }
 
   const trend = TREND_META[data.trend] || TREND_META.insufficient_data;
   const TrendIcon = trend.icon;
 
   return (
-    <StaffLayout title={`Case File: ${victimId.slice(0, 8)}`} section="counsellor">
+    <StaffLayout title={`Case File: ${victimId.slice(0, 8)}`} section={section}>
       <div className="space-y-6">
 
         {/* TOP SUMMARY HEADER */}
@@ -81,23 +118,25 @@ export default function CaseDetail() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            {data.interventionStatus === 'pending' && data.interventionId && (
+          {!readOnly && (
+            <div className="flex items-center gap-3">
+              {data.interventionStatus === 'pending' && data.interventionId && (
+                <button
+                  onClick={handleComplete}
+                  disabled={completeIntervention.loading}
+                  className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium shadow-sm hover:bg-[#3d83b3] transition disabled:opacity-60"
+                >
+                  Mark Intervention Complete
+                </button>
+              )}
               <button
-                onClick={handleComplete}
-                disabled={completeIntervention.loading}
-                className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium shadow-sm hover:bg-[#3d83b3] transition disabled:opacity-60"
+                onClick={() => navigate(`/counsellor/interventions?victimId=${victimId}${data.suggestedInterventionType ? `&suggested=${data.suggestedInterventionType.id}` : ''}`)}
+                className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-[#519BCE]/10 transition"
               >
-                Mark Intervention Complete
+                Log Intervention
               </button>
-            )}
-            <button
-              onClick={() => navigate(`/counsellor/interventions?victimId=${victimId}${data.suggestedInterventionType ? `&suggested=${data.suggestedInterventionType.id}` : ''}`)}
-              className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-[#519BCE]/10 transition"
-            >
-              Log Intervention
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-3 gap-6">
@@ -146,6 +185,9 @@ export default function CaseDetail() {
                     <div key={n.noteId} className="border-b border-gray-50 pb-2">
                       <div className="flex items-center gap-2 text-gray-400 mb-1">
                         <span className="font-semibold text-gray-600">{n.authorName}</span>
+                        {n.authoredBy === 'ai' && (
+                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#3D5A80] text-[9px] font-bold uppercase">AI-drafted</span>
+                        )}
                         <span>{new Date(n.createdAt).toLocaleString()}</span>
                       </div>
                       <p className="text-gray-700">{n.noteText}</p>
@@ -153,22 +195,24 @@ export default function CaseDetail() {
                   ))}
                 </div>
               )}
-              <div className="flex gap-2 pt-2">
-                <input
-                  type="text"
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  placeholder="Add a note..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs"
-                />
-                <button
-                  onClick={handleAddNote}
-                  disabled={addNote.loading}
-                  className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium disabled:opacity-60"
-                >
-                  Add
-                </button>
-              </div>
+              {!readOnly && (
+                <div className="flex gap-2 pt-2">
+                  <input
+                    type="text"
+                    value={noteText}
+                    onChange={(e) => setNoteText(e.target.value)}
+                    placeholder="Add a note..."
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs"
+                  />
+                  <button
+                    onClick={handleAddNote}
+                    disabled={addNote.loading}
+                    className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium disabled:opacity-60"
+                  >
+                    Add
+                  </button>
+                </div>
+              )}
             </div>
 
           </div>
@@ -176,14 +220,123 @@ export default function CaseDetail() {
           {/* RIGHT COLUMN */}
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
-              <h3 className="font-bold text-sm text-gray-800 mb-2">Case Stage</h3>
-              <p className="text-xs text-gray-500">Further case metadata coming soon.</p>
+              <h3 className="font-bold text-sm text-gray-800 mb-2">Case Background</h3>
+              <p className="text-xs text-gray-600 leading-relaxed">{data.caseBackground || 'No background notes on file.'}</p>
             </div>
+
+            {!readOnly && (
+              <>
+                {/* Decision-making panel - one button per seeded intervention
+                    type, pre-filling Log Intervention rather than defaulting
+                    to the dropdown's first option. */}
+                <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
+                  <h3 className="font-bold text-sm text-gray-800 mb-3">Decision Making</h3>
+                  {interventionTypesQuery.loading ? (
+                    <p className="text-xs text-gray-400">Loading options...</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-2">
+                      {(interventionTypesQuery.data?.interventionTypes || []).map((t) => (
+                        <button
+                          key={t.intervention_type_id}
+                          onClick={() => navigate(`/counsellor/interventions?victimId=${victimId}&suggested=${t.intervention_type_id}`)}
+                          className="px-3 py-2 text-left border border-gray-200 hover:border-[#519BCE] hover:bg-[#519BCE]/5 rounded-lg text-xs font-medium text-gray-700 transition"
+                        >
+                          {t.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Scheduled Counsellings */}
+                <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+                  <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2"><CalendarPlus size={16} /> Schedule a Session</h3>
+                  <input
+                    type="datetime-local"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
+                  />
+                  {scheduleStatus && <p className="text-[11px] text-gray-500">{scheduleStatus}</p>}
+                  <button
+                    onClick={handleSchedule}
+                    disabled={scheduleSession.loading || !scheduleDate}
+                    className="w-full px-3 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                  >
+                    {scheduleSession.loading ? 'Scheduling...' : 'Schedule'}
+                  </button>
+                </div>
+
+                {/* In-app chat - only shown when the victim has opted in to
+                    a manual counsellor; hidden entirely (not disabled)
+                    otherwise. */}
+                {data.optedForManualCounsellor && (
+                  <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
+                    <button
+                      onClick={() => setShowChat((v) => !v)}
+                      className="w-full flex items-center justify-between px-6 py-4 text-left"
+                    >
+                      <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2"><MessageCircle size={16} /> Chat with Victim</h3>
+                      <span className="text-xs text-[#519BCE] font-semibold">{showChat ? 'Hide' : 'Open'}</span>
+                    </button>
+                    {showChat && <CaseChatPanel victimId={victimId} />}
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
         </div>
 
       </div>
     </StaffLayout>
+  );
+}
+
+function CaseChatPanel({ victimId }) {
+  const { data, loading } = useCaseMessages(victimId);
+  const sendMessage = useSendCaseMessage(victimId);
+  const [draft, setDraft] = useState('');
+
+  const handleSend = async () => {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft('');
+    await sendMessage.mutate(text);
+  };
+
+  return (
+    <div className="border-t border-gray-100 p-4 space-y-3">
+      <div className="max-h-64 overflow-y-auto space-y-2">
+        {loading ? (
+          <p className="text-xs text-gray-400">Loading messages...</p>
+        ) : (data?.messages || []).length === 0 ? (
+          <p className="text-xs text-gray-400">No messages yet.</p>
+        ) : data.messages.map((m) => (
+          <div key={m.messageId} className={`flex ${m.senderType === 'official' ? 'justify-end' : 'justify-start'}`}>
+            <div className={`max-w-[80%] px-3 py-2 rounded-lg text-xs ${m.senderType === 'official' ? 'bg-[#519BCE] text-white' : 'bg-gray-100 text-gray-800'}`}>
+              {m.body}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          placeholder="Type a message..."
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs"
+        />
+        <button
+          onClick={handleSend}
+          disabled={sendMessage.loading || !draft.trim()}
+          className="px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-medium disabled:opacity-60"
+        >
+          Send
+        </button>
+      </div>
+    </div>
   );
 }

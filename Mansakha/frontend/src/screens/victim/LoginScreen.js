@@ -1,21 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
-import * as Google from 'expo-auth-session/providers/google';
+import * as Location from 'expo-location';
 import { useAuth } from '../../context/AuthContext';
-import { useToast } from '../../context/ToastContext';
-import { apiClient } from '../../services/apiClient';
-import { useVictimPasswordLogin } from '../../services/hooks';
+import { useJurisdictionOptions, useVictimLogin, useGpsLookup } from '../../services/hooks';
 import { authContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import IconInput from '../../components/IconInput';
-import AuthModeSelect from '../../components/AuthModeSelect';
-
-WebBrowser.maybeCompleteAuthSession();
-
-const AUTH_MODE = { PASSWORD: 'password', EMAIL_OTP: 'email_otp', MOBILE_OTP: 'mobile_otp' };
-const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_OAUTH_CLIENT_ID;
+import Dropdown from '../../components/Dropdown';
 
 const THEME = {
   bg: '#F8F9FD',
@@ -29,139 +21,84 @@ const THEME = {
   border: '#E2E8F0',
 };
 
-function GoogleSignInButton({ onVerified, onError, setLoading }) {
-  const [, googleResponse, promptGoogleLogin] = Google.useIdTokenAuthRequest({ clientId: GOOGLE_CLIENT_ID });
-
-  React.useEffect(() => {
-    // On web this flow returns the ID token in `params.id_token` (implicit
-    // flow), not `authentication.idToken` - that field is only populated by
-    // expo-auth-session's auto code-exchange path, which doesn't run here.
-    if (googleResponse?.type === 'success' && googleResponse.params?.id_token) {
-      (async () => {
-        onError(null);
-        setLoading(true);
-        try {
-          const data = await apiClient.post('/api/auth/victim/google', { idToken: googleResponse.params.id_token });
-          await onVerified(data);
-        } catch (err) {
-          onError(err.message);
-        } finally {
-          setLoading(false);
-        }
-      })();
-    }
-  }, [googleResponse]);
-
-  return (
-    <Pressable style={styles.outlineBtn} onPress={() => promptGoogleLogin()}>
-      <Feather name="log-in" size={18} color={THEME.primaryDark} style={{ marginRight: 8 }} />
-      <Text style={styles.outlineBtnText}>Continue with Google</Text>
-    </Pressable>
-  );
-}
-
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
-  const toast = useToast();
   const { tier } = useResponsive();
 
-  const [authMode, setAuthMode] = useState(AUTH_MODE.EMAIL_OTP);
-  const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [requestId, setRequestId] = useState(null);
-
-  const [phone, setPhone] = useState('');
-  const [phoneCode, setPhoneCode] = useState('');
-  const [phoneRequestId, setPhoneRequestId] = useState(null);
-
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-
+  const [docketNumber, setDocketNumber] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [stateId, setStateId] = useState('');
+  const [districtId, setDistrictId] = useState('');
+  const [pendingGpsDistrictId, setPendingGpsDistrictId] = useState(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(false);
 
-  const passwordLoginMutation = useVictimPasswordLogin();
+  const stateQuery = useJurisdictionOptions('state');
+  const districtQuery = useJurisdictionOptions('district', stateId);
+  const loginMutation = useVictimLogin();
+  const gpsLookupMutation = useGpsLookup();
 
-  const resetOtpFlow = () => {
-    setEmail(''); setCode(''); setRequestId(null);
-    setPhone(''); setPhoneCode(''); setPhoneRequestId(null);
-    setError(null);
-  };
+  // Alphabetical regardless of the order the backend returns them in - all
+  // States/UTs, and each State's Districts, sorted by name for the dropdowns.
+  const stateOptions = (stateQuery.data?.jurisdictions || [])
+    .map((j) => ({ value: j.jurisdictionId, label: j.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const districtOptions = (districtQuery.data?.jurisdictions || [])
+    .map((j) => ({ value: j.jurisdictionId, label: j.name }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
-  const requestEmailOtp = async () => {
-    setError(null);
-    setLoading(true);
-    try {
-      const data = await apiClient.post('/api/auth/victim/otp/request', { email });
-      setRequestId(data.requestId);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+  // Once a GPS-matched state's own district list has loaded, apply the
+  // GPS-suggested district selection (its label isn't known until then).
+  useEffect(() => {
+    if (!pendingGpsDistrictId) return;
+    const match = districtOptions.find((d) => d.value === pendingGpsDistrictId);
+    if (match) {
+      setDistrictId(match.value);
+      setPendingGpsDistrictId(null);
     }
-  };
+  }, [districtOptions, pendingGpsDistrictId]);
 
-  const verifyEmailOtp = async () => {
-    setError(null);
-    setLoading(true);
+  const handleAutoDetect = async () => {
+    setGpsLoading(true);
     try {
-      const data = await apiClient.post('/api/auth/victim/otp/verify', { requestId, code });
-      if (data.registered) {
-        await login({ token: data.token, accountType: 'victim' });
-      } else {
-        navigation.navigate('VictimSignup', { pendingToken: data.pendingToken, verifiedContact: data.verifiedContact });
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return; // optional convenience only - leave dropdowns manual
+      const position = await Location.getCurrentPositionAsync({});
+      const result = await gpsLookupMutation.mutateAsync({
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+      });
+      if (!result?.stateName || !result?.jurisdictionId) return;
+      const matchedState = stateOptions.find((o) => o.label.toLowerCase() === result.stateName.toLowerCase());
+      if (matchedState) {
+        setStateId(matchedState.value);
+        setPendingGpsDistrictId(result.jurisdictionId);
       }
     } catch (err) {
-      setError(err.message);
+      // Best-effort convenience - fail silently, manual selection still works.
     } finally {
-      setLoading(false);
+      setGpsLoading(false);
     }
   };
 
-  const requestPhoneOtp = async () => {
+  const handleLogin = async () => {
     setError(null);
-    setLoading(true);
-    try {
-      const data = await apiClient.post('/api/auth/victim/phone-otp/request', { phone: `+91${phone}` });
-      setPhoneRequestId(data.requestId);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const stateOption = stateOptions.find((o) => o.value === stateId);
+    if (!docketNumber.trim() || !fullName.trim() || !stateOption || !districtId) {
+      setError('Please fill in all fields.');
+      return;
     }
-  };
-
-  const verifyPhoneOtp = async () => {
-    setError(null);
-    setLoading(true);
     try {
-      const data = await apiClient.post('/api/auth/victim/phone-otp/verify', { requestId: phoneRequestId, code: phoneCode });
-      if (data.registered) {
-        await login({ token: data.token, accountType: 'victim' });
-      } else {
-        navigation.navigate('VictimSignup', { pendingToken: data.pendingToken, verifiedContact: data.verifiedContact });
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePasswordLogin = async () => {
-    setError(null);
-    try {
-      const data = await passwordLoginMutation.mutateAsync({ identifier, password });
+      const data = await loginMutation.mutateAsync({
+        docketNumber: docketNumber.trim(),
+        fullName: fullName.trim(),
+        stateName: stateOption.label,
+        jurisdictionId: districtId,
+      });
       await login({ token: data.token, accountType: 'victim' });
     } catch (err) {
-      setError(err.message);
+      setError('No matching record found - check your details and try again.');
     }
-  };
-
-  const handleForgotPassword = () => {
-    setAuthMode(AUTH_MODE.EMAIL_OTP);
-    toast.info('Use a one-time code to sign in instead - proving your contact this way works the same as resetting a password.');
   };
 
   return (
@@ -177,95 +114,37 @@ export default function LoginScreen({ navigation }) {
       </View>
 
       <View style={[styles.card, { maxWidth: authContentWidth[tier] }]}>
-        <AuthModeSelect
-          options={[
-            { value: AUTH_MODE.PASSWORD, label: 'Password', icon: 'lock' },
-            { value: AUTH_MODE.EMAIL_OTP, label: 'Email OTP', icon: 'mail' },
-            { value: AUTH_MODE.MOBILE_OTP, label: 'Mobile OTP', icon: 'smartphone' },
-          ]}
-          value={authMode}
-          onChange={(v) => { setAuthMode(v); resetOtpFlow(); }}
-        />
+        <IconInput icon="hash" placeholder="Docket ID" value={docketNumber} onChangeText={setDocketNumber} autoCapitalize="characters" />
+        <IconInput icon="user" placeholder="Full Name" value={fullName} onChangeText={setFullName} />
 
-        {authMode === AUTH_MODE.PASSWORD ? (
-          <View style={{ marginTop: 12 }}>
-            <IconInput icon="user" placeholder="Email or phone" value={identifier} onChangeText={setIdentifier} autoCapitalize="none" />
-            <IconInput
-              icon="lock"
-              placeholder="Password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              trailingIcon={showPassword ? 'eye-off' : 'eye'}
-              onTrailingPress={() => setShowPassword((v) => !v)}
-            />
-            <Pressable onPress={handleForgotPassword} style={styles.forgotRow}>
-              <Text style={styles.linkText}>Forgot password?</Text>
-            </Pressable>
-            <Pressable style={styles.primaryBtn} onPress={handlePasswordLogin} disabled={passwordLoginMutation.isPending}>
-              <Text style={styles.primaryBtnText}>{passwordLoginMutation.isPending ? 'Signing In...' : 'Sign In'}</Text>
-            </Pressable>
-          </View>
-        ) : authMode === AUTH_MODE.EMAIL_OTP ? (
-          <View style={{ marginTop: 12 }}>
-            <IconInput icon="mail" placeholder="Email Address" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" editable={!requestId} />
-            {!requestId ? (
-              <Pressable style={styles.primaryBtn} onPress={requestEmailOtp} disabled={loading}>
-                <Text style={styles.primaryBtnText}>{loading ? 'Sending...' : 'Send Code'}</Text>
-              </Pressable>
-            ) : (
-              <>
-                <IconInput icon="key" placeholder="6-digit code" value={code} onChangeText={setCode} keyboardType="number-pad" />
-                <Pressable style={styles.primaryBtn} onPress={verifyEmailOtp} disabled={loading}>
-                  <Text style={styles.primaryBtnText}>{loading ? 'Verifying...' : 'Verify & Continue'}</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-        ) : (
-          <View style={{ marginTop: 12 }}>
-            <IconInput
-              icon="smartphone"
-              prefix="+91"
-              placeholder="Phone number"
-              value={phone}
-              onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
-              keyboardType="phone-pad"
-              editable={!phoneRequestId}
-            />
-            {!phoneRequestId ? (
-              <Pressable style={styles.primaryBtn} onPress={requestPhoneOtp} disabled={loading}>
-                <Text style={styles.primaryBtnText}>{loading ? 'Sending...' : 'Send Code'}</Text>
-              </Pressable>
-            ) : (
-              <>
-                <IconInput icon="key" placeholder="6-digit code" value={phoneCode} onChangeText={setPhoneCode} keyboardType="number-pad" />
-                <Pressable style={styles.primaryBtn} onPress={verifyPhoneOtp} disabled={loading}>
-                  <Text style={styles.primaryBtnText}>{loading ? 'Verifying...' : 'Verify & Continue'}</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-        )}
+        <Pressable style={styles.gpsBtn} onPress={handleAutoDetect} disabled={gpsLoading}>
+          {gpsLoading ? (
+            <ActivityIndicator size="small" color={THEME.accentIcon} style={{ marginRight: 8 }} />
+          ) : (
+            <Feather name="navigation" size={16} color={THEME.accentIcon} style={{ marginRight: 8 }} />
+          )}
+          <Text style={styles.gpsBtnText}>{gpsLoading ? 'Detecting location...' : 'Auto-detect my location'}</Text>
+        </Pressable>
+
+        <Dropdown
+          options={stateOptions}
+          value={stateId}
+          onChange={(v) => { setStateId(v); setDistrictId(''); setPendingGpsDistrictId(null); }}
+          placeholder="State"
+        />
+        <Dropdown
+          options={districtOptions}
+          value={districtId}
+          onChange={setDistrictId}
+          placeholder={stateId ? 'District' : 'Select a state first'}
+          disabled={!stateId}
+        />
 
         {error && <Text style={styles.errorText}>{error}</Text>}
 
-        <View style={styles.divider} />
-
-        {GOOGLE_CLIENT_ID ? (
-          <GoogleSignInButton
-            onVerified={async (data) => {
-              if (data.registered) await login({ token: data.token, accountType: 'victim' });
-              else navigation.navigate('VictimSignup', { pendingToken: data.pendingToken, verifiedContact: data.verifiedContact });
-            }}
-            onError={setError}
-            setLoading={setLoading}
-          />
-        ) : (
-          <View style={styles.googleDisabled}>
-            <Text style={styles.notice}>Google sign-in client ID not set up yet.</Text>
-          </View>
-        )}
+        <Pressable style={styles.primaryBtn} onPress={handleLogin} disabled={loginMutation.isPending}>
+          <Text style={styles.primaryBtnText}>{loginMutation.isPending ? 'Signing In...' : 'Sign In'}</Text>
+        </Pressable>
 
         <View style={styles.bannerInfo}>
           <Feather name="shield" size={18} color={THEME.accentIcon} style={{ marginRight: 10 }} />
@@ -274,9 +153,9 @@ export default function LoginScreen({ navigation }) {
           </Text>
         </View>
 
-        <Pressable style={styles.switchRow} onPress={() => navigation.navigate('VictimSignup')}>
-          <Text style={styles.switchText}>Don't have an account? <Text style={styles.linkText}>Sign up</Text></Text>
-        </Pressable>
+        <Text style={styles.notice}>
+          Don't have login details? Contact your assigned counsellor or district office to get registered.
+        </Text>
       </View>
 
       <Pressable style={styles.linkRow} onPress={() => navigation.navigate('StaffLogin')}>
@@ -294,19 +173,14 @@ const styles = StyleSheet.create({
   screenTitle: { fontSize: 24, fontWeight: '700', color: THEME.textMain, textAlign: 'center' },
   screenSubtitle: { fontSize: 13, color: THEME.textMuted, textAlign: 'center', marginTop: 6, paddingHorizontal: 20 },
   card: { width: '100%', backgroundColor: THEME.cardBg, borderRadius: 20, padding: 20, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8 },
-  primaryBtn: { backgroundColor: THEME.primaryDark, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 12 },
+  gpsBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: THEME.border, borderRadius: 12, paddingVertical: 12, marginBottom: 16, backgroundColor: THEME.accentBlue },
+  gpsBtnText: { color: THEME.accentIcon, fontWeight: '600', fontSize: 13 },
+  primaryBtn: { backgroundColor: THEME.primaryDark, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   primaryBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 15 },
-  outlineBtn: { borderWidth: 1, borderColor: THEME.border, borderRadius: 12, paddingVertical: 14, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', marginTop: 12 },
-  outlineBtnText: { color: THEME.textMain, fontWeight: '600', fontSize: 15 },
-  forgotRow: { alignItems: 'flex-end', marginTop: 4, marginBottom: 8 },
   linkText: { color: THEME.accentIcon, fontSize: 13, fontWeight: '600' },
-  notice: { fontSize: 12, color: THEME.textMuted, textAlign: 'center', marginVertical: 8 },
-  errorText: { fontSize: 13, color: THEME.danger, textAlign: 'center', marginTop: 8 },
-  divider: { height: 1, backgroundColor: THEME.border, marginVertical: 16 },
-  googleDisabled: { borderWidth: 1, borderColor: THEME.border, borderRadius: 12, padding: 12, backgroundColor: THEME.bg },
+  notice: { fontSize: 12, color: THEME.textMuted, textAlign: 'center', marginTop: 16, lineHeight: 17 },
+  errorText: { fontSize: 13, color: THEME.danger, textAlign: 'center', marginTop: 4, marginBottom: 4 },
   bannerInfo: { flexDirection: 'row', alignItems: 'center', backgroundColor: THEME.accentBlue, borderRadius: 12, padding: 12, marginTop: 16 },
   bannerText: { fontSize: 12, color: THEME.textMain, flex: 1, lineHeight: 16 },
-  switchRow: { marginTop: 16, alignItems: 'center' },
-  switchText: { fontSize: 13, color: THEME.textMuted },
   linkRow: { marginTop: 24, padding: 10 },
 });
