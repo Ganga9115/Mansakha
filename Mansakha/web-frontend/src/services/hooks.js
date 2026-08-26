@@ -153,6 +153,39 @@ export function useCreateVictimDataIntake() {
   return { mutate, loading };
 }
 
+export function useDataIntakeVictims() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/data-intake/victims', token), [token]);
+}
+
+export function useUpdateDataIntakeVictim() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (victimId, payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/data-intake/victims/${victimId}`, payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useDeleteDataIntakeVictim() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (victimId) => {
+    setLoading(true);
+    try {
+      return await apiClient.delete(`/api/data-intake/victims/${victimId}`, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 export function useFetchCaseDetails() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

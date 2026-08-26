@@ -33,13 +33,23 @@ export function useLanguageOptions() {
 
 // --- Victim ---
 
-// Docket-based login (Feature Catalog: Docket ID + Full Name + State +
-// District, no OTP/Google) - credentials are provisioned for the victim by
-// a District Admin / Data Intake Admin, not self-registered.
+// Docket-based login (Feature Catalog: Docket ID + Full Name + Contact
+// Number + Password, no OTP/Google) - credentials are provisioned for the
+// victim by a District Admin / Data Intake Admin, not self-registered.
+// Password is fixed to 'Victim123' at creation; the backend's
+// mustChangePassword flag (checked by the caller) forces a real one on
+// first login.
 export function useVictimLogin() {
   return useMutation({
-    mutationFn: ({ docketNumber, fullName, contactNumber }) =>
-      apiClient.post('/api/auth/victim/login', { docketNumber, fullName, contactNumber }),
+    mutationFn: ({ docketNumber, fullName, contactNumber, password }) =>
+      apiClient.post('/api/auth/victim/login', { docketNumber, fullName, contactNumber, password }),
+  });
+}
+
+export function useChangeVictimPassword() {
+  const { session } = useAuth();
+  return useMutation({
+    mutationFn: (newPassword) => apiClient.post('/api/auth/victim/change-password', { newPassword }, session?.token),
   });
 }
 

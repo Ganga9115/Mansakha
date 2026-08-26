@@ -2,13 +2,17 @@ import React, { useState } from 'react';
 import { Copy } from 'lucide-react';
 import { useCaseTypeOptions, useJurisdictionOptions } from '../services/hooks';
 
-const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
-
 // Shared by District Admin's VictimRegistration.jsx (jurisdiction locked to
 // the admin's own district) and Data Intake Admin's Dashboard.jsx
 // (jurisdiction open - not jurisdiction-locked, per the backend prompt's
 // non-scoped /api/data-intake/victims route) - same fields either way, only
 // whether State/District are editable differs.
+//
+// Case Stage is deliberately NOT collected here (removed per explicit
+// request) - every new victim starts at 'Investigation' server-side
+// (services/victimProvisioning.js), and stage is something the operator
+// sets later via the Victims list's editable dropdown, not a decision made
+// at intake time.
 export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJurisdictionLabel, onCreate, creating }) {
   const caseTypesQuery = useCaseTypeOptions();
   const stateQuery = useJurisdictionOptions('state');
@@ -17,11 +21,10 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
   const [fullName, setFullName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [caseTypeId, setCaseTypeId] = useState('');
-  const [caseStage, setCaseStage] = useState('');
   const [stateId, setStateId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [error, setError] = useState(null);
-  const [createdDocket, setCreatedDocket] = useState(null);
+  const [created, setCreated] = useState(null);
 
   const districtQuery = useJurisdictionOptions('district', lockedJurisdictionId ? undefined : stateId);
   const caseTypeOptions = caseTypesQuery.data?.caseTypes || [];
@@ -31,9 +34,9 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
-    setCreatedDocket(null);
+    setCreated(null);
     const jurisdictionId = lockedJurisdictionId || districtId;
-    if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim() || !caseTypeId || !caseStage || !jurisdictionId) {
+    if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim() || !caseTypeId || !jurisdictionId) {
       setError('Please fill in all fields.');
       return;
     }
@@ -44,14 +47,15 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
         contactNumber: contactNumber.trim(),
         jurisdictionId,
         caseTypeId,
-        caseStage,
       });
-      setCreatedDocket(result?.docketNumber || docketNumber.trim());
+      setCreated({
+        docketNumber: result?.docketNumber || docketNumber.trim(),
+        temporaryPassword: result?.temporaryPassword,
+      });
       setDocketNumber('');
       setFullName('');
       setContactNumber('');
       setCaseTypeId('');
-      setCaseStage('');
       setStateId('');
       setDistrictId('');
     } catch (err) {
@@ -59,8 +63,8 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
     }
   };
 
-  const handleCopyDocket = () => {
-    if (createdDocket) navigator.clipboard?.writeText(createdDocket).catch(() => {});
+  const handleCopy = (text) => {
+    navigator.clipboard?.writeText(text).catch(() => {});
   };
 
   return (
@@ -142,34 +146,36 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Type</label>
-          <select value={caseTypeId} onChange={(e) => setCaseTypeId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Select...</option>
-            {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Stage</label>
-          <select value={caseStage} onChange={(e) => setCaseStage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Select...</option>
-            {CASE_STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Type</label>
+        <select value={caseTypeId} onChange={(e) => setCaseTypeId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+          <option value="">Select...</option>
+          {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
+        </select>
       </div>
 
       {error && <p className="text-xs text-rose-600">{error}</p>}
 
-      {createdDocket && (
-        <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-          <div>
-            <p className="text-xs text-emerald-700 font-semibold">Victim created. Docket number:</p>
-            <p className="text-sm font-bold text-emerald-900">{createdDocket}</p>
+      {created && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3 space-y-2">
+          <p className="text-xs text-emerald-700 font-semibold">Victim created - hand these to them:</p>
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-emerald-800">Docket Number</span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-emerald-900">{created.docketNumber}</span>
+              <button type="button" onClick={() => handleCopy(created.docketNumber)} className="p-1 text-emerald-700 hover:bg-emerald-100 rounded"><Copy size={14} /></button>
+            </div>
           </div>
-          <button type="button" onClick={handleCopyDocket} className="p-2 text-emerald-700 hover:bg-emerald-100 rounded-lg">
-            <Copy size={16} />
-          </button>
+          {created.temporaryPassword && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-emerald-800">Password</span>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-emerald-900">{created.temporaryPassword}</span>
+                <button type="button" onClick={() => handleCopy(created.temporaryPassword)} className="p-1 text-emerald-700 hover:bg-emerald-100 rounded"><Copy size={14} /></button>
+              </div>
+            </div>
+          )}
+          <p className="text-[11px] text-emerald-700">The victim will be asked to set their own password the first time they log in.</p>
         </div>
       )}
 

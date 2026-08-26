@@ -28,6 +28,7 @@ import ReportsInbox from './pages/ministry/ReportsInbox';
 
 import DataIntakeDashboard from './pages/dataintake/Dashboard';
 import DataIntakeFetchCase from './pages/dataintake/FetchCase';
+import DataIntakeVictims from './pages/dataintake/Victims';
 
 export default function App() {
   return (
@@ -96,6 +97,7 @@ export default function App() {
             alone). */}
         <Route path="/dataintake" element={<RequireAuth><DataIntakeDashboard /></RequireAuth>} />
         <Route path="/dataintake/fetch-case" element={<RequireAuth><DataIntakeFetchCase /></RequireAuth>} />
+        <Route path="/dataintake/victims" element={<RequireAuth><DataIntakeVictims /></RequireAuth>} />
         <Route path="/dataintake/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
       </Routes>
     </Router>
