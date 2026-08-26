@@ -75,7 +75,7 @@ export default function Settings({ onNavigate }) {
   };
 
   return (
-    <StaffLayout title="System Configuration & Preferences" activePage="Settings" onNavigate={onNavigate}>
+    <StaffLayout title="Profile" activePage="Profile" onNavigate={onNavigate}>
       <div className="space-y-6 max-w-5xl">
         
         {/* COUNSELLOR PROFILE MATRIX */}

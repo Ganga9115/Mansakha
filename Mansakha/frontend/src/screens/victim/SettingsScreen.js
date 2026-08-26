@@ -126,7 +126,7 @@ export default function SettingsScreen() {
                 <Text style={styles.pillText}>PREFERENCES</Text>
               </View>
             )}
-            <Text style={styles.statusTitle}>App Settings</Text>
+            <Text style={styles.statusTitle}>Profile</Text>
             {!isDesktop && <Text style={styles.subtext}>Manage account & choices</Text>}
           </View>
         </View>

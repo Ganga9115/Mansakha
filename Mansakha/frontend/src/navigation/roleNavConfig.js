@@ -9,7 +9,7 @@ export const roleNavConfig = {
       { key: 'checkin', label: 'Check-in', screen: 'checkin', icon: 'edit-3' },
       { key: 'history', label: 'My History', screen: 'history', icon: 'bar-chart-2' },
       { key: 'support', label: 'Support', screen: 'support', icon: 'life-buoy' },
-      { key: 'settings', label: 'Settings', screen: 'settings', icon: 'settings' },
+      { key: 'settings', label: 'Profile', screen: 'settings', icon: 'settings' },
     ],
   },
 };
