@@ -134,7 +134,7 @@ export function useUpdateVictim() {
   return { mutate, loading };
 }
 
-// --- Data Intake & Integration Admin ---
+// --- Data Operator ---
 // Not jurisdiction-locked like District Admin's /api/admin/victims - a
 // separate route per the backend prompt's §7, sharing the same insert logic
 // server-side.

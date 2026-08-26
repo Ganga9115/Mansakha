@@ -3,7 +3,7 @@ import StaffLayout from '../../layouts/StaffLayout';
 import VictimRegistrationForm from '../../components/VictimRegistrationForm';
 import { useCreateVictimDataIntake } from '../../services/hooks';
 
-// Data Intake & Integration Admin - not jurisdiction-locked the way District
+// Data Operator - not jurisdiction-locked the way District
 // Admin's own Victim Registration is, so this reuses the shared form with
 // no locked jurisdiction (State/District are open dropdowns).
 export default function DataIntakeDashboard() {

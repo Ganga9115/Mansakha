@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const { supabase } = require('../db/supabaseClient');
+const { withTransaction } = require('../db/pgPool');
 
 const VALID_CASE_STAGES = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
 const VALID_STATUSES = ['active', 'inactive'];
@@ -7,6 +8,26 @@ const VALID_STATUSES = ['active', 'inactive'];
 // request. must_change_password (default true) forces a real one on first
 // login (routes/auth.victim.js), same pattern as officials.
 const DEFAULT_VICTIM_PASSWORD = 'Victim123';
+
+// Every table with a victim_id foreign key into victims (besides victim_identity,
+// which is the record's own PII row and gets deleted alongside it, not treated
+// as "history"). Checked up front by deleteVictim so a delete either fully
+// succeeds or leaves nothing changed - see the transaction there.
+const VICTIM_HISTORY_TABLES = [
+  ['distress_scores', 'victim_id'],
+  ['consent_records', 'victim_id'],
+  ['interactions', 'victim_id'],
+  ['alerts', 'victim_id'],
+  ['interventions', 'victim_id'],
+  ['audit_log', 'victim_id'],
+  ['case_notes', 'victim_id'],
+  ['dispatch_queue', 'victim_id'],
+  ['chat_messages', 'victim_id'],
+  ['messages', 'victim_id'],
+  ['sos_events', 'victim_id'],
+  ['journal_entries', 'victim_id'],
+  ['counselling_sessions', 'victim_id'],
+];
 
 class ProvisioningError extends Error {
   constructor(message, status) {
@@ -17,7 +38,7 @@ class ProvisioningError extends Error {
 
 // Shared by routes/admin.js's District Admin victim-creation route (jurisdiction-
 // locked to the caller's own district via requireJurisdiction) and
-// routes/dataIntake.js's Data Intake Admin equivalent (not jurisdiction-locked,
+// routes/dataIntake.js's Data Operator equivalent (not jurisdiction-locked,
 // per Feature Catalog Section 7) - both already-validated their own jurisdiction
 // scope before calling this; it only performs the insert. This is the write-side
 // counterpart to auth.victim.js's docket-based login (Section 1.1).
@@ -39,34 +60,33 @@ async function createVictim({ docketNumber, fullName, contactNumber, jurisdictio
 
   const passwordHash = await bcrypt.hash(DEFAULT_VICTIM_PASSWORD, 12);
 
-  const { data: victim, error: victimError } = await supabase
-    .from('victims')
-    .insert({
-      docket_number: docketNumber.trim(),
-      case_type_id: caseTypeId,
-      jurisdiction_id: jurisdictionId,
-      case_stage: resolvedCaseStage,
-      auth_method: provisionedVia, // 'district_admin' | 'data_intake_admin'
-      case_background: caseBackground || null,
-      password_hash: passwordHash,
-      must_change_password: true,
-    })
-    .select('victim_id')
-    .single();
-  if (victimError) throw new ProvisioningError(`Could not create victim: ${victimError.message}`, 500);
-
-  const { error: identityError } = await supabase.from('victim_identity').insert({
-    victim_id: victim.victim_id,
-    full_name: fullName.trim(),
-    contact_number: contactNumber.trim(),
-    address: address || null,
-  });
-  if (identityError) throw new ProvisioningError(`Could not create victim identity: ${identityError.message}`, 500);
+  // victims + victim_identity in one transaction - a victim row must never exist
+  // without its identity row (or vice versa); two independent supabase-js calls
+  // could previously leave an orphaned victims row if the second insert failed.
+  let victimId;
+  try {
+    victimId = await withTransaction(async (client) => {
+      const { rows } = await client.query(
+        `insert into victims (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password)
+         values ($1, $2, $3, $4, $5, $6, $7, true)
+         returning victim_id`,
+        [docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash]
+      );
+      const id = rows[0].victim_id;
+      await client.query(
+        `insert into victim_identity (victim_id, full_name, contact_number, address) values ($1, $2, $3, $4)`,
+        [id, fullName.trim(), contactNumber.trim(), address || null]
+      );
+      return id;
+    });
+  } catch (err) {
+    throw new ProvisioningError(`Could not create victim: ${err.message}`, 500);
+  }
 
   // temporaryPassword returned so the calling route can show it to the
   // provisioning admin alongside the docket number - it's the same fixed
   // value every time, but the admin still needs to actually tell the victim.
-  return { victimId: victim.victim_id, docketNumber: docketNumber.trim(), temporaryPassword: DEFAULT_VICTIM_PASSWORD };
+  return { victimId, docketNumber: docketNumber.trim(), temporaryPassword: DEFAULT_VICTIM_PASSWORD };
 }
 
 // Case stage / status / contact detail updates only - docket number, name, and
@@ -84,39 +104,63 @@ async function updateVictim(victimId, { caseStage, status, address, contactNumbe
     throw new ProvisioningError(`status must be one of: ${VALID_STATUSES.join(', ')}`, 400);
   }
 
-  if (caseStage !== undefined || status !== undefined) {
-    const patch = {};
-    if (caseStage !== undefined) patch.case_stage = caseStage;
-    if (status !== undefined) patch.status = status;
-    const { error } = await supabase.from('victims').update(patch).eq('victim_id', victimId);
-    if (error) throw new ProvisioningError(`Could not update case: ${error.message}`, 500);
-  }
+  // Both patches (when both are present) run in one transaction - a caller that
+  // sends caseStage/status alongside address/contactNumber must not end up with
+  // only one side applied if the other fails.
+  try {
+    await withTransaction(async (client) => {
+      if (caseStage !== undefined || status !== undefined) {
+        const sets = [];
+        const values = [];
+        if (caseStage !== undefined) { values.push(caseStage); sets.push(`case_stage = $${values.length}`); }
+        if (status !== undefined) { values.push(status); sets.push(`status = $${values.length}`); }
+        values.push(victimId);
+        await client.query(`update victims set ${sets.join(', ')} where victim_id = $${values.length}`, values);
+      }
 
-  if (address !== undefined || contactNumber !== undefined) {
-    const patch = {};
-    if (address !== undefined) patch.address = address || null;
-    if (contactNumber !== undefined) patch.contact_number = contactNumber || null;
-    const { error } = await supabase.from('victim_identity').update(patch).eq('victim_id', victimId);
-    if (error) throw new ProvisioningError(`Could not update contact details: ${error.message}`, 500);
+      if (address !== undefined || contactNumber !== undefined) {
+        const sets = [];
+        const values = [];
+        if (address !== undefined) { values.push(address || null); sets.push(`address = $${values.length}`); }
+        if (contactNumber !== undefined) { values.push(contactNumber || null); sets.push(`contact_number = $${values.length}`); }
+        values.push(victimId);
+        await client.query(`update victim_identity set ${sets.join(', ')} where victim_id = $${values.length}`, values);
+      }
+    });
+  } catch (err) {
+    throw new ProvisioningError(`Could not update victim: ${err.message}`, 500);
   }
 }
 
 // Hard delete - only actually succeeds for a victim with no case history yet
-// (no FK-referencing row in any of the 14 dependent tables: interactions,
-// distress_scores, alerts, interventions, etc. - none of them cascade on
-// delete, by design, same reasoning as officials never being hard-deleted).
-// A victim with real history throws a clear, catchable error instead of a
-// raw Postgres FK-violation message - the caller (routes/dataIntake.js) is
-// expected to suggest marking the case inactive instead in that case.
+// (no row in any of the tables above). Everything (the history check, the
+// victim_identity delete, and the victims delete) runs in one transaction:
+// previously these were two separate supabase-js calls, so a victim_id delete
+// failing (FK violation, real history) AFTER the victim_identity delete had
+// already succeeded permanently destroyed that victim's name/contact/address
+// while leaving the case record behind with no way to re-attach them. Wrapping
+// both in a transaction means any failure rolls back everything, not just the
+// second half.
 async function deleteVictim(victimId) {
-  const { error: identityError } = await supabase.from('victim_identity').delete().eq('victim_id', victimId);
-  if (identityError) {
-    throw new ProvisioningError('This victim has related records and cannot be deleted - mark the case inactive instead.', 409);
-  }
+  try {
+    await withTransaction(async (client) => {
+      for (const [table, column] of VICTIM_HISTORY_TABLES) {
+        const { rows } = await client.query(`select 1 from ${table} where ${column} = $1 limit 1`, [victimId]);
+        if (rows.length) {
+          throw new ProvisioningError('This victim has case history and cannot be deleted - mark the case inactive instead.', 409);
+        }
+      }
 
-  const { error: victimError } = await supabase.from('victims').delete().eq('victim_id', victimId);
-  if (victimError) {
-    throw new ProvisioningError('This victim has case history and cannot be deleted - mark the case inactive instead.', 409);
+      await client.query('delete from victim_identity where victim_id = $1', [victimId]);
+      const { rowCount } = await client.query('delete from victims where victim_id = $1', [victimId]);
+      if (!rowCount) throw new ProvisioningError('Victim not found', 404);
+    });
+  } catch (err) {
+    if (err instanceof ProvisioningError) throw err;
+    // A concurrent write could still slip a new history row in between the
+    // check above and the delete - the transaction rolls back cleanly either
+    // way, so this is just a clear message instead of a raw FK error.
+    throw new ProvisioningError('This victim has related records and cannot be deleted - mark the case inactive instead.', 409);
   }
 }
 

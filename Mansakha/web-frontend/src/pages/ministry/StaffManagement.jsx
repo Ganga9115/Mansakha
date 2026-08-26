@@ -3,7 +3,7 @@ import MinistryLayout from '../../layouts/MinistryLayout';
 import { UserPlus } from 'lucide-react';
 import { useStaffList, useCreateStaff, useRevokeStaff, useJurisdictionOptions } from '../../services/hooks';
 
-const ROLE_OPTIONS = ['Counsellor', 'Administration', 'Data Intake Admin'];
+const ROLE_OPTIONS = ['Counsellor', 'Administration', 'Data Operator'];
 const JURISDICTION_LEVELS = ['district', 'state', 'national'];
 
 const STATUS_BADGE = {

@@ -10,7 +10,7 @@ import { User, Lock, MessageSquare, BarChart3, ShieldCheck, IdCard } from 'lucid
 // selected, since the field itself is the same `staffId` value either way.
 function staffIdLabel(uiRole, adminLevel) {
   if (uiRole === 'Counsellor') return 'Counsellor ID';
-  if (uiRole === 'Data Operator') return 'Data Intake Admin ID';
+  if (uiRole === 'Data Operator') return 'Data Operator ID';
   if (adminLevel === 'National Admin') return 'National Admin ID';
   if (adminLevel === 'State Admin') return 'State Admin ID';
   if (adminLevel === 'District Admin') return 'District Admin ID';
@@ -38,10 +38,10 @@ export default function StaffLogin() {
     setError(null);
     setLoading(true);
 
-    // Map UI role back to backend expected role
+    // Map UI role back to backend expected role - only 'Admins' needs
+    // translating now that the Data Operator role is named that everywhere.
     let roleName = uiRole;
     if (uiRole === 'Admins') roleName = 'Administration';
-    if (uiRole === 'Data Operator') roleName = 'Data Intake Admin';
 
     try {
       const data = await apiClient.post('/api/auth/staff/login', { email, password, roleName, staffId });

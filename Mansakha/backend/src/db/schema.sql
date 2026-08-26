@@ -18,9 +18,9 @@ create table roles (
   -- variant) - its permission set (create victim credentials, simulated
   -- case fetch) doesn't overlap with District/State/National Administration
   -- at all, so modeling it as its own role keeps RBAC checks unambiguous.
-  role_name   text not null unique check (role_name in ('Ministry', 'Administration', 'Counsellor', 'Data Intake Admin'))
+  role_name   text not null unique check (role_name in ('Ministry', 'Administration', 'Counsellor', 'Data Operator'))
 );
-insert into roles (role_name) values ('Ministry'), ('Administration'), ('Counsellor'), ('Data Intake Admin');
+insert into roles (role_name) values ('Ministry'), ('Administration'), ('Counsellor'), ('Data Operator');
 
 create table case_types (
   case_type_id  uuid primary key default gen_random_uuid(),
@@ -131,12 +131,11 @@ create table victims (
   case_stage         text not null check (case_stage in ('Investigation', 'Trial', 'Rehabilitation', 'Compensation')),
   preferred_language uuid references languages(language_id),
   -- Records who provisioned this record - victims no longer self-register
-  -- (Feature Catalog Section 1.1: login is docket_number + full_name + state +
-  -- district, a credential-less lookup, not an OTP-verified signup). Old
-  -- OTP/Google values kept in the allow-list for backward compatibility with
-  -- rows created before this change; new rows only ever use the two staff-
-  -- provisioning values.
-  auth_method        text not null check (auth_method in ('mobile_otp', 'email_otp', 'google', 'district_admin', 'data_intake_admin')),
+  -- (Feature Catalog Section 1.1: login is docket_number + full_name +
+  -- contact number + password, a staff-provisioned credential set, not an
+  -- OTP-verified signup). The handful of legacy OTP/Google rows predating
+  -- this change were removed and this constraint tightened to match.
+  auth_method        text not null check (auth_method in ('district_admin', 'data_intake_admin')),
   password_hash      text, -- REACTIVATED: a 4th required login credential alongside
                             -- Docket ID + Full Name + Contact Number, per explicit
                             -- request - every victim a District/Data Intake Admin

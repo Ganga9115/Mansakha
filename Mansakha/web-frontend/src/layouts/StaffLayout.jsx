@@ -63,7 +63,7 @@ const SECTION_LABELS = {
   districtadmin: 'District Administration',
   stateadmin: 'State Administration',
   nationaladmin: 'National Administration',
-  dataintake: 'Data Intake Admin',
+  dataintake: 'Data Operator',
 };
 
 // Shared shell for Counsellor, District Admin, and State Admin - `section`
