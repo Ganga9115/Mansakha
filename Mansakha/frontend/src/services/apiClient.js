@@ -16,7 +16,9 @@ async function request(path, { method = 'GET', body, token } = {}) {
 
   const envelope = await res.json();
   if (!envelope.success) {
-    throw new Error(envelope.message || 'Request failed');
+    const error = new Error(envelope.message || 'Request failed');
+    error.status = res.status;
+    throw error;
   }
   return envelope.data;
 }
