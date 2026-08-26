@@ -63,6 +63,15 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
   const navItems = NAV_ITEMS_BY_SECTION[resolvedSection] || NAV_ITEMS_BY_SECTION.counsellor;
   const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || `/${resolvedSection}`;
   const profilePath = navItems.find((item) => item.name === 'Profile')?.path || `/${resolvedSection}/profile`;
+  // Same icon as whichever sidebar item matches the current page, so the
+  // top bar always shows a page icon + name, matching the Victim app.
+  // Longest-path-wins: Dashboard's own path (e.g. /counsellor) is a prefix
+  // of every other route here, so a plain first-match would always pick
+  // Dashboard's icon instead of the more specific current page's.
+  const activeNavItem = navItems
+    .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
+    .sort((a, b) => b.path.length - a.path.length)[0];
+  const TitleIcon = activeNavItem?.icon;
 
   return (
     <div className="flex h-screen w-full bg-[#F8F9FA] text-gray-800 font-sans">
@@ -117,7 +126,10 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
 
         {/* PERSISTENT HEADER - same palette as the Victim app's top bar */}
         <header className="h-16 bg-[#EBF4FA] border-b border-[#D6E8F5] px-8 flex items-center justify-between shrink-0">
-          <h2 className="text-xl font-bold text-[#3D5A80]">{title}</h2>
+          <div className="flex items-center gap-3">
+            {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80]" />}
+            <h2 className="text-xl font-bold text-[#3D5A80]">{title}</h2>
+          </div>
 
           <div className="flex items-center gap-6">
             <div className="relative">
