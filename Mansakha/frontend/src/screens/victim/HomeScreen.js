@@ -111,7 +111,7 @@ export default function HomeScreen({ navigation }) {
                   {/* Action Button */}
                   <Pressable
                     style={styles.distressBtn}
-                    onPress={() => navigation?.navigate('Checkin')}
+                    onPress={() => navigation?.navigate('checkin')}
                   >
                     <Feather name="mic" size={18} color={colors.white} style={{ marginRight: spacing.sm }} />
                     <Text style={styles.distressBtnText}>Start Check-in</Text>
@@ -147,7 +147,7 @@ export default function HomeScreen({ navigation }) {
 
                   <Pressable
                     style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
-                    onPress={() => navigation?.navigate('Support')}
+                    onPress={() => navigation?.navigate('support')}
                   >
                     <View style={styles.gridIconCircle}>
                       <Feather name="phone-call" size={20} color={colors.primary} />
@@ -158,13 +158,13 @@ export default function HomeScreen({ navigation }) {
 
                   <Pressable
                     style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
-                    onPress={() => navigation?.navigate('HelpCenter')}
+                    onPress={() => navigation?.navigate('Journal')}
                   >
                     <View style={styles.gridIconCircle}>
-                      <Feather name="help-circle" size={20} color={colors.primary} />
+                      <Feather name="book-open" size={20} color={colors.primary} />
                     </View>
-                    <Text style={styles.gridTitle}>Help Center</Text>
-                    <Text style={styles.gridSub}>Emergency assistance</Text>
+                    <Text style={styles.gridTitle}>My Journal</Text>
+                    <Text style={styles.gridSub}>Write it down</Text>
                   </Pressable>
                 </View>
 

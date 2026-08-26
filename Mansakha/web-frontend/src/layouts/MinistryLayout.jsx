@@ -1,12 +1,16 @@
 import React from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Users, Settings, FileText, LogOut, Search, Bell, User } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, FileText, Map, Inbox, LogOut, Search, Bell, User } from 'lucide-react';
 import { logout } from '../services/auth';
+import { useMe } from '../services/hooks';
 
 const NAV_ITEMS = [
+  { name: 'Dashboard', icon: LayoutDashboard, path: '/ministry/dashboard' },
   { name: 'Staff Management', icon: Users, path: '/ministry/staff-management' },
   { name: 'System Configuration', icon: Settings, path: '/ministry/system-config' },
   { name: 'Audit Log', icon: FileText, path: '/ministry/audit-log' },
+  { name: 'Heatmap', icon: Map, path: '/ministry/heatmap' },
+  { name: 'Reports Inbox', icon: Inbox, path: '/ministry/reports' },
 ];
 
 // Distinct from StaffLayout on purpose - Ministry's screen set is exactly
@@ -17,6 +21,7 @@ const NAV_ITEMS = [
 export default function MinistryLayout({ children, title = 'Ministry Console' }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { data: me } = useMe();
   // Same icon as whichever sidebar item matches the current page, so the
   // top bar always shows a page icon + name, matching the Victim app.
   const activeNavItem = NAV_ITEMS.find(
@@ -91,7 +96,7 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
                 <User size={18} className="text-[#3D5A80]" />
               </div>
               <div className="text-xs">
-                <p className="font-bold text-[#3D5A80]">Ministry Official</p>
+                <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
                 <p className="text-[#3D5A80]/70">Ministry Console</p>
               </div>
             </div>

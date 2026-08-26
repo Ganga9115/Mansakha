@@ -10,8 +10,11 @@ import CaseDetail from './pages/staff/counsellor/CaseDetail';
 import LogIntervention from './pages/staff/counsellor/LogIntervention';
 import AlertsFeed from './pages/staff/counsellor/AlertsFeed';
 import AdminDashboard from './pages/staff/administration/AdminDashboard';
+import StateDashboard from './pages/staff/administration/StateDashboard';
+import NationalDashboard from './pages/staff/administration/NationalDashboard';
 import Workload from './pages/staff/administration/Workload';
 import AdminAlerts from './pages/staff/administration/AdminAlerts';
+import VictimRegistration from './pages/staff/administration/VictimRegistration';
 import StaffReports from './pages/staff/shared/Reports';
 import StaffSettings from './pages/staff/shared/Settings';
 
@@ -19,6 +22,12 @@ import MinistryLoginPage from './pages/ministry/Login';
 import StaffManagement from './pages/ministry/StaffManagement';
 import SystemConfig from './pages/ministry/SystemConfig';
 import AuditLog from './pages/ministry/AuditLog';
+import MinistryDashboard from './pages/ministry/MinistryDashboard';
+import Heatmap from './pages/ministry/Heatmap';
+import ReportsInbox from './pages/ministry/ReportsInbox';
+
+import DataIntakeDashboard from './pages/dataintake/Dashboard';
+import DataIntakeFetchCase from './pages/dataintake/FetchCase';
 
 export default function App() {
   return (
@@ -42,28 +51,52 @@ export default function App() {
         <Route path="/counsellor/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
         <Route path="/counsellor/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
 
-        {/* District Admin / State Admin - same components as before ("Coming
-            soon" stubs), reached via jurisdiction-specific URLs instead of
-            one shared /administration. */}
+        {/* District Admin - case-level dashboard is the default view;
+            Register Victim is District-only per the Feature Catalog. */}
         <Route path="/districtadmin" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
         <Route path="/districtadmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
+        <Route path="/districtadmin/register-victim" element={<RequireAuth><VictimRegistration /></RequireAuth>} />
         <Route path="/districtadmin/workload" element={<RequireAuth><Workload /></RequireAuth>} />
         <Route path="/districtadmin/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
         <Route path="/districtadmin/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
         <Route path="/districtadmin/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
 
-        <Route path="/stateadmin" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
+        {/* State/UT Admin - aggregate (district-wise breakdown) is the
+            default view; /district/:id is the drill-down into a specific
+            district's case-level AdminDashboard, keeping the state sidebar. */}
+        <Route path="/stateadmin" element={<RequireAuth><StateDashboard /></RequireAuth>} />
+        <Route path="/stateadmin/district/:jurisdictionId" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
         <Route path="/stateadmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
         <Route path="/stateadmin/workload" element={<RequireAuth><Workload /></RequireAuth>} />
         <Route path="/stateadmin/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
         <Route path="/stateadmin/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
         <Route path="/stateadmin/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
 
-        {/* Ministry (unchanged stubs, out of this branch's scope) */}
+        {/* National Admin - state-wise breakdown by default; drills into a
+            state (StateDashboard), then a district (AdminDashboard), then a
+            case (CaseDetail), each keeping the national sidebar. */}
+        <Route path="/nationaladmin" element={<RequireAuth><NationalDashboard /></RequireAuth>} />
+        <Route path="/nationaladmin/state/:jurisdictionId" element={<RequireAuth><StateDashboard /></RequireAuth>} />
+        <Route path="/nationaladmin/district/:jurisdictionId" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
+        <Route path="/nationaladmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
+        <Route path="/nationaladmin/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
+
+        {/* Ministry */}
         <Route path="/ministry/login" element={<MinistryLoginPage />} />
-        <Route path="/ministry/staff-management" element={<StaffManagement />} />
-        <Route path="/ministry/system-config" element={<SystemConfig />} />
-        <Route path="/ministry/audit-log" element={<AuditLog />} />
+        <Route path="/ministry/dashboard" element={<RequireAuth loginPath="/ministry/login"><MinistryDashboard /></RequireAuth>} />
+        <Route path="/ministry/staff-management" element={<RequireAuth loginPath="/ministry/login"><StaffManagement /></RequireAuth>} />
+        <Route path="/ministry/system-config" element={<RequireAuth loginPath="/ministry/login"><SystemConfig /></RequireAuth>} />
+        <Route path="/ministry/audit-log" element={<RequireAuth loginPath="/ministry/login"><AuditLog /></RequireAuth>} />
+        <Route path="/ministry/heatmap" element={<RequireAuth loginPath="/ministry/login"><Heatmap /></RequireAuth>} />
+        <Route path="/ministry/reports" element={<RequireAuth loginPath="/ministry/login"><ReportsInbox /></RequireAuth>} />
+
+        {/* Data Intake & Integration Admin - signs in via the shared Staff
+            Login (/login) alongside Counsellor/Administration, not a
+            separate login page (that treatment is Ministry/Super Admin's
+            alone). */}
+        <Route path="/dataintake" element={<RequireAuth><DataIntakeDashboard /></RequireAuth>} />
+        <Route path="/dataintake/fetch-case" element={<RequireAuth><DataIntakeFetchCase /></RequireAuth>} />
+        <Route path="/dataintake/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
       </Routes>
     </Router>
   );

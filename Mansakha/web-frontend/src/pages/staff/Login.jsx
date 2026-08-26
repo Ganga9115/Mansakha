@@ -24,12 +24,22 @@ export default function StaffLogin() {
         return;
       }
 
-      // Administration accounts route to /districtadmin or /stateadmin based
-      // on their own jurisdiction level - not a choice made at login, so it's
-      // looked up via /api/me rather than picked from the dropdown.
+      if (roleName === 'Data Intake Admin') {
+        navigate('/dataintake');
+        return;
+      }
+
+      // Administration accounts route to /districtadmin, /stateadmin, or
+      // /nationaladmin based on their own jurisdiction level - not a choice
+      // made at login, so it's looked up via /api/me rather than picked
+      // from the dropdown.
       const me = await apiClient.get('/api/me', data.token);
       const jurisdictionLevel = me.roles?.[0]?.jurisdictionLevel;
-      navigate(jurisdictionLevel === 'state' || jurisdictionLevel === 'national' ? '/stateadmin' : '/districtadmin');
+      navigate(
+        jurisdictionLevel === 'national' ? '/nationaladmin'
+          : jurisdictionLevel === 'state' ? '/stateadmin'
+          : '/districtadmin'
+      );
     } catch (err) {
       setError(err.message);
     } finally {
@@ -41,7 +51,7 @@ export default function StaffLogin() {
     <div className="min-h-screen flex items-center justify-center bg-[#F8F9FA]">
       <form onSubmit={handleSubmit} className="w-full max-w-sm bg-white rounded-lg shadow-sm p-8">
         <h1 className="text-xl font-bold text-gray-800 mb-1">Mansakha Staff Portal</h1>
-        <p className="text-sm text-gray-500 mb-6">Counsellor / Administration sign in</p>
+        <p className="text-sm text-gray-500 mb-6">Counsellor / Administration / Data Intake sign in</p>
         <div className="space-y-4">
           <select
             value={roleName}
@@ -50,6 +60,7 @@ export default function StaffLogin() {
           >
             <option value="Counsellor">Counsellor</option>
             <option value="Administration">Administration</option>
+            <option value="Data Intake Admin">Data Intake Admin</option>
           </select>
           <input
             type="email"
