@@ -5,10 +5,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme/colors';
 
-import VictimSignupScreen from '../screens/victim/VictimSignupScreen';
 import VictimGate from './VictimGate';
 import LanguageGate from './LanguageGate';
-import SignupSuccessScreen from '../screens/victim/SignupSuccessScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 
 const Stack = createNativeStackNavigator();
@@ -19,7 +17,6 @@ const linking = {
     screens: {
       Onboarding: 'welcome',
       VictimLogin: '',
-      VictimSignup: 'signup',
     },
   },
 };
@@ -42,8 +39,6 @@ export default function RootNavigator() {
           <>
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />
             <Stack.Screen name="VictimLogin" component={LanguageGate} />
-            <Stack.Screen name="VictimSignup" component={VictimSignupScreen} />
-            <Stack.Screen name="SignupSuccess" component={SignupSuccessScreen} />
           </>
         )}
 

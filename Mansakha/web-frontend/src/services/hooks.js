@@ -25,9 +25,261 @@ function useQuery(queryFn, deps) {
   return { ...state, refetch };
 }
 
+// --- Public lookups (used by Victim Registration forms) ---
+
+export function useCaseTypeOptions() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/lookups/case-types', token), [token]);
+}
+
+// `level`: 'state' | 'district'. `parentId`: a state's jurisdictionId,
+// required when level is 'district'.
+export function useJurisdictionOptions(level, parentId) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ level });
+    if (parentId) params.set('parentId', parentId);
+    return apiClient.get(`/api/lookups/jurisdictions?${params.toString()}`, token);
+  }, [token, level, parentId]);
+}
+
 export function useMe() {
   const token = getToken();
   return useQuery(() => apiClient.get('/api/me', token), [token]);
+}
+
+// Derives the logged-in Administration account's own jurisdiction from
+// /api/me, so District/State/National dashboards don't each re-fetch and
+// re-parse it - `jurisdictionId` is what every /api/admin/* route below is
+// scoped to.
+export function useMyJurisdiction() {
+  const { data, loading, error } = useMe();
+  const role = data?.roles?.[0];
+  return { jurisdictionId: role?.jurisdictionId, jurisdictionLevel: role?.jurisdictionLevel, loading, error };
+}
+
+// --- District / State / National Administration ---
+
+export function useAdminDashboard(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/dashboard/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+export function useAdminWorkload(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/workload/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+export function useGenerateReport() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (jurisdictionId) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/reports/generate', { jurisdictionId }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useCreateVictim() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/victims', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Assumption (not yet in the backend prompt): a docket-number search so the
+// Edit form can look a victim up without already knowing their internal id.
+export function useSearchVictimByDocket() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (docketNumber) => {
+    setLoading(true);
+    try {
+      return await apiClient.get(`/api/admin/victims?docketNumber=${encodeURIComponent(docketNumber)}`, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useUpdateVictim() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (victimId, payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/victims/${victimId}`, payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// --- Data Intake & Integration Admin ---
+// Not jurisdiction-locked like District Admin's /api/admin/victims - a
+// separate route per the backend prompt's §7, sharing the same insert logic
+// server-side.
+
+export function useCreateVictimDataIntake() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/data-intake/victims', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useFetchCaseDetails() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (docketNumber) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/data-intake/fetch-case', { docketNumber }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// --- Ministry: Staff/Account Management ---
+
+export function useStaffList() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/staff', token), [token]);
+}
+
+export function useCreateStaff() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/ministry/staff', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useRevokeStaff() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (officialId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/ministry/staff/${officialId}/revoke`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// --- Ministry: System Configuration (Case Types / Intervention Types /
+// Channels / Languages) - all four share one CRUD shape, so one factory
+// generates the four hook sets instead of repeating them four times. ---
+
+function makeConfigResource(resourcePath, listKey) {
+  return {
+    useList: () => {
+      const token = getToken();
+      return useQuery(() => apiClient.get(`/api/ministry/${resourcePath}`, token), [token]);
+    },
+    useCreate: () => {
+      const token = getToken();
+      const [loading, setLoading] = useState(false);
+      const mutate = async (payload) => {
+        setLoading(true);
+        try {
+          return await apiClient.post(`/api/ministry/${resourcePath}`, payload, token);
+        } finally {
+          setLoading(false);
+        }
+      };
+      return { mutate, loading };
+    },
+    useUpdate: () => {
+      const token = getToken();
+      const [loading, setLoading] = useState(false);
+      const mutate = async (id, payload) => {
+        setLoading(true);
+        try {
+          return await apiClient.patch(`/api/ministry/${resourcePath}/${id}`, payload, token);
+        } finally {
+          setLoading(false);
+        }
+      };
+      return { mutate, loading };
+    },
+    useDelete: () => {
+      const token = getToken();
+      const [loading, setLoading] = useState(false);
+      const mutate = async (id) => {
+        setLoading(true);
+        try {
+          return await apiClient.delete(`/api/ministry/${resourcePath}/${id}`, token);
+        } finally {
+          setLoading(false);
+        }
+      };
+      return { mutate, loading };
+    },
+    listKey,
+  };
+}
+
+export const caseTypesResource = makeConfigResource('case-types', 'caseTypes');
+export const interventionTypesResource = makeConfigResource('intervention-types', 'interventionTypes');
+export const channelsResource = makeConfigResource('channels', 'channels');
+export const languagesResource = makeConfigResource('languages', 'languages');
+
+// --- Ministry: Oversight ---
+
+export function useAuditLog(page) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/ministry/audit-log?page=${page || 1}`, token), [token, page]);
+}
+
+export function useHeatmap() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/heatmap', token), [token]);
+}
+
+export function useIvrsLog() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/ivrs-log', token), [token]);
+}
+
+export function useReportsInbox() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/reports', token), [token]);
 }
 
 export function useCounsellorDashboard() {
@@ -60,9 +312,64 @@ export function useInterventionTypes() {
   return useQuery(() => apiClient.get('/api/counsellor/intervention-types', token), [token]);
 }
 
+const ALERTS_POLL_MS = 15000;
+
+// True push (a Supabase Realtime subscription) needs an anon-key channel
+// scoped by RLS to just this counsellor's own alerts - that's a backend/RLS
+// change this pass can't safely make blind (a naive subscription risks
+// leaking every counsellor's alerts to every browser tab). Polling gets the
+// user-facing result - the feed updates without a manual refresh - without
+// guessing at infra that isn't confirmed to exist yet.
 export function useCounsellorAlerts(enabled = true) {
   const token = getToken();
-  return useQuery(() => (enabled ? apiClient.get('/api/counsellor/alerts', token) : Promise.resolve(null)), [token, enabled]);
+  const query = useQuery(() => (enabled ? apiClient.get('/api/counsellor/alerts', token) : Promise.resolve(null)), [token, enabled]);
+
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const interval = setInterval(query.refetch, ALERTS_POLL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, query.refetch]);
+
+  return query;
+}
+
+export function useScheduledSessions() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/counsellor/scheduled', token), [token]);
+}
+
+export function useScheduleSession(victimId) {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (scheduledAt) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/counsellor/cases/${victimId}/schedule`, { scheduledAt }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useCaseMessages(victimId) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/counsellor/cases/${victimId}/messages`, token), [token, victimId]);
+}
+
+export function useSendCaseMessage(victimId) {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (message) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/counsellor/cases/${victimId}/messages`, { message }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
 }
 
 // --- Mutations ---

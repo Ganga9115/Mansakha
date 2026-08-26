@@ -33,7 +33,3 @@ export const formContentWidth = { mobile: '100%', tablet: 640, desktop: 680 };
 // Signup Success): identical layout to phone, just capped and centered
 // at larger tiers.
 export const authContentWidth = { mobile: '100%', tablet: 440, desktop: 460 };
-
-// VictimSignupScreen's step 2/3 forms carry more fields per step than a
-// single login field, so they get a slightly wider cap.
-export const authWizardContentWidth = { mobile: '100%', tablet: 560, desktop: 600 };

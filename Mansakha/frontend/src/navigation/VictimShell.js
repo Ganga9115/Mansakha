@@ -11,6 +11,7 @@ import { tabletShellWidth, sidebarWidth } from '../theme/layout';
 import { useResponsive } from '../hooks/useResponsive';
 import { getNavItemsForRole } from './roleNavConfig';
 import SidebarNav from '../components/SidebarNav';
+import SosButton from '../components/SosButton';
 
 import HomeScreen from '../screens/victim/HomeScreen';
 import CheckinScreen from '../screens/victim/CheckinScreen';
@@ -18,10 +19,15 @@ import CheckinConfirmationScreen from '../screens/victim/CheckinConfirmationScre
 import DistressHistoryScreen from '../screens/victim/DistressHistoryScreen';
 import SupportScreen from '../screens/victim/SupportScreen';
 import SettingsScreen from '../screens/victim/SettingsScreen';
+import ChatScreen from '../screens/victim/ChatScreen';
+import WellnessScreen from '../screens/victim/WellnessScreen';
+import JournalScreen from '../screens/victim/JournalScreen';
+import CounsellorChatScreen from '../screens/victim/CounsellorChatScreen';
 
 const Tab = createBottomTabNavigator();
 const Drawer = createDrawerNavigator();
 const CheckinStack = createNativeStackNavigator();
+const RootStack = createNativeStackNavigator();
 
 // Nested stack for Check-in flow (Check-in -> Confirmation)
 function CheckinTab() {
@@ -126,24 +132,53 @@ function DesktopNavigator() {
   );
 }
 
+// Screens pushed on top of the tab/drawer navigator (not part of the daily
+// tab bar) - reached via Home's quick-action tiles or Settings' conditional
+// counsellor-chat entry point. Nesting these above MainTabs, rather than
+// adding more tabs, keeps the 5-item tab bar/sidebar from getting crowded;
+// `navigation.navigate('Chatbot')` called from any screen inside MainTabs
+// bubbles up to this stack automatically.
+function ShellStack({ tabs }) {
+  return (
+    <RootStack.Navigator screenOptions={{ headerShown: false }}>
+      <RootStack.Screen name="MainTabs" component={tabs} />
+      <RootStack.Screen name="Chatbot" component={ChatScreen} />
+      <RootStack.Screen name="Wellbeing" component={WellnessScreen} />
+      <RootStack.Screen name="Journal" component={JournalScreen} />
+      <RootStack.Screen name="CounsellorChat" component={CounsellorChatScreen} />
+    </RootStack.Navigator>
+  );
+}
+
 export default function VictimShell() {
   const { tier } = useResponsive();
 
   if (tier === 'desktop') {
-    return <DesktopNavigator />;
+    return (
+      <View style={{ flex: 1 }}>
+        <ShellStack tabs={DesktopNavigator} />
+        <SosButton />
+      </View>
+    );
   }
 
   if (tier === 'tablet') {
     return (
       <View style={styles.webBackdrop}>
         <View style={[styles.webFrame, { maxWidth: tabletShellWidth }]}>
-          <TabNavigator />
+          <ShellStack tabs={TabNavigator} />
+          <SosButton />
         </View>
       </View>
     );
   }
 
-  return <TabNavigator />;
+  return (
+    <View style={{ flex: 1 }}>
+      <ShellStack tabs={TabNavigator} />
+      <SosButton />
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
