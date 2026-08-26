@@ -60,9 +60,9 @@ export function useInterventionTypes() {
   return useQuery(() => apiClient.get('/api/counsellor/intervention-types', token), [token]);
 }
 
-export function useCounsellorAlerts() {
+export function useCounsellorAlerts(enabled = true) {
   const token = getToken();
-  return useQuery(() => apiClient.get('/api/counsellor/alerts', token), [token]);
+  return useQuery(() => (enabled ? apiClient.get('/api/counsellor/alerts', token) : Promise.resolve(null)), [token, enabled]);
 }
 
 // --- Mutations ---

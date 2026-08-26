@@ -11,7 +11,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { logout } from '../services/auth';
-import { useMe } from '../services/hooks';
+import { useMe, useCounsellorAlerts } from '../services/hooks';
 
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
 
@@ -63,6 +63,15 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
   const navItems = NAV_ITEMS_BY_SECTION[resolvedSection] || NAV_ITEMS_BY_SECTION.counsellor;
   const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || `/${resolvedSection}`;
   const profilePath = navItems.find((item) => item.name === 'Profile')?.path || `/${resolvedSection}/profile`;
+  // Real open-alert count for the bell dot, matching the Victim app's bell
+  // (only shown when there's actually something to see) - only Counsellor
+  // has a real alerts endpoint today, District/State Admin's is still a
+  // "Coming soon" stub with no data source, so the dot stays off there
+  // rather than showing a fabricated count.
+  const { data: alertsData } = useCounsellorAlerts(resolvedSection === 'counsellor');
+  const openAlertCount = resolvedSection === 'counsellor'
+    ? (alertsData?.alerts || []).filter((a) => a.status === 'Open').length
+    : 0;
   // Same icon as whichever sidebar item matches the current page, so the
   // top bar always shows a page icon + name, matching the Victim app.
   // Longest-path-wins: Dashboard's own path (e.g. /counsellor) is a prefix
@@ -131,7 +140,7 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
             <h2 className="text-xl font-bold text-[#3D5A80]">{title}</h2>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-5">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D5A80]/60" size={16} />
               <input
@@ -146,12 +155,14 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
               className="relative p-1 text-[#3D5A80] hover:opacity-70"
             >
               <Bell size={20} />
-              <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+              {openAlertCount > 0 && (
+                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
+              )}
             </Link>
 
             <button
               onClick={() => navigate(profilePath)}
-              className="flex items-center gap-3 border-l border-[#D6E8F5] pl-6 text-left focus:outline-none"
+              className="flex items-center gap-3 border-l border-[#D6E8F5] pl-4 text-left focus:outline-none"
             >
               <img
                 src={me?.profileImageUrl || FALLBACK_PHOTO}

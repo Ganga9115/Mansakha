@@ -72,7 +72,7 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
             <h2 className="text-xl font-bold text-[#3D5A80]">{title}</h2>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-5">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D5A80]/60" size={16} />
               <input
@@ -86,7 +86,7 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
               <Bell size={20} />
             </button>
 
-            <div className="flex items-center gap-3 border-l border-[#D6E8F5] pl-6">
+            <div className="flex items-center gap-3 border-l border-[#D6E8F5] pl-4">
               <div className="w-9 h-9 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center">
                 <User size={18} className="text-[#3D5A80]" />
               </div>
