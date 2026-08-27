@@ -1,6 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const { supabase } = require('../db/supabaseClient');
+const { pool } = require('../db/pgPool');
 const { verifyToken } = require('../middleware/verifyToken');
 const { ok, fail } = require('../services/responseEnvelope');
 
@@ -41,6 +42,48 @@ router.get('/', verifyToken, async (req, res) => {
     mustChangePassword: req.auth.mustChangePassword,
     roles: req.auth.roles,
   });
+});
+
+// Real notification bell for every staff role (Ministry's was a plain
+// decorative button; Counsellor's top bar had its own one-off open-alert
+// count instead of this). alert_notifications (schema.sql) is written for
+// whichever officials actually need to know about an alert/SOS - the
+// assigned Counsellor and every District Administration official in that
+// victim's jurisdiction (see the table's own comment) - so State/National
+// Admin, Ministry, and Data Operator legitimately just see an empty list
+// today, not a bug, since nothing currently targets them.
+router.get('/notifications', verifyToken, async (req, res) => {
+  if (req.auth.type !== 'official') return fail(res, 'Staff account required', 403);
+
+  try {
+    const { rows } = await pool.query(
+      `select an.alert_notification_id, an.notified_at, an.source, an.priority, an.auto_assigned,
+              an.alert_id, an.sos_event_id, vi.full_name as victim_name, rl.name as risk_level
+       from alert_notifications an
+       left join alerts al on al.alert_id = an.alert_id
+       left join sos_events se on se.sos_event_id = an.sos_event_id
+       left join distress_scores ds on ds.score_id = al.distress_score_id
+       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       left join victim_identity vi on vi.victim_id = coalesce(al.victim_id, se.victim_id)
+       where an.official_id = $1
+       order by an.notified_at desc
+       limit 20`,
+      [req.auth.officialId]
+    );
+
+    const notifications = rows.map((n) => ({
+      notificationId: n.alert_notification_id,
+      notifiedAt: n.notified_at,
+      priority: n.priority,
+      message: n.source === 'sos'
+        ? `SOS from ${n.victim_name || 'a victim'}`
+        : `${n.risk_level || 'New'} alert - ${n.victim_name || 'a victim'}`,
+    }));
+
+    return ok(res, { notifications });
+  } catch (err) {
+    return fail(res, `Could not load notifications: ${err.message}`, 500);
+  }
 });
 
 // Uploads to Supabase Storage's `profile-photos` bucket (public read, see

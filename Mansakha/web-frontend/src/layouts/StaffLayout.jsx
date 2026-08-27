@@ -14,7 +14,8 @@ import {
   Users,
 } from 'lucide-react';
 import { logout } from '../services/auth';
-import { useMe, useCounsellorAlerts } from '../services/hooks';
+import { useMe } from '../services/hooks';
+import NotificationBell from '../components/NotificationBell';
 
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
 
@@ -83,17 +84,7 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
       : location.pathname.startsWith('/dataintake') ? 'dataintake'
       : 'counsellor');
   const navItems = NAV_ITEMS_BY_SECTION[resolvedSection] || NAV_ITEMS_BY_SECTION.counsellor;
-  const alertsPath = navItems.find((item) => item.name === 'Alerts')?.path || `/${resolvedSection}`;
   const profilePath = navItems.find((item) => item.name === 'Profile')?.path || `/${resolvedSection}/profile`;
-  // Real open-alert count for the bell dot, matching the Victim app's bell
-  // (only shown when there's actually something to see) - only Counsellor
-  // has a real alerts endpoint today, District/State Admin's is still a
-  // "Coming soon" stub with no data source, so the dot stays off there
-  // rather than showing a fabricated count.
-  const { data: alertsData } = useCounsellorAlerts(resolvedSection === 'counsellor');
-  const openAlertCount = resolvedSection === 'counsellor'
-    ? (alertsData?.alerts || []).filter((a) => a.status === 'Open').length
-    : 0;
   // Same icon as whichever sidebar item matches the current page, so the
   // top bar always shows a page icon + name, matching the Victim app.
   // Longest-path-wins: Dashboard's own path (e.g. /counsellor) is a prefix

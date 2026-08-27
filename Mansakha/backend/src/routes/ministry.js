@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
 const { supabase } = require('../db/supabaseClient');
-const { withTransaction } = require('../db/pgPool');
+const { pool, withTransaction } = require('../db/pgPool');
 const { writeAuditLog } = require('../services/auditLog');
 const { verifyToken } = require('../middleware/verifyToken');
 const { requireRole } = require('../middleware/requireRole');
@@ -34,56 +34,116 @@ async function checkJurisdictionLimit(roleName, jurisdictionId) {
     .is('revoked_at', null);
 
   const alreadyHasAdmin = (existing || []).some((r) => r.roles.role_name === 'Administration');
-  if (alreadyHasAdmin) return `This ${level.level} already has an active Administration account - revoke it first before assigning a new one`;
+  if (alreadyHasAdmin) return `This ${level.level} already has an active Administration account - delete it (via Edit) before assigning a new one`;
   return null;
 }
 
 // The Staff Management screen (Section 8) needs to list existing accounts before
 // it can show anything to create/revoke - the create/revoke routes alone don't
 // support that.
+// role/level filter accepted so the Staff Management UI can show one category
+// at a time (National/State/District Admin, Counsellor, Data Operator)
+// instead of one flat 770+-row list - level only means something for
+// role=Administration (National/State/District Admin are all that one role,
+// distinguished only by their jurisdiction's level). Written as raw SQL
+// (not supabase-js) because filtering the parent row by a condition on a
+// doubly-nested embed (official_roles -> jurisdictions.level) isn't
+// something PostgREST's embed syntax can express.
 router.get('/staff', async (req, res) => {
-  const { page = 1 } = req.query;
+  const { page = 1, role, level } = req.query;
   const pageSize = 30;
   const offset = (Number(page) - 1) * pageSize;
 
-  // official_roles has two FKs into officials (official_id and assigned_by) - the
-  // explicit constraint-name hint disambiguates the embed (see the identical fix
-  // in routes/admin.js's workload query, where the unhinted version silently
-  // returned no rows).
-  const { data, count, error } = await supabase
-    .from('officials')
-    .select(
-      'official_id, full_name, email, phone, must_change_password, official_roles!official_roles_official_id_fkey(role_id, jurisdiction_id, revoked_at, roles(role_name), jurisdictions(name))',
-      { count: 'exact' }
-    )
-    .order('full_name')
-    .range(offset, offset + pageSize - 1);
-  if (error) return fail(res, `Could not load staff list: ${error.message}`, 500);
+  const conditions = ['orl.revoked_at is null'];
+  const params = [];
+  if (role) {
+    params.push(role);
+    conditions.push(`r.role_name = $${params.length}`);
+  }
+  if (level) {
+    params.push(level);
+    conditions.push(`j.level = $${params.length}`);
+  }
+  const whereClause = conditions.join(' and ');
 
-  const staff = (data || []).map((o) => {
-    const activeRoles = (o.official_roles || [])
-      .filter((r) => !r.revoked_at)
-      .map((r) => ({ roleName: r.roles.role_name, jurisdictionName: r.jurisdictions ? r.jurisdictions.name : null }));
+  try {
+    const { rows: countRows } = await pool.query(
+      `select count(*) from officials o
+       join official_roles orl on orl.official_id = o.official_id
+       join roles r on r.role_id = orl.role_id
+       left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
+       where ${whereClause}`,
+      params
+    );
 
-    return {
+    const { rows } = await pool.query(
+      `select o.official_id, o.full_name, o.email, o.phone, o.staff_id, o.must_change_password,
+              r.role_name, j.name as jurisdiction_name
+       from officials o
+       join official_roles orl on orl.official_id = o.official_id
+       join roles r on r.role_id = orl.role_id
+       left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
+       where ${whereClause}
+       order by o.full_name
+       limit ${pageSize} offset ${offset}`,
+      params
+    );
+
+    const staff = rows.map((o) => ({
       officialId: o.official_id,
       fullName: o.full_name,
       email: o.email,
       phone: o.phone,
+      staffId: o.staff_id,
       mustChangePassword: o.must_change_password,
-      // The Staff Management table is one row per official (not per role
-      // assignment) - flatten the common single-role case into roleName/
-      // jurisdictionName directly, joining if an official somehow holds more
-      // than one active role. status is derived, not stored: an official with
-      // zero active roles (every assignment revoked) reads as 'revoked'.
-      roleName: activeRoles.map((r) => r.roleName).join(', ') || null,
-      jurisdictionName: activeRoles.map((r) => r.jurisdictionName).filter(Boolean).join(', ') || null,
-      status: activeRoles.length > 0 ? 'active' : 'revoked',
-      roles: activeRoles,
-    };
-  });
+      roleName: o.role_name,
+      jurisdictionName: o.jurisdiction_name,
+      status: 'active', // the join above only matches unrevoked role rows
+    }));
 
-  return ok(res, { staff, total: count || staff.length });
+    return ok(res, { staff, total: Number(countRows[0].count), page: Number(page), pageSize });
+  } catch (err) {
+    return fail(res, `Could not load staff list: ${err.message}`, 500);
+  }
+});
+
+// Ministry-wide victim list for Super Admin visibility (Feature Catalog
+// Section 3/8's oversight remit) - every victim regardless of who
+// provisioned them (District Admin or Data Operator), unlike Data Operator's
+// own /api/dataintake/victims which only shows its own auth_method. Read-only
+// here; editing/deleting a victim record stays on the Data Operator screen
+// that already owns that flow.
+router.get('/victims', async (req, res) => {
+  const { page = 1 } = req.query;
+  const pageSize = 30;
+  const offset = (Number(page) - 1) * pageSize;
+
+  const { data, count, error } = await supabase
+    .from('victims')
+    .select(
+      `victim_id, docket_number, case_stage, status, auth_method, enrolled_at,
+       case_types(name), jurisdictions(name), victim_identity(full_name, contact_number, address)`,
+      { count: 'exact' }
+    )
+    .order('enrolled_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
+  if (error) return fail(res, `Could not load victims: ${error.message}`, 500);
+
+  const victims = (data || []).map((v) => ({
+    victimId: v.victim_id,
+    docketNumber: v.docket_number,
+    fullName: v.victim_identity?.full_name || null,
+    contactNumber: v.victim_identity?.contact_number || null,
+    address: v.victim_identity?.address || null,
+    caseType: v.case_types?.name || null,
+    jurisdictionName: v.jurisdictions?.name || null,
+    caseStage: v.case_stage,
+    status: v.status,
+    provisionedVia: v.auth_method === 'district_admin' ? 'District Admin' : 'Data Operator',
+    enrolledAt: v.enrolled_at,
+  }));
+
+  return ok(res, { victims, total: count || victims.length, page: Number(page), pageSize });
 });
 
 // Extends Section 7's contract (explicitly allowed: "extend as needed, keep the
@@ -144,16 +204,27 @@ router.post('/staff', async (req, res) => {
   return ok(res, { officialId }, 'Account created', 201);
 });
 
-// Deliberately name/phone only - email is the login identifier, so it stays
-// immutable here to avoid an edit accidentally locking an account out.
+// Deliberately no email here - it's the login identifier, and an edit could
+// accidentally lock the account out. newPassword is optional (Ministry
+// resetting someone's forgotten/compromised password) - when sent, it always
+// forces must_change_password back to true, same as a brand-new account, so
+// Ministry never learns the account's real ongoing password.
 router.patch('/staff/:officialId', async (req, res) => {
   const { officialId } = req.params;
-  const { fullName, phone } = req.body;
-  if (!fullName && phone === undefined) return fail(res, 'fullName or phone is required', 400);
+  const { fullName, phone, staffId, newPassword } = req.body;
+  if (!fullName && phone === undefined && !staffId && !newPassword) {
+    return fail(res, 'fullName, phone, staffId, or newPassword is required', 400);
+  }
+  if (newPassword && newPassword.length < 8) return fail(res, 'newPassword must be at least 8 characters', 400);
 
   const patch = {};
   if (fullName) patch.full_name = fullName;
   if (phone !== undefined) patch.phone = phone || null;
+  if (staffId) patch.staff_id = staffId;
+  if (newPassword) {
+    patch.password_hash = await bcrypt.hash(newPassword, 12);
+    patch.must_change_password = true;
+  }
 
   const { error } = await supabase.from('officials').update(patch).eq('official_id', officialId);
   if (error) return fail(res, `Could not update account: ${error.message}`, 500);
@@ -161,6 +232,58 @@ router.patch('/staff/:officialId', async (req, res) => {
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'official', entityId: officialId });
 
   return ok(res, null, 'Account updated');
+});
+
+// Every table with an official_id-shaped foreign key into officials (besides
+// official_roles, which is this account's own role grant and gets deleted
+// alongside it, not treated as "history"). Checked up front by the delete
+// route below, same reasoning/pattern as victimProvisioning.js's deleteVictim.
+const OFFICIAL_HISTORY_TABLES = [
+  ['official_roles', 'assigned_by'], // assigned someone ELSE a role
+  ['officials', 'provisioned_by'], // provisioned someone ELSE's account
+  ['interventions', 'assigned_official_id'],
+  ['case_notes', 'official_id'],
+  ['dispatch_queue', 'official_id'],
+  ['messages', 'official_id'],
+  ['counselling_sessions', 'counsellor_id'],
+  ['sos_events', 'resolved_by'],
+  ['alert_notifications', 'official_id'],
+  ['audit_log', 'official_id'],
+  ['reports', 'generated_by'],
+];
+
+// Hard delete - only actually succeeds for an account with no activity yet
+// (a freshly created/seeded account that has never logged in or acted). An
+// account with real history can't be cleanly removed without orphaning what
+// it created/touched, so it throws a clear error instead.
+router.delete('/staff/:officialId', async (req, res) => {
+  const { officialId } = req.params;
+  try {
+    await withTransaction(async (client) => {
+      for (const [table, column] of OFFICIAL_HISTORY_TABLES) {
+        const { rows } = await client.query(`select 1 from ${table} where ${column} = $1 limit 1`, [officialId]);
+        if (rows.length) {
+          const err = new Error('This account has activity history and cannot be deleted.');
+          err.status = 409;
+          throw err;
+        }
+      }
+
+      await client.query('delete from official_roles where official_id = $1', [officialId]);
+      const { rowCount } = await client.query('delete from officials where official_id = $1', [officialId]);
+      if (!rowCount) {
+        const err = new Error('Account not found');
+        err.status = 404;
+        throw err;
+      }
+    });
+  } catch (err) {
+    return fail(res, err.message || 'Could not delete account', err.status || 409);
+  }
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'delete', entityType: 'official', entityId: officialId });
+
+  return ok(res, null, 'Account deleted');
 });
 
 // (Re)grants a role/jurisdiction to an existing official - e.g. after a
