@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../services/apiClient';
 import { setToken } from '../../services/auth';
-import { User, Lock, MessageSquare, BarChart3, ShieldCheck, IdCard } from 'lucide-react';
+import { User, Lock, MessageSquare, BarChart3, ShieldCheck, IdCard, Phone, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 // Third required login credential alongside email+password (Feature
 // Catalog: every Ministry-provisioned account gets a "State Admin ID" /
@@ -19,23 +20,28 @@ function staffIdLabel(uiRole, adminLevel) {
 
 export default function StaffLogin() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [staffId, setStaffId] = useState('');
+  // 4th credential, Counsellor only (routes/auth.staff.js) - must match
+  // officials.phone exactly.
+  const [mobileNumber, setMobileNumber] = useState('');
   // uiRole can be 'Counsellor', 'Admins', 'Data Operator'
   const [uiRole, setUiRole] = useState('Counsellor');
   // adminLevel can be '', 'National Admin', 'State Admin', 'District Admin'
   const [adminLevel, setAdminLevel] = useState('');
-  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [tempToken, setTempToken] = useState(null);
 
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
 
     // Map UI role back to backend expected role - only 'Admins' needs
@@ -44,7 +50,10 @@ export default function StaffLogin() {
     if (uiRole === 'Admins') roleName = 'Administration';
 
     try {
-      const data = await apiClient.post('/api/auth/staff/login', { email, password, roleName, staffId });
+      const data = await apiClient.post('/api/auth/staff/login', {
+        email, password, roleName, staffId,
+        ...(uiRole === 'Counsellor' ? { mobileNumber } : {}),
+      });
 
       if (data.mustChangePassword) {
         setRequirePasswordChange(true);
@@ -55,7 +64,7 @@ export default function StaffLogin() {
 
       await completeLogin(data.token);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setLoading(false);
     }
   };
@@ -97,13 +106,12 @@ export default function StaffLogin() {
           : '/districtadmin'
       );
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     }
   };
 
   const handleChangePassword = async (e) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
     try {
       if (newPassword.length < 8) {
@@ -112,7 +120,7 @@ export default function StaffLogin() {
       await apiClient.post('/api/auth/staff/change-password', { newPassword }, tempToken);
       await completeLogin(tempToken);
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
       setLoading(false);
     }
   };
@@ -178,10 +186,7 @@ export default function StaffLogin() {
                     <button
                       key={role}
                       type="button"
-                      onClick={() => {
-                        setUiRole(role);
-                        setError(null);
-                      }}
+                      onClick={() => setUiRole(role)}
                       className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
                         uiRole === role
                           ? 'bg-white text-[#519BCE] shadow-sm'
@@ -228,6 +233,25 @@ export default function StaffLogin() {
                     </div>
                   </div>
 
+                  {uiRole === 'Counsellor' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
+                      <div className="relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Phone className="h-5 w-5 text-gray-400" />
+                        </div>
+                        <input
+                          type="tel"
+                          placeholder="Mobile Number"
+                          value={mobileNumber}
+                          onChange={(e) => setMobileNumber(e.target.value)}
+                          required
+                          className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
                     <div className="relative">
@@ -252,21 +276,24 @@ export default function StaffLogin() {
                         <Lock className="h-5 w-5 text-gray-400" />
                       </div>
                       <input
-                        type="password"
+                        type={showPassword ? 'text' : 'password'}
                         placeholder="Password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        tabIndex={-1}
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
                     </div>
                   </div>
-
-                  {error && (
-                    <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100">
-                      {error}
-                    </div>
-                  )}
 
                   <button
                     type="submit"
@@ -292,22 +319,25 @@ export default function StaffLogin() {
                         <Lock className="h-5 w-5 text-gray-400" />
                       </div>
                       <input
-                        type="password"
+                        type={showNewPassword ? 'text' : 'password'}
                         placeholder="New Password (min 8 chars)"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
                         minLength={8}
-                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword((v) => !v)}
+                        className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                        tabIndex={-1}
+                        aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showNewPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                      </button>
                     </div>
                   </div>
-
-                  {error && (
-                    <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100">
-                      {error}
-                    </div>
-                  )}
 
                   <button
                     type="submit"

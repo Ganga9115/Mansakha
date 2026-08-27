@@ -13,12 +13,14 @@ import RiskBadge from '../../components/RiskBadge';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import TopRightActions from '../../components/TopRightActions';
 import { QueryBoundary } from '../../components/QueryStates';
-import { useVictimDashboard, useUpcomingSessions } from '../../services/hooks';
+import { useVictimDashboard, useUpcomingSessions, useAssignedCounsellor } from '../../services/hooks';
 
 export default function HomeScreen({ navigation }) {
   const query = useVictimDashboard();
   const sessionsQuery = useUpcomingSessions();
   const upcomingSessions = sessionsQuery.data?.sessions || [];
+  const assignedCounsellorQuery = useAssignedCounsellor();
+  const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
   const { tier, isDesktop } = useResponsive();
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
@@ -167,6 +169,23 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.gridTitle}>My Journal</Text>
                     <Text style={styles.gridSub}>Write it down</Text>
                   </Pressable>
+
+                  {/* Only for a victim who's opted in AND has a counsellor
+                      assigned - not shown otherwise, matching Settings'
+                      opted-in-vs-not distinction rather than always
+                      appearing as a dead/disabled tile. */}
+                  {data.optedForManualCounsellor && hasAssignedCounsellor && (
+                    <Pressable
+                      style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
+                      onPress={() => navigation?.navigate('CounsellorChat')}
+                    >
+                      <View style={styles.gridIconCircle}>
+                        <Feather name="message-circle" size={20} color={colors.primary} />
+                      </View>
+                      <Text style={styles.gridTitle}>Message Counsellor</Text>
+                      <Text style={styles.gridSub}>Chat with your counsellor</Text>
+                    </Pressable>
+                  )}
                 </View>
 
                 {/* Upcoming Counselling Session - scheduled by the assigned

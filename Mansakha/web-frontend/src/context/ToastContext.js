@@ -1,12 +1,15 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
-import Toast from '../components/Toast';
+import ToastContainer from '../components/ToastContainer';
 
-// Replaces "mutation either navigates away or shows inline text" as the only
-// feedback mechanism - a real success/error/info toast any screen can fire.
+// Replaces "every failed action shows the raw thrown Error.message in a
+// plain <div>" as the only feedback mechanism - a real success/error/info
+// toast any page can fire via useToast(), conceptually mirroring
+// frontend/src/context/ToastContext.js (the Expo app) but implemented as
+// plain React + Tailwind since this is a CRA web app, not React Native.
 const ToastContext = createContext(null);
 
 let nextId = 1;
-const AUTO_DISMISS_MS = 3500;
+const AUTO_DISMISS_MS = 4000;
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
@@ -18,9 +21,11 @@ export function ToastProvider({ children }) {
     delete timers.current[id];
   }, []);
 
-  // Same message showing again (e.g. a slow endpoint the user keeps
-  // retrying) replaces the old toast instead of stacking a duplicate
-  // alongside it.
+  // A repeated failure (e.g. a slow endpoint the user keeps retrying) used to
+  // stack a fresh toast on top of every earlier one with the identical
+  // message, growing into a wall of duplicate "Failed to fetch" banners.
+  // Same message showing again now replaces the old one instead of piling
+  // up alongside it.
   const show = useCallback((message, type = 'info') => {
     const id = nextId++;
     setToasts((prev) => {
@@ -42,7 +47,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <Toast toasts={toasts} onDismiss={dismiss} />
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </ToastContext.Provider>
   );
 }

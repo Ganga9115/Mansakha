@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import MinistryLayout from '../../layouts/MinistryLayout';
-import { UserPlus, X, Pencil, Trash2 } from 'lucide-react';
-import { useStaffList, useMinistryVictims, useCreateStaff, useUpdateStaff, useDeleteStaff, useJurisdictionOptions } from '../../services/hooks';
+import { UserPlus, X, Pencil, Trash2, Eye, EyeOff } from 'lucide-react';
+import {
+  useStaffList,
+  useMinistryVictims,
+  useCreateStaff,
+  useUpdateStaff,
+  useDeleteStaff,
+  useJurisdictionOptions,
+} from '../../services/hooks';
+import { useToast } from '../../context/ToastContext';
 
 const ROLE_OPTIONS = ['Counsellor', 'Administration', 'Data Operator'];
 const JURISDICTION_LEVELS = ['district', 'state', 'national'];
@@ -55,6 +63,7 @@ function Pagination({ page, pageSize, total, onChange }) {
 }
 
 export default function StaffManagement() {
+  const toast = useToast();
   const [activeTab, setActiveTab] = useState(STAFF_TABS[0].key);
   const [page, setPage] = useState(1);
   const tab = TABS.find((t) => t.key === activeTab);
@@ -75,14 +84,14 @@ export default function StaffManagement() {
   const [jurisdictionLevel, setJurisdictionLevel] = useState('district');
   const [jurisdictionId, setJurisdictionId] = useState('');
   const [password, setPassword] = useState('');
-  const [formError, setFormError] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [editingId, setEditingId] = useState(null);
   const [editFullName, setEditFullName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editStaffId, setEditStaffId] = useState('');
   const [editNewPassword, setEditNewPassword] = useState('');
-  const [editError, setEditError] = useState(null);
+  const [showEditNewPassword, setShowEditNewPassword] = useState(false);
 
   const jurisdictionQuery = useJurisdictionOptions(
     roleName === 'Administration' ? jurisdictionLevel : undefined
@@ -98,7 +107,6 @@ export default function StaffManagement() {
 
   const handleCreate = async (e) => {
     e.preventDefault();
-    setFormError(null);
     try {
       await createStaff.mutate({
         fullName: fullName.trim(),
@@ -113,12 +121,13 @@ export default function StaffManagement() {
       setEmail('');
       setPhone('');
       setPassword('');
+      setShowPassword(false);
       setJurisdictionId('');
       refetch();
     } catch (err) {
-      // e.g. the 1-per-district/state limit rejection - surfaced inline,
-      // not as a generic toast, so it's clear exactly what to change.
-      setFormError(err.message || 'Could not create this account.');
+      // e.g. the 1-per-district/state limit rejection - whole-action-failed,
+      // so a toast fits better than a raw-string inline dump next to the form.
+      toast.error(err.message || 'Could not create this account.');
     }
   };
 
@@ -128,15 +137,14 @@ export default function StaffManagement() {
     setEditPhone(s.phone || '');
     setEditStaffId(s.staffId || '');
     setEditNewPassword('');
-    setEditError(null);
+    setShowEditNewPassword(false);
   };
 
   const cancelEdit = () => setEditingId(null);
 
   const handleSaveEdit = async (officialId) => {
-    setEditError(null);
     if (editNewPassword && editNewPassword.length < 8) {
-      setEditError('New password must be at least 8 characters.');
+      toast.error('New password must be at least 8 characters.');
       return;
     }
     try {
@@ -153,21 +161,20 @@ export default function StaffManagement() {
       setEditingId(null);
       refetch();
     } catch (err) {
-      setEditError(err.message || 'Could not update this account.');
+      toast.error(err.message || 'Could not update this account.');
     }
   };
 
   const handleDelete = async (officialId) => {
     if (!window.confirm('Permanently delete this account? This cannot be undone.')) return;
-    setEditError(null);
     try {
       await deleteStaff.mutate(officialId);
       setEditingId(null);
       refetch();
     } catch (err) {
       // e.g. the account already has activity history - revoke is the
-      // correct action there, surfaced inline rather than as a raw error.
-      setEditError(err.message || 'Could not delete this account.');
+      // correct action there; surfaced as a toast rather than a raw error.
+      toast.error(err.message || 'Could not delete this account.');
     }
   };
 
@@ -212,27 +219,50 @@ export default function StaffManagement() {
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
-            <div>
-              <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
-                Phone{roleName === 'Counsellor' ? ' (required - also their login credential)' : ''}
-              </label>
-              <input
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required={roleName === 'Counsellor'}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-            </div>
+            {/* Phone only means anything for Counsellor - it's their 4th
+                login credential (routes/auth.staff.js); Administration and
+                Data Operator accounts never use it for anything. */}
+            {roleName === 'Counsellor' && (
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
+                  Phone (required - also their login credential)
+                </label>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+            )}
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Role</label>
-              <select value={roleName} onChange={(e) => setRoleName(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+              <select value={roleName} onChange={(e) => { setRoleName(e.target.value); if (e.target.value !== 'Counsellor') setPhone(''); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
                 {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Temporary Password</label>
-              <input type="text" value={password} onChange={(e) => setPassword(e.target.value)} required placeholder="Required" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder="Required"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                  tabIndex={-1}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </div>
             {roleName === 'Administration' && (
               <>
@@ -255,7 +285,6 @@ export default function StaffManagement() {
                 </div>
               </>
             )}
-            {formError && <p className="col-span-2 text-xs text-rose-600">{formError}</p>}
             <div className="col-span-2">
               <button type="submit" disabled={createStaff.loading} className="px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
                 {createStaff.loading ? 'Creating...' : 'Create Account'}
@@ -316,28 +345,38 @@ export default function StaffManagement() {
                                 className="w-full px-3 py-2 border border-transparent bg-gray-100 rounded-lg text-sm text-gray-500 cursor-not-allowed"
                               />
                             </div>
-                            <div>
-                              <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
-                                Phone{s.roleName === 'Counsellor' ? ' (login credential)' : ''}
-                              </label>
-                              <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" />
-                            </div>
+                            {s.roleName === 'Counsellor' && (
+                              <div>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Phone (login credential)</label>
+                                <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" />
+                              </div>
+                            )}
                             <div>
                               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Staff ID</label>
                               <input value={editStaffId} onChange={(e) => setEditStaffId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" />
                             </div>
                             <div>
                               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">New Password</label>
-                              <input
-                                type="text"
-                                value={editNewPassword}
-                                onChange={(e) => setEditNewPassword(e.target.value)}
-                                placeholder="Leave blank to keep current"
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                              />
+                              <div className="relative">
+                                <input
+                                  type={showEditNewPassword ? 'text' : 'password'}
+                                  value={editNewPassword}
+                                  onChange={(e) => setEditNewPassword(e.target.value)}
+                                  placeholder="Leave blank to keep current"
+                                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm bg-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditNewPassword((v) => !v)}
+                                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                                  tabIndex={-1}
+                                  aria-label={showEditNewPassword ? 'Hide password' : 'Show password'}
+                                >
+                                  {showEditNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                              </div>
                             </div>
                           </div>
-                          {editError && <p className="mt-3 text-xs text-rose-600">{editError}</p>}
                           <div className="mt-4 flex items-center gap-3">
                             <button
                               onClick={() => handleSaveEdit(s.officialId)}

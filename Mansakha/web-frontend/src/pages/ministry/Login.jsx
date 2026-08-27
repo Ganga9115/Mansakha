@@ -2,25 +2,26 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../services/apiClient';
 import { setToken } from '../../services/auth';
-import { Settings, Users, Map, User, Lock } from 'lucide-react';
+import { Settings, Users, Map, User, Lock, Eye, EyeOff } from 'lucide-react';
+import { useToast } from '../../context/ToastContext';
 
 export default function MinistryLogin() {
   const navigate = useNavigate();
+  const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
     try {
       const data = await apiClient.post('/api/auth/ministry/login', { email, password });
       setToken(data.token);
       navigate('/ministry/dashboard');
     } catch (err) {
-      setError(err.message);
+      toast.error(err.message);
     } finally {
       setLoading(false);
     }
@@ -104,21 +105,24 @@ export default function MinistryLogin() {
                     <Lock className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                    className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    tabIndex={-1}
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
               </div>
-
-              {error && (
-                <div className="p-3 bg-red-50 text-red-700 rounded-lg text-sm border border-red-100">
-                  {error}
-                </div>
-              )}
 
               <button
                 type="submit"

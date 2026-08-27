@@ -325,14 +325,27 @@ create table dispatch_queue (
   dispatch_id      uuid primary key default gen_random_uuid(),
   -- 'ivrs_call'/'sms_checkin_prompt': Section 1.3. 'wellness_push'/
   -- 'ai_proactive_contact': Section 1.5's Moderate/High automated response.
-  kind              text not null check (kind in ('checkin_due', 'alert', 'ivrs_call', 'sms_checkin_prompt', 'wellness_push', 'ai_proactive_contact')),
+  -- 'admin_broadcast_sms'/'admin_broadcast_push': Ministry Analytics &
+  -- Workflow spec Task 2C (migration_010) - an admin-triggered mass send to
+  -- every active victim in a jurisdiction, distinct from every other kind
+  -- above (which are individual automated triggers, not admin-initiated).
+  kind              text not null check (kind in ('checkin_due', 'alert', 'ivrs_call', 'sms_checkin_prompt', 'wellness_push', 'ai_proactive_contact', 'admin_broadcast_sms', 'admin_broadcast_push')),
   victim_id          uuid references victims(victim_id),   -- target for every kind except 'alert'
   official_id         uuid references officials(official_id), -- target for 'alert'
   alert_id             uuid references alerts(alert_id),
-  attempt_count         int not null default 0,
-  last_attempt_at        timestamptz,
-  delivered_at             timestamptz,
-  created_at                timestamptz not null default now()
+  -- migration_010: every OTHER kind derives its delivered text from fixed
+  -- hardcoded strings at drain time (services/dispatchWorker.js) - only
+  -- admin_broadcast_sms/admin_broadcast_push carry admin-authored freeform
+  -- text, which has to survive on the row since drainDispatchQueue may run
+  -- up to a minute after the row is inserted. `priority` mirrors
+  -- alert_notifications.priority's existing 'normal'/'urgent' convention.
+  -- Both null/unused for every other kind.
+  message               text,
+  priority                text check (priority in ('normal', 'urgent')),
+  attempt_count             int not null default 0,
+  last_attempt_at            timestamptz,
+  delivered_at                 timestamptz,
+  created_at                    timestamptz not null default now()
 );
 
 -- ===== Audit log (depends on officials, victims) =====
@@ -387,13 +400,17 @@ create table wellness_content (
 -- Section 1.6 Journal writing - reflection-only signal (sentiment_score reuses
 -- services/gemini.js's existing sentiment extraction, doesn't duplicate it),
 -- deliberately NOT fed into distress_scores/the trend line (see routes/victim.js).
+-- title/updated_at added by migration_008 (edit/delete support, list ordered
+-- by last-edited instead of created_at).
 create table journal_entries (
   entry_id      uuid primary key default gen_random_uuid(),
   victim_id      uuid not null references victims(victim_id),
+  title          text not null,
   content         text not null,
   language_id       uuid references languages(language_id),
   sentiment_score     numeric,
-  created_at            timestamptz not null default now()
+  created_at            timestamptz not null default now(),
+  updated_at            timestamptz not null default now()
 );
 
 -- Section 2.2 Scheduled counsellings.
@@ -406,9 +423,43 @@ create table counselling_sessions (
   created_at            timestamptz not null default now()
 );
 
+-- Ministry Analytics & Workflow spec - caches Gemini-generated qualitative
+-- themes/predictive counsellor demand per jurisdiction (POST
+-- /api/admin/analytics/generate), so the Ministry dashboard doesn't call
+-- Gemini on every page load against the shared free-tier quota.
+create table jurisdiction_analytics_insights (
+  insight_id      uuid primary key default gen_random_uuid(),
+  jurisdiction_id  uuid not null references jurisdictions(jurisdiction_id),
+  generated_at      timestamptz not null default now(),
+  period_start        timestamptz not null,
+  period_end            timestamptz not null,
+  top_themes              jsonb not null, -- [{theme, prevalence}]
+  overall_sentiment          text,
+  emerging_risks               jsonb, -- string[] - potential organized-intimidation flags
+  predicted_counsellor_demand    text check (predicted_counsellor_demand in ('low', 'stable', 'high_surge_expected')),
+  demand_reasoning                  text
+);
+
+-- Strategic interventions a National/State admin launches, so their effect
+-- on the distress trend line can be visually compared (trend chart overlays
+-- a marker at launched_at).
+create table policies (
+  policy_id     uuid primary key default gen_random_uuid(),
+  jurisdiction_id  uuid not null references jurisdictions(jurisdiction_id),
+  title             text not null,
+  description         text,
+  launched_at           timestamptz not null,
+  created_by              uuid references officials(official_id)
+);
+
 -- Sections 3.6/4.4/6.3 - a District/State/National Admin snapshots their
 -- current dashboard numbers so Ministry has something concrete to receive
 -- ("share upwards"), rather than Ministry re-deriving the same aggregates.
+-- status/target_jurisdiction_id/commentary/insight_id (Ministry Analytics &
+-- Workflow spec) support real District -> State -> National upward
+-- routing: a report is 'Draft' until sent, target_jurisdiction_id is the
+-- parent tier it's sent to, commentary is the sending admin's own write-up
+-- alongside the optional AI insight snapshot it was generated from.
 create table reports (
   report_id       uuid primary key default gen_random_uuid(),
   jurisdiction_id  uuid not null references jurisdictions(jurisdiction_id),
@@ -416,7 +467,11 @@ create table reports (
   generated_at        timestamptz not null default now(),
   period_start          timestamptz not null,
   period_end              timestamptz not null,
-  snapshot                  jsonb not null
+  snapshot                  jsonb not null,
+  status                      text not null default 'Draft' check (status in ('Draft', 'Submitted', 'Reviewed')),
+  target_jurisdiction_id        uuid references jurisdictions(jurisdiction_id),
+  commentary                       text,
+  insight_id                         uuid references jurisdiction_analytics_insights(insight_id)
 );
 
 -- ===== Indexes for the access patterns the API contract implies =====
@@ -435,6 +490,81 @@ create index idx_chat_messages_victim on chat_messages(victim_id, sent_at);
 create index idx_messages_victim on messages(victim_id, sent_at);
 create index idx_messages_official on messages(official_id, sent_at);
 create index idx_wellness_content_category on wellness_content(category);
-create index idx_journal_entries_victim on journal_entries(victim_id, created_at desc);
+create index idx_journal_entries_victim on journal_entries(victim_id, updated_at desc);
 create index idx_counselling_sessions_counsellor on counselling_sessions(counsellor_id, scheduled_at);
 create index idx_reports_jurisdiction on reports(jurisdiction_id, generated_at desc);
+create index idx_jurisdiction_analytics_insights_jurisdiction on jurisdiction_analytics_insights(jurisdiction_id, generated_at desc);
+create index idx_policies_jurisdiction on policies(jurisdiction_id, launched_at desc);
+create index idx_reports_target_jurisdiction on reports(target_jurisdiction_id, generated_at desc);
+-- migration_011_ollama_and_policies.sql
+-- Description: Adds tables for the Ollama 15-question dynamic Check-In flow and Ministry Policy deployment.
+
+BEGIN;
+
+-- 1. Table for Ollama Dynamic Questionnaires
+CREATE TABLE IF NOT EXISTS victim_questionnaires (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    victim_id UUID REFERENCES victims(victim_id) ON DELETE CASCADE,
+    responses JSONB NOT NULL DEFAULT '[]'::jsonb, -- Stores the Q&A pairs
+    predicted_distress_score INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for victim_questionnaires
+ALTER TABLE victim_questionnaires ENABLE ROW LEVEL SECURITY;
+
+-- Victims can insert their own questionnaires
+CREATE POLICY "Victims can insert their own questionnaires"
+    ON victim_questionnaires
+    FOR INSERT
+    WITH CHECK (victim_id = (current_setting('request.jwt.claims', true)::json->>'sub')::uuid);
+
+-- Victims can read their own questionnaires
+CREATE POLICY "Victims can read their own questionnaires"
+    ON victim_questionnaires
+    FOR SELECT
+    USING (victim_id = (current_setting('request.jwt.claims', true)::json->>'sub')::uuid);
+
+-- Staff/Ministry can read all questionnaires (assuming privacy isn't restricted here per user prompt)
+CREATE POLICY "Staff can read all questionnaires"
+    ON victim_questionnaires
+    FOR SELECT
+    USING (
+        (current_setting('request.jwt.claims', true)::json->>'account_type') IN ('Counsellor', 'Administration', 'Ministry')
+    );
+
+-- 2. Table for Ministry Policies
+-- Policies are strategic interventions deployed by National/State admins to measure impact over time.
+-- Note: Re-creating this safely just in case migration_009_ministry_analytics didn't create it exactly as needed, 
+-- or ensuring it exists if it wasn't there.
+CREATE TABLE IF NOT EXISTS policies (
+    policy_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    jurisdiction_id UUID REFERENCES jurisdictions(jurisdiction_id) ON DELETE CASCADE NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    launched_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_by UUID REFERENCES officials(official_id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Enable RLS for policies
+ALTER TABLE policies ENABLE ROW LEVEL SECURITY;
+
+-- Admins/Ministry can insert and read policies
+CREATE POLICY "Admins can manage policies"
+    ON policies
+    FOR ALL
+    USING (
+        (current_setting('request.jwt.claims', true)::json->>'account_type') IN ('Administration', 'Ministry')
+    );
+
+-- Staff can read policies
+CREATE POLICY "Staff can read policies"
+    ON policies
+    FOR SELECT
+    USING (
+        (current_setting('request.jwt.claims', true)::json->>'account_type') IN ('Counsellor', 'Administration', 'Ministry')
+    );
+
+COMMIT;
+

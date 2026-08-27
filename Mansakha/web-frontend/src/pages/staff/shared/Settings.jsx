@@ -3,8 +3,8 @@ import StaffLayout from '../../../layouts/StaffLayout';
 import { apiClient } from '../../../services/apiClient';
 import { getToken } from '../../../services/auth';
 import { useMe } from '../../../services/hooks';
-
-const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
+import { Eye, EyeOff, User } from 'lucide-react';
+import { useToast } from '../../../context/ToastContext';
 
 // This Settings/Profile screen is shared across every Staff role (Counsellor,
 // District/State/National Administration, Data Operator) - it used to
@@ -23,7 +23,13 @@ function roleLabels(role) {
   return { matrixTitle: `${role.roleName} Profile Matrix`, jobTitle: role.roleName };
 }
 
-export default function Settings({ onNavigate }) {
+// Layout defaults to StaffLayout (every existing caller - Counsellor,
+// District/State/National Admin, Data Operator); Ministry reuses this same
+// profile content but under its own MinistryLayout chrome (different sidebar/
+// header), passed in explicitly rather than importing it here and coupling
+// this "shared" component to one specific role's layout.
+export default function Settings({ onNavigate, Layout = StaffLayout }) {
+  const toast = useToast();
   const { data: me, refetch: refetchMe } = useMe();
   const { matrixTitle, jobTitle } = roleLabels(me?.roles?.[0]);
   const fileInputRef = useRef(null);
@@ -63,6 +69,8 @@ export default function Settings({ onNavigate }) {
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -86,14 +94,17 @@ export default function Settings({ onNavigate }) {
       setConfirmPassword('');
       setTimeout(() => { setShowPasswordForm(false); setPasswordSuccess(false); }, 1500);
     } catch (err) {
-      setPasswordError(err.message);
+      // Real backend failure (e.g. current session/token issue) - a whole-
+      // action-failed case, unlike the two client-side checks above which
+      // stay inline since they're field-level ("min 8 chars", "must match").
+      toast.error(err.message);
     } finally {
       setPasswordLoading(false);
     }
   };
 
   return (
-    <StaffLayout title="Profile" activePage="Profile" onNavigate={onNavigate}>
+    <Layout title="Profile" activePage="Profile" onNavigate={onNavigate}>
       <div className="space-y-6 max-w-5xl">
         
         {/* COUNSELLOR PROFILE MATRIX */}
@@ -101,11 +112,17 @@ export default function Settings({ onNavigate }) {
           <h3 className="font-bold text-sm text-gray-800">{matrixTitle}</h3>
           
           <div className="flex items-center gap-4">
-            <img
-              src={me?.profileImageUrl || FALLBACK_PHOTO}
-              alt={me?.fullName || 'Profile'}
-              className="w-16 h-16 rounded-full object-cover"
-            />
+            {me?.profileImageUrl ? (
+              <img
+                src={me.profileImageUrl}
+                alt={me?.fullName || 'Profile'}
+                className="w-16 h-16 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-16 h-16 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
+                <User size={28} className="text-[#3D5A80]" />
+              </div>
+            )}
             <div>
               <h4 className="font-bold text-gray-800 text-base">{me?.fullName || 'Loading...'}</h4>
               <p className="text-xs text-gray-500">{jobTitle}</p>
@@ -123,6 +140,9 @@ export default function Settings({ onNavigate }) {
               >
                 {photoUploading ? 'Uploading...' : 'Change Profile Photo'}
               </button>
+              {me && !me.profileImageUrl && !photoUploading && (
+                <p className="text-[11px] text-amber-600 mt-1">You haven't set a profile photo yet.</p>
+              )}
               {photoError && <p className="text-xs text-red-600 mt-1">{photoError}</p>}
             </div>
           </div>
@@ -226,20 +246,42 @@ export default function Settings({ onNavigate }) {
 
             {showPasswordForm && (
               <div className="p-4 bg-[#F8F9FA] rounded-lg space-y-3">
-                <input
-                  type="password"
-                  placeholder="New password (min 8 characters)"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-xs"
-                />
-                <input
-                  type="password"
-                  placeholder="Confirm new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-xs"
-                />
+                <div className="relative">
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    placeholder="New password (min 8 characters)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-3.5 py-2 pr-10 border border-gray-300 rounded-lg text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    tabIndex={-1}
+                    aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    placeholder="Confirm new password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-3.5 py-2 pr-10 border border-gray-300 rounded-lg text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                    tabIndex={-1}
+                    aria-label={showConfirmPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {passwordError && <p className="text-xs text-red-600">{passwordError}</p>}
                 {passwordSuccess && <p className="text-xs text-emerald-600">Password updated.</p>}
                 <button
@@ -255,7 +297,7 @@ export default function Settings({ onNavigate }) {
         </div>
 
       </div>
-    </StaffLayout>
+    </Layout>
   );
 }
 

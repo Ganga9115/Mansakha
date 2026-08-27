@@ -76,21 +76,39 @@ export function useAdminDashboard(jurisdictionId) {
   );
 }
 
-export function useAdminWorkload(jurisdictionId) {
-  const token = getToken();
-  return useQuery(
-    () => (jurisdictionId ? apiClient.get(`/api/admin/workload/${jurisdictionId}`, token) : Promise.resolve(null)),
-    [token, jurisdictionId]
-  );
-}
-
+// Backward-compatible: existing callers (AdminDashboard.jsx, StateDashboard.jsx)
+// pass just a jurisdictionId string. Ministry Analytics & Workflow's Task 4E
+// report submit/review UI needs the fuller periodStart/periodEnd/commentary/
+// targetJurisdictionId/insightId fields from POST /api/admin/reports/generate
+// too, so `mutate` also accepts one options object instead - whichever shape
+// is passed, it's forwarded to the backend as-is (a string is wrapped into
+// { jurisdictionId }).
 export function useGenerateReport() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (jurisdictionId) => {
+  const mutate = async (jurisdictionIdOrPayload) => {
+    const payload = typeof jurisdictionIdOrPayload === 'string' ? { jurisdictionId: jurisdictionIdOrPayload } : jurisdictionIdOrPayload;
     setLoading(true);
     try {
-      return await apiClient.post('/api/admin/reports/generate', { jurisdictionId }, token);
+      return await apiClient.post('/api/admin/reports/generate', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Ministry Analytics & Workflow Task 2E - PATCH /api/admin/reports/:reportId/status.
+// Called by the RECIPIENT tier (the report's target_jurisdiction_id) to mark
+// a received report 'Reviewed' (backend also allows 'Draft'/'Submitted' for
+// robustness, though the spec's stated use case is 'Reviewed').
+export function useUpdateReportStatus() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, status) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/reports/${reportId}/status`, { status }, token);
     } finally {
       setLoading(false);
     }
@@ -140,6 +158,80 @@ export function useUpdateVictim() {
     }
   };
   return { mutate, loading };
+}
+
+// --- Advanced Ministry Analytics & Workflow ---
+
+// Task 2A - POST /api/admin/analytics/generate. Admin-triggered only (never
+// polled/auto-called - GEMINI_API_KEY is a small shared free-tier quota, see
+// backend/src/services/gemini.js) - `mutate` takes { jurisdictionId,
+// periodStart?, periodEnd? } and resolves to { insight } (insight is null
+// when the backend found no interaction data for the period).
+export function useGenerateAnalytics() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/analytics/generate', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Task 2B - GET /api/admin/policies/:jurisdictionId.
+export function useFetchPolicies(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/policies/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+// Task 2B - POST /api/admin/policies. `mutate` takes { title, description?,
+// launchedAt, jurisdictionId }.
+export function useCreatePolicy() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/policies', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Task 2C - POST /api/admin/broadcast. `mutate` takes { jurisdictionId,
+// message, priority? ('normal' | 'urgent') }, resolves to { queuedCount }
+// (count of victims queued, not raw dispatch_queue rows).
+export function useSendBroadcast() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/broadcast', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Task 2D - GET /api/admin/counsellors/performance/:jurisdictionId. Resolves
+// to { counsellors: [{ officialId, fullName, activeCaseCount,
+// avgDistressPointDrop, victimsConsideredForEfficacy }] }.
+export function useCounsellorPerformance(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/counsellors/performance/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
 }
 
 // --- Data Operator ---

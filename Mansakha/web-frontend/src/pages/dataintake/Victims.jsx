@@ -3,7 +3,10 @@ import StaffLayout from '../../layouts/StaffLayout';
 import { Trash2 } from 'lucide-react';
 import { useDataIntakeVictims, useUpdateDataIntakeVictim, useDeleteDataIntakeVictim } from '../../services/hooks';
 
-const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
+// 'Case Closed' is a terminal stage settable only by Data Operator (this
+// screen) - District Admin's equivalent editor stays restricted to the
+// original 4 (services/victimProvisioning.js enforces this server-side).
+const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation', 'Case Closed'];
 const STATUS_BADGE = { active: 'bg-emerald-100 text-emerald-700', inactive: 'bg-gray-100 text-gray-500' };
 
 // Feature Catalog Section 7 extension (explicit user request) - every victim

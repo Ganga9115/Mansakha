@@ -561,33 +561,49 @@ router.get('/heatmap', async (req, res) => {
   const { data: states, error: stateError } = await supabase.from('jurisdictions').select('jurisdiction_id, name').eq('level', 'state');
   if (stateError) return fail(res, 'Could not load heatmap', 500);
 
-  const heatmap = [];
-  for (const state of states || []) {
+  // Same fix as admin.js's dashboard route: every state runs concurrently
+  // (Promise.all, not a sequential for-loop) and goes straight to Postgres
+  // (pgPool) instead of one Supabase REST call per state - confirmed live
+  // that REST overhead alone was ~1-2s per call, which a ~35-state
+  // sequential loop turned into tens of seconds for this one page.
+  const heatmap = await Promise.all((states || []).map(async (state) => {
     const descendantIds = await getDescendantJurisdictionIds(state.jurisdiction_id);
-    const { data: victims } = await supabase
-      .from('victims')
-      .select('victim_id, distress_scores(score_value, computed_at)')
-      .in('jurisdiction_id', descendantIds);
+    const { rows } = await pool.query(
+      `select v.victim_id, ds.score_value, rl.name as risk_level_name
+       from victims v
+       left join lateral (
+         select score_value, risk_level_id from distress_scores where victim_id = v.victim_id order by computed_at desc limit 1
+       ) ds on true
+       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where v.jurisdiction_id = any($1::uuid[])`,
+      [descendantIds]
+    );
 
-    let victimCount = 0;
     let scoreSum = 0;
     let scoredCount = 0;
-    for (const v of victims || []) {
-      victimCount += 1;
-      const latest = (v.distress_scores || []).sort((a, b) => (a.computed_at < b.computed_at ? 1 : -1))[0];
-      if (latest) {
-        scoreSum += latest.score_value;
+    let vulnerable = 0;
+    let highRisk = 0;
+    let critical = 0;
+    for (const r of rows) {
+      if (r.score_value !== null) {
+        scoreSum += Number(r.score_value);
         scoredCount += 1;
       }
+      if (r.risk_level_name === 'Moderate') vulnerable += 1;
+      if (r.risk_level_name === 'High') highRisk += 1;
+      if (r.risk_level_name === 'Critical') critical += 1;
     }
 
-    heatmap.push({
+    return {
       jurisdictionId: state.jurisdiction_id,
       name: state.name,
-      victimCount,
+      victimCount: rows.length,
       averageScore: scoredCount > 0 ? Math.round((scoreSum / scoredCount) * 10) / 10 : null,
-    });
-  }
+      vulnerable,
+      highRisk,
+      critical,
+    };
+  }));
 
   return ok(res, { heatmap });
 });
@@ -623,35 +639,66 @@ router.get('/ivrs-log', async (req, res) => {
 
 // "Receive Base-Level Reports" - lists what District/State/National
 // generated via POST /api/admin/reports/generate.
+//
+// FIX (found while wiring Ministry Analytics & Workflow Task 4D's Inbox/
+// Outbox split): migration_009 added a SECOND FK from reports into
+// jurisdictions (target_jurisdiction_id, for Task 2E's upward routing)
+// alongside the original jurisdiction_id one. That makes the bare
+// `jurisdictions(name, level)` embed this route used to have AMBIGUOUS to
+// PostgREST - confirmed live (PGRST201, "more than one relationship was
+// found for 'reports' and 'jurisdictions'") - so every call to this route
+// was a 500 before this fix, regardless of caller. Resolved with explicit
+// FK-hint aliases (jurisdictions!<constraint_name>) instead of a second
+// plain query, since (unlike the official_roles->officials ambiguity
+// elsewhere in this codebase) the exact constraint names are fixed and
+// known from schema.sql. Also now selects/returns the Task 2E fields
+// (status, targetJurisdictionId, commentary, insightId) and resolves
+// generatedByName - none of which this route returned before, even though
+// the columns/data have existed since migration_009.
 router.get('/reports', async (req, res) => {
   const { jurisdictionLevel } = req.query;
   const pageSize = 30;
   const page = Math.max(1, Number(req.query.page) || 1);
   const offset = (page - 1) * pageSize;
 
-  let query = supabase
+  const { data, count, error } = await supabase
     .from('reports')
-    .select('report_id, jurisdiction_id, generated_by, generated_at, period_start, period_end, snapshot, jurisdictions(name, level)', { count: 'exact' })
-    .order('generated_at', { ascending: false });
-  if (jurisdictionLevel) query = query.eq('jurisdictions.level', jurisdictionLevel);
-
-  const { data, count, error } = await query.range(offset, offset + pageSize - 1);
+    .select(
+      `report_id, jurisdiction_id, generated_by, generated_at, period_start, period_end, snapshot,
+       status, target_jurisdiction_id, commentary, insight_id,
+       origin:jurisdictions!reports_jurisdiction_id_fkey(name, level),
+       target:jurisdictions!reports_target_jurisdiction_id_fkey(name, level),
+       generator:officials(full_name)`,
+      { count: 'exact' }
+    )
+    .order('generated_at', { ascending: false })
+    .range(offset, offset + pageSize - 1);
   if (error) return fail(res, `Could not load reports: ${error.message}`, 500);
 
-  return ok(res, {
-    reports: (data || []).map((r) => ({
-      reportId: r.report_id,
-      jurisdictionId: r.jurisdiction_id,
-      jurisdictionName: r.jurisdictions ? r.jurisdictions.name : null,
-      jurisdictionLevel: r.jurisdictions ? r.jurisdictions.level : null,
-      generatedBy: r.generated_by,
-      generatedAt: r.generated_at,
-      periodStart: r.period_start,
-      periodEnd: r.period_end,
-      snapshot: r.snapshot,
-    })),
-    total: count || 0,
-  });
+  // jurisdictionLevel filter kept as a JS-side pass (not a server-side
+  // .eq() on the aliased embed) - no current caller passes this param, and
+  // filtering post-map avoids relying on untested alias-qualified embed
+  // filter syntax under time pressure.
+  let reports = (data || []).map((r) => ({
+    reportId: r.report_id,
+    jurisdictionId: r.jurisdiction_id,
+    jurisdictionName: r.origin ? r.origin.name : null,
+    jurisdictionLevel: r.origin ? r.origin.level : null,
+    generatedBy: r.generated_by,
+    generatedByName: r.generator ? r.generator.full_name : null,
+    generatedAt: r.generated_at,
+    periodStart: r.period_start,
+    periodEnd: r.period_end,
+    snapshot: r.snapshot,
+    status: r.status,
+    targetJurisdictionId: r.target_jurisdiction_id,
+    targetJurisdictionName: r.target ? r.target.name : null,
+    commentary: r.commentary,
+    insightId: r.insight_id,
+  }));
+  if (jurisdictionLevel) reports = reports.filter((r) => r.jurisdictionLevel === jurisdictionLevel);
+
+  return ok(res, { reports, total: count || 0 });
 });
 
 module.exports = router;

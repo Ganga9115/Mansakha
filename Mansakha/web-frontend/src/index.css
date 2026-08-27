@@ -1,3 +1,16 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Sidebar needs overflow-y-auto so a tall nav list scrolls internally
+   instead of stretching the whole page (see StaffLayout/MinistryLayout) -
+   but a visible native scrollbar there reads as a broken/unstyled control
+   sitting on top of the nav, not a real scroll affordance, so it's hidden
+   while scrolling still works via wheel/touch/keyboard. */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
