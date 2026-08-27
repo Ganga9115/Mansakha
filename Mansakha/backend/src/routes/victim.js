@@ -1,7 +1,6 @@
 const express = require('express');
 const { supabase } = require('../db/supabaseClient');
-const { analyzeInteraction, analyzeChatMessage } = require('../services/ai');
-const { generateCaseNoteDraft } = require('../services/gemini');
+const { analyzeInteraction, analyzeChatMessage, analyzeInteractionFromClientAi } = require('../services/ai');
 const { writeAuditLog } = require('../services/auditLog');
 const { verifyToken } = require('../middleware/verifyToken');
 const { generalApiLimiter, victimChatLimiter } = require('../middleware/rateLimiter');
@@ -92,11 +91,26 @@ router.get('/dashboard', async (req, res) => {
   });
 });
 
+// Check-in now runs its conversation against a locally-running Ollama instance
+// on the victim's own device (frontend/src/services/ollamaClient.js), not a
+// server-side Gemini call - the client sends the transcript plus its own
+// Ollama-derived distress analysis, and this route scores it through the same
+// computeDistressScore/alerts/case-note pipeline analyzeInteraction() used to
+// feed (see services/ai.js's analyzeInteractionFromClientAi).
 router.post('/checkin', async (req, res) => {
   const victimId = req.auth.victimId;
-  const { channel, responses } = req.body;
+  const { channel, responses, aiAnalysis } = req.body;
   if (!channel || !Array.isArray(responses) || responses.length === 0) {
     return fail(res, 'channel and a non-empty responses[] are required', 400);
+  }
+  if (
+    !aiAnalysis ||
+    typeof aiAnalysis.sentiment !== 'number' ||
+    typeof aiAnalysis.emotion !== 'number' ||
+    typeof aiAnalysis.summary !== 'string' ||
+    !aiAnalysis.summary.trim()
+  ) {
+    return fail(res, 'aiAnalysis (sentiment, emotion, summary) is required', 400);
   }
   const text = responses.join(' ');
 
@@ -110,7 +124,7 @@ router.post('/checkin', async (req, res) => {
 
   let analysis;
   try {
-    analysis = await analyzeInteraction(victimId, text);
+    analysis = await analyzeInteractionFromClientAi(victimId, text, aiAnalysis);
   } catch (err) {
     return fail(res, `Check-in recorded, but analysis failed: ${err.message}`, 502);
   }
@@ -123,15 +137,14 @@ router.post('/checkin', async (req, res) => {
   // Critical real alert with opt-in-aware routing).
   const { alertId } = await applyStressResponse(victimId, scoreId, analysis.riskLevel);
 
-  // Section 2.3 - after a real check-in, draft a case note a Counsellor can
-  // review/edit rather than write from scratch. Best-effort: a Gemini
-  // failure here must never fail the check-in response itself - the
-  // victim's check-in is already fully recorded and scored by this point.
+  // Section 2.3 - after a real check-in, save a case note a Counsellor can
+  // review/edit. The summary is already AI-authored (by the same Ollama
+  // conversation, not a second server-side call) - stored as-is.
+  const summary = aiAnalysis.summary.trim();
   try {
-    const draft = await generateCaseNoteDraft(text);
-    await supabase.from('case_notes').insert({ victim_id: victimId, official_id: null, note_text: draft, authored_by: 'ai' });
+    await supabase.from('case_notes').insert({ victim_id: victimId, official_id: null, note_text: summary, authored_by: 'ai' });
   } catch (err) {
-    console.warn('checkin: AI case-note draft failed (non-fatal):', err.message);
+    console.warn('checkin: saving AI case-note summary failed (non-fatal):', err.message);
   }
 
   await writeAuditLog({ victimId, action: 'create', entityType: 'interaction', entityId: interactionId });
@@ -141,6 +154,7 @@ router.post('/checkin', async (req, res) => {
     scoreValue: analysis.scoreValue,
     riskLevel: analysis.riskLevel,
     alertTriggered: alertId !== null,
+    summary,
   }, null, 201);
 });
 

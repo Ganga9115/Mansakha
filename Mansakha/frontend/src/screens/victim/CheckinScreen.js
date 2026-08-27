@@ -1,6 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, Animated } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import * as Speech from 'expo-speech';
 import { colors } from '../../theme/colors';
@@ -11,96 +10,274 @@ import { shadow } from '../../theme/shadow';
 import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useToast } from '../../context/ToastContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { useCheckin, useVictimDashboard } from '../../services/hooks';
-import Card from '../../components/Card';
-import IconInput from '../../components/IconInput';
+import { checkOllamaConnection, sendCompanionMessage, analyzeConversation, OPENING_GREETING } from '../../services/ollamaClient';
+import SegmentedToggle from '../../components/SegmentedToggle';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 
-const DISTRESS_TAGS = [
-  { id: 'anxious', label: 'Anxious / Panic', isHighRisk: true },
-  { id: 'afraid', label: 'Afraid / Unsafe', isHighRisk: true },
-  { id: 'cant_sleep', label: "Can't Sleep", isHighRisk: false },
-  { id: 'crying', label: 'Overwhelmed', isHighRisk: false },
-  { id: 'hopeless', label: 'Hopeless', isHighRisk: true },
-  { id: 'alone', label: 'Isolated / Alone', isHighRisk: false },
-  { id: 'calm', label: 'Calm / Safe', isHighRisk: false },
-  { id: 'exhausted', label: 'Physically Exhausted', isHighRisk: false },
-];
+// Voice input (speech-to-text) only exists in the browser's Web Speech API -
+// there's no native STT library in this app yet, so Call mode's mic is
+// web-only. Text-to-speech still works everywhere via expo-speech.
+const VOICE_SUPPORTED =
+  Platform.OS === 'web' && typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
 
-const RATING_SCALE = [
-  { value: 1, label: 'Very Low', color: colors.success },
-  { value: 2, label: 'Low', color: colors.success },
-  { value: 3, label: 'Moderate', color: colors.warning },
-  { value: 4, label: 'High', color: colors.error },
-  { value: 5, label: 'Critical', color: colors.error },
-];
+const CALL_STATE_LABEL = {
+  idle: 'Ready to talk',
+  listening: 'Listening...',
+  thinking: 'Thinking...',
+  speaking: 'Speaking...',
+};
+
+const CONNECTION_LABEL = {
+  connecting: 'Connecting to local AI...',
+  connected: 'Local AI connected',
+  error: 'Cannot reach local AI - is Ollama running?',
+};
+const CONNECTION_COLOR = {
+  connecting: colors.textSecondary,
+  connected: colors.success,
+  error: colors.danger,
+};
+
+function Bubble({ message }) {
+  const isVictim = message.role === 'user';
+  return (
+    <View style={[bubbleStyles.row, isVictim && bubbleStyles.rowVictim]}>
+      <View style={[bubbleStyles.bubble, isVictim ? bubbleStyles.bubbleVictim : bubbleStyles.bubbleAi]}>
+        <Text style={[bubbleStyles.text, isVictim && bubbleStyles.textVictim]}>{message.content}</Text>
+      </View>
+    </View>
+  );
+}
 
 export default function CheckinScreen({ navigation }) {
-  const { t } = useLanguage();
   const toast = useToast();
   const checkin = useCheckin();
   const dashboardQuery = useVictimDashboard();
   const { tier, isDesktop } = useResponsive();
 
-  const [distressRating, setDistressRating] = useState(null);
-  const [selectedTags, setSelectedTags] = useState([]);
-  const [optionalNote, setOptionalNote] = useState('');
-  const [error, setError] = useState(false);
+  const [ollamaStatus, setOllamaStatus] = useState('connecting'); // connecting | connected | error
+  const [mode, setMode] = useState('chat'); // chat | call
+  const [conversation, setConversation] = useState([{ role: 'assistant', content: OPENING_GREETING }]);
+  const [draft, setDraft] = useState('');
+  const [thinking, setThinking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Resets the screen inputs back to original blank state whenever focused
-  useFocusEffect(
-    useCallback(() => {
-      setDistressRating(null);
-      setSelectedTags([]);
-      setOptionalNote('');
-      setError(false);
-    }, [])
-  );
+  const [callState, setCallState] = useState('idle');
+  const [inCall, setInCall] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState('');
 
-  const today = new Date();
-  const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
-  const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
-  const yearStr = `Year - ${today.getFullYear()}`;
+  const scrollRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const inCallRef = useRef(false);
+  const speakingRef = useRef(false);
+  const conversationRef = useRef(conversation);
+  const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  const toggleTag = (tagId) => {
-    setSelectedTags((prev) =>
-      prev.includes(tagId) ? prev.filter((id) => id !== tagId) : [...prev, tagId]
+  useEffect(() => {
+    conversationRef.current = conversation;
+  }, [conversation]);
+
+  useEffect(() => {
+    checkOllamaConnection().then(({ connected }) => setOllamaStatus(connected ? 'connected' : 'error'));
+    return () => {
+      inCallRef.current = false;
+      try {
+        recognitionRef.current?.stop();
+      } catch (e) {}
+      Speech.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    const active = callState === 'listening' || callState === 'speaking';
+    if (!active) {
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ])
     );
+    loop.start();
+    return () => loop.stop();
+  }, [callState, pulseAnim]);
+
+  const retryConnection = async () => {
+    setOllamaStatus('connecting');
+    const { connected } = await checkOllamaConnection();
+    setOllamaStatus(connected ? 'connected' : 'error');
   };
 
-  const speakGuide = () => {
-    Speech.speak("How are you feeling right now? Select your distress level and any keywords that describe your current state.");
+  const handleSend = async () => {
+    const text = draft.trim();
+    if (!text || thinking) return;
+    setDraft('');
+    const updated = [...conversationRef.current, { role: 'user', content: text }];
+    setConversation(updated);
+    setThinking(true);
+    try {
+      const reply = await sendCompanionMessage(updated);
+      setConversation((prev) => [...prev, { role: 'assistant', content: reply }]);
+      setOllamaStatus('connected');
+    } catch (err) {
+      toast.error(`Local AI error: ${err.message}`);
+      setOllamaStatus('error');
+    } finally {
+      setThinking(false);
+    }
+  };
+
+  const speak = (text) =>
+    new Promise((resolve) => {
+      speakingRef.current = true;
+      setCallState('speaking');
+      Speech.speak(text, {
+        language: 'en-IN',
+        rate: 0.92,
+        onDone: () => {
+          speakingRef.current = false;
+          resolve();
+        },
+        onStopped: () => {
+          speakingRef.current = false;
+          resolve();
+        },
+        onError: () => {
+          speakingRef.current = false;
+          resolve();
+        },
+      });
+    });
+
+  const startListening = useCallback(() => {
+    if (!inCallRef.current || speakingRef.current) return;
+    if (!recognitionRef.current) recognitionRef.current = makeRecognition();
+    if (!recognitionRef.current) return;
+    try {
+      recognitionRef.current.start();
+    } catch (e) {}
+  }, []);
+
+  function makeRecognition() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return null;
+    const r = new SR();
+    r.continuous = false;
+    r.interimResults = true;
+    r.lang = 'en-IN';
+    r.onstart = () => {
+      if (inCallRef.current) setCallState('listening');
+    };
+    r.onresult = (e) => {
+      let finalText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      }
+      if (finalText.trim()) handleVoiceMessage(finalText.trim());
+    };
+    r.onerror = (e) => {
+      if (inCallRef.current && e.error !== 'not-allowed') {
+        setTimeout(startListening, 500);
+      } else if (e.error === 'not-allowed') {
+        toast.error('Allow microphone access to use Call mode.');
+      }
+    };
+    r.onend = () => {
+      if (inCallRef.current && !speakingRef.current) setTimeout(startListening, 300);
+    };
+    return r;
+  }
+
+  const stopListening = () => {
+    try {
+      recognitionRef.current?.stop();
+    } catch (e) {}
+  };
+
+  const handleVoiceMessage = async (text) => {
+    if (!inCallRef.current) return;
+    stopListening();
+    setLiveTranscript(`You: ${text}`);
+    setCallState('thinking');
+    const updated = [...conversationRef.current, { role: 'user', content: text }];
+    setConversation(updated);
+    try {
+      const reply = await sendCompanionMessage(updated);
+      setConversation((prev) => [...prev, { role: 'assistant', content: reply }]);
+      setOllamaStatus('connected');
+      setLiveTranscript(`You: ${text}\n\nMansakha: ${reply}`);
+      await speak(reply);
+      if (inCallRef.current) setTimeout(startListening, 250);
+    } catch (err) {
+      toast.error(`Local AI error: ${err.message}`);
+      setOllamaStatus('error');
+      setCallState('idle');
+      if (inCallRef.current) setTimeout(startListening, 1000);
+    }
+  };
+
+  const toggleCall = async () => {
+    if (inCall) {
+      inCallRef.current = false;
+      setInCall(false);
+      Speech.stop();
+      stopListening();
+      setCallState('idle');
+      return;
+    }
+
+    let status = ollamaStatus;
+    if (status !== 'connected') {
+      const result = await checkOllamaConnection();
+      status = result.connected ? 'connected' : 'error';
+      setOllamaStatus(status);
+    }
+    if (status !== 'connected') {
+      toast.error('Cannot reach the local AI. Make sure Ollama is running on this device.');
+      return;
+    }
+
+    inCallRef.current = true;
+    setInCall(true);
+    setLiveTranscript('');
+    if (conversationRef.current.length <= 1) {
+      await speak(conversationRef.current[0]?.content || OPENING_GREETING);
+    }
+    if (inCallRef.current) startListening();
   };
 
   const handleSubmit = async () => {
-    if (!distressRating) {
-      setError(true);
-      toast.error('Please select your current distress level.');
+    const hasUserMessage = conversation.some((m) => m.role === 'user');
+    if (!hasUserMessage) {
+      toast.error('Share at least one message before submitting your check-in.');
       return;
     }
-    setError(false);
+    if (inCall) await toggleCall();
 
-    const formattedResponses = [
-      `Distress Rating: ${distressRating}/5`,
-      `Selected Symptoms: ${selectedTags.length > 0 ? selectedTags.join(', ') : 'None selected'}`,
-      optionalNote.trim() ? `Note: ${optionalNote}` : 'No extra notes provided.',
-    ];
-
+    setSubmitting(true);
     try {
-      const result = await checkin.mutateAsync({
-        channel: 'Mobile App',
-        responses: formattedResponses,
+      const analysis = await analyzeConversation(conversation);
+      const transcriptLines = conversation.map((m) => `${m.role === 'user' ? 'Victim' : 'Mansakha'}: ${m.content}`);
+      const result = await checkin.mutateAsync({ channel: 'Chatbot', responses: transcriptLines, aiAnalysis: analysis });
+      navigation.navigate('CheckinConfirmation', {
+        riskLevel: result.riskLevel,
+        summary: result.summary,
+        alertTriggered: result.alertTriggered,
       });
-      navigation.navigate('CheckinConfirmation', { alertTriggered: result.alertTriggered });
     } catch (err) {
-      toast.error(err.message);
+      toast.error(err.message || 'Could not submit your check-in.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
+  const canSubmit = !submitting && conversation.some((m) => m.role === 'user');
+
   return (
-    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
-      {/* Top Header Banner */}
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
@@ -113,7 +290,6 @@ export default function CheckinScreen({ navigation }) {
               </View>
             </View>
           )}
-
           <View style={styles.headerInfo}>
             {!isDesktop && (
               <View style={styles.pillBadge}>
@@ -121,14 +297,10 @@ export default function CheckinScreen({ navigation }) {
               </View>
             )}
             <Text style={styles.statusTitle}>Mansakha Care</Text>
-            {!isDesktop && <Text style={styles.subtext}>Quick well-being pulse</Text>}
+            {!isDesktop && <Text style={styles.subtext}>Talk it through, in chat or by voice</Text>}
           </View>
         </View>
-
         <View style={styles.headerRightRow}>
-          <Pressable style={styles.speakHeaderBtn} onPress={speakGuide}>
-            <Feather name="volume-2" size={18} color={colors.primary} />
-          </Pressable>
           {isDesktop && (
             <DesktopHeaderActions
               fullName={dashboardQuery.data?.fullName}
@@ -139,106 +311,115 @@ export default function CheckinScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Main Body Content */}
-      <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-        {/* Date Ticker */}
-        <View style={styles.dateTicker}>
-          <Text style={styles.tickerText}>{dayStr}</Text>
-          <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
-          <Text style={styles.tickerText}>{yearStr}</Text>
-        </View>
-
-        {/* Question 1: Rating Scale */}
-        <Text style={styles.sectionHeaderTitle}>1. HOW DISTRESSED ARE YOU FEELING?</Text>
-        <Card style={[styles.customCard, error && !distressRating && styles.cardError]}>
-          <Text style={styles.questionSubText}>Select a scale from 1 (Calm) to 5 (Severe Distress)</Text>
-
-          <View style={styles.ratingRow}>
-            {RATING_SCALE.map((item) => {
-              const isSelected = distressRating === item.value;
-              return (
-                <Pressable
-                  key={item.value}
-                  onPress={() => {
-                    setDistressRating(item.value);
-                    setError(false);
-                  }}
-                  style={[
-                    styles.ratingBox,
-                    isSelected && { backgroundColor: item.color, borderColor: item.color },
-                  ]}
-                >
-                  <Text style={[styles.ratingNumber, isSelected && styles.textWhite]}>
-                    {item.value}
-                  </Text>
-                  <Text style={[styles.ratingLabel, isSelected && styles.textWhite]}>
-                    {item.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Card>
-
-        {/* Question 2: Chip Tags */}
-        <Text style={styles.sectionHeaderTitle}>2. WHAT ARE YOU EXPERIENCING?</Text>
-        <Card style={styles.customCard}>
-          <Text style={styles.questionSubText}>Tap all words that match how you feel right now</Text>
-
-          <View style={styles.tagsContainer}>
-            {DISTRESS_TAGS.map((tag) => {
-              const isSelected = selectedTags.includes(tag.id);
-              return (
-                <Pressable
-                  key={tag.id}
-                  onPress={() => toggleTag(tag.id)}
-                  style={[
-                    styles.tagChip,
-                    isSelected && styles.tagChipSelected,
-                    isSelected && tag.isHighRisk && styles.tagChipHighRisk,
-                  ]}
-                >
-                  <Feather
-                    name={isSelected ? 'check-circle' : 'plus-circle'}
-                    size={14}
-                    color={isSelected ? colors.white : colors.primary}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={[styles.tagChipText, isSelected && styles.textWhite]}>
-                    {tag.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Card>
-
-        {/* Question 3: Optional Text Field */}
-        <Text style={styles.sectionHeaderTitle}>3. ANYTHING ELSE ON YOUR MIND? (OPTIONAL)</Text>
-        <Card style={styles.customCard}>
-          <IconInput
-            icon="edit-3"
-            value={optionalNote}
-            onChangeText={setOptionalNote}
-            multiline
-            numberOfLines={3}
-            placeholder="Type optional thoughts here or leave blank..."
-          />
-        </Card>
-
-        {/* Submit Action Button */}
+      <View
+        style={[
+          styles.contentBody,
+          isDesktop && styles.contentBodyDesktop,
+          { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' },
+        ]}
+      >
         <Pressable
-          style={styles.primaryBtn}
-          onPress={handleSubmit}
-          disabled={checkin.isPending}
+          style={styles.connectionPill}
+          onPress={ollamaStatus === 'error' ? retryConnection : undefined}
         >
-          <Feather name="send" size={18} color={colors.white} style={{ marginRight: spacing.xs }} />
-          <Text style={styles.primaryBtnText}>
-            {checkin.isPending ? 'Submitting...' : 'Submit Check-in'}
+          <View style={[styles.connectionDot, { backgroundColor: CONNECTION_COLOR[ollamaStatus] }]} />
+          <Text style={[styles.connectionText, { color: CONNECTION_COLOR[ollamaStatus] }]}>
+            {CONNECTION_LABEL[ollamaStatus]}
           </Text>
+          {ollamaStatus === 'error' && <Text style={styles.connectionRetry}>Tap to retry</Text>}
+        </Pressable>
+
+        <SegmentedToggle
+          options={[
+            { value: 'chat', label: 'Chat', icon: 'message-circle' },
+            { value: 'call', label: 'Call', icon: 'phone' },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
+
+        {mode === 'chat' ? (
+          <View style={styles.chatArea}>
+            <ScrollView
+              ref={scrollRef}
+              style={styles.chatScroll}
+              contentContainerStyle={styles.chatContent}
+              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            >
+              {conversation.map((m, i) => (
+                <Bubble key={i} message={m} />
+              ))}
+              {thinking && (
+                <View style={bubbleStyles.row}>
+                  <View style={[bubbleStyles.bubble, bubbleStyles.bubbleAi]}>
+                    <Text style={[bubbleStyles.text, { color: colors.textSecondary }]}>Mansakha is typing...</Text>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+            <View style={styles.composerRow}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Type how you're feeling..."
+                placeholderTextColor={colors.textSecondary}
+                value={draft}
+                onChangeText={setDraft}
+                onSubmitEditing={handleSend}
+                multiline
+              />
+              <Pressable style={styles.sendBtn} onPress={handleSend} disabled={thinking || !draft.trim()}>
+                <Feather name="send" size={18} color={colors.white} />
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.callCard}>
+            <View style={styles.callArea}>
+              <Animated.View
+                style={[
+                  styles.avatarCircle,
+                  (callState === 'listening' || callState === 'speaking') && styles.avatarCircleActive,
+                  { transform: [{ scale: pulseAnim }] },
+                ]}
+              >
+                <Feather
+                  name={callState === 'speaking' ? 'volume-2' : 'mic'}
+                  size={40}
+                  color={callState === 'idle' ? colors.textSecondary : colors.primary}
+                />
+              </Animated.View>
+              <Text style={styles.callStateText}>{inCall ? CALL_STATE_LABEL[callState] : 'Ready to talk'}</Text>
+              <Text style={styles.transcriptText}>
+                {liveTranscript || 'Press the call button and Mansakha will speak first.'}
+              </Text>
+
+              {VOICE_SUPPORTED ? (
+                <Pressable style={[styles.callBtn, inCall && styles.callBtnActive]} onPress={toggleCall}>
+                  <Feather name={inCall ? 'phone-off' : 'phone'} size={26} color={colors.white} />
+                </Pressable>
+              ) : (
+                <View style={styles.unsupportedBox}>
+                  <Feather name="alert-circle" size={16} color={colors.textSecondary} style={{ marginRight: spacing.xs }} />
+                  <Text style={styles.unsupportedNote}>
+                    Voice call needs microphone support in a web browser. Open Mansakha on the web to use Call mode,
+                    or use Chat instead.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        <Pressable style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]} onPress={handleSubmit} disabled={!canSubmit}>
+          {submitting ? (
+            <ActivityIndicator color={colors.white} style={{ marginRight: spacing.xs }} />
+          ) : (
+            <Feather name="check-circle" size={18} color={colors.white} style={{ marginRight: spacing.xs }} />
+          )}
+          <Text style={styles.submitBtnText}>{submitting ? 'Analyzing your check-in...' : "I'm done - submit check-in"}</Text>
         </Pressable>
       </View>
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -247,7 +428,7 @@ const styles = StyleSheet.create({
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xl,
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -266,7 +447,6 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
     position: 'relative',
   },
-  avatarContainerDesktop: { width: 40, height: 40 },
   avatarEditBadge: {
     position: 'absolute',
     bottom: 0,
@@ -288,127 +468,134 @@ const styles = StyleSheet.create({
   statusTitle: { ...typography.h3, color: colors.primaryDark },
   subtext: { ...typography.caption, color: colors.textSecondary },
   headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  speakHeaderBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   contentBody: {
+    flex: 1,
     backgroundColor: colors.background,
     borderTopLeftRadius: radius.xxl,
     borderTopRightRadius: radius.xxl,
     marginTop: -spacing.xl,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.lg,
-    paddingBottom: spacing.xxxl,
+    paddingBottom: spacing.lg,
   },
-  contentBodyDesktop: {
-    marginTop: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
-  },
-  dateTicker: {
+  contentBodyDesktop: { marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  connectionPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.md,
   },
-  tickerText: { ...typography.bodyStrong, color: colors.primary },
-  tickerTextActive: { color: colors.error },
-  sectionHeaderTitle: {
-    ...typography.label,
-    color: colors.primaryDark,
-    marginBottom: spacing.xs,
-    letterSpacing: 1,
-    marginTop: spacing.xs,
-  },
-  customCard: {
+  connectionDot: { width: 8, height: 8, borderRadius: radius.pill, marginRight: spacing.xs },
+  connectionText: { ...typography.caption, fontWeight: '700' },
+  connectionRetry: { ...typography.caption, color: colors.textSecondary, marginLeft: spacing.sm, textDecorationLine: 'underline' },
+  chatArea: { flex: 1, minHeight: 320 },
+  chatScroll: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
     borderRadius: radius.xl,
     backgroundColor: colors.surface,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+  },
+  chatContent: { padding: spacing.lg },
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  textInput: {
+    flex: 1,
+    ...typography.body,
+    color: colors.textPrimary,
+    maxHeight: 100,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  sendBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  callCard: {
+    flex: 1,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     ...shadow.card,
   },
-  cardError: {
-    borderColor: colors.error,
-    borderWidth: 1.5,
-  },
-  questionSubText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.md,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  ratingBox: {
-    flex: 1,
-    marginHorizontal: 3,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-  },
-  ratingNumber: {
-    ...typography.h3,
-    color: colors.textPrimary,
-  },
-  ratingLabel: {
-    fontSize: 9,
-    fontWeight: '600',
-    color: colors.textSecondary,
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.xs,
-  },
-  tagChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
+  callArea: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xl },
+  avatarCircle: {
+    width: 120,
+    height: 120,
     borderRadius: radius.pill,
     backgroundColor: colors.primaryLight,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.xs,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
   },
-  tagChipSelected: {
+  avatarCircleActive: { backgroundColor: colors.infoLight, borderWidth: 2, borderColor: colors.primary },
+  callStateText: { ...typography.h2, color: colors.primaryDark, marginBottom: spacing.sm },
+  transcriptText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
+    minHeight: 60,
+  },
+  callBtn: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.pop,
   },
-  tagChipHighRisk: {
-    backgroundColor: colors.error,
-    borderColor: colors.error,
+  callBtnActive: { backgroundColor: colors.danger },
+  unsupportedBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    maxWidth: 320,
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
-  tagChipText: {
-    ...typography.caption,
-    fontWeight: '600',
-    color: colors.primaryDark,
-  },
-  textWhite: {
-    color: colors.white,
-  },
-  primaryBtn: {
+  unsupportedNote: { ...typography.caption, color: colors.textSecondary, flex: 1, lineHeight: 16 },
+  submitBtn: {
     backgroundColor: colors.primaryDark,
     borderRadius: radius.xl,
     paddingVertical: spacing.md,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: spacing.xs,
+    marginTop: spacing.md,
     ...shadow.card,
   },
-  primaryBtnText: { ...typography.bodyStrong, color: colors.white, fontSize: 16 },
+  submitBtnDisabled: { opacity: 0.5 },
+  submitBtnText: { ...typography.bodyStrong, color: colors.white, fontSize: 16 },
+});
+
+const bubbleStyles = StyleSheet.create({
+  row: { flexDirection: 'row', marginBottom: spacing.sm },
+  rowVictim: { justifyContent: 'flex-end' },
+  bubble: { maxWidth: '80%', borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  bubbleAi: { backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border, borderTopLeftRadius: 4 },
+  bubbleVictim: { backgroundColor: colors.primary, borderTopRightRadius: 4 },
+  text: { ...typography.body, color: colors.textPrimary },
+  textVictim: { color: colors.white },
 });

@@ -1,0 +1,117 @@
+// Local, on-device conversational AI for the Check-in screen - talks directly
+// to a locally-running Ollama instance, the same way
+// mansakha_local_ai_two_modes_fixed_voice.html does (plain fetch to
+// /api/tags and /api/chat, no SDK). Runs entirely on the victim's own
+// device/network; this never reaches Anthropic, Google, or Mansakha's own
+// backend - the backend only sees the finished transcript + analysis
+// (see useCheckin in services/hooks.js).
+
+const OLLAMA_BASE_URL = process.env.EXPO_PUBLIC_OLLAMA_BASE_URL || 'http://127.0.0.1:11434';
+const OLLAMA_MODEL = process.env.EXPO_PUBLIC_OLLAMA_MODEL || 'gemma3:4b';
+
+const TAGS_URL = `${OLLAMA_BASE_URL}/api/tags`;
+const CHAT_URL = `${OLLAMA_BASE_URL}/api/chat`;
+
+const COMPANION_SYSTEM_PROMPT = `You are Mansakha, a calm and supportive conversational companion running a check-in for a victim of an atrocity under India's SC/ST (Prevention of Atrocities) Act. Listen with empathy. Keep replies short (2-3 sentences) and natural. Ask one gentle question at a time to understand how they are doing today. Do not diagnose mental-health conditions. Do not assign risk levels or distress scores yourself - a separate step handles that from the full conversation afterward. Do not claim to be a doctor, counsellor, lawyer or police officer. Do not give legal or medical advice. Do not claim you contacted anyone. If immediate danger is described, gently encourage them to contact the NHAA Helpline (14566, 24/7) or their Counsellor right away.`;
+
+const OPENING_GREETING = "Hello. I'm here to listen. Take your time. How are you feeling today?";
+
+const VALID_INTERVENTIONS = ['Counselling', 'Medical', 'Witness Protection', 'Relocation', 'Financial Assistance', 'Legal Aid', 'Rehabilitation'];
+
+const ANALYSIS_SYSTEM_PROMPT = `You are the distress-analysis step of Mansakha, a check-in companion for victims of an atrocity under India's SC/ST (Prevention of Atrocities) Act. You will be given a full check-in conversation transcript. Read it and return ONLY a JSON object (no markdown fences, no extra text) with exactly these fields:
+{
+  "sentiment": <number from -1 to 1, where -1 is very positive/safe and 1 is very negative/distressed - i.e. ALREADY INVERTED so higher means more distress>,
+  "emotion": <number from 0 to 1, weighted toward fear and sadness specifically, where 1 is strong fear/sadness present>,
+  "reason": "<one short sentence naming which words or phrases drove this assessment - shown to a counsellor as an explanation>",
+  "suggestedIntervention": "<if this conversation suggests a specific kind of help would be appropriate, EXACTLY one of: Counselling, Medical, Witness Protection, Relocation, Financial Assistance, Legal Aid, Rehabilitation. If nothing specific stands out, use null.>",
+  "summary": "<a short, factual, professional 2-4 sentence summary of what the person reported during this check-in, written for a Counsellor's case notes - no diagnosis, no clinical labels, no legal conclusions>"
+}`;
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+// Mirrors local_ai.html's loadModels() connectivity check - lets the screen
+// show "Local AI connected" / "Cannot connect to Ollama" instead of only
+// discovering it's unreachable on the first real message.
+async function checkOllamaConnection() {
+  try {
+    const res = await fetch(TAGS_URL);
+    if (!res.ok) throw new Error(String(res.status));
+    const data = await res.json();
+    const models = (data.models || []).map((m) => m.name);
+    return { connected: true, models };
+  } catch (err) {
+    return { connected: false, models: [] };
+  }
+}
+
+// `conversation`: [{ role: 'user'|'assistant', content }] - no system prompt
+// included, this function prepends it. Returns the assistant's reply text.
+async function sendCompanionMessage(conversation, model = OLLAMA_MODEL) {
+  const res = await fetch(CHAT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      messages: [{ role: 'system', content: COMPANION_SYSTEM_PROMPT }, ...conversation],
+      options: { temperature: 0.5 },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => `Ollama error ${res.status}`));
+  const data = await res.json();
+  const reply = data?.message?.content?.trim();
+  if (!reply) throw new Error('Ollama returned an empty response');
+  return reply;
+}
+
+// One analysis call over the WHOLE conversation (not per-message, unlike the
+// backend's old per-message Gemini calls) - this is the "distress level and
+// summary" the app submits to /api/victim/checkin, which the backend runs
+// through its existing computeDistressScore/alerts/case-note pipeline
+// (see services/ai.js's analyzeInteractionFromClientAi on the backend).
+async function analyzeConversation(conversation, model = OLLAMA_MODEL) {
+  const transcript = conversation
+    .map((m) => `${m.role === 'user' ? 'Person' : 'Mansakha'}: ${m.content}`)
+    .join('\n');
+
+  const res = await fetch(CHAT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      format: 'json',
+      messages: [
+        { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+        { role: 'user', content: `Check-in conversation transcript:\n"""${transcript}"""` },
+      ],
+      options: { temperature: 0.2 },
+    }),
+  });
+  if (!res.ok) throw new Error(await res.text().catch(() => `Ollama error ${res.status}`));
+  const data = await res.json();
+  const raw = data?.message?.content;
+  if (!raw) throw new Error('Ollama returned no analysis');
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error('Ollama returned a non-JSON analysis');
+  }
+  if (typeof parsed.sentiment !== 'number' || typeof parsed.emotion !== 'number' || typeof parsed.summary !== 'string' || !parsed.summary.trim()) {
+    throw new Error('Ollama analysis is missing required fields');
+  }
+
+  return {
+    sentiment: clamp(parsed.sentiment, -1, 1),
+    emotion: clamp(parsed.emotion, 0, 1),
+    reason: typeof parsed.reason === 'string' ? parsed.reason : null,
+    suggestedIntervention: VALID_INTERVENTIONS.includes(parsed.suggestedIntervention) ? parsed.suggestedIntervention : null,
+    summary: parsed.summary.trim(),
+  };
+}
+
+export { checkOllamaConnection, sendCompanionMessage, analyzeConversation, OPENING_GREETING, OLLAMA_MODEL };
