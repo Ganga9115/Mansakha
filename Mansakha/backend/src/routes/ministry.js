@@ -81,7 +81,7 @@ router.get('/staff', async (req, res) => {
     );
 
     const { rows } = await pool.query(
-      `select o.official_id, o.full_name, o.email, o.phone, o.staff_id, o.must_change_password,
+      `select o.official_id, o.full_name, o.email, o.phone, o.whatsapp_number, o.staff_id, o.must_change_password,
               r.role_name, j.name as jurisdiction_name
        from officials o
        join official_roles orl on orl.official_id = o.official_id
@@ -98,6 +98,7 @@ router.get('/staff', async (req, res) => {
       fullName: o.full_name,
       email: o.email,
       phone: o.phone,
+      whatsappNumber: o.whatsapp_number,
       staffId: o.staff_id,
       mustChangePassword: o.must_change_password,
       roleName: o.role_name,
@@ -154,7 +155,7 @@ router.get('/victims', async (req, res) => {
 // shape consistent") with what Section 3/8 requires for Ministry to function at
 // all: nothing else can onboard staff without this.
 router.post('/staff', async (req, res) => {
-  const { fullName, email, roleName, jurisdictionId, password, staffId } = req.body;
+  const { fullName, email, roleName, jurisdictionId, password, staffId, phone, whatsappNumber } = req.body;
   if (!fullName || !email || !roleName || !password) return fail(res, 'fullName, email, roleName, and password are required', 400);
 
   // Server-side allowlist, not trusting client input: this endpoint can ONLY create
@@ -166,6 +167,12 @@ router.post('/staff', async (req, res) => {
   }
   if (roleName === 'Administration' && !jurisdictionId) {
     return fail(res, 'jurisdictionId is required for Administration accounts', 400);
+  }
+  // phone doubles as this account's 4th login credential for Counsellor
+  // specifically (routes/auth.staff.js) - without it the account could never
+  // log in at all, so Ministry can't create one without setting it.
+  if (roleName === 'Counsellor' && !phone) {
+    return fail(res, 'phone is required for Counsellor accounts (also used as their login credential)', 400);
   }
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
@@ -185,11 +192,13 @@ router.post('/staff', async (req, res) => {
       const { rows } = await client.query(
         // staffId: the login screen's "State Admin ID"/"Counsellor ID"/etc. field -
         // defaults to '1' (every account uses that placeholder for now, per explicit
-        // request) when Ministry doesn't send one.
-        `insert into officials (full_name, email, password_hash, must_change_password, staff_id, provisioned_by)
-         values ($1, $2, $3, true, $4, $5)
+        // request) when Ministry doesn't send one. whatsappNumber: distinct from
+        // phone - a Counsellor's "opt for manual counselling -> WhatsApp" redirect
+        // target (routes/victim.js's /assigned-counsellor).
+        `insert into officials (full_name, email, password_hash, must_change_password, staff_id, phone, whatsapp_number, provisioned_by)
+         values ($1, $2, $3, true, $4, $5, $6, $7)
          returning official_id`,
-        [fullName, email, passwordHash, staffId || '1', req.auth.officialId]
+        [fullName, email, passwordHash, staffId || '1', phone || null, whatsappNumber || null, req.auth.officialId]
       );
       const id = rows[0].official_id;
       await client.query(
@@ -215,15 +224,29 @@ router.post('/staff', async (req, res) => {
 // Ministry never learns the account's real ongoing password.
 router.patch('/staff/:officialId', async (req, res) => {
   const { officialId } = req.params;
-  const { fullName, phone, staffId, newPassword } = req.body;
-  if (!fullName && phone === undefined && !staffId && !newPassword) {
-    return fail(res, 'fullName, phone, staffId, or newPassword is required', 400);
+  const { fullName, phone, whatsappNumber, staffId, newPassword } = req.body;
+  if (!fullName && phone === undefined && whatsappNumber === undefined && !staffId && !newPassword) {
+    return fail(res, 'fullName, phone, whatsappNumber, staffId, or newPassword is required', 400);
   }
   if (newPassword && newPassword.length < 8) return fail(res, 'newPassword must be at least 8 characters', 400);
+
+  // Clearing phone on an active Counsellor would lock them out of login
+  // entirely (their 4th credential, routes/auth.staff.js) - block it rather
+  // than let an edit silently strand the account.
+  if (phone === '' || phone === null) {
+    const { data: roleRows } = await supabase
+      .from('official_roles')
+      .select('roles(role_name)')
+      .eq('official_id', officialId)
+      .is('revoked_at', null);
+    const isCounsellor = (roleRows || []).some((r) => r.roles.role_name === 'Counsellor');
+    if (isCounsellor) return fail(res, 'phone cannot be cleared for a Counsellor account - it is required for login', 400);
+  }
 
   const patch = {};
   if (fullName) patch.full_name = fullName;
   if (phone !== undefined) patch.phone = phone || null;
+  if (whatsappNumber !== undefined) patch.whatsapp_number = whatsappNumber || null;
   if (staffId) patch.staff_id = staffId;
   if (newPassword) {
     patch.password_hash = await bcrypt.hash(newPassword, 12);
