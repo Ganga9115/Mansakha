@@ -87,25 +87,37 @@ export default function SettingsScreen({ navigation }) {
   const [speakingLanguageId, setSpeakingLanguageId] = useState(null);
   const { tier, isDesktop } = useResponsive();
 
-  const optedForCounsellor = dashboardQuery.data?.optedForManualCounsellor ?? false;
-  const smsCheckinEnabled = dashboardQuery.data?.smsCheckinEnabled ?? false;
+  const [localOptedForCounsellor, setLocalOptedForCounsellor] = useState(false);
+  const [localSmsCheckinEnabled, setLocalSmsCheckinEnabled] = useState(false);
+
+  React.useEffect(() => {
+    if (dashboardQuery.data) {
+      setLocalOptedForCounsellor(dashboardQuery.data.optedForManualCounsellor ?? false);
+      setLocalSmsCheckinEnabled(dashboardQuery.data.smsCheckinEnabled ?? false);
+    }
+  }, [dashboardQuery.data]);
+
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
   const counsellor = assignedCounsellorQuery.data?.counsellor;
 
   const handleToggleCounsellorPreference = async (value) => {
+    setLocalOptedForCounsellor(value);
     try {
       await updateCounsellorPreference.mutateAsync(value);
       toast.success(value ? 'You will now be matched with a human counsellor.' : 'Counsellor preference updated.');
     } catch (err) {
+      setLocalOptedForCounsellor(!value);
       toast.error(err.message || 'Could not update this preference.');
     }
   };
 
   const handleToggleSmsPreference = async (value) => {
+    setLocalSmsCheckinEnabled(value);
     try {
       await updateSmsPreference.mutateAsync(value);
       toast.success(value ? 'SMS check-in prompts enabled.' : 'SMS check-in prompts disabled.');
     } catch (err) {
+      setLocalSmsCheckinEnabled(!value);
       toast.error(err.message || 'Could not update this preference.');
     }
   };
@@ -296,7 +308,7 @@ export default function SettingsScreen({ navigation }) {
               <Text style={styles.cardHeaderSubtitle}>Get matched with a counsellor for chat & calls</Text>
             </View>
             <Switch
-              value={optedForCounsellor}
+              value={localOptedForCounsellor}
               onValueChange={handleToggleCounsellorPreference}
               disabled={updateCounsellorPreference.isPending}
               trackColor={{ true: colors.primary }}
@@ -309,7 +321,7 @@ export default function SettingsScreen({ navigation }) {
               <Text style={styles.cardHeaderSubtitle}>Receive check-in reminders over SMS</Text>
             </View>
             <Switch
-              value={smsCheckinEnabled}
+              value={localSmsCheckinEnabled}
               onValueChange={handleToggleSmsPreference}
               disabled={updateSmsPreference.isPending}
               trackColor={{ true: colors.primary }}
@@ -320,7 +332,7 @@ export default function SettingsScreen({ navigation }) {
         {/* Not opted in - an explanatory invite instead of just... nothing,
             so a victim who's never touched this toggle understands what
             turning it on would actually get them. */}
-        {!optedForCounsellor && (
+        {!localOptedForCounsellor && (
           <Card style={[styles.customCard, styles.counsellorInviteCard]}>
             <Feather name="user-plus" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
             <Text style={styles.cardHeaderTitle}>Want to talk to someone?</Text>
@@ -333,7 +345,7 @@ export default function SettingsScreen({ navigation }) {
         {/* Opted in, but the jurisdiction has no counsellor to assign yet -
             distinct from "not opted in" so this doesn't read as if the
             toggle silently did nothing. */}
-        {optedForCounsellor && !hasAssignedCounsellor && (
+        {localOptedForCounsellor && !hasAssignedCounsellor && (
           <Card style={[styles.customCard, styles.counsellorInviteCard]}>
             <Feather name="clock" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
             <Text style={styles.cardHeaderTitle}>Finding you a counsellor</Text>
@@ -343,14 +355,7 @@ export default function SettingsScreen({ navigation }) {
           </Card>
         )}
 
-        {/* Your Counsellor - only shown once opted in AND assigned, never a
-            greyed-out/disabled version of this card. */}
-        {optedForCounsellor && hasAssignedCounsellor && (
-          <>
-            <Text style={styles.sectionHeaderTitle}>YOUR COUNSELLOR</Text>
-            <AssignedCounsellorCard counsellor={counsellor} navigation={navigation} />
-          </>
-        )}
+
 
         {/* Notifications & System Info Card */}
         <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>

@@ -19,7 +19,14 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import SplashScreen from './src/screens/SplashScreen';
 import { colors } from './src/theme/colors';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    }
+  }
+});
 
 export default function App() {
   const [splashFinished, setSplashFinished] = useState(false);

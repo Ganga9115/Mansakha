@@ -26,27 +26,37 @@ export function useSpeechToText(onResult) {
 
   const start = useCallback(() => {
     if (!SPEECH_TO_TEXT_SUPPORTED || listening) return;
-    const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const recognition = new SpeechRecognitionCtor();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-IN';
-    recognition.onstart = () => setListening(true);
-    recognition.onresult = (event) => {
-      let finalText = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
-      }
-      if (finalText.trim()) onResult(finalText.trim());
-    };
-    recognition.onerror = () => setListening(false);
-    recognition.onend = () => setListening(false);
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-    } catch (e) {
-      setListening(false);
-    }
+    
+    // Explicitly request mic permission first to prevent the browser's permission prompt 
+    // from interrupting or timing out the SpeechRecognition's delicate first-run state machine.
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(() => {
+        const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognitionCtor();
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        recognition.lang = 'en-IN';
+        recognition.onstart = () => setListening(true);
+        recognition.onresult = (event) => {
+          let finalText = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+          }
+          if (finalText.trim()) onResult(finalText.trim());
+        };
+        recognition.onerror = () => setListening(false);
+        recognition.onend = () => setListening(false);
+        recognitionRef.current = recognition;
+        try {
+          recognition.start();
+        } catch (e) {
+          setListening(false);
+        }
+      })
+      .catch((err) => {
+        console.warn('Mic permission denied or unavailable:', err);
+        setListening(false);
+      });
   }, [listening, onResult]);
 
   const toggle = useCallback(() => {

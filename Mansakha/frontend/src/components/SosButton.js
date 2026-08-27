@@ -122,9 +122,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
   },
   title: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.sm, textAlign: 'center' },
-  body: { ...typography.bodySmall, color: colors.textSecondary, textAlign: 'center', marginBottom: spacing.xl, lineHeight: 18 },
+  body: { ...typography.bodySmall, color: '#4A4A4A', textAlign: 'center', marginBottom: spacing.xl, lineHeight: 18 },
   confirmBtn: { width: '100%', backgroundColor: colors.danger, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center', marginBottom: spacing.sm },
   confirmBtnText: { ...typography.bodyStrong, color: colors.white },
   cancelBtn: { width: '100%', paddingVertical: spacing.sm, alignItems: 'center' },
-  cancelBtnText: { ...typography.bodyStrong, color: colors.textSecondary },
+  cancelBtnText: { ...typography.bodyStrong, color: '#4A4A4A' },
 });

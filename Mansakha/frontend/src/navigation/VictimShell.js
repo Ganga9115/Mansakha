@@ -24,6 +24,8 @@ import WellnessScreen from '../screens/victim/WellnessScreen';
 import JournalScreen from '../screens/victim/JournalScreen';
 import CounsellorChatScreen from '../screens/victim/CounsellorChatScreen';
 
+import { useVictimDashboard, useAssignedCounsellor } from '../services/hooks';
+
 const Tab = createBottomTabNavigator();
 const Drawer = createDrawerNavigator();
 const CheckinStack = createNativeStackNavigator();
@@ -45,6 +47,7 @@ const SCREENS = {
   history: DistressHistoryScreen,
   support: SupportScreen,
   settings: SettingsScreen,
+  mycounsellor: CounsellorChatScreen,
 };
 
 // Map screen keys to Feather icons - shared between the bottom tab bar
@@ -56,10 +59,18 @@ const TAB_ICONS = {
   history: 'bar-chart-2',
   support: 'file-text',
   settings: 'user',
+  mycounsellor: 'message-square',
 };
 
 function TabNavigator() {
-  const navItems = getNavItemsForRole('Victim');
+  const dashboard = useVictimDashboard();
+  const counsellor = useAssignedCounsellor();
+  const navItems = [...getNavItemsForRole('Victim')];
+  
+  if (dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned) {
+    const insertIndex = navItems.findIndex(i => i.key === 'settings');
+    navItems.splice(insertIndex !== -1 ? insertIndex : navItems.length, 0, { key: 'mycounsellor', label: 'My Counsellor', screen: 'mycounsellor', icon: 'message-square' });
+  }
 
   return (
     <Tab.Navigator
@@ -104,7 +115,14 @@ function TabNavigator() {
 // purely as a left sidebar rail. Same routes/screens as TabNavigator -
 // only the navigation chrome differs.
 function DesktopNavigator() {
-  const navItems = getNavItemsForRole('Victim');
+  const dashboard = useVictimDashboard();
+  const counsellor = useAssignedCounsellor();
+  const navItems = [...getNavItemsForRole('Victim')];
+  
+  if (dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned) {
+    const insertIndex = navItems.findIndex(i => i.key === 'settings');
+    navItems.splice(insertIndex !== -1 ? insertIndex : navItems.length, 0, { key: 'mycounsellor', label: 'My Counsellor', screen: 'mycounsellor', icon: 'message-square' });
+  }
 
   return (
     <Drawer.Navigator

@@ -9,7 +9,8 @@ import { shadow } from '../../theme/shadow';
 import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useToast } from '../../context/ToastContext';
-import { useQuestionnaireNext, useQuestionnaireSubmit, useVictimDashboard } from '../../services/hooks';
+import { useCheckin, useVictimDashboard } from '../../services/hooks';
+import { sendCompanionMessage, analyzeConversation, OPENING_GREETING } from '../../services/ollamaClient';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import TopRightActions from '../../components/TopRightActions';
 
@@ -20,31 +21,38 @@ export default function CheckinScreen({ navigation }) {
   const dashboardQuery = useVictimDashboard();
   const { tier, isDesktop } = useResponsive();
 
-  const nextMutation = useQuestionnaireNext();
-  const submitMutation = useQuestionnaireSubmit();
+  const submitMutation = useCheckin();
 
   const [responses, setResponses] = useState([]); // Array of { q, a }
-  const [currentQuestion, setCurrentQuestion] = useState(null);
+  const [currentQuestion, setCurrentQuestion] = useState(OPENING_GREETING);
   const [draft, setDraft] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
 
-  // Initial load
-  useEffect(() => {
-    loadNextQuestion([]);
-  }, []);
+const FALLBACK_QUESTIONS = [
+  "Take your time. Can you tell me a little more about how you're feeling?",
+  "I'm here to listen. What else is on your mind?",
+  "Is there anything else you'd like to share today?",
+  "How has everything been affecting your daily life?",
+  "Are you receiving any support from family, friends, or your community right now?"
+];
 
   const loadNextQuestion = async (history) => {
     setLoading(true);
     try {
-      const result = await nextMutation.mutateAsync({
-        currentQuestionIndex: history.length,
-        previousResponses: history
-      });
-      setCurrentQuestion(result.question);
+      const conversation = [];
+      for (const item of history) {
+        conversation.push({ role: 'assistant', content: item.q });
+        conversation.push({ role: 'user', content: item.a });
+      }
+
+      const nextQ = await sendCompanionMessage(conversation);
+      setCurrentQuestion(nextQ);
     } catch (err) {
-      toast.error(err.message || 'Failed to load next question. Is Ollama running on backend?');
+      toast.error('Ollama is offline or slow. Using a fallback question so you can continue.');
+      const fallbackQ = FALLBACK_QUESTIONS[history.length % FALLBACK_QUESTIONS.length];
+      setCurrentQuestion(fallbackQ);
     } finally {
       setLoading(false);
     }
@@ -69,7 +77,21 @@ export default function CheckinScreen({ navigation }) {
   const handleSubmit = async (finalResponses) => {
     setSubmitting(true);
     try {
-      const result = await submitMutation.mutateAsync({ allResponses: finalResponses });
+      const conversation = [];
+      for (const item of finalResponses) {
+        conversation.push({ role: 'assistant', content: item.q });
+        conversation.push({ role: 'user', content: item.a });
+      }
+      
+      const aiAnalysis = await analyzeConversation(conversation);
+      const formattedResponses = finalResponses.map(r => `Mansakha: ${r.q}\nPerson: ${r.a}`);
+      
+      const result = await submitMutation.mutateAsync({ 
+        channel: 'App', 
+        responses: formattedResponses, 
+        aiAnalysis 
+      });
+      
       navigation.navigate('CheckinConfirmation', {
         riskLevel: result.riskLevel,
         summary: result.summary,
@@ -78,6 +100,11 @@ export default function CheckinScreen({ navigation }) {
     } catch (err) {
       toast.error(err.message || 'Could not submit your check-in.');
       setIsFinished(false);
+      if (finalResponses.length > 0) {
+        const last = finalResponses[finalResponses.length - 1];
+        setDraft(last.a === "Skipped." ? "" : last.a);
+        setResponses(finalResponses.slice(0, -1));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -163,15 +190,23 @@ export default function CheckinScreen({ navigation }) {
 
                 <View style={styles.actionRow}>
                   <Pressable style={styles.skipBtn} onPress={() => handleNext(true)}>
-                    <Text style={styles.skipBtnText}>Skip Question</Text>
+                    <Text style={styles.skipBtnText}>
+                      {responses.length === TOTAL_QUESTIONS - 1 ? 'Skip & Submit' : 'Skip Question'}
+                    </Text>
                   </Pressable>
                   <Pressable 
                     style={[styles.nextBtn, !draft.trim() && styles.nextBtnDisabled]} 
                     onPress={() => handleNext(false)}
                     disabled={!draft.trim()}
                   >
-                    <Text style={styles.nextBtnText}>Next</Text>
-                    <Feather name="arrow-right" size={18} color={colors.white} style={{ marginLeft: spacing.xs }} />
+                    <Text style={styles.nextBtnText}>
+                      {responses.length === TOTAL_QUESTIONS - 1 ? 'Finish & Submit' : 'Next'}
+                    </Text>
+                    {responses.length === TOTAL_QUESTIONS - 1 ? (
+                      <Feather name="check" size={18} color={colors.white} style={{ marginLeft: spacing.xs }} />
+                    ) : (
+                      <Feather name="arrow-right" size={18} color={colors.white} style={{ marginLeft: spacing.xs }} />
+                    )}
                   </Pressable>
                 </View>
               </View>
