@@ -70,10 +70,10 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {} 
         <View style={styles.footer}>
           <Pressable
             onPress={logout}
-            style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+            style={({ pressed }) => [styles.logoutItem, pressed && styles.itemPressed]}
           >
             <Feather name="log-out" size={18} color={SIDEBAR.textInactive} />
-            <Text style={styles.itemLabel}>Log Out</Text>
+            <Text style={styles.logoutItemLabel}>Log Out</Text>
           </Pressable>
         </View>
       </View>
@@ -102,8 +102,8 @@ const styles = StyleSheet.create({
   items: { padding: spacing.xxl, gap: spacing.sm },
   footer: {
     paddingHorizontal: spacing.xxl,
-    paddingBottom: spacing.xxl,
-    paddingTop: spacing.lg,
+    paddingBottom: 16,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: SIDEBAR.divider,
   },
@@ -118,4 +118,17 @@ const styles = StyleSheet.create({
   itemPressed: { backgroundColor: SIDEBAR.pressedOverlay },
   itemLabel: { ...typography.bodyStrong, color: SIDEBAR.textInactive, marginLeft: spacing.md, fontSize: 14 },
   itemLabelActive: { color: SIDEBAR.textActive },
+  logoutItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: radius.md,
+  },
+  logoutItemLabel: {
+    ...typography.bodyStrong,
+    color: SIDEBAR.textInactive,
+    marginLeft: 12,
+    fontSize: 14,
+  },
 });

@@ -79,7 +79,7 @@ function TabNavigator() {
         },
         tabBarLabelStyle: {
           fontSize: typography.caption.fontSize,
-          fontFamily: typography.caption.fontFamily,
+          fontFamily: typography.bodyStrong.fontFamily,
           marginTop: 2,
         },
         tabBarIcon: ({ color, size }) => {

@@ -123,27 +123,17 @@ export default function DistressHistoryScreen() {
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
-            <Feather name="trending-up" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+            <Feather name="bar-chart-2" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather name="trending-up" size={28} color={colors.primary} />
-              <View style={styles.avatarEditBadge}>
-                <Feather name="activity" size={10} color={colors.white} />
-              </View>
+              <Feather name="bar-chart-2" size={28} color={colors.primary} />
             </View>
           )}
 
           <View style={styles.headerInfo}>
-            {!isDesktop && (
-              <View style={styles.pillBadge}>
-                <Text style={styles.pillText}>ANALYTICS</Text>
-              </View>
-            )}
-            <Text style={styles.statusTitle}>My Well-being</Text>
-            {!isDesktop && <Text style={styles.subtext}>Historical assessment records</Text>}
+            <Text style={styles.pageTitle}>My History</Text>
           </View>
         </View>
-
         <View style={styles.headerRight}>
           {isDesktop ? (
             <DesktopHeaderActions
@@ -243,7 +233,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
   contentBody: {
     flex: 1,

@@ -90,20 +90,14 @@ export default function CheckinScreen({ navigation }) {
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
-            <Feather name="activity" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+            <Feather name="mic" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather name="activity" size={28} color={colors.primary} />
+              <Feather name="mic" size={28} color={colors.primary} />
             </View>
           )}
           <View style={styles.headerInfo}>
-            {!isDesktop && (
-              <View style={styles.pillBadge}>
-                <Text style={styles.pillText}>AI CHECK-IN</Text>
-              </View>
-            )}
-            <Text style={styles.statusTitle}>Mansakha Care</Text>
-            {!isDesktop && <Text style={styles.subtext}>A quick 15-question check-in</Text>}
+            <Text style={styles.pageTitle}>Check-in</Text>
           </View>
         </View>
         <View style={styles.headerRightRow}>
@@ -224,7 +218,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
   headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   contentBody: {

@@ -40,30 +40,15 @@ export default function HomeScreen({ navigation }) {
               <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
                 <View style={styles.headerLeft}>
                   {isDesktop ? (
-                    <Feather name="user" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+                    <Feather name="home" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
                   ) : (
                     <View style={styles.avatarContainer}>
-                      <Feather name="user" size={32} color={colors.primary} />
-                      <View style={styles.avatarEditBadge}>
-                        <Feather name="shield" size={10} color={colors.white} />
-                      </View>
+                      <Feather name="home" size={28} color={colors.primary} />
                     </View>
                   )}
 
                   <View style={styles.headerInfo}>
-                    {!isDesktop && (
-                      <View style={styles.pillBadge}>
-                        <Text style={styles.pillText}>{data.caseStatus.caseStage}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.statusTitle}>{data.caseStatus.status}</Text>
-                    {!isDesktop && (
-                      <Text style={styles.subtext}>
-                        {data.nextCheckIn
-                          ? `Next: ${new Date(data.nextCheckIn).toLocaleDateString()}`
-                          : 'Active Portal'}
-                      </Text>
-                    )}
+                    <Text style={styles.pageTitle}>Home</Text>
                   </View>
                 </View>
 
@@ -270,7 +255,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
   headerRight: { marginLeft: spacing.md },
   iconCircleBtn: {

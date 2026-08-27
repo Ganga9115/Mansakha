@@ -6,10 +6,10 @@ export const roleNavConfig = {
   Victim: {
     navItems: [
       { key: 'home', label: 'Home', screen: 'home', icon: 'home' },
-      { key: 'checkin', label: 'Check-in', screen: 'checkin', icon: 'edit-3' },
+      { key: 'checkin', label: 'Check-in', screen: 'checkin', icon: 'mic' },
       { key: 'history', label: 'My History', screen: 'history', icon: 'bar-chart-2' },
-      { key: 'support', label: 'Support', screen: 'support', icon: 'life-buoy' },
-      { key: 'settings', label: 'Profile', screen: 'settings', icon: 'settings' },
+      { key: 'support', label: 'Support', screen: 'support', icon: 'file-text' },
+      { key: 'settings', label: 'Profile', screen: 'settings', icon: 'user' },
     ],
   },
 };
