@@ -15,7 +15,6 @@ const router = express.Router();
 const NEXT_CHECKIN_CADENCE_DAYS = 7;
 const SUPPORT_LINKS = [
   { label: 'NHAA Helpline', detail: 'Call 14566, 24/7, available in Hindi/English/regional languages' },
-  { label: 'Talk to your Counsellor', detail: 'Available through the Support section' },
 ];
 
 function requireVictim(req, res, next) {

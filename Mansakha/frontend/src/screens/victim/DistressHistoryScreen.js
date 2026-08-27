@@ -18,15 +18,15 @@ import { useDistressHistory, useVictimDashboard } from '../../services/hooks';
 const RISK_COLOR = {
   Low: colors.success,
   Moderate: colors.warning,
-  High: colors.error,
-  Critical: colors.error,
+  High: colors.high,
+  Critical: colors.danger,
 };
 
 const LEGEND = [
   { label: 'Low', color: colors.success },
   { label: 'Moderate', color: colors.warning },
-  { label: 'High', color: colors.error },
-  { label: 'Critical', color: colors.error },
+  { label: 'High', color: colors.high },
+  { label: 'Critical', color: colors.danger },
 ];
 
 const MAX_BAR_HEIGHT = 100;

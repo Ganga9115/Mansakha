@@ -23,9 +23,10 @@ export default function AssignedCounsellorCard({ counsellor, navigation }) {
   };
 
   const handleWhatsApp = () => {
-    if (!counsellor?.whatsappNumber) return;
+    const number = counsellor?.whatsappNumber || counsellor?.phone;
+    if (!number) return;
     // wa.me expects digits only (no +, spaces, or dashes).
-    const digits = counsellor.whatsappNumber.replace(/[^\d]/g, '');
+    const digits = number.replace(/[^\d]/g, '');
     Linking.openURL(`https://wa.me/${digits}`).catch(() => toast.error('Could not open WhatsApp on this device.'));
   };
 
@@ -41,23 +42,17 @@ export default function AssignedCounsellorCard({ counsellor, navigation }) {
         </View>
       </View>
       <View style={styles.buttonRow}>
-        <Pressable style={[styles.outlineBtn, styles.halfBtn]} onPress={() => navigation.navigate('CounsellorChat')}>
-          <Feather name="message-circle" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
-          <Text style={styles.outlineBtnText}>Message</Text>
-        </Pressable>
-        <Pressable style={[styles.outlineBtn, styles.halfBtn]} onPress={handleCall}>
+        <Pressable style={[styles.outlineBtn, { flex: 1 }]} onPress={handleCall}>
           <Feather name="phone" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
           <Text style={styles.outlineBtnText}>Call</Text>
         </Pressable>
-      </View>
-      {!!counsellor?.whatsappNumber && (
-        <View style={[styles.buttonRow, { marginTop: spacing.sm }]}>
+        {(!!counsellor?.whatsappNumber || !!counsellor?.phone) && (
           <Pressable style={[styles.outlineBtn, { flex: 1 }]} onPress={handleWhatsApp}>
             <Feather name="message-square" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
             <Text style={styles.outlineBtnText}>WhatsApp</Text>
           </Pressable>
-        </View>
-      )}
+        )}
+      </View>
     </Card>
   );
 }

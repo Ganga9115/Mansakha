@@ -7,6 +7,7 @@ import { useVictimLogin } from '../../services/hooks';
 import { apiClient } from '../../services/apiClient';
 import { useResponsive } from '../../hooks/useResponsive';
 import IconInput from '../../components/IconInput';
+import { typography } from '../../theme/typography';
 
 const THEME = {
   bg: '#F0F9FF', // Soft sky blue background
@@ -89,7 +90,7 @@ export default function LoginScreen({ navigation }) {
           {isDesktop && (
             <View style={styles.imagePane}>
               <Image 
-                source={require('../../assets/login_illustration.jpg')} 
+                source={require('../../../assets/login_illustration.jpg')} 
                 style={styles.illustration} 
                 resizeMode="cover" 
               />
@@ -214,44 +215,44 @@ const styles = StyleSheet.create({
     shadowColor: '#000', shadowOffset: { width: 0, height: 24 }, shadowOpacity: 0.08, shadowRadius: 48, elevation: 10, 
     overflow: 'hidden',
   },
-  cardDesktop: { flexDirection: 'row', width: '100%', maxWidth: 960, minHeight: 600 },
+  cardDesktop: { flexDirection: 'row', width: '100%', maxWidth: 1000 },
   cardMobile: { flexDirection: 'column', width: '100%', maxWidth: 420 },
   
   imagePane: { flex: 1, backgroundColor: '#E0F2FE' },
   illustration: { width: '100%', height: '100%' },
   
   formPane: { flex: 1, justifyContent: 'center' },
-  formPaneDesktop: { padding: 48 },
+  formPaneDesktop: { paddingHorizontal: 48, paddingVertical: 20 },
   formPaneMobile: { padding: 32 },
 
-  headerBox: { marginBottom: 32 },
-  screenTitle: { fontSize: 26, fontWeight: '800', color: THEME.textMain, letterSpacing: -0.5, marginBottom: 8 },
-  screenSubtitle: { fontSize: 15, color: THEME.textMuted },
+  headerBox: { marginBottom: 16 },
+  screenTitle: { ...typography.display, color: THEME.textMain, marginBottom: 2 },
+  screenSubtitle: { ...typography.body, color: THEME.textMuted },
   
-  formContainer: { gap: 12, marginBottom: 24 },
+  formContainer: { gap: 8, marginBottom: 16 },
   customInput: {
     backgroundColor: THEME.inputBg,
     borderColor: 'transparent',
     borderRadius: 12,
-    paddingVertical: 14,
+    paddingVertical: 10,
   },
 
   primaryBtn: { 
-    backgroundColor: THEME.primaryDark, borderRadius: 12, paddingVertical: 16, alignItems: 'center',
-    shadowColor: THEME.primaryDark, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6,
+    backgroundColor: THEME.primaryDark, borderRadius: 12, paddingVertical: 12, alignItems: 'center',
+    shadowColor: THEME.primaryDark, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4,
   },
-  primaryBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 16 },
+  primaryBtnText: { ...typography.bodyStrong, color: '#FFFFFF', fontSize: 16 },
   
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 16 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
-  dividerText: { marginHorizontal: 16, color: '#94A3B8', fontSize: 13, fontWeight: '500' },
+  dividerText: { ...typography.bodySmall, marginHorizontal: 16, color: '#94A3B8' },
 
   secondaryBtn: { 
-    backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 14, alignItems: 'center',
+    backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 10, alignItems: 'center',
     borderWidth: 1, borderColor: '#E2E8F0'
   },
-  secondaryBtnText: { color: THEME.textMain, fontWeight: '700', fontSize: 15 },
+  secondaryBtnText: { ...typography.bodyStrong, color: THEME.textMain, fontSize: 15 },
 
-  notice: { fontSize: 13, color: THEME.textMuted, textAlign: 'center', marginTop: 32 },
-  linkText: { color: THEME.textMain, fontWeight: '700', textDecorationLine: 'underline' },
+  notice: { ...typography.bodySmall, color: THEME.textMuted, textAlign: 'center', marginTop: 16 },
+  linkText: { ...typography.bodyStrong, color: THEME.textMain, textDecorationLine: 'underline' },
 });

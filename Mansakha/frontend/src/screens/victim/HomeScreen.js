@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { spacing } from '../../theme/spacing';
@@ -144,20 +144,20 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.gridSub}>Write it down</Text>
                   </Pressable>
 
-                  {/* Only for a victim who's opted in AND has a counsellor
-                      assigned - not shown otherwise, matching Settings'
-                      opted-in-vs-not distinction rather than always
-                      appearing as a dead/disabled tile. */}
-                  {data.optedForManualCounsellor && hasAssignedCounsellor && (
+                  {data.optedForManualCounsellor && hasAssignedCounsellor && (assignedCounsellorQuery.data?.counsellor?.whatsappNumber || assignedCounsellorQuery.data?.counsellor?.phone) && (
                     <Pressable
                       style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
-                      onPress={() => navigation?.navigate('CounsellorChat')}
+                      onPress={() => {
+                        const number = assignedCounsellorQuery.data.counsellor.whatsappNumber || assignedCounsellorQuery.data.counsellor.phone;
+                        const digits = number.replace(/[^\d]/g, '');
+                        Linking.openURL(`https://wa.me/${digits}`).catch(() => {});
+                      }}
                     >
                       <View style={styles.gridIconCircle}>
-                        <Feather name="message-circle" size={20} color={colors.primary} />
+                        <Feather name="message-square" size={20} color={colors.primary} />
                       </View>
-                      <Text style={styles.gridTitle}>Message Counsellor</Text>
-                      <Text style={styles.gridSub}>Chat with your counsellor</Text>
+                      <Text style={styles.gridTitle}>Chat with Counsellor</Text>
+                      <Text style={styles.gridSub}>Chat directly via WhatsApp</Text>
                     </Pressable>
                   )}
                 </View>
