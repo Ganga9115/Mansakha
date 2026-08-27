@@ -21,10 +21,17 @@ const router = express.Router();
 const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Operator'];
 
 router.post('/login', staffLoginLimiter, async (req, res) => {
-  const { email, password, roleName, staffId } = req.body;
+  const { email, password, roleName, staffId, mobileNumber } = req.body;
   if (!email || !password || !staffId) return fail(res, 'email, password, and staffId are required', 400);
   if (!STAFF_LOGIN_ROLES.includes(roleName)) {
     return fail(res, `roleName must be one of: ${STAFF_LOGIN_ROLES.join(', ')}`, 400);
+  }
+  // Counsellor-specific 4th credential, per explicit request: their mobile
+  // number (chat/call features depend on it actually being real and on file,
+  // so login itself enforces it's set and known) - Administration/Data
+  // Operator logins are unaffected, still 3 credentials.
+  if (roleName === 'Counsellor' && !mobileNumber) {
+    return fail(res, 'mobileNumber is required for Counsellor login', 400);
   }
 
   const match = await findOfficialForLogin(email, [roleName]);
@@ -38,6 +45,16 @@ router.post('/login', staffLoginLimiter, async (req, res) => {
   // message as a bad password, not "wrong ID", so a valid email+password
   // guess can't be used to probe for the right ID separately.
   if (String(staffId).trim() !== match.official.staff_id) return fail(res, 'Invalid credentials', 401);
+
+  // Fourth credential, Counsellor only - must match officials.phone (the same
+  // number victims call/WhatsApp via /assigned-counsellor). Same generic
+  // failure message as the other checks, for the same anti-probing reason.
+  if (roleName === 'Counsellor') {
+    const officialPhone = (match.official.phone || '').trim();
+    if (!officialPhone || officialPhone !== String(mobileNumber).trim()) {
+      return fail(res, 'Invalid credentials', 401);
+    }
+  }
 
   const token = signToken({ type: 'official', officialId: match.official.official_id, selectedRole: roleName });
   return ok(res, { token, mustChangePassword: match.official.must_change_password });
