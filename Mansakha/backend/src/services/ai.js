@@ -62,6 +62,31 @@ async function analyzeInteraction(victimId, text) {
   return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId };
 }
 
+// Feature Catalog Section 1.3 "AI Chat" check-in, Ollama variant - the mobile
+// app's Check-in screen now runs its own conversation against a locally-running
+// Ollama instance (frontend/src/services/ollamaClient.js) instead of a per-message
+// Gemini call, then sends ONE analysis of the whole conversation here. Mirrors
+// analyzeInteraction()'s shape exactly (same computeEngagementDelta +
+// computeDistressScore + resolveInterventionTypeId calls, all unchanged, so
+// scoring.js/alerts/case-notes stay untouched) - only the sentiment/emotion/
+// reason/suggestedIntervention values are sourced from the client's Ollama
+// analysis instead of a server-side callGemini().
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+async function analyzeInteractionFromClientAi(victimId, text, clientAnalysis) {
+  const sentimentRaw = clamp(clientAnalysis.sentiment, -1, 1);
+  const emotion = clamp(clientAnalysis.emotion, 0, 1);
+  const reason = typeof clientAnalysis.reason === 'string' ? clientAnalysis.reason : null;
+
+  const engagementDelta = await computeEngagementDelta(victimId, text.length);
+  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, 0, emotion, engagementDelta);
+  const suggestedInterventionTypeId = await resolveInterventionTypeId(clientAnalysis.suggestedIntervention);
+
+  return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId };
+}
+
 const HIGH_RISK_HELP_POINTER = "\n\nIf things feel unsafe or overwhelming right now, please reach out to real support: call the NHAA Helpline at 14566 (24/7) or talk to your Counsellor through the Support section of this app.";
 
 // Feature Catalog Section 1.3 "AI Chat" - mirrors analyzeInteraction()'s
@@ -87,4 +112,4 @@ async function analyzeChatMessage(victimId, text) {
   return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId, reply: finalReply };
 }
 
-module.exports = { analyzeInteraction, analyzeChatMessage };
+module.exports = { analyzeInteraction, analyzeChatMessage, analyzeInteractionFromClientAi };

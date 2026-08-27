@@ -7,9 +7,12 @@ import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
 import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
+import StatusBadge from '../../components/StatusBadge';
 
-export default function CheckinConfirmationScreen({ navigation }) {
+export default function CheckinConfirmationScreen({ navigation, route }) {
   const { tier } = useResponsive();
+  const { riskLevel, summary, alertTriggered } = route?.params || {};
+
   const handleGoHome = () => {
     // 1. Pop all screens off the current stack back to the root CheckinScreen
     if (navigation.canGoBack()) {
@@ -36,6 +39,29 @@ export default function CheckinConfirmationScreen({ navigation }) {
 
         {/* Simplified Assessment Text */}
         <Text style={styles.body}>Successfully completed the assessment</Text>
+
+        {/* AI-derived distress level + summary from this check-in's conversation */}
+        {(riskLevel || summary) && (
+          <View style={styles.summaryCard}>
+            {riskLevel && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>DISTRESS LEVEL</Text>
+                <StatusBadge status={riskLevel} />
+              </View>
+            )}
+            {summary && (
+              <>
+                <Text style={styles.summaryLabel}>WHAT MANSAKHA HEARD</Text>
+                <Text style={styles.summaryText}>{summary}</Text>
+              </>
+            )}
+            {alertTriggered && (
+              <Text style={styles.alertNote}>
+                Based on this check-in, your Counsellor has been notified so they can reach out to you.
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Primary Action Button to Homescreen */}
         <Pressable style={styles.primaryBtn} onPress={handleGoHome}>
@@ -79,8 +105,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '500',
-    marginBottom: spacing.xxxl,
+    marginBottom: spacing.xl,
     paddingHorizontal: spacing.sm,
+  },
+  summaryCard: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+    ...shadow.card,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  summaryLabel: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.xs },
+  summaryText: { ...typography.body, color: colors.textPrimary },
+  alertNote: {
+    ...typography.caption,
+    color: colors.danger,
+    marginTop: spacing.md,
+    lineHeight: 16,
   },
   primaryBtn: {
     width: '100%',
