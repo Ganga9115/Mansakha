@@ -32,40 +32,46 @@ router.use(verifyToken, requireVictim, generalApiLimiter);
 router.get('/dashboard', async (req, res) => {
   const victimId = req.auth.victimId;
 
-  const { data: victim, error: victimError } = await supabase
-    .from('victims')
-    .select('status, case_stage, preferred_language, docket_number, opted_for_manual_counsellor, sms_checkin_enabled')
-    .eq('victim_id', victimId)
-    .single();
+  // These 5 reads are all keyed on victimId alone - none depends on another's
+  // result - but ran one after another, each paying Supabase REST's own
+  // ~1-2s round-trip on top of the last. Confirmed live as the cause of the
+  // Home screen sitting on its loading skeleton for several seconds; running
+  // them concurrently is a straightforward fix (see admin.js's dashboard/
+  // heatmap routes for the same pattern applied to their own N+1 loops).
+  const [
+    { data: victim, error: victimError },
+    { data: identity },
+    { data: latestScore },
+    { data: openAlerts },
+    { data: lastInteraction },
+  ] = await Promise.all([
+    supabase
+      .from('victims')
+      .select('status, case_stage, preferred_language, docket_number, opted_for_manual_counsellor, sms_checkin_enabled')
+      .eq('victim_id', victimId)
+      .single(),
+    supabase.from('victim_identity').select('full_name').eq('victim_id', victimId).maybeSingle(),
+    supabase
+      .from('distress_scores')
+      .select('score_value, risk_level_id, computed_at, risk_levels(name)')
+      .eq('victim_id', victimId)
+      .order('computed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from('alerts')
+      .select('alert_id, triggered_at, alert_statuses(name)')
+      .eq('victim_id', victimId)
+      .order('triggered_at', { ascending: false }),
+    supabase
+      .from('interactions')
+      .select('occurred_at')
+      .eq('victim_id', victimId)
+      .order('occurred_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   if (victimError || !victim) return fail(res, 'Victim record not found', 404);
-
-  const { data: identity } = await supabase
-    .from('victim_identity')
-    .select('full_name')
-    .eq('victim_id', victimId)
-    .maybeSingle();
-
-  const { data: latestScore } = await supabase
-    .from('distress_scores')
-    .select('score_value, risk_level_id, computed_at, risk_levels(name)')
-    .eq('victim_id', victimId)
-    .order('computed_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data: openAlerts } = await supabase
-    .from('alerts')
-    .select('alert_id, triggered_at, alert_statuses(name)')
-    .eq('victim_id', victimId)
-    .order('triggered_at', { ascending: false });
-
-  const { data: lastInteraction } = await supabase
-    .from('interactions')
-    .select('occurred_at')
-    .eq('victim_id', victimId)
-    .order('occurred_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
 
   // Placeholder cadence rule - there's no scheduler built yet (Section 4.2's
   // "scheduling and dispatch" is a future pass), so this is a real computed date
