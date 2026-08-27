@@ -15,7 +15,7 @@ import { useResponsive } from '../hooks/useResponsive';
 // visible no matter which Victim tab is active. A two-step confirm (tap to
 // open, a second explicit tap to send) rather than a single-tap trigger,
 // since an accidental press here has real consequences.
-export default function SosButton() {
+export default function SosButton({ asHeaderIcon = false }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const toast = useToast();
   const triggerSos = useTriggerSOS();
@@ -34,12 +34,12 @@ export default function SosButton() {
   return (
     <>
       <Pressable
-        style={[styles.fab, { bottom: isDesktop ? 24 : 84 }]}
+        style={asHeaderIcon ? styles.headerIconBtn : [styles.fab, { bottom: isDesktop ? 24 : 84 }]}
         onPress={() => setConfirmOpen(true)}
         accessibilityRole="button"
         accessibilityLabel="Send emergency SOS alert"
       >
-        <Feather name="alert-triangle" size={22} color={colors.white} />
+        <Feather name="alert-triangle" size={asHeaderIcon ? 20 : 22} color={asHeaderIcon ? colors.danger : colors.white} />
       </Pressable>
 
       <Modal visible={confirmOpen} transparent animationType="fade" onRequestClose={() => setConfirmOpen(false)}>
@@ -77,6 +77,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadow.pop,
     zIndex: 20,
+  },
+  headerIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.dangerLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
   },
   backdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.5)', alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   card: {

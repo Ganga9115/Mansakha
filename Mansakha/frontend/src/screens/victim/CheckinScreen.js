@@ -14,6 +14,7 @@ import { useCheckin, useVictimDashboard } from '../../services/hooks';
 import { checkOllamaConnection, sendCompanionMessage, analyzeConversation, OPENING_GREETING } from '../../services/ollamaClient';
 import SegmentedToggle from '../../components/SegmentedToggle';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
+import TopRightActions from '../../components/TopRightActions';
 
 // Voice input (speech-to-text) only exists in the browser's Web Speech API -
 // there's no native STT library in this app yet, so Call mode's mic is
@@ -301,12 +302,14 @@ export default function CheckinScreen({ navigation }) {
           </View>
         </View>
         <View style={styles.headerRightRow}>
-          {isDesktop && (
+          {isDesktop ? (
             <DesktopHeaderActions
               fullName={dashboardQuery.data?.fullName}
               alertCount={dashboardQuery.data?.alerts?.length || 0}
               onBellPress={() => {}}
             />
+          ) : (
+            <TopRightActions />
           )}
         </View>
       </View>

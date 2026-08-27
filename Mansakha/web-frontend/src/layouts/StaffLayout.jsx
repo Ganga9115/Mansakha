@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, Link, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   ListOrdered,
@@ -163,15 +163,7 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
               />
             </div>
 
-            <Link
-              to={alertsPath}
-              className="relative p-1 text-[#3D5A80] hover:opacity-70"
-            >
-              <Bell size={20} />
-              {openAlertCount > 0 && (
-                <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
-              )}
-            </Link>
+            <NotificationBell />
 
             <button
               onClick={() => navigate(profilePath)}

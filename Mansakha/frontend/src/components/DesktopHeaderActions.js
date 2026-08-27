@@ -5,6 +5,7 @@ import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
+import SosButton from './SosButton';
 
 // Desktop-tier top bar actions (search / notifications / profile) - sized
 // to match the Staff/Ministry web app's header exactly (256px search field,
@@ -22,10 +23,13 @@ export default function DesktopHeaderActions({ fullName, roleLabel = 'Victim', a
         />
       </View>
 
-      <Pressable style={styles.bellBtn} onPress={onBellPress}>
-        <Feather name="bell" size={20} color={colors.primaryDark} />
-        {alertCount > 0 && <View style={styles.bellDot} />}
-      </Pressable>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <SosButton asHeaderIcon />
+        <Pressable style={styles.bellBtn} onPress={onBellPress}>
+          <Feather name="bell" size={20} color={colors.primaryDark} />
+          {alertCount > 0 && <View style={styles.bellDot} />}
+        </Pressable>
+      </View>
 
       <View style={styles.profileChip}>
         <View style={styles.avatarCircle}>

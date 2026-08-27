@@ -7,6 +7,7 @@ import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
+import TopRightActions from '../../components/TopRightActions';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useChatHistory, useSendChatMessage } from '../../services/hooks';
 
@@ -54,6 +55,7 @@ export default function ChatScreen({ navigation }) {
           <Text style={styles.statusTitle}>Talk to Mansakha</Text>
           <Text style={styles.subtext}>Safe, private AI conversation</Text>
         </View>
+        <TopRightActions />
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>

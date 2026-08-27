@@ -7,6 +7,7 @@ import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
+import TopRightActions from '../../components/TopRightActions';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useCounsellorMessages, useSendCounsellorMessage, useAssignedCounsellor } from '../../services/hooks';
 
@@ -50,6 +51,7 @@ export default function CounsellorChatScreen({ navigation }) {
           <Text style={styles.statusTitle}>{counsellorQuery.data?.fullName || 'Your Counsellor'}</Text>
           <Text style={styles.subtext}>Private, opted-in conversation</Text>
         </View>
+        <TopRightActions />
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>

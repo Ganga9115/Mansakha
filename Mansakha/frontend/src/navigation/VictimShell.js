@@ -11,7 +11,7 @@ import { tabletShellWidth, sidebarWidth } from '../theme/layout';
 import { useResponsive } from '../hooks/useResponsive';
 import { getNavItemsForRole } from './roleNavConfig';
 import SidebarNav from '../components/SidebarNav';
-import SosButton from '../components/SosButton';
+import AiChatButton from '../components/AiChatButton';
 
 import HomeScreen from '../screens/victim/HomeScreen';
 import CheckinScreen from '../screens/victim/CheckinScreen';
@@ -132,6 +132,24 @@ function DesktopNavigator() {
   );
 }
 
+function TabNavigatorWithFAB() {
+  return (
+    <View style={{ flex: 1 }}>
+      <TabNavigator />
+      <AiChatButton />
+    </View>
+  );
+}
+
+function DesktopNavigatorWithFAB() {
+  return (
+    <View style={{ flex: 1 }}>
+      <DesktopNavigator />
+      <AiChatButton />
+    </View>
+  );
+}
+
 // Screens pushed on top of the tab/drawer navigator (not part of the daily
 // tab bar) - reached via Home's quick-action tiles or Settings' conditional
 // counsellor-chat entry point. Nesting these above MainTabs, rather than
@@ -156,8 +174,7 @@ export default function VictimShell() {
   if (tier === 'desktop') {
     return (
       <View style={{ flex: 1 }}>
-        <ShellStack tabs={DesktopNavigator} />
-        <SosButton />
+        <ShellStack tabs={DesktopNavigatorWithFAB} />
       </View>
     );
   }
@@ -166,8 +183,7 @@ export default function VictimShell() {
     return (
       <View style={styles.webBackdrop}>
         <View style={[styles.webFrame, { maxWidth: tabletShellWidth }]}>
-          <ShellStack tabs={TabNavigator} />
-          <SosButton />
+          <ShellStack tabs={TabNavigatorWithFAB} />
         </View>
       </View>
     );
@@ -175,8 +191,7 @@ export default function VictimShell() {
 
   return (
     <View style={{ flex: 1 }}>
-      <ShellStack tabs={TabNavigator} />
-      <SosButton />
+      <ShellStack tabs={TabNavigatorWithFAB} />
     </View>
   );
 }
