@@ -72,7 +72,7 @@ export default function HomeScreen({ navigation }) {
                     <DesktopHeaderActions
                       fullName={data.fullName}
                       alertCount={data.alerts.length}
-                      onBellPress={() => navigation?.navigate('support')}
+                      onBellPress={() => {}}
                     />
                   ) : (
                     <TopRightActions />
@@ -126,17 +126,6 @@ export default function HomeScreen({ navigation }) {
 
                 {/* 2x2 Quick Actions Grid */}
                 <View style={styles.gridContainer}>
-                  <Pressable
-                    style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
-                    onPress={() => navigation?.navigate('Chatbot')}
-                  >
-                    <View style={styles.gridIconCircle}>
-                      <Feather name="message-circle" size={20} color={colors.primary} />
-                    </View>
-                    <Text style={styles.gridTitle}>Talk to Mansakha</Text>
-                    <Text style={styles.gridSub}>Safe AI chatbot</Text>
-                  </Pressable>
-
                   <Pressable
                     style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
                     onPress={() => navigation?.navigate('Wellbeing')}

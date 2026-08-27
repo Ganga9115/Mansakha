@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, Pressable, Modal, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Modal, StyleSheet, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -87,10 +87,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
-  backdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.5)', alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
+  backdrop: { 
+    flex: 1, 
+    backgroundColor: 'rgba(15, 23, 42, 0.6)', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    padding: spacing.xl,
+    ...Platform.select({
+      web: { backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' },
+      default: {},
+    }),
+  },
   card: {
-    width: '100%', maxWidth: 340, backgroundColor: colors.white, borderRadius: radius.xl,
-    padding: spacing.xl, alignItems: 'center', ...shadow.modal,
+    width: '100%', 
+    maxWidth: 340, 
+    backgroundColor: 'rgba(255, 255, 255, 0.85)', 
+    borderRadius: radius.xl,
+    padding: spacing.xl, 
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 1)',
+    ...Platform.select({
+      web: { backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)' },
+      default: {},
+    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 32,
+    elevation: 10,
   },
   iconTile: {
     width: 56, height: 56, borderRadius: radius.pill, backgroundColor: colors.dangerLight,

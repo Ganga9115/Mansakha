@@ -42,10 +42,13 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {} 
       <View style={styles.body}>
         <View style={styles.items}>
           {state.routes.map((route, index) => {
+            // Hide secondary screens that are in the drawer but shouldn't be in the sidebar menu
+            if (!icons[route.name]) return null;
+
             const { options } = descriptors[route.key];
             const label = options.title ?? route.name;
             const isActive = state.index === index;
-            const iconName = icons[route.name] || 'circle';
+            const iconName = icons[route.name];
 
             return (
               <Pressable
