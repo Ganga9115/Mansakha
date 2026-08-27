@@ -1,29 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Linking, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, Linking, Platform, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { useVictimLogin } from '../../services/hooks';
 import { apiClient } from '../../services/apiClient';
-import { authContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import IconInput from '../../components/IconInput';
 
 const THEME = {
-  bg: '#F8F9FD',
-  cardBg: '#FFFFFF',
-  primaryDark: '#0F172A',
-  textMain: '#0F172A',
+  bg: '#F0F9FF', // Soft sky blue background
+  cardBg: 'rgba(255, 255, 255, 0.95)',
+  primaryDark: '#1E1B4B', // Deep dark purple/blue for button
+  textMain: '#1E1B4B',
   textMuted: '#64748B',
-  accentBlue: '#E0F2FE',
+  inputBg: '#F8FAFC', // Very light filled background for inputs
   accentIcon: '#0284C7',
   danger: '#EF4444',
-  border: '#E2E8F0',
+  border: 'rgba(255, 255, 255, 1)',
 };
 
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
-  const { tier } = useResponsive();
+  const { isDesktop } = useResponsive();
   const toast = useToast();
 
   const [docketNumber, setDocketNumber] = useState('');
@@ -31,8 +30,6 @@ export default function LoginScreen({ navigation }) {
   const [contactNumber, setContactNumber] = useState('');
   const [password, setPassword] = useState('');
 
-  // First-login forced password change - same pattern as the Staff Login
-  // screen's mustChangePassword flow, just for the victim's 4th credential.
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [tempToken, setTempToken] = useState(null);
   const [newPassword, setNewPassword] = useState('');
@@ -80,90 +77,181 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
-      <View style={styles.headerBox}>
-        <View style={styles.logoBadge}>
-          <Feather name="shield" size={28} color={THEME.accentIcon} />
-        </View>
-        <Text style={styles.screenTitle}>Welcome to Mansakha</Text>
-        <Text style={styles.screenSubtitle}>
-          Secure, non-judgmental, and confidential mental well-being support anytime.
-        </Text>
-      </View>
+    <View style={styles.container}>
+      {/* Abstract Background Blobs */}
+      <View style={styles.bgBlob1} />
+      <View style={styles.bgBlob2} />
 
-      <View style={[styles.card, { maxWidth: authContentWidth[tier], alignSelf: 'center' }]}>
-        {!requirePasswordChange ? (
-          <>
-            <IconInput icon="hash" placeholder="Docket ID" value={docketNumber} onChangeText={setDocketNumber} autoCapitalize="characters" />
-            <IconInput icon="user" placeholder="Full Name" value={fullName} onChangeText={setFullName} />
-            <IconInput icon="phone" placeholder="Mobile Number" value={contactNumber} onChangeText={setContactNumber} keyboardType="phone-pad" />
-            <IconInput icon="lock" placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={[styles.card, isDesktop ? styles.cardDesktop : styles.cardMobile]}>
+          
+          {/* Left Pane: Illustration (Desktop Only) */}
+          {isDesktop && (
+            <View style={styles.imagePane}>
+              <Image 
+                source={require('../../assets/login_illustration.jpg')} 
+                style={styles.illustration} 
+                resizeMode="cover" 
+              />
+            </View>
+          )}
 
-            <Pressable style={styles.primaryBtn} onPress={handleLogin} disabled={loginMutation.isPending}>
-              <Text style={styles.primaryBtnText}>{loginMutation.isPending ? 'Signing In...' : 'Sign In'}</Text>
-            </Pressable>
-
-            <View style={styles.bannerInfo}>
-              <Feather name="shield" size={18} color={THEME.accentIcon} style={{ marginRight: 10 }} />
-              <Text style={styles.bannerText}>
-                Your data is fully encrypted and never shared without your explicit consent.
+          {/* Right Pane: Form */}
+          <View style={[styles.formPane, isDesktop ? styles.formPaneDesktop : styles.formPaneMobile]}>
+            <View style={styles.headerBox}>
+              <Text style={styles.screenTitle}>Let's sign you in.</Text>
+              <Text style={styles.screenSubtitle}>
+                Welcome back to your secure support account.
               </Text>
             </View>
 
-            <Text style={styles.notice}>
-              Don't have login details? Contact{' '}
-              <Text
-                style={{ color: THEME.primaryDark, textDecorationLine: 'underline' }}
-                onPress={() => Linking.openURL('https://www.dosje.gov.in/organisation/national-helpline-against-atrocities/')}
-              >
-                NHAA Portal
-              </Text>
-              {' '}or{' '}
-              <Text
-                style={{ color: THEME.primaryDark, textDecorationLine: 'underline' }}
-                onPress={() => {
-                  if (Platform.OS !== 'web') {
-                    Linking.openURL('tel:14566');
-                  }
-                }}
-              >
-                14566
-              </Text>
-              {' '}to get registered.
-            </Text>
-          </>
-        ) : (
-          <>
-            <Text style={styles.screenTitle}>Change Password</Text>
-            <Text style={[styles.screenSubtitle, { marginBottom: 16 }]}>
-              This is your first time signing in - set a new password to continue.
-            </Text>
-            <IconInput icon="lock" placeholder="New password (min 8 characters)" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
+            {!requirePasswordChange ? (
+              <>
+                <View style={styles.formContainer}>
+                  <IconInput 
+                    icon="hash" 
+                    placeholder="Docket ID" 
+                    value={docketNumber} 
+                    onChangeText={setDocketNumber} 
+                    autoCapitalize="characters" 
+                    containerStyle={styles.customInput}
+                  />
+                  <IconInput 
+                    icon="user" 
+                    placeholder="Full Name" 
+                    value={fullName} 
+                    onChangeText={setFullName} 
+                    containerStyle={styles.customInput}
+                  />
+                  <IconInput 
+                    icon="phone" 
+                    placeholder="Mobile Number" 
+                    value={contactNumber} 
+                    onChangeText={setContactNumber} 
+                    keyboardType="phone-pad" 
+                    containerStyle={styles.customInput}
+                  />
+                  <IconInput 
+                    icon="lock" 
+                    placeholder="Password" 
+                    value={password} 
+                    onChangeText={setPassword} 
+                    secureTextEntry 
+                    containerStyle={styles.customInput}
+                  />
+                </View>
 
-            <Pressable style={styles.primaryBtn} onPress={handleChangePassword} disabled={changingPassword}>
-              <Text style={styles.primaryBtnText}>{changingPassword ? 'Updating...' : 'Update & Continue'}</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-    </ScrollView>
+                <Pressable style={styles.primaryBtn} onPress={handleLogin} disabled={loginMutation.isPending}>
+                  <Text style={styles.primaryBtnText}>{loginMutation.isPending ? 'Signing In...' : 'Sign in now'}</Text>
+                </Pressable>
+
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or get help</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                <Pressable
+                  style={styles.secondaryBtn}
+                  onPress={() => Linking.openURL('https://www.dosje.gov.in/organisation/national-helpline-against-atrocities/')}
+                >
+                  <Text style={styles.secondaryBtnText}>NHAA Portal</Text>
+                </Pressable>
+
+                <Text style={styles.notice}>
+                  Don't have an account?{' '}
+                  <Text
+                    style={styles.linkText}
+                    onPress={() => {
+                      if (Platform.OS !== 'web') Linking.openURL('tel:14566');
+                    }}
+                  >
+                    Call 14566 to register
+                  </Text>
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.screenTitle, { marginTop: 16 }]}>Change Password</Text>
+                <Text style={[styles.screenSubtitle, { marginBottom: 24 }]}>
+                  This is your first time signing in - set a new password to continue.
+                </Text>
+                <View style={styles.formContainer}>
+                  <IconInput icon="lock" placeholder="New password (min 8 characters)" value={newPassword} onChangeText={setNewPassword} secureTextEntry containerStyle={styles.customInput} />
+                </View>
+
+                <Pressable style={styles.primaryBtn} onPress={handleChangePassword} disabled={changingPassword}>
+                  <Text style={styles.primaryBtnText}>{changingPassword ? 'Updating...' : 'Update & Continue'}</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.bg },
-  scrollContent: { padding: 24, paddingVertical: 40, alignItems: 'center' },
-  headerBox: { alignItems: 'center', marginBottom: 20 },
-  logoBadge: { width: 64, height: 64, borderRadius: 20, backgroundColor: THEME.accentBlue, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  screenTitle: { fontSize: 24, fontWeight: '700', color: THEME.textMain, textAlign: 'center' },
-  screenSubtitle: { fontSize: 13, color: THEME.textMuted, textAlign: 'center', marginTop: 6, paddingHorizontal: 20 },
-  card: { width: '100%', backgroundColor: THEME.cardBg, borderRadius: 20, padding: 20, elevation: 1, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8 },
-  primaryBtn: { backgroundColor: THEME.primaryDark, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
-  primaryBtnText: { color: '#FFFFFF', fontWeight: '600', fontSize: 15 },
-  linkText: { color: THEME.accentIcon, fontSize: 13, fontWeight: '600' },
-  notice: { fontSize: 12, color: THEME.textMuted, textAlign: 'center', marginTop: 16, lineHeight: 17 },
-  errorText: { fontSize: 13, color: THEME.danger, textAlign: 'center', marginTop: 4, marginBottom: 4 },
-  bannerInfo: { flexDirection: 'row', alignItems: 'center', backgroundColor: THEME.accentBlue, borderRadius: 12, padding: 12, marginTop: 16 },
-  bannerText: { fontSize: 12, color: THEME.textMain, flex: 1, lineHeight: 16 },
-  linkRow: { marginTop: 24, padding: 10 },
+  container: { flex: 1, backgroundColor: THEME.bg, overflow: 'hidden' },
+  bgBlob1: {
+    position: 'absolute', top: -150, right: -100, width: 450, height: 450,
+    borderRadius: 225, backgroundColor: '#BAE6FD', opacity: 0.6,
+  },
+  bgBlob2: {
+    position: 'absolute', bottom: -100, left: -150, width: 350, height: 350,
+    borderRadius: 175, backgroundColor: '#7DD3FC', opacity: 0.4,
+  },
+  scrollContent: { 
+    flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24, paddingVertical: 40 
+  },
+  card: { 
+    backgroundColor: THEME.cardBg, 
+    borderRadius: 32, 
+    borderWidth: 1.5, 
+    borderColor: THEME.border,
+    ...Platform.select({ web: { backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)' } }),
+    shadowColor: '#000', shadowOffset: { width: 0, height: 24 }, shadowOpacity: 0.08, shadowRadius: 48, elevation: 10, 
+    overflow: 'hidden',
+  },
+  cardDesktop: { flexDirection: 'row', width: '100%', maxWidth: 960, minHeight: 600 },
+  cardMobile: { flexDirection: 'column', width: '100%', maxWidth: 420 },
+  
+  imagePane: { flex: 1, backgroundColor: '#E0F2FE' },
+  illustration: { width: '100%', height: '100%' },
+  
+  formPane: { flex: 1, justifyContent: 'center' },
+  formPaneDesktop: { padding: 48 },
+  formPaneMobile: { padding: 32 },
+
+  headerBox: { marginBottom: 32 },
+  screenTitle: { fontSize: 26, fontWeight: '800', color: THEME.textMain, letterSpacing: -0.5, marginBottom: 8 },
+  screenSubtitle: { fontSize: 15, color: THEME.textMuted },
+  
+  formContainer: { gap: 12, marginBottom: 24 },
+  customInput: {
+    backgroundColor: THEME.inputBg,
+    borderColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 14,
+  },
+
+  primaryBtn: { 
+    backgroundColor: THEME.primaryDark, borderRadius: 12, paddingVertical: 16, alignItems: 'center',
+    shadowColor: THEME.primaryDark, shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6,
+  },
+  primaryBtnText: { color: '#FFFFFF', fontWeight: '700', fontSize: 16 },
+  
+  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  dividerText: { marginHorizontal: 16, color: '#94A3B8', fontSize: 13, fontWeight: '500' },
+
+  secondaryBtn: { 
+    backgroundColor: '#FFFFFF', borderRadius: 12, paddingVertical: 14, alignItems: 'center',
+    borderWidth: 1, borderColor: '#E2E8F0'
+  },
+  secondaryBtnText: { color: THEME.textMain, fontWeight: '700', fontSize: 15 },
+
+  notice: { fontSize: 13, color: THEME.textMuted, textAlign: 'center', marginTop: 32 },
+  linkText: { color: THEME.textMain, fontWeight: '700', textDecorationLine: 'underline' },
 });

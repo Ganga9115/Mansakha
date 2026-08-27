@@ -32,7 +32,7 @@ function adminNavItems(prefix, { extraItems = [], graphs = false } = {}) {
     ...(graphs ? [{ name: 'Graphs', icon: BarChart3, path: `/${prefix}/graphs` }] : []),
     { name: 'Alerts', icon: Bell, path: `/${prefix}/alerts` },
     { name: 'Reports', icon: BarChart3, path: `/${prefix}/reports` },
-    { name: 'Profile', icon: Settings, path: `/${prefix}/profile` },
+    { name: 'Profile', icon: User, path: `/${prefix}/profile` },
   ];
 }
 
@@ -43,7 +43,7 @@ const NAV_ITEMS_BY_SECTION = {
     { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
     { name: 'Interventions', icon: MessageSquare, path: '/counsellor/interventions' },
     { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
-    { name: 'Profile', icon: Settings, path: '/counsellor/profile' },
+    { name: 'Profile', icon: User, path: '/counsellor/profile' },
   ],
   districtadmin: adminNavItems('districtadmin', {
     extraItems: [{ name: 'Register Victim', icon: UserPlus, path: '/districtadmin/register-victim' }],
@@ -52,13 +52,13 @@ const NAV_ITEMS_BY_SECTION = {
   nationaladmin: [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/nationaladmin' },
     { name: 'Graphs', icon: BarChart3, path: '/nationaladmin/graphs' },
-    { name: 'Profile', icon: Settings, path: '/nationaladmin/profile' },
+    { name: 'Profile', icon: User, path: '/nationaladmin/profile' },
   ],
   dataintake: [
     { name: 'Register Victim', icon: UserPlus, path: '/dataintake' },
     { name: 'Victims', icon: Users, path: '/dataintake/victims' },
     { name: 'Fetch Case Details', icon: FileSearch, path: '/dataintake/fetch-case' },
-    { name: 'Profile', icon: Settings, path: '/dataintake/profile' },
+    { name: 'Profile', icon: User, path: '/dataintake/profile' },
   ],
 };
 

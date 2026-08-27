@@ -47,6 +47,32 @@ function InfoTileRow({ icon, label, value, loading, iconColor = colors.primary, 
   );
 }
 
+const INDIAN_LANGUAGES = [
+  { value: 'en', label: 'English' },
+  { value: 'as', label: 'Assamese (অসমীয়া)' },
+  { value: 'bn', label: 'Bengali (বাংলা)' },
+  { value: 'brx', label: 'Bodo (बड़ो)' },
+  { value: 'doi', label: 'Dogri (डोगरी)' },
+  { value: 'gu', label: 'Gujarati (ગુજરાતી)' },
+  { value: 'hi', label: 'Hindi (हिन्दी)' },
+  { value: 'kn', label: 'Kannada (ಕನ್ನಡ)' },
+  { value: 'ks', label: 'Kashmiri (كأشُر)' },
+  { value: 'gom', label: 'Konkani (कोंकणी)' },
+  { value: 'mai', label: 'Maithili (मैथिली)' },
+  { value: 'ml', label: 'Malayalam (മലയാളം)' },
+  { value: 'mni', label: 'Manipuri (মৈতৈলোন্)' },
+  { value: 'mr', label: 'Marathi (मराठी)' },
+  { value: 'ne', label: 'Nepali (नेपाली)' },
+  { value: 'or', label: 'Odia (ଓଡ଼ିଆ)' },
+  { value: 'pa', label: 'Punjabi (ਪੰਜਾਬੀ)' },
+  { value: 'sa', label: 'Sanskrit (संस्कृतम्)' },
+  { value: 'sat', label: 'Santali (ᱥᱟᱱᱛᱟᱲᱤ)' },
+  { value: 'sd', label: 'Sindhi (سنڌي)' },
+  { value: 'ta', label: 'Tamil (தமிழ்)' },
+  { value: 'te', label: 'Telugu (తెలుగు)' },
+  { value: 'ur', label: 'Urdu (اردو)' },
+];
+
 export default function SettingsScreen({ navigation }) {
   const { logout, session } = useAuth();
   const toast = useToast();
@@ -57,14 +83,12 @@ export default function SettingsScreen({ navigation }) {
   const assignedCounsellorQuery = useAssignedCounsellor();
   const updateCounsellorPreference = useUpdateCounsellorPreference();
   const updateSmsPreference = useUpdateSmsPreference();
-  const [languageId, setLanguageId] = useState(null);
+  const [displayLanguageId, setDisplayLanguageId] = useState(null);
+  const [speakingLanguageId, setSpeakingLanguageId] = useState(null);
   const { tier, isDesktop } = useResponsive();
 
   const optedForCounsellor = dashboardQuery.data?.optedForManualCounsellor ?? false;
   const smsCheckinEnabled = dashboardQuery.data?.smsCheckinEnabled ?? false;
-  // Backend shape is { assigned, counsellor: {fullName, phone, whatsappNumber} | null } -
-  // there's no top-level officialId on this response at all, so checking for
-  // one here always read as false and this whole card never rendered.
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
   const counsellor = assignedCounsellorQuery.data?.counsellor;
 
@@ -98,21 +122,8 @@ export default function SettingsScreen({ navigation }) {
   const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
   const yearStr = `Year - ${today.getFullYear()}`;
 
-  const languageOptions = (languagesQuery.data?.languages || []).map((l) => ({
-    value: l.language_id,
-    label: l.name,
-  }));
-  const currentLanguageId = languageId ?? dashboardQuery.data?.preferredLanguageId ?? '';
-
-  const handleLanguageChange = async (value) => {
-    setLanguageId(value);
-    try {
-      await updateLanguage.mutateAsync(value);
-      toast.success('Preferred language updated.');
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
+  const currentDisplayLanguageId = displayLanguageId ?? dashboardQuery.data?.preferredLanguageId ?? 'en';
+  const currentSpeakingLanguageId = speakingLanguageId ?? 'en';
 
   const handleChangePassword = async () => {
     setPasswordError(null);
@@ -145,24 +156,15 @@ export default function SettingsScreen({ navigation }) {
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
-            <Feather name="settings" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+            <Feather name="user" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather name="settings" size={28} color={colors.primary} />
-              <View style={styles.avatarEditBadge}>
-                <Feather name="sliders" size={10} color={colors.white} />
-              </View>
+              <Feather name="user" size={28} color={colors.primary} />
             </View>
           )}
 
           <View style={styles.headerInfo}>
-            {!isDesktop && (
-              <View style={styles.pillBadge}>
-                <Text style={styles.pillText}>PREFERENCES</Text>
-              </View>
-            )}
-            <Text style={styles.statusTitle}>Profile</Text>
-            {!isDesktop && <Text style={styles.subtext}>Manage account & choices</Text>}
+            <Text style={styles.pageTitle}>Profile</Text>
           </View>
         </View>
 
@@ -239,18 +241,48 @@ export default function SettingsScreen({ navigation }) {
               <Feather name="globe" size={20} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardHeaderTitle}>Language</Text>
+              <Text style={styles.cardHeaderTitle}>Display Language</Text>
               <Text style={styles.cardHeaderSubtitle}>Select your preferred interface language</Text>
             </View>
           </View>
+          <View style={{ marginTop: spacing.md, marginBottom: spacing.xl }}>
+            <Dropdown
+              options={INDIAN_LANGUAGES}
+              value={currentDisplayLanguageId}
+              onChange={async (value) => {
+                setDisplayLanguageId(value);
+                try {
+                  await updateLanguage.mutateAsync(value);
+                  toast.success('Display language updated.');
+                } catch (err) {
+                  toast.error(err.message || 'Could not update language');
+                }
+              }}
+              placeholder="Select interface language"
+              disabled={updateLanguage.isPending}
+            />
+          </View>
 
+          <View style={styles.divider} />
+
+          <View style={[styles.cardHeader, { marginTop: spacing.md }]}>
+            <View style={styles.accountIconTile}>
+              <Feather name="mic" size={20} color={colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardHeaderTitle}>Speaking Language</Text>
+              <Text style={styles.cardHeaderSubtitle}>Language used for voice check-ins and AI calls</Text>
+            </View>
+          </View>
           <View style={{ marginTop: spacing.md }}>
             <Dropdown
-              options={languageOptions}
-              value={currentLanguageId}
-              onChange={handleLanguageChange}
-              placeholder="Select a language"
-              disabled={updateLanguage.isPending}
+              options={INDIAN_LANGUAGES}
+              value={currentSpeakingLanguageId}
+              onChange={(value) => {
+                setSpeakingLanguageId(value);
+                toast.success('Speaking language updated.');
+              }}
+              placeholder="Select voice language"
             />
           </View>
         </Card>
@@ -441,7 +473,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
   headerRight: { marginLeft: spacing.md },
   iconCircleBtn: {

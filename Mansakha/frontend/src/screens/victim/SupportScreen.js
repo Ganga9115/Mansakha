@@ -70,24 +70,15 @@ export default function SupportScreen({ navigation }) {
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
-            <Feather name="phone-call" size={20} color={colors.primaryDark} style={styles.headerIconDesktop} />
+            <Feather name="file-text" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather name="phone-call" size={28} color={colors.primary} />
-              <View style={styles.avatarEditBadge}>
-                <Feather name="heart" size={10} color={colors.white} />
-              </View>
+              <Feather name="file-text" size={28} color={colors.primary} />
             </View>
           )}
 
           <View style={styles.headerInfo}>
-            {!isDesktop && (
-              <View style={styles.pillBadge}>
-                <Text style={styles.pillText}>EMERGENCY & AID</Text>
-              </View>
-            )}
-            <Text style={styles.statusTitle}>Support Helpline</Text>
-            {!isDesktop && <Text style={styles.subtext}>Emergency numbers & Mansakha assistance</Text>}
+            <Text style={styles.pageTitle}>Support</Text>
           </View>
         </View>
 
@@ -242,7 +233,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
   contentBody: {
     backgroundColor: colors.background,
