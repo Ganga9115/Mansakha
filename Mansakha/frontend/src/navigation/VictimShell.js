@@ -128,6 +128,10 @@ function DesktopNavigator() {
           options={{ title: item.label }}
         />
       ))}
+      <Drawer.Screen name="Chatbot" component={ChatScreen} />
+      <Drawer.Screen name="Wellbeing" component={WellnessScreen} />
+      <Drawer.Screen name="Journal" component={JournalScreen} />
+      <Drawer.Screen name="CounsellorChat" component={CounsellorChatScreen} />
     </Drawer.Navigator>
   );
 }
@@ -156,14 +160,18 @@ function DesktopNavigatorWithFAB() {
 // adding more tabs, keeps the 5-item tab bar/sidebar from getting crowded;
 // `navigation.navigate('Chatbot')` called from any screen inside MainTabs
 // bubbles up to this stack automatically.
-function ShellStack({ tabs }) {
+function ShellStack({ tabs, includeExtras = true }) {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={tabs} />
-      <RootStack.Screen name="Chatbot" component={ChatScreen} />
-      <RootStack.Screen name="Wellbeing" component={WellnessScreen} />
-      <RootStack.Screen name="Journal" component={JournalScreen} />
-      <RootStack.Screen name="CounsellorChat" component={CounsellorChatScreen} />
+      {includeExtras && (
+        <>
+          <RootStack.Screen name="Chatbot" component={ChatScreen} />
+          <RootStack.Screen name="Wellbeing" component={WellnessScreen} />
+          <RootStack.Screen name="Journal" component={JournalScreen} />
+          <RootStack.Screen name="CounsellorChat" component={CounsellorChatScreen} />
+        </>
+      )}
     </RootStack.Navigator>
   );
 }
@@ -174,7 +182,7 @@ export default function VictimShell() {
   if (tier === 'desktop') {
     return (
       <View style={{ flex: 1 }}>
-        <ShellStack tabs={DesktopNavigatorWithFAB} />
+        <ShellStack tabs={DesktopNavigatorWithFAB} includeExtras={false} />
       </View>
     );
   }

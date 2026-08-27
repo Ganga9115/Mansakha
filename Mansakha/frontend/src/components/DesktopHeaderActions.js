@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -7,22 +7,9 @@ import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
 import SosButton from './SosButton';
 
-// Desktop-tier top bar actions (search / notifications / profile) - sized
-// to match the Staff/Ministry web app's header exactly (256px search field,
-// bare bell icon, 36px avatar + two-line name/role chip) so every role's
-// top bar reads as the same component, just themed to its own colors.
 export default function DesktopHeaderActions({ fullName, roleLabel = 'Victim', alertCount = 0, onBellPress }) {
   return (
     <View style={styles.container}>
-      <View style={styles.searchWrap}>
-        <Feather name="search" size={16} color={colors.textSecondary} style={styles.searchIcon} />
-        <TextInput
-          placeholder="Search..."
-          placeholderTextColor={colors.textSecondary}
-          style={styles.searchInput}
-        />
-      </View>
-
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <SosButton asHeaderIcon />
         <Pressable style={styles.bellBtn} onPress={onBellPress}>
