@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import MinistryLayout from '../../layouts/MinistryLayout';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, X } from 'lucide-react';
 import { useStaffList, useCreateStaff, useRevokeStaff, useJurisdictionOptions } from '../../services/hooks';
 
 const ROLE_OPTIONS = ['Counsellor', 'Administration', 'Data Operator'];
@@ -70,7 +70,7 @@ export default function StaffManagement() {
             onClick={() => setShowForm((v) => !v)}
             className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition"
           >
-            <UserPlus size={14} />
+            {showForm ? <X size={14} /> : <UserPlus size={14} />}
             {showForm ? 'Cancel' : 'Create Account'}
           </button>
         </div>

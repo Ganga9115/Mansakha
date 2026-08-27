@@ -60,16 +60,28 @@ router.get('/staff', async (req, res) => {
     .range(offset, offset + pageSize - 1);
   if (error) return fail(res, `Could not load staff list: ${error.message}`, 500);
 
-  const staff = (data || []).map((o) => ({
-    officialId: o.official_id,
-    fullName: o.full_name,
-    email: o.email,
-    phone: o.phone,
-    mustChangePassword: o.must_change_password,
-    roles: (o.official_roles || [])
+  const staff = (data || []).map((o) => {
+    const activeRoles = (o.official_roles || [])
       .filter((r) => !r.revoked_at)
-      .map((r) => ({ roleName: r.roles.role_name, jurisdictionName: r.jurisdictions ? r.jurisdictions.name : null })),
-  }));
+      .map((r) => ({ roleName: r.roles.role_name, jurisdictionName: r.jurisdictions ? r.jurisdictions.name : null }));
+
+    return {
+      officialId: o.official_id,
+      fullName: o.full_name,
+      email: o.email,
+      phone: o.phone,
+      mustChangePassword: o.must_change_password,
+      // The Staff Management table is one row per official (not per role
+      // assignment) - flatten the common single-role case into roleName/
+      // jurisdictionName directly, joining if an official somehow holds more
+      // than one active role. status is derived, not stored: an official with
+      // zero active roles (every assignment revoked) reads as 'revoked'.
+      roleName: activeRoles.map((r) => r.roleName).join(', ') || null,
+      jurisdictionName: activeRoles.map((r) => r.jurisdictionName).filter(Boolean).join(', ') || null,
+      status: activeRoles.length > 0 ? 'active' : 'revoked',
+      roles: activeRoles,
+    };
+  });
 
   return ok(res, { staff, total: count || staff.length });
 });
