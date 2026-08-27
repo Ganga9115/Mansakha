@@ -96,6 +96,27 @@ export function useCheckin() {
   });
 }
 
+export function useQuestionnaireNext() {
+  const token = useToken();
+  return useMutation({
+    mutationFn: ({ currentQuestionIndex, previousResponses }) => 
+      apiClient.post('/api/victim/questionnaire/next', { currentQuestionIndex, previousResponses }, token),
+  });
+}
+
+export function useQuestionnaireSubmit() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ allResponses }) => 
+      apiClient.post('/api/victim/questionnaire/submit', { allResponses }, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['victim', 'dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['victim', 'distress-history'] });
+    },
+  });
+}
+
 export function useUpdateVictimLanguage() {
   const token = useToken();
   const queryClient = useQueryClient();
@@ -162,7 +183,25 @@ export function useAddJournalEntry() {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (content) => apiClient.post('/api/victim/journal', { content }, token),
+    mutationFn: ({ title, content }) => apiClient.post('/api/victim/journal', { title, content }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['victim', 'journal'] }),
+  });
+}
+
+export function useUpdateJournalEntry() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ entryId, title, content }) => apiClient.patch(`/api/victim/journal/${entryId}`, { title, content }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['victim', 'journal'] }),
+  });
+}
+
+export function useDeleteJournalEntry() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (entryId) => apiClient.delete(`/api/victim/journal/${entryId}`, token),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['victim', 'journal'] }),
   });
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Switch, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -21,6 +21,7 @@ import { shadow } from '../../theme/shadow';
 import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
+import AssignedCounsellorCard from '../../components/AssignedCounsellorCard';
 import Dropdown from '../../components/Dropdown';
 import SegmentedToggle from '../../components/SegmentedToggle';
 import IconInput from '../../components/IconInput';
@@ -61,7 +62,11 @@ export default function SettingsScreen({ navigation }) {
 
   const optedForCounsellor = dashboardQuery.data?.optedForManualCounsellor ?? false;
   const smsCheckinEnabled = dashboardQuery.data?.smsCheckinEnabled ?? false;
-  const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.officialId;
+  // Backend shape is { assigned, counsellor: {fullName, phone, whatsappNumber} | null } -
+  // there's no top-level officialId on this response at all, so checking for
+  // one here always read as false and this whole card never rendered.
+  const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
+  const counsellor = assignedCounsellorQuery.data?.counsellor;
 
   const handleToggleCounsellorPreference = async (value) => {
     try {
@@ -79,12 +84,6 @@ export default function SettingsScreen({ navigation }) {
     } catch (err) {
       toast.error(err.message || 'Could not update this preference.');
     }
-  };
-
-  const handleCallCounsellor = () => {
-    const phone = assignedCounsellorQuery.data?.phone;
-    if (!phone) return;
-    Linking.openURL(`tel:${phone}`).catch(() => toast.error('Could not start a call on this device.'));
   };
 
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -134,7 +133,7 @@ export default function SettingsScreen({ navigation }) {
       setConfirmPassword('');
       setTimeout(() => { setShowPasswordForm(false); setPasswordSuccess(false); }, 1500);
     } catch (err) {
-      setPasswordError(err.message);
+      toast.error(err.message || 'Could not update your password.');
     } finally {
       setPasswordLoading(false);
     }
@@ -170,7 +169,7 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.headerRight}>
           {isDesktop ? (
             <DesktopHeaderActions
-              fullName={assignedCounsellorQuery.data?.fullName}
+              fullName={dashboardQuery.data?.fullName}
               alertCount={0}
               onBellPress={() => {}}
             />
@@ -286,32 +285,38 @@ export default function SettingsScreen({ navigation }) {
           </View>
         </Card>
 
+        {/* Not opted in - an explanatory invite instead of just... nothing,
+            so a victim who's never touched this toggle understands what
+            turning it on would actually get them. */}
+        {!optedForCounsellor && (
+          <Card style={[styles.customCard, styles.counsellorInviteCard]}>
+            <Feather name="user-plus" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
+            <Text style={styles.cardHeaderTitle}>Want to talk to someone?</Text>
+            <Text style={styles.cardHeaderSubtitle}>
+              Turn on "Prefer a human counsellor" above to get matched with a real counsellor you can message or call directly.
+            </Text>
+          </Card>
+        )}
+
+        {/* Opted in, but the jurisdiction has no counsellor to assign yet -
+            distinct from "not opted in" so this doesn't read as if the
+            toggle silently did nothing. */}
+        {optedForCounsellor && !hasAssignedCounsellor && (
+          <Card style={[styles.customCard, styles.counsellorInviteCard]}>
+            <Feather name="clock" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
+            <Text style={styles.cardHeaderTitle}>Finding you a counsellor</Text>
+            <Text style={styles.cardHeaderSubtitle}>
+              You're opted in - we'll connect you with a counsellor as soon as one is available in your area.
+            </Text>
+          </Card>
+        )}
+
         {/* Your Counsellor - only shown once opted in AND assigned, never a
             greyed-out/disabled version of this card. */}
         {optedForCounsellor && hasAssignedCounsellor && (
           <>
             <Text style={styles.sectionHeaderTitle}>YOUR COUNSELLOR</Text>
-            <Card style={styles.customCard}>
-              <View style={styles.cardHeader}>
-                <View style={styles.accountIconTile}>
-                  <Feather name="user" size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardHeaderTitle}>{assignedCounsellorQuery.data.fullName}</Text>
-                  <Text style={styles.cardHeaderSubtitle}>Assigned Counsellor</Text>
-                </View>
-              </View>
-              <View style={styles.buttonRow}>
-                <Pressable style={[styles.outlineBtn, styles.halfBtn]} onPress={() => navigation.navigate('CounsellorChat')}>
-                  <Feather name="message-circle" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
-                  <Text style={styles.outlineBtnText}>Message</Text>
-                </Pressable>
-                <Pressable style={[styles.outlineBtn, styles.halfBtn]} onPress={handleCallCounsellor}>
-                  <Feather name="phone" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
-                  <Text style={styles.outlineBtnText}>Call</Text>
-                </Pressable>
-              </View>
-            </Card>
+            <AssignedCounsellorCard counsellor={counsellor} navigation={navigation} />
           </>
         )}
 
@@ -485,6 +490,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     ...shadow.card,
   },
+  counsellorInviteCard: { backgroundColor: colors.primaryLight, borderColor: colors.primaryLight },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
   accountIconTile: {
     width: 44,

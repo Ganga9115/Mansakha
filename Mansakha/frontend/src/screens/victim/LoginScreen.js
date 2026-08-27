@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, Linking, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { useVictimLogin } from '../../services/hooks';
 import { apiClient } from '../../services/apiClient';
 import { authContentWidth } from '../../theme/layout';
@@ -23,12 +24,12 @@ const THEME = {
 export default function LoginScreen({ navigation }) {
   const { login } = useAuth();
   const { tier } = useResponsive();
+  const toast = useToast();
 
   const [docketNumber, setDocketNumber] = useState('');
   const [fullName, setFullName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
 
   // First-login forced password change - same pattern as the Staff Login
   // screen's mustChangePassword flow, just for the victim's 4th credential.
@@ -40,9 +41,8 @@ export default function LoginScreen({ navigation }) {
   const loginMutation = useVictimLogin();
 
   const handleLogin = async () => {
-    setError(null);
     if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim() || !password.trim()) {
-      setError('Please fill in all fields.');
+      toast.error('Please fill in all fields.');
       return;
     }
     try {
@@ -60,14 +60,13 @@ export default function LoginScreen({ navigation }) {
       await login({ token: data.token, accountType: 'victim' });
     } catch (err) {
       console.error('Login error:', err);
-      setError(`Login failed: ${err.message || 'Unknown error'}`);
+      toast.error(err.message || 'Login failed - check your details and try again');
     }
   };
 
   const handleChangePassword = async () => {
-    setError(null);
     if (newPassword.length < 8) {
-      setError('Password must be at least 8 characters.');
+      toast.error('Password must be at least 8 characters.');
       return;
     }
     setChangingPassword(true);
@@ -75,7 +74,7 @@ export default function LoginScreen({ navigation }) {
       await apiClient.post('/api/auth/victim/change-password', { newPassword }, tempToken);
       await login({ token: tempToken, accountType: 'victim' });
     } catch (err) {
-      setError(err.message || 'Could not update password.');
+      toast.error(err.message || 'Could not update password.');
       setChangingPassword(false);
     }
   };
@@ -92,15 +91,13 @@ export default function LoginScreen({ navigation }) {
         </Text>
       </View>
 
-      <View style={[styles.card, { maxWidth: authContentWidth[tier] }]}>
+      <View style={[styles.card, { maxWidth: authContentWidth[tier], alignSelf: 'center' }]}>
         {!requirePasswordChange ? (
           <>
             <IconInput icon="hash" placeholder="Docket ID" value={docketNumber} onChangeText={setDocketNumber} autoCapitalize="characters" />
             <IconInput icon="user" placeholder="Full Name" value={fullName} onChangeText={setFullName} />
             <IconInput icon="phone" placeholder="Mobile Number" value={contactNumber} onChangeText={setContactNumber} keyboardType="phone-pad" />
             <IconInput icon="lock" placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
-
-            {error && <Text style={styles.errorText}>{error}</Text>}
 
             <Pressable style={styles.primaryBtn} onPress={handleLogin} disabled={loginMutation.isPending}>
               <Text style={styles.primaryBtnText}>{loginMutation.isPending ? 'Signing In...' : 'Sign In'}</Text>
@@ -142,8 +139,6 @@ export default function LoginScreen({ navigation }) {
               This is your first time signing in - set a new password to continue.
             </Text>
             <IconInput icon="lock" placeholder="New password (min 8 characters)" value={newPassword} onChangeText={setNewPassword} secureTextEntry />
-
-            {error && <Text style={styles.errorText}>{error}</Text>}
 
             <Pressable style={styles.primaryBtn} onPress={handleChangePassword} disabled={changingPassword}>
               <Text style={styles.primaryBtnText}>{changingPassword ? 'Updating...' : 'Update & Continue'}</Text>

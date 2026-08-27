@@ -8,12 +8,17 @@ import { useCaseTypeOptions, useJurisdictionOptions } from '../services/hooks';
 // non-scoped /api/data-intake/victims route) - same fields either way, only
 // whether State/District are editable differs.
 //
-// Case Stage is deliberately NOT collected here (removed per explicit
-// request) - every new victim starts at 'Investigation' server-side
-// (services/victimProvisioning.js), and stage is something the operator
-// sets later via the Victims list's editable dropdown, not a decision made
-// at intake time.
-export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJurisdictionLabel, onCreate, creating }) {
+// Case Stage is only collected here for Data Operator (`showCaseStage`) -
+// District Admin's form leaves it out entirely, per an earlier explicit
+// request that stage there is set later via the Victims list's editable
+// dropdown, not a decision made at intake time. Data Operator got this field
+// back at creation per a later, Data-Operator-specific request. Either way
+// it's optional - omitting it lets the server default to 'Investigation'
+// (services/victimProvisioning.js). 'Case Closed' isn't offered here - it
+// isn't a sensible state for a victim record that doesn't exist yet.
+const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
+
+export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJurisdictionLabel, onCreate, creating, showCaseStage = false }) {
   const caseTypesQuery = useCaseTypeOptions();
   const stateQuery = useJurisdictionOptions('state');
 
@@ -21,6 +26,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
   const [fullName, setFullName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [caseTypeId, setCaseTypeId] = useState('');
+  const [caseStage, setCaseStage] = useState('');
   const [stateId, setStateId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [error, setError] = useState(null);
@@ -47,6 +53,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
         contactNumber: contactNumber.trim(),
         jurisdictionId,
         caseTypeId,
+        ...(showCaseStage && caseStage ? { caseStage } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
@@ -56,6 +63,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
       setFullName('');
       setContactNumber('');
       setCaseTypeId('');
+      setCaseStage('');
       setStateId('');
       setDistrictId('');
     } catch (err) {
@@ -153,6 +161,16 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
           {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
         </select>
       </div>
+
+      {showCaseStage && (
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Stage</label>
+          <select value={caseStage} onChange={(e) => setCaseStage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Investigation (default)</option>
+            {CASE_STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      )}
 
       {error && <p className="text-xs text-rose-600">{error}</p>}
 

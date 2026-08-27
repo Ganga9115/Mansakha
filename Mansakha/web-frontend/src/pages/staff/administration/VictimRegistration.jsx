@@ -3,6 +3,7 @@ import StaffLayout from '../../../layouts/StaffLayout';
 import { Search } from 'lucide-react';
 import VictimRegistrationForm from '../../../components/VictimRegistrationForm';
 import { useMyJurisdiction, useCreateVictim, useSearchVictimByDocket, useUpdateVictim } from '../../../services/hooks';
+import { useToast } from '../../../context/ToastContext';
 
 const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
 
@@ -11,20 +12,19 @@ const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compens
 // them); a District Admin's own State/District are locked to their own
 // jurisdiction, not chosen, since this is *their* district's intake.
 export default function VictimRegistration() {
+  const toast = useToast();
   const { jurisdictionId } = useMyJurisdiction();
   const createVictim = useCreateVictim();
   const searchVictim = useSearchVictimByDocket();
   const updateVictim = useUpdateVictim();
 
   const [searchDocket, setSearchDocket] = useState('');
-  const [searchError, setSearchError] = useState(null);
   const [editVictim, setEditVictim] = useState(null);
   const [editCaseStage, setEditCaseStage] = useState('');
   const [editSuccess, setEditSuccess] = useState(false);
 
   const handleSearch = async (e) => {
     e.preventDefault();
-    setSearchError(null);
     setEditVictim(null);
     setEditSuccess(false);
     if (!searchDocket.trim()) return;
@@ -32,13 +32,13 @@ export default function VictimRegistration() {
       const result = await searchVictim.mutate(searchDocket.trim());
       const victim = result?.victim;
       if (!victim) {
-        setSearchError('No victim found with that docket number.');
+        toast.error('No victim found with that docket number.');
         return;
       }
       setEditVictim(victim);
       setEditCaseStage(victim.caseStage || '');
     } catch (err) {
-      setSearchError(err.message || 'Search failed.');
+      toast.error(err.message || 'Search failed.');
     }
   };
 
@@ -49,7 +49,7 @@ export default function VictimRegistration() {
       await updateVictim.mutate(editVictim.victimId, { caseStage: editCaseStage });
       setEditSuccess(true);
     } catch (err) {
-      setSearchError(err.message || 'Could not save changes.');
+      toast.error(err.message || 'Could not save changes.');
     }
   };
 
@@ -83,8 +83,6 @@ export default function VictimRegistration() {
               <Search size={16} />
             </button>
           </form>
-
-          {searchError && <p className="text-xs text-rose-600">{searchError}</p>}
 
           {editVictim && (
             <div className="space-y-3 pt-2 border-t border-gray-100">

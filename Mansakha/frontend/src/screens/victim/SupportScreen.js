@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Linking, ScrollView, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../context/ToastContext';
 import { colors } from '../../theme/colors';
@@ -10,10 +10,11 @@ import { shadow } from '../../theme/shadow';
 import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
+import AssignedCounsellorCard from '../../components/AssignedCounsellorCard';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import TopRightActions from '../../components/TopRightActions';
 import { QueryBoundary } from '../../components/QueryStates';
-import { useVictimDashboard } from '../../services/hooks';
+import { useVictimDashboard, useAssignedCounsellor, useUpdateCounsellorPreference } from '../../services/hooks';
 
 const PHONE_PATTERN = /\b\d[\d\s-]{3,}\d\b/;
 const EMAIL_PATTERN = /[\w.+-]+@[\w-]+\.[\w.-]+/;
@@ -26,10 +27,20 @@ function getLinkInfo(detail) {
   return null;
 }
 
-export default function SupportScreen() {
+export default function SupportScreen({ navigation }) {
   const query = useVictimDashboard();
+  const assignedCounsellorQuery = useAssignedCounsellor();
+  const updateCounsellorPreference = useUpdateCounsellorPreference();
   const toast = useToast();
   const { tier, isDesktop } = useResponsive();
+
+  // Same three states SettingsScreen.js already handles for this preference -
+  // see its own comment: the backend shape is
+  // { assigned, counsellor: {fullName, phone, whatsappNumber} | null }, never
+  // a top-level officialId/phone.
+  const optedForCounsellor = query.data?.optedForManualCounsellor ?? false;
+  const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
+  const counsellor = assignedCounsellorQuery.data?.counsellor;
 
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
@@ -41,6 +52,15 @@ export default function SupportScreen() {
       await Linking.openURL(url);
     } catch (err) {
       toast.error('Could not open that link on this device.');
+    }
+  };
+
+  const handleToggleCounsellorPreference = async (value) => {
+    try {
+      await updateCounsellorPreference.mutateAsync(value);
+      toast.success(value ? 'You will now be matched with a human counsellor.' : 'Counsellor preference updated.');
+    } catch (err) {
+      toast.error(err.message || 'Could not update this preference.');
     }
   };
 
@@ -137,6 +157,44 @@ export default function SupportScreen() {
             </View>
           )}
         </QueryBoundary>
+
+        {/* Feature Catalog Section 1.4 - counsellor-connect functionality that
+            previously only existed in Settings, brought here so a victim
+            looking for help doesn't have to go elsewhere to find it. */}
+        <Text style={[styles.sectionHeaderTitle, { marginTop: spacing.lg }]}>TALK TO A COUNSELLOR</Text>
+
+        {!optedForCounsellor && (
+          <Card style={[styles.card, styles.inviteCard]}>
+            <Feather name="user-plus" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
+            <Text style={styles.label}>Want to talk to someone?</Text>
+            <Text style={styles.detail}>
+              Opt in below to get matched with a real counsellor you can message, call, or reach on WhatsApp directly.
+            </Text>
+            <View style={styles.inviteToggleRow}>
+              <Text style={styles.inviteToggleLabel}>Prefer a human counsellor</Text>
+              <Switch
+                value={optedForCounsellor}
+                onValueChange={handleToggleCounsellorPreference}
+                disabled={updateCounsellorPreference.isPending}
+                trackColor={{ true: colors.primary }}
+              />
+            </View>
+          </Card>
+        )}
+
+        {optedForCounsellor && !hasAssignedCounsellor && (
+          <Card style={[styles.card, styles.inviteCard]}>
+            <Feather name="clock" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
+            <Text style={styles.label}>Finding you a counsellor</Text>
+            <Text style={styles.detail}>
+              You're opted in - we'll connect you with a counsellor as soon as one is available in your area.
+            </Text>
+          </Card>
+        )}
+
+        {optedForCounsellor && hasAssignedCounsellor && (
+          <AssignedCounsellorCard counsellor={counsellor} navigation={navigation} />
+        )}
       </View>
     </ScrollView>
   );
@@ -236,4 +294,15 @@ const styles = StyleSheet.create({
   textWrap: { flex: 1 },
   label: { ...typography.bodyStrong, color: colors.textPrimary },
   detail: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  inviteCard: { backgroundColor: colors.primaryLight, borderColor: colors.primaryLight },
+  inviteToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  inviteToggleLabel: { ...typography.bodyStrong, color: colors.textPrimary },
 });

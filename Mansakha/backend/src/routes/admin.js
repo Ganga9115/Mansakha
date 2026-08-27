@@ -1,5 +1,6 @@
 const express = require('express');
 const { supabase } = require('../db/supabaseClient');
+const { pool } = require('../db/pgPool');
 const { getDescendantJurisdictionIds, getChildJurisdictions } = require('../services/jurisdictionTree');
 const { writeAuditLog } = require('../services/auditLog');
 const { verifyToken } = require('../middleware/verifyToken');
@@ -8,30 +9,56 @@ const { requireJurisdiction } = require('../middleware/requireJurisdiction');
 const { generalApiLimiter } = require('../middleware/rateLimiter');
 const { ok, fail } = require('../services/responseEnvelope');
 const { createVictim, updateVictim, ProvisioningError } = require('../services/victimProvisioning');
+const { generateJurisdictionAnalytics } = require('../services/gemini');
 
 const router = express.Router();
 
-// Average distress score for a set of jurisdictions within [sinceIso, untilIso)
-// - untilIso omitted means "up to now". Mirrors countVictimsByRisk's existing
-// query shape (fetch victims with embedded distress_scores, aggregate in JS)
-// rather than a reverse-embed filter, matching this file's established style.
-async function computeAverageScore(jurisdictionIds, sinceIso, untilIso) {
-  const { data: victims } = await supabase
-    .from('victims')
-    .select('distress_scores(score_value, computed_at)')
-    .in('jurisdiction_id', jurisdictionIds);
+// PostgREST rejects a `.in()` filter once the id list makes the URL too long -
+// confirmed live at the National tier, where a full descendant-jurisdiction
+// list (700+ districts) blew past that limit and made the query fail with a
+// 400. Several callers here were only reading `data`, never `error`, so that
+// failure silently read as "no matching rows" instead of a broken request -
+// every place that filters by an unbounded jurisdiction subtree goes through
+// this chunked helper instead of a bare `.in()` so that can't happen again.
+const ID_CHUNK_SIZE = 150;
 
-  let sum = 0;
-  let count = 0;
-  for (const v of victims || []) {
-    for (const s of v.distress_scores || []) {
-      if (s.computed_at >= sinceIso && (!untilIso || s.computed_at < untilIso)) {
-        sum += s.score_value;
-        count += 1;
-      }
-    }
+async function selectInChunks(ids, runChunk) {
+  const rows = [];
+  for (let i = 0; i < ids.length; i += ID_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + ID_CHUNK_SIZE);
+    // eslint-disable-next-line no-await-in-loop
+    const { data, error } = await runChunk(chunk);
+    if (error) throw new Error(error.message);
+    rows.push(...(data || []));
   }
-  return count > 0 ? sum / count : null;
+  return rows;
+}
+
+// Average distress score for a set of jurisdictions within [sinceIso, untilIso)
+// - untilIso omitted means "up to now".
+//
+// Goes straight to Postgres (pgPool) rather than through supabase-js/PostgREST -
+// confirmed live that a single PostgREST round trip costs ~1-2s of pure
+// network/HTTP overhead here regardless of how little data comes back, and
+// this is called twice per state on every State/National dashboard load
+// (~70 calls total). The raw connection cuts each call to tens of
+// milliseconds, which is what actually took the National dashboard from
+// 30+ seconds down to near-instant - the chunking/parallelizing fixes above
+// this comment address a different, smaller-impact problem (PostgREST's
+// URL-length limit and this file's own sequential loop), not this one.
+async function computeAverageScore(jurisdictionIds, sinceIso, untilIso) {
+  const { rows } = await pool.query(
+    `select ds.score_value
+     from distress_scores ds
+     join victims v on v.victim_id = ds.victim_id
+     where v.jurisdiction_id = any($1::uuid[])
+       and ds.computed_at >= $2
+       and ($3::timestamptz is null or ds.computed_at < $3)`,
+    [jurisdictionIds, sinceIso, untilIso || null]
+  );
+  if (rows.length === 0) return null;
+  const sum = rows.reduce((acc, r) => acc + Number(r.score_value), 0);
+  return sum / rows.length;
 }
 
 const TREND_PERIOD_DAYS = 30;
@@ -68,23 +95,34 @@ router.get('/root-jurisdiction', verifyToken, generalApiLimiter, async (req, res
   return ok(res, { jurisdictionId: data.jurisdiction_id, name: data.name });
 });
 
+// Raw pg (see computeAverageScore's comment above for why) - LATERAL join
+// picks each victim's single latest distress_scores row (or none), matching
+// the old embed's `distress_scores?.[0]` after an order-by-computed_at-desc.
 async function countVictimsByRisk(jurisdictionIds) {
-  const { data: victims } = await supabase
-    .from('victims')
-    .select('victim_id, distress_scores(score_value, computed_at, risk_levels(name))')
-    .in('jurisdiction_id', jurisdictionIds)
-    .order('computed_at', { referencedTable: 'distress_scores', ascending: false });
+  const { rows } = await pool.query(
+    `select v.victim_id, ds.score_value, rl.name as risk_level_name
+     from victims v
+     left join lateral (
+       select score_value, risk_level_id
+       from distress_scores
+       where victim_id = v.victim_id
+       order by computed_at desc
+       limit 1
+     ) ds on true
+     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+     where v.jurisdiction_id = any($1::uuid[])`,
+    [jurisdictionIds]
+  );
 
   const counts = { total: 0, vulnerable: 0, highRisk: 0, critical: 0 };
   const caseRows = [];
-  for (const v of victims || []) {
+  for (const v of rows) {
     counts.total += 1;
-    const latest = v.distress_scores?.[0];
-    const riskLevel = latest ? latest.risk_levels.name : null;
+    const riskLevel = v.risk_level_name || null;
     if (riskLevel === 'Moderate') counts.vulnerable += 1;
     if (riskLevel === 'High') counts.highRisk += 1;
     if (riskLevel === 'Critical') counts.critical += 1;
-    caseRows.push({ victimId: v.victim_id, score: latest ? latest.score_value : null, riskLevel });
+    caseRows.push({ victimId: v.victim_id, score: v.score_value !== null ? Number(v.score_value) : null, riskLevel });
   }
   return { counts, caseRows };
 }
@@ -115,35 +153,47 @@ router.get(
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'admin_dashboard', entityId: jurisdictionId });
 
-    if (jurisdiction.level === 'district') {
-      // District's default view is case-level detail, not just aggregates -
-      // Section 4.5. `counts` stay computed over the full district (not just
-      // the current page) - only the case list itself is paginated, so a
-      // district with thousands of cases doesn't load them all at once.
-      const { counts, caseRows } = await countVictimsByRisk([jurisdictionId]);
-      const total = caseRows.length;
-      const cases = caseRows.slice(offset, offset + pageSize);
-      return ok(res, { tier: 'district', ...counts, trends: null, cases, total });
+    try {
+      if (jurisdiction.level === 'district') {
+        // District's default view is case-level detail, not just aggregates -
+        // Section 4.5. `counts` stay computed over the full district (not just
+        // the current page) - only the case list itself is paginated, so a
+        // district with thousands of cases doesn't load them all at once.
+        const { counts, caseRows } = await countVictimsByRisk([jurisdictionId]);
+        const total = caseRows.length;
+        const cases = caseRows.slice(offset, offset + pageSize);
+        return ok(res, { tier: 'district', ...counts, trends: null, cases, total });
+      }
+
+      // State/National: aggregate-with-drill-down is the default, not case-level -
+      // Section 4.5. State also sees its child districts side by side; National sees
+      // its child states side by side.
+      //
+      // The top-level count and every child's row are fully independent of
+      // each other, so they run concurrently (Promise.all) rather than one
+      // child waiting on the previous one to finish - a National-tier load
+      // has ~35 states here, and a sequential for-loop meant the page's load
+      // time scaled with the state count instead of being roughly constant.
+      const [{ counts }, children] = await Promise.all([
+        getDescendantJurisdictionIds(jurisdictionId).then(countVictimsByRisk).then((r) => ({ counts: r.counts })),
+        getChildJurisdictions(jurisdictionId),
+      ]);
+
+      const breakdown = await Promise.all(children.map(async (child) => {
+        const childDescendants = await getDescendantJurisdictionIds(child.jurisdiction_id);
+        const [{ counts: childCounts }, trendDirection] = await Promise.all([
+          countVictimsByRisk(childDescendants),
+          // Section 4.3 "Rising-trend districts" - a per-row indicator, not a
+          // separate list, so the frontend can sort/highlight in place.
+          computeTrendDirection(childDescendants),
+        ]);
+        return { jurisdictionId: child.jurisdiction_id, name: child.name, ...childCounts, trendDirection };
+      }));
+
+      return ok(res, { tier: jurisdiction.level, ...counts, trends: breakdown });
+    } catch (err) {
+      return fail(res, `Could not load dashboard: ${err.message}`, 500);
     }
-
-    // State/National: aggregate-with-drill-down is the default, not case-level -
-    // Section 4.5. State also sees its child districts side by side; National sees
-    // its child states side by side.
-    const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
-    const { counts } = await countVictimsByRisk(allDescendantIds);
-
-    const children = await getChildJurisdictions(jurisdictionId);
-    const breakdown = [];
-    for (const child of children) {
-      const childDescendants = await getDescendantJurisdictionIds(child.jurisdiction_id);
-      const { counts: childCounts } = await countVictimsByRisk(childDescendants);
-      // Section 4.3 "Rising-trend districts" - a per-row indicator, not a
-      // separate list, so the frontend can sort/highlight in place.
-      const trendDirection = await computeTrendDirection(childDescendants);
-      breakdown.push({ jurisdictionId: child.jurisdiction_id, name: child.name, ...childCounts, trendDirection });
-    }
-
-    return ok(res, { tier: jurisdiction.level, ...counts, trends: breakdown });
   }
 );
 
@@ -185,58 +235,6 @@ router.get(
   }
 );
 
-// Counsellor Workload View - District tier only (Section 4.5). No formal
-// "assignment" concept exists in the schema (same reasoning as counsellor.js's
-// jurisdiction-based case scoping), so workload here is: how many interventions
-// this counsellor has logged, and how many open/acknowledged alerts are currently
-// routed to them - a real, queryable proxy for load, not an invented number.
-router.get(
-  '/workload/:jurisdictionId',
-  verifyToken,
-  requireRole(['Administration', 'Ministry']),
-  generalApiLimiter,
-  requireJurisdiction((req) => req.params.jurisdictionId),
-  async (req, res) => {
-    const { jurisdictionId } = req.params;
-
-    const { data: jurisdiction } = await supabase.from('jurisdictions').select('level').eq('jurisdiction_id', jurisdictionId).single();
-    if (!jurisdiction || jurisdiction.level !== 'district') {
-      return fail(res, 'Workload view is only available at the district tier', 400);
-    }
-
-    // official_roles has TWO foreign keys into officials (official_id AND
-    // assigned_by) - officials(full_name) alone is an ambiguous embed for
-    // PostgREST and silently returned no rows with no error surfaced. The
-    // explicit constraint-name hint disambiguates it; the error check here is
-    // what would have caught this the first time.
-    const { data: allRoles, error: rolesError } = await supabase
-      .from('official_roles')
-      .select('official_id, roles(role_name), officials!official_roles_official_id_fkey(full_name)')
-      .eq('jurisdiction_id', jurisdictionId)
-      .is('revoked_at', null);
-    if (rolesError) return fail(res, `Could not load workload: ${rolesError.message}`, 500);
-    const counsellorRoles = (allRoles || []).filter((r) => r.roles.role_name === 'Counsellor');
-    const counsellorIds = counsellorRoles.map((r) => r.official_id);
-    if (counsellorIds.length === 0) return ok(res, { counsellors: [] });
-
-    const { data: interventions } = await supabase.from('interventions').select('assigned_official_id').in('assigned_official_id', counsellorIds);
-    const { data: notifications } = await supabase
-      .from('alert_notifications')
-      .select('official_id, alerts(alert_status_id, alert_statuses(name))')
-      .in('official_id', counsellorIds);
-
-    const workload = counsellorRoles.map((r) => {
-      const interventionCount = (interventions || []).filter((i) => i.assigned_official_id === r.official_id).length;
-      const openAlertCount = (notifications || []).filter(
-        (n) => n.official_id === r.official_id && n.alerts.alert_statuses.name !== 'Resolved'
-      ).length;
-      return { officialId: r.official_id, name: r.officials.full_name, interventionCount, openAlertCount };
-    });
-
-    return ok(res, { counsellors: workload });
-  }
-);
-
 function toCsvCell(value) {
   const str = value === null || value === undefined ? '' : String(value);
   return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
@@ -274,20 +272,26 @@ router.get(
 
     let csv;
     let filename;
+    try {
     if (jurisdiction.level === 'district') {
       const { caseRows } = await countVictimsByRisk([jurisdictionId]);
       csv = toCsv(['victimId', 'score', 'riskLevel'], caseRows);
       filename = `${jurisdiction.name}-cases.csv`;
     } else {
       const children = await getChildJurisdictions(jurisdictionId);
-      const breakdown = [];
-      for (const child of children) {
+      // Same concurrency fix as GET /dashboard/:jurisdictionId - each child's
+      // row is independent, so they run in parallel instead of one state
+      // waiting on the previous one.
+      const breakdown = await Promise.all(children.map(async (child) => {
         const childDescendants = await getDescendantJurisdictionIds(child.jurisdiction_id);
         const { counts } = await countVictimsByRisk(childDescendants);
-        breakdown.push({ jurisdictionId: child.jurisdiction_id, name: child.name, ...counts });
-      }
+        return { jurisdictionId: child.jurisdiction_id, name: child.name, ...counts };
+      }));
       csv = toCsv(['jurisdictionId', 'name', 'total', 'vulnerable', 'highRisk', 'critical'], breakdown);
       filename = `${jurisdiction.name}-breakdown.csv`;
+    }
+    } catch (err) {
+      return fail(res, `Could not export dashboard: ${err.message}`, 500);
     }
 
     res.setHeader('Content-Type', 'text/csv');
@@ -311,10 +315,14 @@ router.get(
     const months = Math.min(Math.max(Number(req.query.months) || 6, 1), 24);
 
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
-    const { data: victims } = await supabase
-      .from('victims')
-      .select('distress_scores(score_value, computed_at)')
-      .in('jurisdiction_id', allDescendantIds);
+    let victims;
+    try {
+      victims = await selectInChunks(allDescendantIds, (chunk) =>
+        supabase.from('victims').select('distress_scores(score_value, computed_at)').in('jurisdiction_id', chunk)
+      );
+    } catch (err) {
+      return fail(res, `Could not load trend data: ${err.message}`, 500);
+    }
 
     const scoresByMonth = new Map(); // 'YYYY-MM' -> { sum, count }
     for (const v of victims || []) {
@@ -336,7 +344,95 @@ router.get(
       points.push({ month: monthKey, averageScore: bucket ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null });
     }
 
-    return ok(res, { points });
+    // Ministry Analytics & Workflow spec Task 2B "Policy Impact Tracker" -
+    // overlays this SAME jurisdiction's own launched policies (not its
+    // descendant subtree - a policy is understood as authored by/scoped to
+    // exactly the jurisdiction it was created under, unlike the score
+    // aggregation above) onto the identical [windowStart, now] window the
+    // trend line already covers, so the frontend can plot a marker at each
+    // policy's launched_at against the score line without a second
+    // months-to-dates computation.
+    const windowStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).toISOString();
+    const { data: policyRows } = await supabase
+      .from('policies')
+      .select('policy_id, title, launched_at')
+      .eq('jurisdiction_id', jurisdictionId)
+      .gte('launched_at', windowStart)
+      .lte('launched_at', now.toISOString())
+      .order('launched_at', { ascending: false });
+    const policies = (policyRows || []).map((p) => ({ policyId: p.policy_id, title: p.title, launchedAt: p.launched_at }));
+
+    return ok(res, { points, policies });
+  }
+);
+
+// Ministry Analytics & Workflow spec Task 2B "Policy Impact Tracker" -
+// create/list a strategic intervention a National/State/District admin
+// launches, so its effect on the distress trend line above can be visually
+// compared. jurisdiction-scoped on the BODY's jurisdictionId (a new
+// resource, same reasoning as POST /victims above).
+router.post(
+  '/policies',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.body.jurisdictionId),
+  async (req, res) => {
+    const { title, description, launchedAt, jurisdictionId } = req.body;
+    if (!title || !launchedAt || !jurisdictionId) return fail(res, 'title, launchedAt, and jurisdictionId are required', 400);
+
+    const { data, error } = await supabase
+      .from('policies')
+      .insert({
+        jurisdiction_id: jurisdictionId,
+        title,
+        description: description || null,
+        launched_at: new Date(launchedAt).toISOString(),
+        created_by: req.auth.officialId,
+      })
+      .select('policy_id, title, description, launched_at')
+      .single();
+    if (error) return fail(res, `Could not create policy: ${error.message}`, 500);
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'policy', entityId: data.policy_id });
+
+    return ok(
+      res,
+      { policyId: data.policy_id, title: data.title, description: data.description, launchedAt: data.launched_at },
+      'Policy created',
+      201
+    );
+  }
+);
+
+// List a jurisdiction's own launched policies - exact jurisdiction_id match,
+// same reasoning as the trend endpoint's policies overlay above (not the
+// descendant subtree /dashboard and /dashboard/trend use for score
+// aggregation).
+router.get(
+  '/policies/:jurisdictionId',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.params.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId } = req.params;
+    const { data, error } = await supabase
+      .from('policies')
+      .select('policy_id, title, description, launched_at, created_by')
+      .eq('jurisdiction_id', jurisdictionId)
+      .order('launched_at', { ascending: false });
+    if (error) return fail(res, `Could not load policies: ${error.message}`, 500);
+
+    return ok(res, {
+      policies: (data || []).map((p) => ({
+        policyId: p.policy_id,
+        title: p.title,
+        description: p.description,
+        launchedAt: p.launched_at,
+        createdBy: p.created_by,
+      })),
+    });
   }
 );
 
@@ -445,12 +541,32 @@ router.patch(
   }
 );
 
-// Feature Catalog Section 3.6/4.4 - snapshots the caller's own dashboard
-// numbers (the exact same computation /dashboard/:jurisdictionId already
-// does, so there's no separate aggregation query to keep in sync) into a
-// durable `reports` row Ministry can list (routes/ministry.js's inbox).
+// ===== Ministry Analytics & Workflow: Task 2A - AI analytics generator =====
+
+// Most-recent-N-rows-per-source cap on the raw dump handed to Gemini - an
+// active jurisdiction's chat/journal/case-note volume over a period could
+// otherwise be unbounded, risking a call that's too large or too slow.
+// Documented judgment call: 200 rows per source (600 rows total max), most
+// recent first within the requested period.
+const ANALYTICS_PER_SOURCE_CAP = 200;
+
+// Feature Catalog / Ministry Analytics & Workflow spec Task 2A - caches a
+// Gemini-generated qualitative read (themes, sentiment, predicted counsellor
+// demand, possible syndicate flags) into jurisdiction_analytics_insights so
+// the dashboard never has to call Gemini on page load against the shared,
+// small free-tier quota - this route is the only thing that ever calls
+// Gemini for this feature, and only when an admin explicitly clicks
+// "Generate".
+//
+// Scope judgment call: victims are matched via the DESCENDANT SUBTREE of
+// jurisdictionId (getDescendantJurisdictionIds), not an exact jurisdiction_id
+// match - a State/National admin generating analytics against their own
+// state/national-level jurisdiction_id would otherwise always see zero
+// victims (no victim's jurisdiction_id is ever a state/national id
+// directly). Same reasoning /dashboard and /dashboard/trend above already
+// use for aggregating victims across a subtree.
 router.post(
-  '/reports/generate',
+  '/analytics/generate',
   verifyToken,
   requireRole(['Administration', 'Ministry']),
   generalApiLimiter,
@@ -462,28 +578,395 @@ router.post(
     const { data: jurisdiction, error: jError } = await supabase.from('jurisdictions').select('level, name').eq('jurisdiction_id', jurisdictionId).single();
     if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
+    const end = periodEnd ? new Date(periodEnd) : new Date();
+    const start = periodStart ? new Date(periodStart) : new Date(end.getTime() - TREND_PERIOD_DAYS * 86400000);
+    const startIso = start.toISOString();
+    const endIso = end.toISOString();
+
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
-    const { counts } = await countVictimsByRisk(allDescendantIds);
+    let victims;
+    try {
+      victims = await selectInChunks(allDescendantIds, (chunk) =>
+        supabase.from('victims').select('victim_id').in('jurisdiction_id', chunk)
+      );
+    } catch (err) {
+      return fail(res, `Could not load victims: ${err.message}`, 500);
+    }
+    const victimIds = victims.map((v) => v.victim_id);
+
+    let chatMessages = [];
+    let journalEntries = [];
+    let caseNotes = [];
+    if (victimIds.length > 0) {
+      const [chatRes, journalRes, notesRes] = await Promise.all([
+        // sender: 'victim' only - the AI's own canned supportive replies
+        // (sender: 'ai') aren't a distress signal worth feeding back into
+        // another AI analysis.
+        supabase
+          .from('chat_messages')
+          .select('body, sent_at')
+          .in('victim_id', victimIds)
+          .eq('sender', 'victim')
+          .gte('sent_at', startIso)
+          .lte('sent_at', endIso)
+          .order('sent_at', { ascending: false })
+          .limit(ANALYTICS_PER_SOURCE_CAP),
+        supabase
+          .from('journal_entries')
+          .select('content, created_at')
+          .in('victim_id', victimIds)
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+          .order('created_at', { ascending: false })
+          .limit(ANALYTICS_PER_SOURCE_CAP),
+        supabase
+          .from('case_notes')
+          .select('note_text, created_at')
+          .in('victim_id', victimIds)
+          .gte('created_at', startIso)
+          .lte('created_at', endIso)
+          .order('created_at', { ascending: false })
+          .limit(ANALYTICS_PER_SOURCE_CAP),
+      ]);
+      chatMessages = chatRes.data || [];
+      journalEntries = journalRes.data || [];
+      caseNotes = notesRes.data || [];
+    }
+
+    const totalItems = chatMessages.length + journalEntries.length + caseNotes.length;
+    if (totalItems === 0) {
+      // No inserted row for a zero-data period, per the spec - nothing
+      // meaningful to cache, and no Gemini call spent on empty input.
+      return ok(res, { insight: null }, 'Not enough interaction data for this period');
+    }
+
+    const rawDump = [
+      ...chatMessages.map((m) => `[chat] ${m.body}`),
+      ...journalEntries.map((j) => `[journal] ${j.content}`),
+      ...caseNotes.map((n) => `[case_note] ${n.note_text}`),
+    ].join('\n');
+
+    let analysis;
+    try {
+      analysis = await generateJurisdictionAnalytics(rawDump);
+    } catch (err) {
+      // Malformed/failed Gemini response never gets inserted as a row - a
+      // clear 502 instead, per the spec.
+      return fail(res, `Analytics generation failed: ${err.message}`, 502);
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from('jurisdiction_analytics_insights')
+      .insert({
+        jurisdiction_id: jurisdictionId,
+        period_start: startIso,
+        period_end: endIso,
+        top_themes: analysis.topThemes,
+        overall_sentiment: analysis.overallSentiment,
+        emerging_risks: analysis.emergingRisks,
+        predicted_counsellor_demand: analysis.predictedCounsellorDemand,
+        demand_reasoning: analysis.demandReasoning,
+      })
+      .select('insight_id, jurisdiction_id, generated_at, period_start, period_end, top_themes, overall_sentiment, emerging_risks, predicted_counsellor_demand, demand_reasoning')
+      .single();
+    if (insertError) return fail(res, `Could not save analytics insight: ${insertError.message}`, 500);
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'jurisdiction_analytics_insight', entityId: inserted.insight_id });
+
+    return ok(
+      res,
+      {
+        insight: {
+          insightId: inserted.insight_id,
+          jurisdictionId: inserted.jurisdiction_id,
+          generatedAt: inserted.generated_at,
+          periodStart: inserted.period_start,
+          periodEnd: inserted.period_end,
+          topThemes: inserted.top_themes,
+          overallSentiment: inserted.overall_sentiment,
+          emergingRisks: inserted.emerging_risks,
+          predictedCounsellorDemand: inserted.predicted_counsellor_demand,
+          demandReasoning: inserted.demand_reasoning,
+        },
+      },
+      'Analytics generated',
+      201
+    );
+  }
+);
+
+// ===== Ministry Analytics & Workflow: Task 2C - Emergency Broadcast =====
+
+// Feature Catalog / Ministry Analytics & Workflow spec Task 2C - mass SMS +
+// push to every active victim in a jurisdiction. Uses the same
+// descendant-subtree scoping as Task 2A above (not an exact jurisdiction_id
+// match) so a State/National admin's broadcast actually reaches victims
+// (who are always enrolled at district level), not zero rows.
+router.post(
+  '/broadcast',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.body.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId, message, priority } = req.body;
+    if (!jurisdictionId || !message) return fail(res, 'jurisdictionId and message are required', 400);
+    const normalizedPriority = priority === 'urgent' ? 'urgent' : 'normal';
+
+    const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
+    let activeVictims;
+    try {
+      activeVictims = await selectInChunks(allDescendantIds, (chunk) =>
+        supabase.from('victims').select('victim_id').in('jurisdiction_id', chunk).eq('status', 'active')
+      );
+    } catch (err) {
+      return fail(res, `Could not load victims: ${err.message}`, 500);
+    }
+
+    if (activeVictims.length === 0) {
+      return ok(res, { queuedCount: 0 }, 'No active victims in this jurisdiction to broadcast to');
+    }
+
+    // Judgment call: every active victim gets BOTH an SMS and a push row
+    // (not gated by victims.sms_checkin_enabled, unlike the automated
+    // sms_checkin_prompt kind) - an emergency broadcast's whole point is
+    // maximum reach, not respecting a routine-reminder opt-in. Two separate
+    // dispatch_queue rows per victim (not one row carrying two kinds)
+    // matches this table's existing one-row-per-delivery-attempt shape, so
+    // a victim whose push fails but SMS succeeds (or vice versa) gets
+    // independent, accurate retry/attempt tracking per channel.
+    const rows = [];
+    for (const v of activeVictims) {
+      rows.push({ kind: 'admin_broadcast_sms', victim_id: v.victim_id, message, priority: normalizedPriority });
+      rows.push({ kind: 'admin_broadcast_push', victim_id: v.victim_id, message, priority: normalizedPriority });
+    }
+
+    const { error: insertError } = await supabase.from('dispatch_queue').insert(rows);
+    if (insertError) return fail(res, `Could not queue broadcast: ${insertError.message}`, 500);
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'admin_broadcast', entityId: jurisdictionId });
+
+    // Count of VICTIMS queued (not dispatch_queue rows, which is 2x this),
+    // per the spec.
+    return ok(res, { queuedCount: activeVictims.length }, `Broadcast queued for ${activeVictims.length} victim(s)`, 201);
+  }
+);
+
+// ===== Ministry Analytics & Workflow: Task 2D - Counsellor Efficacy =====
+
+// Feature Catalog / Ministry Analytics & Workflow spec Task 2D. Distinct,
+// newly-built feature from the now-removed standalone "Workload" Admin Panel
+// page (that page was deleted as a separate product decision, unrelated to
+// this route) - reuses the same official_roles+role_name='Counsellor' join
+// pattern services/stressResponse.js's selectLeastLoadedCounsellor already
+// uses for counsellor lookup within a jurisdiction, exact jurisdiction_id
+// match (not a descendant subtree) to match that same existing convention -
+// a counsellor is assigned to work exactly one jurisdiction, not a whole
+// state/national subtree.
+router.get(
+  '/counsellors/performance/:jurisdictionId',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.params.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId } = req.params;
+
+    // A counsellor is always assigned to a single district-level jurisdiction
+    // (Ministry's Create Account form never offers a state/national
+    // jurisdiction for a Counsellor role) - so an exact-match lookup here
+    // would always come back empty for a State or National selection, even
+    // though every one of that jurisdiction's districts may have counsellors.
+    // Walking the descendant tree (a no-op for an already-district id, since
+    // getDescendantJurisdictionIds always includes the root itself) lets the
+    // same picker meaningfully aggregate at every tier instead of only
+    // working for 'district'.
+    const jurisdictionIds = await getDescendantJurisdictionIds(jurisdictionId);
+
+    // official_roles has TWO FKs into officials (official_id AND
+    // assigned_by), so a plain `officials(full_name)` embed here is
+    // ambiguous to PostgREST ("more than one relationship was found") -
+    // confirmed live, not hypothetical. Sidestepped with a second plain
+    // query instead of an embed-hint (routes/lookups.js documents the same
+    // "avoid embed hints, do two queries" convention for a different
+    // ambiguous-relationship case).
+    let roleRows;
+    try {
+      roleRows = await selectInChunks(jurisdictionIds, (chunk) =>
+        supabase.from('official_roles').select('official_id, roles(role_name)').in('jurisdiction_id', chunk).is('revoked_at', null)
+      );
+    } catch (err) {
+      return fail(res, `Could not load counsellors: ${err.message}`, 500);
+    }
+
+    const counsellorIds = roleRows.filter((r) => r.roles.role_name === 'Counsellor').map((r) => r.official_id);
+    if (counsellorIds.length === 0) return ok(res, { counsellors: [] });
+
+    const { data: officialRows } = await supabase.from('officials').select('official_id, full_name').in('official_id', counsellorIds);
+    const fullNameById = new Map((officialRows || []).map((o) => [o.official_id, o.full_name]));
+
+    const results = [];
+    for (const officialId of counsellorIds) {
+      // eslint-disable-next-line no-await-in-loop
+      const { data: victims } = await supabase
+        .from('victims')
+        .select('status, distress_scores(score_value, computed_at)')
+        .eq('assigned_counsellor_id', officialId);
+
+      const activeCaseCount = (victims || []).filter((v) => v.status === 'active').length;
+
+      // EFFICACY PROXY (documented judgment call, per the spec's own
+      // acknowledged ambiguity): there is no assignment-history table
+      // recording WHEN a victim was assigned to THIS counsellor
+      // (victims.assigned_counsellor_id is a single current-value column,
+      // overwritten on reassignment, no history kept) - so a true
+      // "before assignment vs. after assignment" comparison isn't possible
+      // without building that out, which is out of scope here. Proxy used
+      // instead: for every victim CURRENTLY assigned to this counsellor
+      // (active or not), compare their EARLIEST-ever distress_scores row
+      // (computed_at asc) against their MOST RECENT one (computed_at
+      // desc) - a positive point-drop (earliest minus latest) reads as
+      // improvement. Victims with fewer than 2 score readings are excluded
+      // from the average entirely (nothing to compare), and the count of
+      // victims that WERE considered is returned alongside the average so
+      // the UI can show "based on N cases" rather than presenting a
+      // 1-case average as a solid signal.
+      let dropSum = 0;
+      let consideredCount = 0;
+      for (const v of victims || []) {
+        const scores = (v.distress_scores || []).slice().sort((a, b) => new Date(a.computed_at) - new Date(b.computed_at));
+        if (scores.length < 2) continue;
+        dropSum += scores[0].score_value - scores[scores.length - 1].score_value;
+        consideredCount += 1;
+      }
+
+      results.push({
+        officialId,
+        fullName: fullNameById.get(officialId) || null,
+        activeCaseCount,
+        avgDistressPointDrop: consideredCount > 0 ? Math.round((dropSum / consideredCount) * 10) / 10 : null,
+        victimsConsideredForEfficacy: consideredCount,
+      });
+    }
+
+    return ok(res, { counsellors: results });
+  }
+);
+
+// Feature Catalog Section 3.6/4.4 - snapshots the caller's own dashboard
+// numbers (the exact same computation /dashboard/:jurisdictionId already
+// does, so there's no separate aggregation query to keep in sync) into a
+// durable `reports` row Ministry can list (routes/ministry.js's inbox).
+//
+// Ministry Analytics & Workflow spec Task 2E extends this with upward
+// routing: commentary (the sending admin's own write-up), targetJurisdictionId
+// (the parent tier this is being sent TO - setting it also marks the report
+// 'Submitted' immediately instead of leaving it at the column's 'Draft'
+// default), and insightId (optionally linking a Task 2A analytics snapshot).
+router.post(
+  '/reports/generate',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.body.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId, periodStart, periodEnd, commentary, targetJurisdictionId, insightId } = req.body;
+    if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
+
+    const { data: jurisdiction, error: jError } = await supabase.from('jurisdictions').select('level, name').eq('jurisdiction_id', jurisdictionId).single();
+    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+
+    if (targetJurisdictionId) {
+      const { data: targetJ } = await supabase.from('jurisdictions').select('jurisdiction_id').eq('jurisdiction_id', targetJurisdictionId).maybeSingle();
+      if (!targetJ) return fail(res, 'targetJurisdictionId not found', 404);
+    }
+    if (insightId) {
+      const { data: insightRow } = await supabase.from('jurisdiction_analytics_insights').select('insight_id').eq('insight_id', insightId).maybeSingle();
+      if (!insightRow) return fail(res, 'insightId not found', 404);
+    }
+
+    const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
+    let counts;
+    try {
+      ({ counts } = await countVictimsByRisk(allDescendantIds));
+    } catch (err) {
+      return fail(res, `Could not compute jurisdiction counts: ${err.message}`, 500);
+    }
 
     const end = periodEnd ? new Date(periodEnd) : new Date();
     const start = periodStart ? new Date(periodStart) : new Date(end.getTime() - TREND_PERIOD_DAYS * 86400000);
 
+    const insertPayload = {
+      jurisdiction_id: jurisdictionId,
+      generated_by: req.auth.officialId,
+      period_start: start.toISOString(),
+      period_end: end.toISOString(),
+      snapshot: { jurisdictionName: jurisdiction.name, tier: jurisdiction.level, ...counts },
+      commentary: commentary || null,
+      target_jurisdiction_id: targetJurisdictionId || null,
+      insight_id: insightId || null,
+    };
+    // Sending straight up to a parent tier (targetJurisdictionId given)
+    // marks this Submitted immediately, per the spec - this key is omitted
+    // entirely (not set to a literal 'Draft') when no target is given, so
+    // the column's own default applies.
+    if (targetJurisdictionId) insertPayload.status = 'Submitted';
+
     const { data, error } = await supabase
       .from('reports')
-      .insert({
-        jurisdiction_id: jurisdictionId,
-        generated_by: req.auth.officialId,
-        period_start: start.toISOString(),
-        period_end: end.toISOString(),
-        snapshot: { jurisdictionName: jurisdiction.name, tier: jurisdiction.level, ...counts },
-      })
-      .select('report_id, generated_at')
+      .insert(insertPayload)
+      .select('report_id, generated_at, status')
       .single();
     if (error) return fail(res, `Could not generate report: ${error.message}`, 500);
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'report', entityId: data.report_id });
 
-    return ok(res, { reportId: data.report_id, generatedAt: data.generated_at }, 'Report generated - visible to Ministry', 201);
+    return ok(res, { reportId: data.report_id, generatedAt: data.generated_at, status: data.status }, 'Report generated - visible to Ministry', 201);
+  }
+);
+
+const REPORT_STATUSES = ['Draft', 'Submitted', 'Reviewed'];
+
+// Ministry Analytics & Workflow spec Task 2E - the RECIPIENT tier (whoever
+// the report's target_jurisdiction_id points at) marks a report reviewed
+// after reading it. requireJurisdiction is scoped to target_jurisdiction_id,
+// not the report's own origin jurisdiction_id - the sender shouldn't be able
+// to mark their own upward report "Reviewed". The existence/target-set check
+// runs BEFORE requireJurisdiction (as a plain middleware, not inside the
+// resolver) specifically so a missing report or one with no target yields
+// the spec's requested 404, rather than requireJurisdiction's generic 400
+// "Could not resolve target jurisdiction".
+router.patch(
+  '/reports/:reportId/status',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  async (req, res, next) => {
+    const { data: report } = await supabase
+      .from('reports')
+      .select('report_id, target_jurisdiction_id')
+      .eq('report_id', req.params.reportId)
+      .maybeSingle();
+    if (!report || !report.target_jurisdiction_id) return fail(res, 'Report not found or has no target jurisdiction set', 404);
+    req._targetReport = report;
+    next();
+  },
+  requireJurisdiction((req) => req._targetReport.target_jurisdiction_id),
+  async (req, res) => {
+    const { status } = req.body;
+    if (!REPORT_STATUSES.includes(status)) return fail(res, `status must be one of: ${REPORT_STATUSES.join(', ')}`, 400);
+
+    const { data, error } = await supabase
+      .from('reports')
+      .update({ status })
+      .eq('report_id', req._targetReport.report_id)
+      .select('report_id, status')
+      .single();
+    if (error) return fail(res, `Could not update report status: ${error.message}`, 500);
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'report', entityId: req._targetReport.report_id });
+
+    return ok(res, { reportId: data.report_id, status: data.status }, 'Report status updated');
   }
 );
 

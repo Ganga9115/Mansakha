@@ -1,5 +1,7 @@
 import React from 'react';
 import MinistryLayout from '../../layouts/MinistryLayout';
+import BarChart from '../../components/BarChart';
+import DonutChart from '../../components/DonutChart';
 import { useHeatmap } from '../../services/hooks';
 
 // Color intensity by average distress score (the primary metric); victim
@@ -16,10 +18,10 @@ function intensityClass(avgScore) {
 
 export default function Heatmap() {
   const { data, loading, error } = useHeatmap();
-  const regions = data?.regions || [];
+  const regions = data?.heatmap || [];
 
   return (
-    <MinistryLayout title="Heatmap by State / Region">
+    <MinistryLayout title="Graphs by State / Region">
       {loading ? (
         <p className="text-sm text-gray-400">Loading...</p>
       ) : error ? (
@@ -27,15 +29,62 @@ export default function Heatmap() {
       ) : regions.length === 0 ? (
         <p className="text-sm text-gray-400">No regional data yet.</p>
       ) : (
-        <div className="grid grid-cols-4 gap-4">
-          {regions.map((r) => (
-            <div key={r.jurisdictionId} className={`p-4 rounded-xl border ${intensityClass(r.avgScore)}`}>
-              <p className="font-bold text-sm">{r.name}</p>
-              <p className="text-2xl font-bold mt-2">{r.avgScore != null ? r.avgScore.toFixed(0) : '-'}</p>
-              <p className="text-[11px] opacity-80 mt-1">avg. distress score</p>
-              <p className="text-[11px] opacity-80">{r.victimCount} victims</p>
-            </div>
-          ))}
+        <div className="space-y-6">
+          {/* Section 6.3's own card grid, unchanged - a quick-scan snapshot
+              of every state at once, complementary to the ranked comparisons
+              below rather than replaced by them. */}
+          <div className="grid grid-cols-4 gap-4">
+            {regions.map((r) => (
+              <div key={r.jurisdictionId} className={`p-4 rounded-xl border ${intensityClass(r.averageScore)}`}>
+                <p className="font-bold text-sm">{r.name}</p>
+                <p className="text-2xl font-bold mt-2">{r.averageScore != null ? r.averageScore.toFixed(0) : '-'}</p>
+                <p className="text-[11px] opacity-80 mt-1">avg. distress score</p>
+                <p className="text-[11px] opacity-80">{r.victimCount} victims</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Ranked comparisons - answers "which states need attention"
+              directly, rather than making Ministry scan 35 cards to find
+              the highest/lowest ones. */}
+          <div className="grid grid-cols-2 gap-6">
+            <BarChart
+              title="Average Distress Score by State"
+              subtitle="Highest first - where cases are, on average, most severe."
+              items={regions.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.averageScore }))}
+              valueLabel="pts"
+              barColor="bg-rose-500"
+              formatValue={(v) => v.toFixed(0)}
+            />
+            <BarChart
+              title="Victim Count by State"
+              subtitle="Highest first - where caseload is concentrated."
+              items={regions.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.victimCount }))}
+              valueLabel="cases"
+              barColor="bg-[#519BCE]"
+            />
+            <BarChart
+              title="Critical Cases by State"
+              subtitle="Highest first - where the most urgent cases are concentrated."
+              items={regions.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.critical }))}
+              valueLabel="cases"
+              barColor="bg-purple-600"
+            />
+            <DonutChart
+              title="Nationwide Risk Composition"
+              subtitle="Share of all victims at each risk tier, right now."
+              segments={[
+                { label: 'Critical', value: regions.reduce((sum, r) => sum + (r.critical || 0), 0), color: '#9333EA' },
+                { label: 'High Risk', value: regions.reduce((sum, r) => sum + (r.highRisk || 0), 0), color: '#F43F5E' },
+                { label: 'Vulnerable', value: regions.reduce((sum, r) => sum + (r.vulnerable || 0), 0), color: '#F59E0B' },
+                {
+                  label: 'Low / unscored',
+                  value: regions.reduce((sum, r) => sum + Math.max(0, (r.victimCount || 0) - (r.critical || 0) - (r.highRisk || 0) - (r.vulnerable || 0)), 0),
+                  color: '#10B981',
+                },
+              ]}
+            />
+          </div>
         </div>
       )}
     </MinistryLayout>

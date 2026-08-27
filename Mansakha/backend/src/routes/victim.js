@@ -8,6 +8,7 @@ const { ok, fail } = require('../services/responseEnvelope');
 const { recordInteraction, recordAiDistressScore, PipelineError } = require('../services/interactionPipeline');
 const { applyStressResponse, selectLeastLoadedCounsellor } = require('../services/stressResponse');
 const { enqueueAlertDispatch } = require('../services/dispatchWorker');
+const { generateNextQuestion, predictDistressScore } = require('../services/ollama');
 
 const router = express.Router();
 
@@ -440,8 +441,23 @@ router.get('/wellness-suggestions', async (req, res) => {
     .order('created_at');
   if (error) return fail(res, 'Could not load wellness suggestions', 500);
 
+  // wellness_content.body is jsonb ({text, url?} for exercise/music,
+  // {steps:[...]} for meditation - see schema.sql's own comment on the
+  // column) - flattened here into plain top-level fields so the frontend
+  // never receives an object where it renders a <Text> child (React Native
+  // throws "Objects are not valid as a React child" on that).
   return ok(res, {
-    suggestions: (data || []).map((c) => ({ contentId: c.content_id, title: c.title, body: c.body, durationSeconds: c.duration_seconds })),
+    suggestions: (data || []).map((c) => {
+      const body = c.body || {};
+      return {
+        contentId: c.content_id,
+        title: c.title,
+        body: typeof body.text === 'string' ? body.text : null,
+        url: typeof body.url === 'string' ? body.url : null,
+        steps: Array.isArray(body.steps) ? body.steps : null,
+        durationSeconds: c.duration_seconds,
+      };
+    }),
   });
 });
 
@@ -449,6 +465,9 @@ router.get('/wellness-suggestions', async (req, res) => {
 // content is run through Gemini's existing sentiment extraction (reused,
 // not duplicated) but deliberately does NOT feed distress_scores/the trend
 // line, and never triggers alerts - this is the victim's own private space.
+// migration_008 added title/updated_at - list now orders by last-edited
+// (updated_at desc) instead of created_at, so an edited entry rises back to
+// the top, matching idx_journal_entries_victim's new column order.
 router.get('/journal', async (req, res) => {
   const { page = 1 } = req.query;
   const pageSize = 20;
@@ -456,20 +475,28 @@ router.get('/journal', async (req, res) => {
 
   const { data, count, error } = await supabase
     .from('journal_entries')
-    .select('entry_id, content, sentiment_score, created_at', { count: 'exact' })
+    .select('entry_id, title, content, sentiment_score, created_at, updated_at', { count: 'exact' })
     .eq('victim_id', req.auth.victimId)
-    .order('created_at', { ascending: false })
+    .order('updated_at', { ascending: false })
     .range(offset, offset + pageSize - 1);
   if (error) return fail(res, 'Could not load journal entries', 500);
 
   return ok(res, {
-    entries: (data || []).map((e) => ({ entryId: e.entry_id, content: e.content, sentimentScore: e.sentiment_score, createdAt: e.created_at })),
+    entries: (data || []).map((e) => ({
+      entryId: e.entry_id,
+      title: e.title,
+      content: e.content,
+      sentimentScore: e.sentiment_score,
+      createdAt: e.created_at,
+      updatedAt: e.updated_at,
+    })),
     total: count || 0,
   });
 });
 
 router.post('/journal', async (req, res) => {
-  const { content } = req.body;
+  const { title, content } = req.body;
+  if (!title || !title.trim()) return fail(res, 'title is required', 400);
   if (!content || !content.trim()) return fail(res, 'content is required', 400);
 
   let sentimentScore = null;
@@ -484,12 +511,69 @@ router.post('/journal', async (req, res) => {
 
   const { data, error } = await supabase
     .from('journal_entries')
-    .insert({ victim_id: req.auth.victimId, content: content.trim(), sentiment_score: sentimentScore })
-    .select('entry_id, created_at')
+    .insert({ victim_id: req.auth.victimId, title: title.trim(), content: content.trim(), sentiment_score: sentimentScore })
+    .select('entry_id, created_at, updated_at')
     .single();
   if (error) return fail(res, `Could not save journal entry: ${error.message}`, 500);
 
-  return ok(res, { entryId: data.entry_id, createdAt: data.created_at }, 'Journal entry saved', 201);
+  return ok(res, { entryId: data.entry_id, createdAt: data.created_at, updatedAt: data.updated_at }, 'Journal entry saved', 201);
+});
+
+// Ownership guard: the .eq('victim_id', ...) on both the update and its
+// preceding existence check means a victim's token can never touch another
+// victim's entry_id, guessed or not - same property every other route in
+// this file relies on req.auth.victimId (never a client-supplied victim ID)
+// for.
+router.patch('/journal/:entryId', async (req, res) => {
+  const { entryId } = req.params;
+  const { title, content } = req.body;
+  if (title !== undefined && !title.trim()) return fail(res, 'title cannot be blank', 400);
+  if (content !== undefined && !content.trim()) return fail(res, 'content cannot be blank', 400);
+  if (title === undefined && content === undefined) return fail(res, 'title or content is required', 400);
+
+  const update = { updated_at: new Date().toISOString() };
+  if (title !== undefined) update.title = title.trim();
+  if (content !== undefined) update.content = content.trim();
+  // sentiment_score is deliberately left untouched on edit, not recomputed -
+  // analyzeInteraction() makes a real Gemini call (the same shared free-tier
+  // quota /chat's victimChatLimiter exists to protect), and re-spending that
+  // on every keystroke-driven save of an edited entry isn't worth it for a
+  // reflection-only signal that never feeds distress_scores anyway.
+
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .update(update)
+    .eq('entry_id', entryId)
+    .eq('victim_id', req.auth.victimId)
+    .select('entry_id, title, content, sentiment_score, created_at, updated_at')
+    .maybeSingle();
+  if (error) return fail(res, `Could not update journal entry: ${error.message}`, 500);
+  if (!data) return fail(res, 'Journal entry not found', 404);
+
+  return ok(res, {
+    entryId: data.entry_id,
+    title: data.title,
+    content: data.content,
+    sentimentScore: data.sentiment_score,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  }, 'Journal entry updated');
+});
+
+router.delete('/journal/:entryId', async (req, res) => {
+  const { entryId } = req.params;
+
+  const { data, error } = await supabase
+    .from('journal_entries')
+    .delete()
+    .eq('entry_id', entryId)
+    .eq('victim_id', req.auth.victimId)
+    .select('entry_id')
+    .maybeSingle();
+  if (error) return fail(res, `Could not delete journal entry: ${error.message}`, 500);
+  if (!data) return fail(res, 'Journal entry not found', 404);
+
+  return ok(res, null, 'Journal entry deleted');
 });
 
 // Screen Inventory (Section 8) shows Consent as its own step after login, before
@@ -541,6 +625,98 @@ router.get('/distress-history', async (req, res) => {
   await writeAuditLog({ victimId, action: 'read', entityType: 'distress_history', entityId: victimId });
 
   return ok(res, { scores: (scores || []).map((s) => ({ score: s.score_value, riskLevel: s.risk_levels.name, computedAt: s.computed_at })) });
+});
+
+router.post('/questionnaire/next', async (req, res) => {
+  const { currentQuestionIndex, previousResponses } = req.body;
+  if (!Array.isArray(previousResponses)) {
+    return fail(res, 'previousResponses must be an array', 400);
+  }
+
+  try {
+    const nextQuestion = await generateNextQuestion(previousResponses);
+    return ok(res, { question: nextQuestion });
+  } catch (err) {
+    console.error('Ollama generation error:', err);
+    return fail(res, 'Failed to generate next question', 500);
+  }
+});
+
+router.post('/questionnaire/submit', async (req, res) => {
+  const victimId = req.auth.victimId;
+  const { allResponses } = req.body;
+
+  if (!Array.isArray(allResponses) || allResponses.length === 0) {
+    return fail(res, 'allResponses must be a non-empty array', 400);
+  }
+
+  try {
+    const { score, summary } = await predictDistressScore(allResponses);
+    
+    // Save the questionnaire
+    const { data: qData, error: qError } = await supabase
+      .from('victim_questionnaires')
+      .insert({
+        victim_id: victimId,
+        responses: allResponses,
+        predicted_distress_score: score
+      })
+      .select('id')
+      .single();
+
+    if (qError) throw qError;
+
+    // Convert distress score 0-100 to risk level
+    let riskLevel = 'Low';
+    if (score >= 80) riskLevel = 'Critical';
+    else if (score >= 55) riskLevel = 'High';
+    else if (score >= 30) riskLevel = 'Moderate';
+
+    // Record interaction and distress score
+    const text = allResponses.map(r => `Q: ${r.q}\nA: ${r.a}`).join('\n\n');
+    const { interactionId } = await recordInteraction({ victimId, channelName: 'App', transcriptText: text });
+    
+    // recordAiDistressScore reads analysis.sentimentRaw/emotion/engagementDelta
+    // for the interaction_signals rows it inserts alongside the score itself
+    // (interactionPipeline.js) - the questionnaire flow doesn't produce those
+    // three signals independently (Ollama returns one overall score+summary,
+    // not per-signal sentiment/emotion/engagement), so they're recorded as
+    // neutral/zero rather than left undefined - passing an undefined field
+    // name here previously (`sentiment` instead of `sentimentRaw`) meant that
+    // insert silently failed on interaction_signals.value's NOT NULL
+    // constraint every time, though it never affected scoreValue itself
+    // (distress_scores.score_value comes from analysis.scoreValue directly).
+    const { scoreId } = await recordAiDistressScore(victimId, interactionId, {
+      scoreValue: score,
+      riskLevel,
+      sentimentRaw: 0,
+      emotion: 0,
+      engagementDelta: 0,
+      summary
+    });
+
+    const { alertId } = await applyStressResponse(victimId, scoreId, riskLevel);
+
+    try {
+      await supabase.from('case_notes').insert({ victim_id: victimId, official_id: null, note_text: summary, authored_by: 'ai' });
+    } catch (err) {
+      console.warn('checkin: saving AI case-note summary failed (non-fatal):', err.message);
+    }
+
+    await writeAuditLog({ victimId, action: 'create', entityType: 'interaction', entityId: interactionId });
+
+    return ok(res, {
+      questionnaireId: qData.id,
+      scoreValue: score,
+      riskLevel,
+      alertTriggered: alertId !== null,
+      summary
+    }, 'Questionnaire submitted successfully', 201);
+
+  } catch (err) {
+    console.error('Questionnaire submit error:', err);
+    return fail(res, 'Failed to submit questionnaire', 500);
+  }
 });
 
 module.exports = router;

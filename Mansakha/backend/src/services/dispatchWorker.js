@@ -117,6 +117,31 @@ async function sendSmsCheckinPrompt(victim) {
   });
 }
 
+// Ministry Analytics & Workflow spec Task 2C "Emergency Broadcast" SMS
+// delivery (migration_010). Same Twilio Messages API call as
+// sendSmsCheckinPrompt above, just sending the admin's own freeform
+// dispatch_queue.message instead of the fixed check-in-prompt text - kept as
+// a separate function (rather than a bodyText param on sendSmsCheckinPrompt)
+// so that function's fixed prompt text stays obviously fixed, matching this
+// file's one-function-per-kind style. Real send only if fully configured,
+// same "never fabricate success" rule as every other kind here.
+async function sendAdminBroadcastSms(victim, messageText) {
+  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
+    throw new Error('SMS provider not configured (TWILIO_PHONE_NUMBER missing)');
+  }
+  const { data: identity } = await supabase.from('victim_identity').select('contact_number').eq('victim_id', victim.victim_id).maybeSingle();
+  if (!identity?.contact_number) throw new Error('No phone number on file for this victim');
+
+  // eslint-disable-next-line global-require
+  const twilio = require('twilio');
+  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  await client.messages.create({
+    to: identity.contact_number,
+    from: process.env.TWILIO_PHONE_NUMBER,
+    body: messageText,
+  });
+}
+
 // Feature Catalog Section 1.5 "Moderate" tier - a simple, non-over-engineered
 // category pick: the victim's most recent emotion_score (fear/sadness
 // weighted, per services/gemini.js's prompt) above 0.5 suggests a calming
@@ -145,7 +170,7 @@ async function drainDispatchQueue() {
   const retryCutoff = new Date(Date.now() - RETRY_BACKOFF_MS).toISOString();
   const { data: pending, error } = await supabase
     .from('dispatch_queue')
-    .select('dispatch_id, kind, victim_id, official_id, attempt_count, last_attempt_at')
+    .select('dispatch_id, kind, victim_id, official_id, attempt_count, last_attempt_at, message, priority')
     .is('delivered_at', null)
     .lt('attempt_count', MAX_ATTEMPTS)
     .order('created_at', { ascending: true })
@@ -161,9 +186,12 @@ async function drainDispatchQueue() {
         await placeIvrsCall({ victim_id: item.victim_id });
       } else if (item.kind === 'sms_checkin_prompt') {
         await sendSmsCheckinPrompt({ victim_id: item.victim_id });
+      } else if (item.kind === 'admin_broadcast_sms') {
+        await sendAdminBroadcastSms({ victim_id: item.victim_id }, item.message || 'This is an emergency broadcast from Mansakha.');
       } else {
-        // checkin_due / alert / wellness_push / ai_proactive_contact all
-        // deliver via Expo push to a victim or official's device token.
+        // checkin_due / alert / wellness_push / ai_proactive_contact /
+        // admin_broadcast_push all deliver via Expo push to a victim or
+        // official's device token.
         const isAlert = item.kind === 'alert';
         const targetTable = isAlert ? 'officials' : 'victims';
         const idColumn = isAlert ? 'official_id' : 'victim_id';
@@ -187,6 +215,9 @@ async function drainDispatchQueue() {
           } catch (err) {
             body = 'We noticed things might be tough right now. We are here if you want to talk.';
           }
+        } else if (item.kind === 'admin_broadcast_push') {
+          title = item.priority === 'urgent' ? 'URGENT: Emergency Broadcast' : 'Emergency Broadcast';
+          body = item.message || 'This is an emergency broadcast from Mansakha.';
         }
         await sendExpoPush(target.expo_push_token, title, body);
       }

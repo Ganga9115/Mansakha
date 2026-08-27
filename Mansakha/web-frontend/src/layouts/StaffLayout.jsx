@@ -12,22 +12,24 @@ import {
   UserPlus,
   FileSearch,
   Users,
+  User,
 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 
-const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
-
 // District/State Admin have near-identical nav shapes, only the URL prefix,
 // underlying jurisdiction level, and (District only) Victim Registration
 // differ. National Admin's Feature Catalog entry is Dashboard-only, so it
 // doesn't take this generator at all.
-function adminNavItems(prefix, extraItems = []) {
+// graphs: State/National only - comparing sub-jurisdictions only makes
+// sense where there ARE sub-jurisdictions to compare (District Admin has
+// none, so it never gets this item).
+function adminNavItems(prefix, { extraItems = [], graphs = false } = {}) {
   return [
     { name: 'Dashboard', icon: LayoutDashboard, path: `/${prefix}` },
     ...extraItems,
-    { name: 'Workload', icon: ListOrdered, path: `/${prefix}/workload` },
+    ...(graphs ? [{ name: 'Graphs', icon: BarChart3, path: `/${prefix}/graphs` }] : []),
     { name: 'Alerts', icon: Bell, path: `/${prefix}/alerts` },
     { name: 'Reports', icon: BarChart3, path: `/${prefix}/reports` },
     { name: 'Profile', icon: Settings, path: `/${prefix}/profile` },
@@ -43,12 +45,13 @@ const NAV_ITEMS_BY_SECTION = {
     { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
     { name: 'Profile', icon: Settings, path: '/counsellor/profile' },
   ],
-  districtadmin: adminNavItems('districtadmin', [
-    { name: 'Register Victim', icon: UserPlus, path: '/districtadmin/register-victim' },
-  ]),
-  stateadmin: adminNavItems('stateadmin'),
+  districtadmin: adminNavItems('districtadmin', {
+    extraItems: [{ name: 'Register Victim', icon: UserPlus, path: '/districtadmin/register-victim' }],
+  }),
+  stateadmin: adminNavItems('stateadmin', { graphs: true }),
   nationaladmin: [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/nationaladmin' },
+    { name: 'Graphs', icon: BarChart3, path: '/nationaladmin/graphs' },
     { name: 'Profile', icon: Settings, path: '/nationaladmin/profile' },
   ],
   dataintake: [
@@ -98,41 +101,43 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
   return (
     <div className="flex h-screen w-full bg-[#F8F9FA] text-gray-800 font-sans">
 
-      {/* PERSISTENT SIDEBAR */}
-      <aside className="w-64 bg-[#3D5A80] text-white flex flex-col justify-between shrink-0">
-        <div>
-          {/* Corner cell - same height as the header to its right, so the
-              two read as one continuous strip across the top. */}
-          <div className="h-16 flex flex-col justify-center px-6 border-b border-white/10">
-            <h1 className="text-xl font-bold tracking-wide leading-tight">Mansakha</h1>
-            <p className="text-[11px] text-blue-200 italic leading-tight">Mind matters. We're listening.</p>
-          </div>
-
-          <nav className="space-y-2 p-6">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <NavLink
-                  key={item.name}
-                  to={item.path}
-                  end
-                  className={({ isActive }) =>
-                    `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                      isActive
-                        ? 'bg-[#519BCE] text-white shadow-sm'
-                        : 'text-blue-100 hover:bg-white/10'
-                    }`
-                  }
-                >
-                  <Icon size={18} />
-                  <span className="text-sm">{item.name}</span>
-                </NavLink>
-              );
-            })}
-          </nav>
+      {/* PERSISTENT SIDEBAR - Log Out sits right after the nav list, not
+          pinned to the bottom of the screen (on a short nav that used to
+          leave a huge empty gap above it). The whole sidebar scrolls as one
+          unit (hidden scrollbar) only if nav+logout together are taller
+          than the viewport, so nothing is ever unreachable either way. */}
+      <aside className="w-64 bg-[#3D5A80] text-white flex flex-col shrink-0 overflow-y-auto no-scrollbar">
+        {/* Corner cell - same height as the header to its right, so the
+            two read as one continuous strip across the top. */}
+        <div className="h-16 flex flex-col justify-center px-6 border-b border-white/10 shrink-0">
+          <h1 className="text-xl font-bold tracking-wide leading-tight">Mansakha</h1>
+          <p className="text-[11px] text-blue-200 italic leading-tight">Mind matters. We're listening.</p>
         </div>
 
-        <div className="px-6 pb-6 pt-4 border-t border-blue-400/30">
+        <nav className="space-y-2 p-6">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.name}
+                to={item.path}
+                end
+                className={({ isActive }) =>
+                  `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
+                    isActive
+                      ? 'bg-[#519BCE] text-white shadow-sm'
+                      : 'text-blue-100 hover:bg-white/10'
+                  }`
+                }
+              >
+                <Icon size={18} />
+                <span className="text-sm">{item.name}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        <div className="px-6 pb-4 pt-2 mt-auto border-t border-blue-400/30 shrink-0">
           <button
             onClick={() => { logout(); navigate('/login'); }}
             className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-blue-100 hover:bg-white/10 transition text-sm"
@@ -143,8 +148,9 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
         </div>
       </aside>
 
-      {/* MAIN VIEW AREA */}
-      <div className="flex-1 flex flex-col overflow-y-auto">
+      {/* MAIN VIEW AREA - header stays fixed; only the content below it
+          scrolls (overflow-y-auto lives on <main>, not this wrapper). */}
+      <div className="flex-1 flex flex-col overflow-hidden">
 
         {/* PERSISTENT HEADER - same palette as the Victim app's top bar */}
         <header className="h-16 bg-[#EBF4FA] border-b border-[#D6E8F5] px-8 flex items-center justify-between shrink-0">
@@ -169,11 +175,17 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
               onClick={() => navigate(profilePath)}
               className="flex items-center gap-3 border-l border-[#D6E8F5] pl-4 text-left focus:outline-none"
             >
-              <img
-                src={me?.profileImageUrl || FALLBACK_PHOTO}
-                alt={me?.fullName || 'Profile'}
-                className="w-9 h-9 rounded-full object-cover"
-              />
+              {me?.profileImageUrl ? (
+                <img
+                  src={me.profileImageUrl}
+                  alt={me?.fullName || 'Profile'}
+                  className="w-9 h-9 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
+                  <User size={18} className="text-[#3D5A80]" />
+                </div>
+              )}
               <div className="text-xs">
                 <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
                 <p className="text-[#3D5A80]/70">{SECTION_LABELS[resolvedSection]}</p>
@@ -182,8 +194,8 @@ export default function StaffLayout({ children, title = 'Dashboard', section }) 
           </div>
         </header>
 
-        {/* DYNAMIC PAGE CONTENT */}
-        <main className="p-8">
+        {/* DYNAMIC PAGE CONTENT - the only scrollable region in this shell */}
+        <main className="flex-1 overflow-y-auto p-8">
           {children}
         </main>
       </div>

@@ -218,4 +218,100 @@ Return ONLY the note text, no quotes, no markdown, no preamble.`;
   return callGeminiPlainText(prompt);
 }
 
-module.exports = { callGemini, callGeminiChat, generateProactiveContactMessage, generateCaseNoteDraft };
+// Ministry Analytics & Workflow spec Task 2A - POST /api/admin/analytics/generate.
+// A privacy-preserving qualitative analysis over a jurisdiction's raw
+// interaction dump (chat/journal/case-note text), distinct from
+// callGemini/callGeminiChat's per-interaction distress scoring. Kept as its
+// own JSON-mode function (not a third branch of callGemini) since the
+// request/response shape is entirely different domain data.
+const ANALYTICS_PROMPT_INSTRUCTIONS = `You are a secure, privacy-preserving data analyst for the Mansakha platform.
+Analyze this raw dump of victim interactions, chat logs, and case notes.
+CRITICAL PRIVACY RULE: Completely anonymize the output. No names, exact quotes, or PII.
+Your tasks:
+1. Extract the top 5 distress themes and overall sentiment.
+2. PREDICTIVE DEMAND: Based on the trajectory of distress, predict if this district will face a 'low', 'stable', or 'high_surge_expected' demand for counsellors next month, and explain why.
+3. SYNDICATE DETECTION: If you notice recurring mentions of similar modus operandi, specific locations, or similar threats across multiple DIFFERENT victims, flag it under "emerging_risks" as a potential organized intimidation syndicate.
+Respond ONLY with valid JSON:
+{
+  "top_themes": [ {"theme": "Theme Name", "prevalence": "high"} ],
+  "overall_sentiment": "string",
+  "emerging_risks": ["risk 1"],
+  "predicted_counsellor_demand": "high_surge_expected",
+  "demand_reasoning": "string"
+}`;
+
+const VALID_DEMAND_LEVELS = ['low', 'stable', 'high_surge_expected'];
+
+// generationConfig.responseMimeType: 'application/json' (used below, same as
+// callGemini/callGeminiChat) suppresses markdown fences in practice, but this
+// strips them defensively anyway (and grabs the outermost {...} if the model
+// still adds stray prose) before JSON.parse - belt-and-suspenders for the
+// exact "wrapped in code fences / stray prose" failure mode called out in the
+// Task 2A spec, without inventing a new error-handling approach: a genuinely
+// malformed response still throws, same as callGemini/callGeminiChat below.
+function extractJsonPayload(rawText) {
+  const trimmed = rawText.trim();
+  const fenceMatch = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenceMatch) return fenceMatch[1].trim();
+  const first = trimmed.indexOf('{');
+  const last = trimmed.lastIndexOf('}');
+  if (first !== -1 && last !== -1 && last > first) return trimmed.slice(first, last + 1);
+  return trimmed;
+}
+
+async function generateJurisdictionAnalytics(rawDumpText) {
+  if (!process.env.GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY is not set');
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: `${ANALYTICS_PROMPT_INSTRUCTIONS}\n\nRaw interaction dump:\n"""${rawDumpText}"""` }] }],
+      generationConfig: { responseMimeType: 'application/json' },
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => '');
+    throw new Error(`Gemini API error (${res.status}): ${errBody}`);
+  }
+
+  const json = await res.json();
+  const rawText = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!rawText) throw new Error('Gemini returned no content');
+
+  let parsed;
+  try {
+    parsed = JSON.parse(extractJsonPayload(rawText));
+  } catch (err) {
+    throw new Error(`Gemini returned non-JSON content: ${rawText}`);
+  }
+
+  if (
+    !Array.isArray(parsed.top_themes) ||
+    typeof parsed.overall_sentiment !== 'string' ||
+    !VALID_DEMAND_LEVELS.includes(parsed.predicted_counsellor_demand)
+  ) {
+    throw new Error(`Gemini analytics response missing required fields: ${rawText}`);
+  }
+
+  return {
+    topThemes: parsed.top_themes,
+    overallSentiment: parsed.overall_sentiment,
+    emergingRisks: Array.isArray(parsed.emerging_risks) ? parsed.emerging_risks : [],
+    predictedCounsellorDemand: parsed.predicted_counsellor_demand,
+    demandReasoning: typeof parsed.demand_reasoning === 'string' ? parsed.demand_reasoning : null,
+  };
+}
+
+module.exports = {
+  callGemini,
+  callGeminiChat,
+  generateProactiveContactMessage,
+  generateCaseNoteDraft,
+  generateJurisdictionAnalytics,
+};

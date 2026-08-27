@@ -11,8 +11,8 @@ export default function DataIntakeDashboard() {
 
   return (
     <StaffLayout title="Register Victim" section="dataintake">
-      <div className="max-w-xl">
-        <VictimRegistrationForm onCreate={createVictim.mutate} creating={createVictim.loading} />
+      <div className="max-w-xl mx-auto">
+        <VictimRegistrationForm onCreate={createVictim.mutate} creating={createVictim.loading} showCaseStage />
       </div>
     </StaffLayout>
   );
