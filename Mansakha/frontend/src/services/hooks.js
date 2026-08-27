@@ -79,11 +79,16 @@ export function useSubmitConsent() {
   });
 }
 
+// `aiAnalysis` is the Check-in screen's local Ollama conversation analysis
+// (sentiment/emotion/reason/suggestedIntervention/summary) - see
+// services/ollamaClient.js's analyzeConversation(). The backend scores it
+// through the same computeDistressScore/alerts/case-note pipeline it always
+// has, just sourced from this instead of a server-side Gemini call.
 export function useCheckin() {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ channel, responses }) => apiClient.post('/api/victim/checkin', { channel, responses }, token),
+    mutationFn: ({ channel, responses, aiAnalysis }) => apiClient.post('/api/victim/checkin', { channel, responses, aiAnalysis }, token),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['victim', 'dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['victim', 'distress-history'] });
