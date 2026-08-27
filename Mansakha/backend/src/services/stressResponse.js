@@ -1,13 +1,25 @@
 const { supabase } = require('../db/supabaseClient');
 const { enqueueAlertDispatch } = require('./dispatchWorker');
+const { CASE_STAGE_SCORES } = require('./victimProvisioning');
 
-// Shared by applyStressResponse's Critical branch below AND routes/victim.js's
-// /sos (both need "which counsellor should this route to when the victim
-// hasn't opted for/doesn't have one already assigned"). Picks whichever
-// eligible Counsellor in the jurisdiction currently has the fewest active
-// assigned cases - a real, queryable proxy (victims.assigned_counsellor_id),
-// same "no formal assignment tracking" reasoning routes/admin.js's Workload
-// view already uses. Returns null if the jurisdiction has no Counsellor at all.
+// Shared by applyStressResponse's Critical branch below, routes/victim.js's
+// /sos, and /counsellor-preference (opting in assigns immediately, so a
+// WhatsApp/call redirect has someone to point to right away). Automated
+// counsellor-assignment algorithm, per explicit request:
+//
+//   1. Primary: whichever eligible Counsellor in the jurisdiction currently
+//      has the fewest ACTIVE assigned cases (case_stage != 'Case Closed').
+//      A closed case no longer counts toward caseload.
+//   2. Tie-break (two+ counsellors with the same active count): whichever
+//      has the HIGHER sum of case-stage scores (Investigation=1, Trial=2,
+//      Rehabilitation=3, Compensation=4, Case Closed=0) across every victim
+//      currently assigned to them. Closed cases contribute 0 to this sum, so
+//      summing "all assigned" vs "active only" gives the identical total -
+//      no need to exclude them separately here.
+//   3. Still tied after that: first by official_id, for a deterministic pick
+//      rather than depending on query row order.
+//
+// Returns null if the jurisdiction has no Counsellor at all.
 async function selectLeastLoadedCounsellor(jurisdictionId) {
   const { data: allRoles } = await supabase
     .from('official_roles')
@@ -16,17 +28,33 @@ async function selectLeastLoadedCounsellor(jurisdictionId) {
     .is('revoked_at', null);
   const counsellorIds = (allRoles || []).filter((r) => r.roles.role_name === 'Counsellor').map((r) => r.official_id);
   if (counsellorIds.length === 0) return null;
+  if (counsellorIds.length === 1) return counsellorIds[0];
 
   const { data: assignedVictims } = await supabase
     .from('victims')
-    .select('assigned_counsellor_id')
+    .select('assigned_counsellor_id, case_stage')
     .in('assigned_counsellor_id', counsellorIds)
     .eq('status', 'active');
-  const countByOfficial = new Map(counsellorIds.map((id) => [id, 0]));
+
+  const activeCountByOfficial = new Map(counsellorIds.map((id) => [id, 0]));
+  const stageScoreSumByOfficial = new Map(counsellorIds.map((id) => [id, 0]));
   for (const v of assignedVictims || []) {
-    countByOfficial.set(v.assigned_counsellor_id, (countByOfficial.get(v.assigned_counsellor_id) || 0) + 1);
+    stageScoreSumByOfficial.set(
+      v.assigned_counsellor_id,
+      stageScoreSumByOfficial.get(v.assigned_counsellor_id) + (CASE_STAGE_SCORES[v.case_stage] ?? 0)
+    );
+    if (v.case_stage !== 'Case Closed') {
+      activeCountByOfficial.set(v.assigned_counsellor_id, activeCountByOfficial.get(v.assigned_counsellor_id) + 1);
+    }
   }
-  return counsellorIds.reduce((min, id) => (countByOfficial.get(id) < countByOfficial.get(min) ? id : min), counsellorIds[0]);
+
+  const minActiveCount = Math.min(...counsellorIds.map((id) => activeCountByOfficial.get(id)));
+  let candidates = counsellorIds.filter((id) => activeCountByOfficial.get(id) === minActiveCount);
+  if (candidates.length > 1) {
+    const maxScore = Math.max(...candidates.map((id) => stageScoreSumByOfficial.get(id)));
+    candidates = candidates.filter((id) => stageScoreSumByOfficial.get(id) === maxScore);
+  }
+  return candidates.sort()[0];
 }
 
 // Feature Catalog Section 1.5 - Stress-Level Automated Response. Called

@@ -98,7 +98,10 @@ router.patch('/victims/:victimId', async (req, res) => {
   const { victimId } = req.params;
   const { caseStage, status, address, contactNumber } = req.body;
   try {
-    await updateVictim(victimId, { caseStage, status, address, contactNumber });
+    // canCloseCase: true - marking a case 'Case Closed' after Compensation is
+    // explicitly a Data Operator action, per request; District Admin's
+    // equivalent route (routes/admin.js) does not set this.
+    await updateVictim(victimId, { caseStage, status, address, contactNumber }, { canCloseCase: true });
     await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'update', entityType: 'victim', entityId: victimId });
     return ok(res, null, 'Victim record updated');
   } catch (err) {

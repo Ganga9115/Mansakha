@@ -284,35 +284,32 @@ router.patch('/sms-preference', async (req, res) => {
   return ok(res, null, 'SMS check-in preference updated');
 });
 
-// Feature Catalog Section 1.4 "Opt-in for Manual Counsellor". Opting in used
-// to only flip the flag - assigned_counsellor_id was left null until (if
-// ever) an SOS or Critical alert happened to auto-assign one, so a victim
-// who opted in but never hit either of those could never actually reach the
-// call/chat features the opt-in was supposed to unlock. Assign immediately
-// on opt-in instead, same selectLeastLoadedCounsellor used by SOS/Critical
-// routing, so "opted in" and "has a counsellor" become true together.
+// Feature Catalog Section 1.4 "Opt-in for Manual Counsellor". Opting in now
+// assigns a counsellor immediately (via the same automated scoring
+// algorithm Critical-risk routing and /sos use), not just on the next
+// crisis event - so the WhatsApp/Call redirects below have someone to point
+// to right away, matching the actual UX request.
 router.patch('/counsellor-preference', async (req, res) => {
   const { optedIn } = req.body;
   if (typeof optedIn !== 'boolean') return fail(res, 'optedIn (boolean) is required', 400);
 
-  const patch = { opted_for_manual_counsellor: optedIn };
+  const { error } = await supabase.from('victims').update({ opted_for_manual_counsellor: optedIn }).eq('victim_id', req.auth.victimId);
+  if (error) return fail(res, `Could not update counsellor preference: ${error.message}`, 500);
 
   if (optedIn) {
-    const { data: victim, error: victimError } = await supabase
+    const { data: victim } = await supabase
       .from('victims')
       .select('jurisdiction_id, assigned_counsellor_id')
       .eq('victim_id', req.auth.victimId)
-      .single();
-    if (victimError || !victim) return fail(res, 'Victim record not found', 404);
-
-    if (!victim.assigned_counsellor_id) {
-      const counsellorId = await selectLeastLoadedCounsellor(victim.jurisdiction_id);
-      if (counsellorId) patch.assigned_counsellor_id = counsellorId;
+      .maybeSingle();
+    if (victim && !victim.assigned_counsellor_id) {
+      const chosenCounsellorId = await selectLeastLoadedCounsellor(victim.jurisdiction_id);
+      if (chosenCounsellorId) {
+        await supabase.from('victims').update({ assigned_counsellor_id: chosenCounsellorId }).eq('victim_id', req.auth.victimId);
+      }
     }
   }
 
-  const { error } = await supabase.from('victims').update(patch).eq('victim_id', req.auth.victimId);
-  if (error) return fail(res, `Could not update counsellor preference: ${error.message}`, 500);
   return ok(res, null, 'Counsellor preference updated');
 });
 
@@ -340,8 +337,9 @@ router.get('/counselling-sessions', async (req, res) => {
   });
 });
 
-// Feature Catalog Section 1.4 "Call Counsellor button" - name + phone only
-// when opted in AND assigned; the frontend renders a tel: link from this.
+// Feature Catalog Section 1.4 "Call Counsellor button" / WhatsApp redirect -
+// name + phone + WhatsApp number only when opted in AND assigned; the
+// frontend renders a tel: link (Call) or a wa.me link (WhatsApp) from this.
 // No backend call-routing/VoIP infrastructure implied.
 router.get('/assigned-counsellor', async (req, res) => {
   const { data: victim, error: victimError } = await supabase
@@ -355,10 +353,17 @@ router.get('/assigned-counsellor', async (req, res) => {
     return ok(res, { assigned: false, counsellor: null });
   }
 
-  const { data: official } = await supabase.from('officials').select('full_name, phone').eq('official_id', victim.assigned_counsellor_id).maybeSingle();
+  const { data: official } = await supabase
+    .from('officials')
+    .select('full_name, phone, whatsapp_number')
+    .eq('official_id', victim.assigned_counsellor_id)
+    .maybeSingle();
   if (!official) return ok(res, { assigned: false, counsellor: null });
 
-  return ok(res, { assigned: true, counsellor: { fullName: official.full_name, phone: official.phone } });
+  return ok(res, {
+    assigned: true,
+    counsellor: { fullName: official.full_name, phone: official.phone, whatsappNumber: official.whatsapp_number },
+  });
 });
 
 // Feature Catalog Section 1.4 "In-app chat with assigned counsellor" - every
