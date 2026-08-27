@@ -70,6 +70,7 @@ export default function StaffManagement() {
   const [showForm, setShowForm] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [roleName, setRoleName] = useState('Counsellor');
   const [jurisdictionLevel, setJurisdictionLevel] = useState('district');
   const [jurisdictionId, setJurisdictionId] = useState('');
@@ -78,6 +79,7 @@ export default function StaffManagement() {
 
   const [editingId, setEditingId] = useState(null);
   const [editFullName, setEditFullName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
   const [editStaffId, setEditStaffId] = useState('');
   const [editNewPassword, setEditNewPassword] = useState('');
   const [editError, setEditError] = useState(null);
@@ -101,6 +103,7 @@ export default function StaffManagement() {
       await createStaff.mutate({
         fullName: fullName.trim(),
         email: email.trim(),
+        phone: phone.trim() || undefined,
         roleName,
         password,
         jurisdictionId: roleName === 'Administration' ? jurisdictionId : undefined,
@@ -108,6 +111,7 @@ export default function StaffManagement() {
       setShowForm(false);
       setFullName('');
       setEmail('');
+      setPhone('');
       setPassword('');
       setJurisdictionId('');
       refetch();
@@ -121,6 +125,7 @@ export default function StaffManagement() {
   const startEdit = (s) => {
     setEditingId(s.officialId);
     setEditFullName(s.fullName || '');
+    setEditPhone(s.phone || '');
     setEditStaffId(s.staffId || '');
     setEditNewPassword('');
     setEditError(null);
@@ -137,6 +142,7 @@ export default function StaffManagement() {
     try {
       await updateStaff.mutate(officialId, {
         fullName: editFullName.trim(),
+        phone: editPhone.trim() || null,
         staffId: editStaffId.trim(),
         // Only sent when the admin actually typed one - otherwise the
         // account keeps its existing password. Setting one always forces a
@@ -205,6 +211,18 @@ export default function StaffManagement() {
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
+                Phone{roleName === 'Counsellor' ? ' (required - also their login credential)' : ''}
+              </label>
+              <input
+                type="tel"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                required={roleName === 'Counsellor'}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
             </div>
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Role</label>
@@ -297,6 +315,12 @@ export default function StaffManagement() {
                                 title="Email is the login identifier and can't be changed here"
                                 className="w-full px-3 py-2 border border-transparent bg-gray-100 rounded-lg text-sm text-gray-500 cursor-not-allowed"
                               />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
+                                Phone{s.roleName === 'Counsellor' ? ' (login credential)' : ''}
+                              </label>
+                              <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" />
                             </div>
                             <div>
                               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Staff ID</label>
