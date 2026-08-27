@@ -48,6 +48,14 @@ export function useMe() {
   return useQuery(() => apiClient.get('/api/me', token), [token]);
 }
 
+// Real per-official notification feed (alert_notifications) - used by the
+// shared NotificationBell in both StaffLayout and MinistryLayout, so every
+// role's bell reflects actual data instead of being decorative.
+export function useMyNotifications() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/me/notifications', token), [token]);
+}
+
 // Derives the logged-in Administration account's own jurisdiction from
 // /api/me, so District/State/National dashboards don't each re-fetch and
 // re-parse it - `jurisdictionId` is what every /api/admin/* route below is
@@ -202,9 +210,23 @@ export function useFetchCaseDetails() {
 
 // --- Ministry: Staff/Account Management ---
 
-export function useStaffList() {
+// role/level select one Staff Management tab's category (level only applies
+// to role='Administration' - National/State/District Admin are all that one
+// role, split by jurisdiction level); page pages through it (some categories,
+// like District Admin, run into the hundreds of rows).
+export function useStaffList(role, level, page = 1) {
   const token = getToken();
-  return useQuery(() => apiClient.get('/api/ministry/staff', token), [token]);
+  return useQuery(() => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (role) params.set('role', role);
+    if (level) params.set('level', level);
+    return apiClient.get(`/api/ministry/staff?${params.toString()}`, token);
+  }, [token, role, level, page]);
+}
+
+export function useMinistryVictims(page = 1) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/ministry/victims?page=${page}`, token), [token, page]);
 }
 
 export function useCreateStaff() {
@@ -228,6 +250,34 @@ export function useRevokeStaff() {
     setLoading(true);
     try {
       return await apiClient.patch(`/api/ministry/staff/${officialId}/revoke`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useUpdateStaff() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (officialId, payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/ministry/staff/${officialId}`, payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useDeleteStaff() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (officialId) => {
+    setLoading(true);
+    try {
+      return await apiClient.delete(`/api/ministry/staff/${officialId}`, token);
     } finally {
       setLoading(false);
     }

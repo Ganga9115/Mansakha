@@ -6,8 +6,26 @@ import { useMe } from '../../../services/hooks';
 
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=100';
 
+// This Settings/Profile screen is shared across every Staff role (Counsellor,
+// District/State/National Administration, Data Operator) - it used to
+// hardcode "Counsellor Profile Matrix"/"Senior Counsellor" regardless of who
+// was actually logged in, so every non-Counsellor role saw the wrong job
+// title on their own profile. Derived from /api/me's roles[0] instead.
+function roleLabels(role) {
+  if (!role) return { matrixTitle: 'Staff Profile Matrix', jobTitle: 'Staff' };
+  if (role.roleName === 'Administration') {
+    const byLevel = { national: 'National Administrator', state: 'State Administrator', district: 'District Administrator' };
+    const jobTitle = byLevel[role.jurisdictionLevel] || 'Administrator';
+    return { matrixTitle: `${jobTitle} Profile Matrix`, jobTitle };
+  }
+  if (role.roleName === 'Counsellor') return { matrixTitle: 'Counsellor Profile Matrix', jobTitle: 'Senior Counsellor' };
+  if (role.roleName === 'Data Operator') return { matrixTitle: 'Data Operator Profile Matrix', jobTitle: 'Data Operator' };
+  return { matrixTitle: `${role.roleName} Profile Matrix`, jobTitle: role.roleName };
+}
+
 export default function Settings({ onNavigate }) {
   const { data: me, refetch: refetchMe } = useMe();
+  const { matrixTitle, jobTitle } = roleLabels(me?.roles?.[0]);
   const fileInputRef = useRef(null);
   const [photoError, setPhotoError] = useState(null);
   const [photoUploading, setPhotoUploading] = useState(false);
@@ -80,7 +98,7 @@ export default function Settings({ onNavigate }) {
         
         {/* COUNSELLOR PROFILE MATRIX */}
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
-          <h3 className="font-bold text-sm text-gray-800">Counsellor Profile Matrix</h3>
+          <h3 className="font-bold text-sm text-gray-800">{matrixTitle}</h3>
           
           <div className="flex items-center gap-4">
             <img
@@ -90,7 +108,7 @@ export default function Settings({ onNavigate }) {
             />
             <div>
               <h4 className="font-bold text-gray-800 text-base">{me?.fullName || 'Loading...'}</h4>
-              <p className="text-xs text-gray-500">Senior Counsellor</p>
+              <p className="text-xs text-gray-500">{jobTitle}</p>
               <input
                 type="file"
                 accept="image/*"
