@@ -11,6 +11,7 @@ import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
+import TopRightActions from '../../components/TopRightActions';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useVictimDashboard } from '../../services/hooks';
 
@@ -66,16 +67,18 @@ export default function SupportScreen() {
               </View>
             )}
             <Text style={styles.statusTitle}>Support Helpline</Text>
-            {!isDesktop && <Text style={styles.subtext}>Connect directly with experts</Text>}
+            {!isDesktop && <Text style={styles.subtext}>Emergency numbers & Mansakha assistance</Text>}
           </View>
         </View>
 
-        {isDesktop && (
+        {isDesktop ? (
           <DesktopHeaderActions
             fullName={query.data?.fullName}
             alertCount={query.data?.alerts?.length || 0}
             onBellPress={() => {}}
           />
+        ) : (
+          <TopRightActions />
         )}
       </View>
 

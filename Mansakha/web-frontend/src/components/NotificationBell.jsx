@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
-import { useMyNotifications } from '../services/hooks';
+import { useMe, useMyNotifications } from '../services/hooks';
 
 // Real notification bell shared by StaffLayout and MinistryLayout - every
 // role gets the same dropdown backed by GET /api/me/notifications
@@ -8,20 +8,26 @@ import { useMyNotifications } from '../services/hooks';
 // Operator) genuinely have nothing routed to them today, so an empty list
 // there is correct, not a sign the feature is broken.
 export default function NotificationBell() {
+  const { data: me } = useMe();
   const { data, loading } = useMyNotifications();
   const notifications = data?.notifications || [];
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(0);
   const containerRef = useRef(null);
+  // Keyed by officialId, not a shared key - otherwise one account's "seen"
+  // timestamp would wrongly suppress another account's unread badge the
+  // next time someone logs into a different account on the same browser.
+  const storageKey = me?.officialId ? `mansakha_notifications_last_seen_${me.officialId}` : null;
 
   useEffect(() => {
+    if (!storageKey) return;
     try {
-      const stored = localStorage.getItem('mansakha_notifications_last_seen');
-      if (stored) setLastSeen(Number(stored));
+      const stored = localStorage.getItem(storageKey);
+      setLastSeen(stored ? Number(stored) : 0);
     } catch {
       // localStorage unavailable - badge just won't persist across reloads
     }
-  }, []);
+  }, [storageKey]);
 
   useEffect(() => {
     function handleClickOutside(e) {
@@ -39,10 +45,12 @@ export default function NotificationBell() {
     if (next) {
       const now = Date.now();
       setLastSeen(now);
-      try {
-        localStorage.setItem('mansakha_notifications_last_seen', String(now));
-      } catch {
-        // best-effort only
+      if (storageKey) {
+        try {
+          localStorage.setItem(storageKey, String(now));
+        } catch {
+          // best-effort only
+        }
       }
     }
   };

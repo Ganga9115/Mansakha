@@ -284,14 +284,60 @@ router.patch('/sms-preference', async (req, res) => {
   return ok(res, null, 'SMS check-in preference updated');
 });
 
-// Feature Catalog Section 1.4 "Opt-in for Manual Counsellor".
+// Feature Catalog Section 1.4 "Opt-in for Manual Counsellor". Opting in used
+// to only flip the flag - assigned_counsellor_id was left null until (if
+// ever) an SOS or Critical alert happened to auto-assign one, so a victim
+// who opted in but never hit either of those could never actually reach the
+// call/chat features the opt-in was supposed to unlock. Assign immediately
+// on opt-in instead, same selectLeastLoadedCounsellor used by SOS/Critical
+// routing, so "opted in" and "has a counsellor" become true together.
 router.patch('/counsellor-preference', async (req, res) => {
   const { optedIn } = req.body;
   if (typeof optedIn !== 'boolean') return fail(res, 'optedIn (boolean) is required', 400);
 
-  const { error } = await supabase.from('victims').update({ opted_for_manual_counsellor: optedIn }).eq('victim_id', req.auth.victimId);
+  const patch = { opted_for_manual_counsellor: optedIn };
+
+  if (optedIn) {
+    const { data: victim, error: victimError } = await supabase
+      .from('victims')
+      .select('jurisdiction_id, assigned_counsellor_id')
+      .eq('victim_id', req.auth.victimId)
+      .single();
+    if (victimError || !victim) return fail(res, 'Victim record not found', 404);
+
+    if (!victim.assigned_counsellor_id) {
+      const counsellorId = await selectLeastLoadedCounsellor(victim.jurisdiction_id);
+      if (counsellorId) patch.assigned_counsellor_id = counsellorId;
+    }
+  }
+
+  const { error } = await supabase.from('victims').update(patch).eq('victim_id', req.auth.victimId);
   if (error) return fail(res, `Could not update counsellor preference: ${error.message}`, 500);
   return ok(res, null, 'Counsellor preference updated');
+});
+
+// Section 2.2 "Scheduled counsellings" - the counsellor-side write
+// (POST /api/counsellor/cases/:victimId/schedule) had no matching victim-side
+// read anywhere, so a scheduled session was invisible to the person it was
+// scheduled for. Upcoming only - a completed/cancelled session isn't
+// something the victim still needs to "prepare for."
+router.get('/counselling-sessions', async (req, res) => {
+  const { data, error } = await supabase
+    .from('counselling_sessions')
+    .select('session_id, counsellor_id, scheduled_at, status, officials(full_name)')
+    .eq('victim_id', req.auth.victimId)
+    .eq('status', 'upcoming')
+    .order('scheduled_at', { ascending: true });
+  if (error) return fail(res, 'Could not load scheduled sessions', 500);
+
+  return ok(res, {
+    sessions: (data || []).map((s) => ({
+      sessionId: s.session_id,
+      counsellorName: s.officials?.full_name || null,
+      scheduledAt: s.scheduled_at,
+      status: s.status,
+    })),
+  });
 });
 
 // Feature Catalog Section 1.4 "Call Counsellor button" - name + phone only
@@ -328,8 +374,14 @@ async function requireCounsellorOptIn(req, res) {
     fail(res, 'Victim record not found', 404);
     return null;
   }
-  if (!victim.opted_for_manual_counsellor || !victim.assigned_counsellor_id) {
+  if (!victim.opted_for_manual_counsellor) {
     fail(res, 'Opt in for a manual counsellor first', 403);
+    return null;
+  }
+  if (!victim.assigned_counsellor_id) {
+    // Opt-in now assigns a counsellor immediately if one's available - this
+    // only fires when the jurisdiction genuinely has none, not a normal path.
+    fail(res, 'No counsellor is available in your jurisdiction right now', 409);
     return null;
   }
   return victim.assigned_counsellor_id;

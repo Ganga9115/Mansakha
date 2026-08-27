@@ -12,6 +12,7 @@ import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useJournalEntries, useAddJournalEntry } from '../../services/hooks';
+import TopRightActions from '../../components/TopRightActions';
 
 export default function JournalScreen({ navigation }) {
   const { tier } = useResponsive();
@@ -45,6 +46,7 @@ export default function JournalScreen({ navigation }) {
           <Text style={styles.statusTitle}>My Journal</Text>
           <Text style={styles.subtext}>A private space for your thoughts</Text>
         </View>
+        <TopRightActions />
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>

@@ -11,6 +11,7 @@ import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import RiskBadge from '../../components/RiskBadge';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
+import TopRightActions from '../../components/TopRightActions';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useDistressHistory, useVictimDashboard } from '../../services/hooks';
 
@@ -143,13 +144,17 @@ export default function DistressHistoryScreen() {
           </View>
         </View>
 
-        {isDesktop && (
-          <DesktopHeaderActions
-            fullName={dashboardQuery.data?.fullName}
-            alertCount={dashboardQuery.data?.alerts?.length || 0}
-            onBellPress={() => {}}
-          />
-        )}
+        <View style={styles.headerRight}>
+          {isDesktop ? (
+            <DesktopHeaderActions
+              fullName={dashboardQuery.data?.fullName}
+              alertCount={dashboardQuery.data?.alerts?.length || 0}
+              onBellPress={() => {}}
+            />
+          ) : (
+            <TopRightActions />
+          )}
+        </View>
       </View>
 
       {/* Main Content Body */}

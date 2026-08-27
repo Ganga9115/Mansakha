@@ -22,8 +22,10 @@ import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import Dropdown from '../../components/Dropdown';
+import SegmentedToggle from '../../components/SegmentedToggle';
 import IconInput from '../../components/IconInput';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
+import TopRightActions from '../../components/TopRightActions';
 import { Skeleton } from '../../components/Skeleton';
 
 function InfoTileRow({ icon, label, value, loading, iconColor = colors.primary, isLast = false }) {
@@ -168,14 +170,12 @@ export default function SettingsScreen({ navigation }) {
         <View style={styles.headerRight}>
           {isDesktop ? (
             <DesktopHeaderActions
-              fullName={dashboardQuery.data?.fullName}
-              alertCount={dashboardQuery.data?.alerts?.length || 0}
+              fullName={assignedCounsellorQuery.data?.fullName}
+              alertCount={0}
               onBellPress={() => {}}
             />
           ) : (
-            <Pressable style={styles.iconCircleBtn} onPress={logout}>
-              <Feather name="log-out" size={18} color={colors.error} />
-            </Pressable>
+            <TopRightActions />
           )}
         </View>
       </View>

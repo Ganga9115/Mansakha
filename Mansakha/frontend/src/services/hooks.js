@@ -192,6 +192,14 @@ export function useAssignedCounsellor() {
   return useQuery({ queryKey: ['victim', 'assigned-counsellor'], queryFn: () => apiClient.get('/api/victim/assigned-counsellor', token), enabled: !!token });
 }
 
+// Feature Catalog Section 2.2 "Scheduled counsellings" - a session the
+// assigned Counsellor scheduled (POST /api/counsellor/cases/:victimId/schedule)
+// showing up on the victim's own side, so they know to expect a call/visit.
+export function useUpcomingSessions() {
+  const token = useToken();
+  return useQuery({ queryKey: ['victim', 'counselling-sessions'], queryFn: () => apiClient.get('/api/victim/counselling-sessions', token), enabled: !!token });
+}
+
 export function useCounsellorMessages() {
   const token = useToken();
   return useQuery({ queryKey: ['victim', 'messages'], queryFn: () => apiClient.get('/api/victim/messages', token), enabled: !!token });

@@ -8,8 +8,9 @@ import { radius } from '../../theme/radius';
 import { typography } from '../../theme/typography';
 import { shadow } from '../../theme/shadow';
 import { formContentWidth } from '../../theme/layout';
-import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
+import TopRightActions from '../../components/TopRightActions';
+import { useResponsive } from '../../hooks/useResponsive';
 import SegmentedToggle from '../../components/SegmentedToggle';
 import { QueryBoundary } from '../../components/QueryStates';
 import { useWellnessSuggestions } from '../../services/hooks';
@@ -127,8 +128,9 @@ export default function WellnessScreen({ navigation }) {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.statusTitle}>My Well-being</Text>
-          <Text style={styles.subtext}>Exercises, meditation & music, at your pace</Text>
+          <Text style={styles.subtext}>Your emotional wellbeing toolkit</Text>
         </View>
+        <TopRightActions />
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>

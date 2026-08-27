@@ -11,11 +11,14 @@ import { useResponsive } from '../../hooks/useResponsive';
 import Card from '../../components/Card';
 import RiskBadge from '../../components/RiskBadge';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
+import TopRightActions from '../../components/TopRightActions';
 import { QueryBoundary } from '../../components/QueryStates';
-import { useVictimDashboard } from '../../services/hooks';
+import { useVictimDashboard, useUpcomingSessions } from '../../services/hooks';
 
 export default function HomeScreen({ navigation }) {
   const query = useVictimDashboard();
+  const sessionsQuery = useUpcomingSessions();
+  const upcomingSessions = sessionsQuery.data?.sessions || [];
   const { tier, isDesktop } = useResponsive();
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
@@ -70,9 +73,7 @@ export default function HomeScreen({ navigation }) {
                       onBellPress={() => navigation?.navigate('support')}
                     />
                   ) : (
-                    <Pressable style={styles.iconCircleBtn}>
-                      <Feather name="bell" size={18} color={colors.primaryDark} />
-                    </Pressable>
+                    <TopRightActions />
                   )}
                 </View>
               </View>
@@ -167,6 +168,26 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.gridSub}>Write it down</Text>
                   </Pressable>
                 </View>
+
+                {/* Upcoming Counselling Session - scheduled by the assigned
+                    Counsellor (Feature Catalog Section 2.2), previously
+                    invisible to the victim entirely. */}
+                {upcomingSessions.length > 0 && (
+                  <Card style={styles.customCard}>
+                    <Text style={styles.cardHeaderTitle}>Upcoming Session</Text>
+                    <View style={{ marginTop: spacing.sm }}>
+                      {upcomingSessions.map((s, i) => (
+                        <View key={s.sessionId} style={[styles.subRow, i > 0 && styles.rowBorder]}>
+                          <Feather name="calendar" size={14} color={colors.primary} style={{ marginRight: spacing.sm }} />
+                          <Text style={styles.subRowText}>
+                            {s.counsellorName ? `With ${s.counsellorName} • ` : ''}
+                            {new Date(s.scheduledAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </Card>
+                )}
 
                 {/* Recent Activity Section */}
                 {data.alerts.length > 0 && (

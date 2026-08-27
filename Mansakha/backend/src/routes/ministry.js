@@ -50,9 +50,13 @@ async function checkJurisdictionLimit(roleName, jurisdictionId) {
 // doubly-nested embed (official_roles -> jurisdictions.level) isn't
 // something PostgREST's embed syntax can express.
 router.get('/staff', async (req, res) => {
-  const { page = 1, role, level } = req.query;
+  const { role, level } = req.query;
   const pageSize = 30;
-  const offset = (Number(page) - 1) * pageSize;
+  // A non-numeric/zero/negative page (bad client state, manual query tinkering)
+  // would otherwise turn into `limit 30 offset NaN` / a negative offset below -
+  // Postgres throws a raw syntax/range error instead of a clean 400.
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const offset = (page - 1) * pageSize;
 
   const conditions = ['orl.revoked_at is null'];
   const params = [];
@@ -114,9 +118,9 @@ router.get('/staff', async (req, res) => {
 // here; editing/deleting a victim record stays on the Data Operator screen
 // that already owns that flow.
 router.get('/victims', async (req, res) => {
-  const { page = 1 } = req.query;
+  const page = Math.max(1, Number(req.query.page) || 1);
   const pageSize = 30;
-  const offset = (Number(page) - 1) * pageSize;
+  const offset = (page - 1) * pageSize;
 
   const { data, count, error } = await supabase
     .from('victims')
@@ -337,9 +341,9 @@ router.patch('/staff/:officialId/revoke', async (req, res) => {
 });
 
 router.get('/audit-log', async (req, res) => {
-  const { page = 1 } = req.query;
+  const page = Math.max(1, Number(req.query.page) || 1);
   const pageSize = 50;
-  const offset = (Number(page) - 1) * pageSize;
+  const offset = (page - 1) * pageSize;
 
   const { data, count, error } = await supabase
     .from('audit_log')
@@ -569,9 +573,9 @@ router.get('/heatmap', async (req, res) => {
 // activity (Section 1.3's dispatch_queue rows), not a new integration.
 // Explicitly labeled as queued/attempted calls, not live call monitoring.
 router.get('/ivrs-log', async (req, res) => {
-  const { page = 1 } = req.query;
+  const page = Math.max(1, Number(req.query.page) || 1);
   const pageSize = 50;
-  const offset = (Number(page) - 1) * pageSize;
+  const offset = (page - 1) * pageSize;
 
   const { data, count, error } = await supabase
     .from('dispatch_queue')
@@ -597,9 +601,10 @@ router.get('/ivrs-log', async (req, res) => {
 // "Receive Base-Level Reports" - lists what District/State/National
 // generated via POST /api/admin/reports/generate.
 router.get('/reports', async (req, res) => {
-  const { jurisdictionLevel, page = 1 } = req.query;
+  const { jurisdictionLevel } = req.query;
   const pageSize = 30;
-  const offset = (Number(page) - 1) * pageSize;
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const offset = (page - 1) * pageSize;
 
   let query = supabase
     .from('reports')
