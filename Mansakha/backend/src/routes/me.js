@@ -27,11 +27,27 @@ router.get('/', verifyToken, async (req, res) => {
     return ok(res, { type: 'victim', victimId: req.auth.victimId });
   }
 
-  const { data: official } = await supabase
-    .from('officials')
-    .select('full_name, email, profile_image_url')
-    .eq('official_id', req.auth.officialId)
-    .maybeSingle();
+  // Profile page needs real per-role fields (phone/WhatsApp only mean
+  // anything for Counsellor, jurisdiction NAME for Administration - the
+  // token's own `roles` only carries jurisdictionId/Level, not the name) to
+  // show something genuinely different per role instead of one identical
+  // page with decorative, non-functional toggles for everyone.
+  //
+  // One raw pg query (not two Supabase REST calls) - this endpoint fires on
+  // every single page load across the whole app, so its latency is felt
+  // everywhere; going straight to Postgres here has the same ~1-2s-per-call
+  // win confirmed on the admin dashboard routes, but with much broader reach.
+  const { rows } = await pool.query(
+    `select o.full_name, o.email, o.profile_image_url, o.phone, o.staff_id, o.whatsapp_number,
+            orr.jurisdiction_id, j.name as jurisdiction_name
+     from officials o
+     left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+     left join jurisdictions j on j.jurisdiction_id = orr.jurisdiction_id
+     where o.official_id = $1`,
+    [req.auth.officialId]
+  );
+  const official = rows[0];
+  const jurisdictionNameById = new Map(rows.filter((r) => r.jurisdiction_id).map((r) => [r.jurisdiction_id, r.jurisdiction_name]));
 
   return ok(res, {
     type: 'official',
@@ -39,8 +55,11 @@ router.get('/', verifyToken, async (req, res) => {
     fullName: official?.full_name || null,
     email: official?.email || null,
     profileImageUrl: official?.profile_image_url || null,
+    phone: official?.phone || null,
+    whatsappNumber: official?.whatsapp_number || null,
+    staffId: official?.staff_id || null,
     mustChangePassword: req.auth.mustChangePassword,
-    roles: req.auth.roles,
+    roles: req.auth.roles.map((r) => ({ ...r, jurisdictionName: r.jurisdictionId ? jurisdictionNameById.get(r.jurisdictionId) || null : null })),
   });
 });
 
