@@ -2,8 +2,23 @@ const bcrypt = require('bcrypt');
 const { supabase } = require('../db/supabaseClient');
 const { withTransaction } = require('../db/pgPool');
 
-const VALID_CASE_STAGES = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
+// 'Case Closed' is terminal, settable only by Data Operator (routes/dataIntake.js) -
+// District Admin's case_stage edits (routes/admin.js) stay restricted to the
+// original 4, enforced below via updateVictim's `canCloseCase` flag.
+const CASE_STAGES_OPEN = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
+const VALID_CASE_STAGES = [...CASE_STAGES_OPEN, 'Case Closed'];
 const VALID_STATUSES = ['active', 'inactive'];
+
+// Automated counsellor-assignment scoring (services/stressResponse.js) - each
+// case stage's point value. 'Case Closed' scores 0 so a closed case never
+// distorts the tie-break sum, and doesn't need excluding from it separately.
+const CASE_STAGE_SCORES = {
+  Investigation: 1,
+  Trial: 2,
+  Rehabilitation: 3,
+  Compensation: 4,
+  'Case Closed': 0,
+};
 // Every victim's password on creation - fixed, not admin-chosen, per explicit
 // request. must_change_password (default true) forces a real one on first
 // login (routes/auth.victim.js), same pattern as officials.
@@ -93,12 +108,25 @@ async function createVictim({ docketNumber, fullName, contactNumber, jurisdictio
 // jurisdiction are the login credential and stay immutable here (changing
 // them would lock the victim out or move them into someone else's
 // jurisdiction scope without a deliberate transfer flow).
-async function updateVictim(victimId, { caseStage, status, address, contactNumber }) {
+//
+// canCloseCase: District Admin's route (routes/admin.js) always passes false
+// (case_stage stays restricted to the 4 open stages there); Data Operator's
+// route (routes/dataIntake.js) passes true - marking a case closed is
+// explicitly a Data Operator action, per request.
+async function updateVictim(victimId, { caseStage, status, address, contactNumber }, { canCloseCase = false } = {}) {
   if (caseStage === undefined && status === undefined && address === undefined && contactNumber === undefined) {
     throw new ProvisioningError('caseStage, status, address, or contactNumber is required', 400);
   }
-  if (caseStage !== undefined && !VALID_CASE_STAGES.includes(caseStage)) {
-    throw new ProvisioningError(`caseStage must be one of: ${VALID_CASE_STAGES.join(', ')}`, 400);
+  if (caseStage !== undefined) {
+    const allowedStages = canCloseCase ? VALID_CASE_STAGES : CASE_STAGES_OPEN;
+    if (!allowedStages.includes(caseStage)) {
+      throw new ProvisioningError(
+        canCloseCase
+          ? `caseStage must be one of: ${VALID_CASE_STAGES.join(', ')}`
+          : `caseStage must be one of: ${CASE_STAGES_OPEN.join(', ')} (only Data Operator can mark a case closed)`,
+        canCloseCase ? 400 : 403
+      );
+    }
   }
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     throw new ProvisioningError(`status must be one of: ${VALID_STATUSES.join(', ')}`, 400);
@@ -164,4 +192,7 @@ async function deleteVictim(victimId) {
   }
 }
 
-module.exports = { createVictim, updateVictim, deleteVictim, ProvisioningError, VALID_CASE_STAGES, VALID_STATUSES };
+module.exports = {
+  createVictim, updateVictim, deleteVictim, ProvisioningError,
+  VALID_CASE_STAGES, CASE_STAGES_OPEN, VALID_STATUSES, CASE_STAGE_SCORES,
+};

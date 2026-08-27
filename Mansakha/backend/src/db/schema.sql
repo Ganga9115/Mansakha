@@ -106,6 +106,10 @@ create table officials (
                                -- services/dispatchWorker.js) - null until then
   profile_image_url     text, -- Supabase Storage public URL, set via
                                -- POST /api/me/profile-photo - null until uploaded
+  whatsapp_number       text, -- separate from `phone` - a victim who opts for
+                               -- manual counselling and picks "WhatsApp" gets
+                               -- redirected here, not necessarily the same
+                               -- number as the official contact line
   created_at            timestamptz not null default now()
 );
 
@@ -128,7 +132,12 @@ create table victims (
   docket_number      text unique, -- reused from NHAA/Integrated Portal where available
   case_type_id       uuid not null references case_types(case_type_id),
   jurisdiction_id    uuid not null references jurisdictions(jurisdiction_id),
-  case_stage         text not null check (case_stage in ('Investigation', 'Trial', 'Rehabilitation', 'Compensation')),
+  -- 'Case Closed' is terminal and settable only by Data Operator
+  -- (services/victimProvisioning.js enforces this in code - a CHECK
+  -- constraint can't see who's calling). Used by the counsellor-assignment
+  -- algorithm (services/stressResponse.js) to know a case no longer counts
+  -- toward a counsellor's active caseload.
+  case_stage         text not null check (case_stage in ('Investigation', 'Trial', 'Rehabilitation', 'Compensation', 'Case Closed')),
   preferred_language uuid references languages(language_id),
   -- Records who provisioned this record - victims no longer self-register
   -- (Feature Catalog Section 1.1: login is docket_number + full_name +

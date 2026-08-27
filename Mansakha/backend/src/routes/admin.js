@@ -433,6 +433,8 @@ router.patch(
     const { victimId } = req.params;
     const { caseStage, address, contactNumber } = req.body;
     try {
+      // canCloseCase omitted (defaults false) - District Admin cannot mark a
+      // case 'Case Closed', only Data Operator can (routes/dataIntake.js).
       await updateVictim(victimId, { caseStage, address, contactNumber });
       await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'update', entityType: 'victim', entityId: victimId });
       return ok(res, null, 'Victim record updated');
