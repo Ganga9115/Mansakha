@@ -10,7 +10,7 @@ import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useToast } from '../../context/ToastContext';
 import { useCheckin, useVictimDashboard } from '../../services/hooks';
-import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING } from '../../services/ollamaClient';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import TopRightActions from '../../components/TopRightActions';
@@ -108,7 +108,7 @@ const FALLBACK_QUESTIONS = [
     
     // Async save
     try {
-      const token = await SecureStore.getItemAsync('victim_jwt');
+      const token = await AsyncStorage.getItem('victim_jwt');
       fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/victim/interaction/append`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
