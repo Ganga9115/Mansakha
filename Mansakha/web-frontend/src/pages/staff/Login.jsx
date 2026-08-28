@@ -2,31 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../../services/apiClient';
 import { setToken } from '../../services/auth';
-import { User, Lock, MessageSquare, BarChart3, ShieldCheck, IdCard, Phone, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, MessageSquare, BarChart3, ShieldCheck, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-
-// Third required login credential alongside email+password (Feature
-// Catalog: every Ministry-provisioned account gets a "State Admin ID" /
-// "Counsellor ID" / etc.) - label follows whichever role/level is currently
-// selected, since the field itself is the same `staffId` value either way.
-function staffIdLabel(uiRole, adminLevel) {
-  if (uiRole === 'Counsellor') return 'Counsellor ID';
-  if (uiRole === 'Data Operator') return 'Data Operator ID';
-  if (adminLevel === 'National Admin') return 'National Admin ID';
-  if (adminLevel === 'State Admin') return 'State Admin ID';
-  if (adminLevel === 'District Admin') return 'District Admin ID';
-  return 'Admin ID';
-}
 
 export default function StaffLogin() {
   const navigate = useNavigate();
   const toast = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [staffId, setStaffId] = useState('');
-  // 4th credential, Counsellor only (routes/auth.staff.js) - must match
-  // officials.phone exactly.
-  const [mobileNumber, setMobileNumber] = useState('');
   // uiRole can be 'Counsellor', 'Admins', 'Data Operator'
   const [uiRole, setUiRole] = useState('Counsellor');
   // adminLevel can be '', 'National Admin', 'State Admin', 'District Admin'
@@ -51,8 +34,7 @@ export default function StaffLogin() {
 
     try {
       const data = await apiClient.post('/api/auth/staff/login', {
-        email, password, roleName, staffId,
-        ...(uiRole === 'Counsellor' ? { mobileNumber } : {}),
+        email, password, roleName,
       });
 
       if (data.mustChangePassword) {
@@ -213,42 +195,6 @@ export default function StaffLogin() {
                         <option value="State Admin">State Admin</option>
                         <option value="District Admin">District Admin</option>
                       </select>
-                    </div>
-                  )}
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{staffIdLabel(uiRole, adminLevel)}</label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                        <IdCard className="h-5 w-5 text-gray-400" />
-                      </div>
-                      <input
-                        type="text"
-                        placeholder={staffIdLabel(uiRole, adminLevel)}
-                        value={staffId}
-                        onChange={(e) => setStaffId(e.target.value)}
-                        required
-                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {uiRole === 'Counsellor' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-                      <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <Phone className="h-5 w-5 text-gray-400" />
-                        </div>
-                        <input
-                          type="tel"
-                          placeholder="Mobile Number"
-                          value={mobileNumber}
-                          onChange={(e) => setMobileNumber(e.target.value)}
-                          required
-                          className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
-                        />
-                      </div>
                     </div>
                   )}
 
