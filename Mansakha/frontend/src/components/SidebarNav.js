@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -26,26 +26,34 @@ const SIDEBAR = {
 // `drawerContent`. Receives the same { state, descriptors, navigation }
 // shape react-navigation gives any custom nav surface, so route state
 // stays driven by the navigator - this only renders the chrome.
-export default function SidebarNav({ state, descriptors, navigation, icons = {} }) {
+export default function SidebarNav({ state, descriptors, navigation, icons = {}, showMyCounsellor = false }) {
   const { logout } = useAuth();
 
   return (
     <View style={styles.container}>
       {/* Corner cell - pinned to topBarHeight, matching each screen's own
           compact desktop banner, so the two read as one continuous strip
-          across the top of the screen; nav items start right below it. */}
+          across the top of the screen. */}
       <View style={styles.cornerCell}>
-        <Text style={styles.brandText}>Mansakha</Text>
-        <Text style={styles.brandTagline}>Mind matters. We're listening.</Text>
+
+        {/* Mansakha Logo */}
+        <Image
+          source={require('../../assets/mansakha-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+
       </View>
 
       <View style={styles.body}>
         <View style={styles.items}>
-          {state.routes.map((route, index) => {
+          {state?.routes?.map((route, index) => {
             // Hide secondary screens that are in the drawer but shouldn't be in the sidebar menu
             if (!icons[route.name]) return null;
+            if (route.name === 'mycounsellor' && !showMyCounsellor) return null;
 
-            const { options } = descriptors[route.key];
+            const descriptor = descriptors?.[route.key];
+            const options = descriptor?.options || {};
             const label = options.title ?? route.name;
             const isActive = state.index === index;
             const iconName = icons[route.name];
@@ -60,8 +68,24 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {} 
                   pressed && !isActive && styles.itemPressed,
                 ]}
               >
-                <Feather name={iconName} size={18} color={isActive ? SIDEBAR.textActive : SIDEBAR.textInactive} />
-                <Text style={[styles.itemLabel, isActive && styles.itemLabelActive]}>{label}</Text>
+                <Feather
+                  name={iconName}
+                  size={18}
+                  color={
+                    isActive
+                      ? SIDEBAR.textActive
+                      : SIDEBAR.textInactive
+                  }
+                />
+
+                <Text
+                  style={[
+                    styles.itemLabel,
+                    isActive && styles.itemLabelActive,
+                  ]}
+                >
+                  {label}
+                </Text>
               </Pressable>
             );
           })}
@@ -70,10 +94,20 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {} 
         <View style={styles.footer}>
           <Pressable
             onPress={logout}
-            style={({ pressed }) => [styles.logoutItem, pressed && styles.itemPressed]}
+            style={({ pressed }) => [
+              styles.logoutItem,
+              pressed && styles.itemPressed,
+            ]}
           >
-            <Feather name="log-out" size={18} color={SIDEBAR.textInactive} />
-            <Text style={styles.logoutItemLabel}>Log Out</Text>
+            <Feather
+              name="log-out"
+              size={18}
+              color={SIDEBAR.textInactive}
+            />
+
+            <Text style={styles.logoutItemLabel}>
+              Log Out
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -86,6 +120,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: SIDEBAR.bg,
   },
+
   cornerCell: {
     height: topBarHeight,
     justifyContent: 'center',
@@ -93,13 +128,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: SIDEBAR.divider,
   },
-  brandText: { ...typography.h3, color: SIDEBAR.textActive, fontWeight: '700', fontSize: 20 },
-  brandTagline: { fontSize: 11, fontStyle: 'italic', color: SIDEBAR.tagline, marginTop: 1 },
+
+  // Mansakha logo
+  logo: {
+    width: 140,
+    height: 70,
+  },
+
   body: {
     flex: 1,
     justifyContent: 'space-between',
   },
-  items: { padding: spacing.xxl, gap: spacing.sm },
+
+  items: {
+    padding: spacing.xxl,
+    gap: spacing.sm,
+  },
+
   footer: {
     paddingHorizontal: spacing.xxl,
     paddingBottom: 16,
@@ -107,6 +152,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: SIDEBAR.divider,
   },
+
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -114,10 +160,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
   },
-  itemActive: { backgroundColor: SIDEBAR.active },
-  itemPressed: { backgroundColor: SIDEBAR.pressedOverlay },
-  itemLabel: { ...typography.bodyStrong, color: SIDEBAR.textInactive, marginLeft: spacing.md, fontSize: 14 },
-  itemLabelActive: { color: SIDEBAR.textActive },
+
+  itemActive: {
+    backgroundColor: SIDEBAR.active,
+  },
+
+  itemPressed: {
+    backgroundColor: SIDEBAR.pressedOverlay,
+  },
+
+  itemLabel: {
+    ...typography.bodyStrong,
+    color: SIDEBAR.textInactive,
+    marginLeft: spacing.md,
+    fontSize: 14,
+  },
+
+  itemLabelActive: {
+    color: SIDEBAR.textActive,
+  },
+
   logoutItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -125,6 +187,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: radius.md,
   },
+
   logoutItemLabel: {
     ...typography.bodyStrong,
     color: SIDEBAR.textInactive,

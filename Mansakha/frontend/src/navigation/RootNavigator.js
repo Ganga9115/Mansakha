@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
@@ -11,12 +11,15 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 
 const Stack = createNativeStackNavigator();
 
+const isWeb = Platform.OS === 'web';
+
 const linking = {
   prefixes: [],
   config: {
     screens: {
       Onboarding: 'welcome',
-      VictimLogin: '',
+      VictimLogin: 'login',
+      VictimShell: '',
     },
   },
 };
@@ -34,7 +37,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer linking={linking}>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator initialRouteName={session ? 'VictimShell' : (isWeb ? 'VictimLogin' : 'Onboarding')} screenOptions={{ headerShown: false }}>
         {!session && (
           <>
             <Stack.Screen name="Onboarding" component={OnboardingScreen} />

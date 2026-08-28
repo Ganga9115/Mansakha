@@ -58,7 +58,8 @@ export default function SupportScreen({ navigation }) {
   const handleToggleCounsellorPreference = async (value) => {
     try {
       await updateCounsellorPreference.mutateAsync(value);
-      toast.success(value ? 'You will now be matched with a human counsellor.' : 'Counsellor preference updated.');
+      await Promise.all([assignedCounsellorQuery.refetch(), query.refetch()]);
+      toast.success(value ? 'Assigned to a human counsellor.' : 'Counsellor preference updated.');
     } catch (err) {
       toast.error(err.message || 'Could not update this preference.');
     }

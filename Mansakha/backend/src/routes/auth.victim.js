@@ -27,16 +27,14 @@ function escapeLikePattern(str) {
 }
 
 router.post('/login', victimLoginLimiter, async (req, res) => {
-  const { docketNumber, fullName, contactNumber, password } = req.body;
-  if (!docketNumber || !fullName || !contactNumber || !password) {
-    return fail(res, 'docketNumber, fullName, contactNumber, and password are required', 400);
+  const { docketNumber, password } = req.body;
+  if (!docketNumber || !password) {
+    return fail(res, 'docketNumber and password are required', 400);
   }
 
-  // Same generic message for every failure reason - don't reveal which field was
-  // wrong to something probing for a valid docket number.
   const genericFailure = () => fail(res, 'No matching record found - check your details and try again', 401);
 
-  console.log('Login attempt:', { docketNumber, fullName, contactNumber });
+  console.log('Victim login attempt for docket:', docketNumber);
   const { data: victim, error: victimError } = await supabase
     .from('victims')
     .select('victim_id, password_hash, must_change_password')
@@ -49,28 +47,13 @@ router.post('/login', victimLoginLimiter, async (req, res) => {
     return genericFailure();
   }
 
-  const { data: identity, error: identityError } = await supabase.from('victim_identity').select('full_name, contact_number').eq('victim_id', victim.victim_id).maybeSingle();
-  if (identityError) console.error('Identity query error:', identityError);
-
-  const normalizePhone = (phone) => String(phone || '').trim().replace(/^\+91/, '');
-
-  if (!identity ||
-      identity.full_name.trim().toLowerCase() !== fullName.trim().toLowerCase() ||
-      normalizePhone(identity.contact_number) !== normalizePhone(contactNumber)) {
-    console.log('Identity mismatch:', identity, { providedName: fullName, providedPhone: contactNumber });
-    return genericFailure();
-  }
-
-  // 4th credential - same generic failure as a docket/name/contact mismatch,
-  // not a distinct "wrong password" message, so a valid 3-field guess can't
-  // be used to probe for the password separately.
   const passwordOk = victim.password_hash && await bcrypt.compare(password, victim.password_hash);
   if (!passwordOk) {
     console.log('Password mismatch for victim:', victim.victim_id);
     return genericFailure();
   }
 
-  console.log('Login successful for:', victim.victim_id);
+  console.log('Victim login successful for:', victim.victim_id);
 
   const token = signToken({ type: 'victim', victimId: victim.victim_id });
   return ok(res, { token, mustChangePassword: victim.must_change_password });

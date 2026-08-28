@@ -21,12 +21,25 @@ const { CASE_STAGE_SCORES } = require('./victimProvisioning');
 //
 // Returns null if the jurisdiction has no Counsellor at all.
 async function selectLeastLoadedCounsellor(jurisdictionId) {
-  const { data: allRoles } = await supabase
-    .from('official_roles')
-    .select('official_id, roles(role_name)')
-    .eq('jurisdiction_id', jurisdictionId)
-    .is('revoked_at', null);
-  const counsellorIds = (allRoles || []).filter((r) => r.roles.role_name === 'Counsellor').map((r) => r.official_id);
+  let counsellorIds = [];
+  if (jurisdictionId) {
+    const { data: allRoles } = await supabase
+      .from('official_roles')
+      .select('official_id, roles(role_name)')
+      .eq('jurisdiction_id', jurisdictionId)
+      .is('revoked_at', null);
+    counsellorIds = (allRoles || []).filter((r) => r.roles?.role_name === 'Counsellor').map((r) => r.official_id);
+  }
+
+  // Fallback: if no counsellor is assigned to that specific district, find any active counsellor in the system
+  if (counsellorIds.length === 0) {
+    const { data: globalRoles } = await supabase
+      .from('official_roles')
+      .select('official_id, roles(role_name)')
+      .is('revoked_at', null);
+    counsellorIds = (globalRoles || []).filter((r) => r.roles?.role_name === 'Counsellor').map((r) => r.official_id);
+  }
+
   if (counsellorIds.length === 0) return null;
   if (counsellorIds.length === 1) return counsellorIds[0];
 

@@ -322,21 +322,39 @@ router.patch('/counsellor-preference', async (req, res) => {
   const { error } = await supabase.from('victims').update({ opted_for_manual_counsellor: optedIn }).eq('victim_id', req.auth.victimId);
   if (error) return fail(res, `Could not update counsellor preference: ${error.message}`, 500);
 
+  let assignedCounsellor = null;
   if (optedIn) {
     const { data: victim } = await supabase
       .from('victims')
       .select('jurisdiction_id, assigned_counsellor_id')
       .eq('victim_id', req.auth.victimId)
       .maybeSingle();
-    if (victim && !victim.assigned_counsellor_id) {
-      const chosenCounsellorId = await selectLeastLoadedCounsellor(victim.jurisdiction_id);
-      if (chosenCounsellorId) {
-        await supabase.from('victims').update({ assigned_counsellor_id: chosenCounsellorId }).eq('victim_id', req.auth.victimId);
+
+    let counsellorId = victim?.assigned_counsellor_id;
+    if (victim && !counsellorId) {
+      counsellorId = await selectLeastLoadedCounsellor(victim.jurisdiction_id);
+      if (counsellorId) {
+        await supabase.from('victims').update({ assigned_counsellor_id: counsellorId }).eq('victim_id', req.auth.victimId);
+      }
+    }
+
+    if (counsellorId) {
+      const { data: official } = await supabase
+        .from('officials')
+        .select('full_name, phone, whatsapp_number')
+        .eq('official_id', counsellorId)
+        .maybeSingle();
+      if (official) {
+        assignedCounsellor = {
+          fullName: official.full_name,
+          phone: official.phone,
+          whatsappNumber: official.whatsapp_number,
+        };
       }
     }
   }
 
-  return ok(res, null, 'Counsellor preference updated');
+  return ok(res, { assigned: !!assignedCounsellor, counsellor: assignedCounsellor }, 'Counsellor preference updated');
 });
 
 // Section 2.2 "Scheduled counsellings" - the counsellor-side write
@@ -370,7 +388,7 @@ router.get('/counselling-sessions', async (req, res) => {
 // No backend call-routing/VoIP infrastructure implied.
 router.get('/assigned-counsellor', async (req, res) => {
   const { rows } = await pool.query(
-    `select v.opted_for_manual_counsellor, v.assigned_counsellor_id, o.full_name, o.phone, o.whatsapp_number
+    `select v.opted_for_manual_counsellor, v.assigned_counsellor_id, v.jurisdiction_id, o.full_name, o.phone, o.whatsapp_number
      from victims v
      left join officials o on o.official_id = v.assigned_counsellor_id
      where v.victim_id = $1`,
@@ -379,13 +397,39 @@ router.get('/assigned-counsellor', async (req, res) => {
   const victim = rows[0];
   if (!victim) return fail(res, 'Victim record not found', 404);
 
-  if (!victim.opted_for_manual_counsellor || !victim.assigned_counsellor_id || !victim.full_name) {
+  if (!victim.opted_for_manual_counsellor) {
+    return ok(res, { assigned: false, counsellor: null });
+  }
+
+  // If opted in but no counsellor is assigned yet, assign immediately!
+  let counsellorName = victim.full_name;
+  let counsellorPhone = victim.phone;
+  let counsellorWhatsapp = victim.whatsapp_number;
+
+  if (!victim.assigned_counsellor_id || !counsellorName) {
+    const chosenCounsellorId = await selectLeastLoadedCounsellor(victim.jurisdiction_id);
+    if (chosenCounsellorId) {
+      await supabase.from('victims').update({ assigned_counsellor_id: chosenCounsellorId }).eq('victim_id', req.auth.victimId);
+      const { data: official } = await supabase
+        .from('officials')
+        .select('full_name, phone, whatsapp_number')
+        .eq('official_id', chosenCounsellorId)
+        .maybeSingle();
+      if (official) {
+        counsellorName = official.full_name;
+        counsellorPhone = official.phone;
+        counsellorWhatsapp = official.whatsapp_number;
+      }
+    }
+  }
+
+  if (!counsellorName) {
     return ok(res, { assigned: false, counsellor: null });
   }
 
   return ok(res, {
     assigned: true,
-    counsellor: { fullName: victim.full_name, phone: victim.phone, whatsappNumber: victim.whatsapp_number },
+    counsellor: { fullName: counsellorName, phone: counsellorPhone, whatsappNumber: counsellorWhatsapp },
   });
 });
 
