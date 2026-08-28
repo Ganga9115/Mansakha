@@ -42,7 +42,10 @@ export default function ChatScreen({ navigation }) {
   const [voiceState, setVoiceState] = useState('Ready to talk');
   const [transcript, setTranscript] = useState('Press the call button and Mansakha will speak first.');
   const recognitionRef = useRef(null);
-  
+
+  // Dictation State (for Text Chat)
+  const [isDictating, setIsDictating] = useState(false);
+  const dictationRef = useRef(null);
   // Analysis State
   const [analysis, setAnalysis] = useState(null);
 
@@ -112,6 +115,39 @@ export default function ChatScreen({ navigation }) {
       // error handled in askOllama
     }
   };
+
+  const toggleDictation = () => {
+    if (isDictating) {
+      try { dictationRef.current?.stop(); } catch (e) {}
+      setIsDictating(false);
+      return;
+    }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      alert("Speech recognition unavailable in this browser.");
+      return;
+    }
+    const r = new SR();
+    r.continuous = false;
+    r.interimResults = true;
+    r.lang = "en-IN";
+    r.onstart = () => setIsDictating(true);
+    r.onresult = (e) => {
+      let finalStr = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finalStr += e.results[i][0].transcript;
+      }
+      if (finalStr.trim()) {
+        setDraft(prev => (prev ? prev + " " + finalStr.trim() : finalStr.trim()));
+      }
+    };
+    r.onerror = () => setIsDictating(false);
+    r.onend = () => setIsDictating(false);
+    
+    dictationRef.current = r;
+    r.start();
+  };
+
 
   // --- Voice Logic (Web Only for Prototype) ---
   const getVoice = () => {
@@ -392,11 +428,10 @@ ${transcriptText}`;
             <FlatList
               ref={listRef}
               data={messages}
-              keyExtractor={(_, i) => String(i)}
+              showsVerticalScrollIndicator={false}
+              keyExtractor={(_, i) => i.toString()}
               renderItem={({ item }) => <Bubble message={item} />}
               contentContainerStyle={styles.listContent}
-              onContentSizeChange={() => listRef.current?.scrollToEnd?.({ animated: false })}
-              showsVerticalScrollIndicator={false}
               ListEmptyComponent={<Text style={styles.emptyText}>This uses the same local Ollama connection as Voice Call.</Text>}
             />
             {analysis && (
@@ -427,6 +462,12 @@ ${transcriptText}`;
                   }}
                   multiline
                 />
+                <Pressable
+                  style={[styles.micBtn, isDictating && styles.micBtnActive]}
+                  onPress={toggleDictation}
+                >
+                  <Feather name={isDictating ? "mic-off" : "mic"} size={20} color={isDictating ? colors.danger : colors.primary} />
+                </Pressable>
                 <Pressable style={[styles.sendBtn, !draft.trim() && styles.sendBtnDisabled]} onPress={handleSendText} disabled={!draft.trim()}>
                   <Feather name="send" size={18} color={colors.white} />
                 </Pressable>
@@ -436,7 +477,7 @@ ${transcriptText}`;
         )}
 
         {mode === 'voice' && (
-          <ScrollView contentContainerStyle={styles.voiceCenter}>
+          <ScrollView contentContainerStyle={styles.voiceCenter} showsVerticalScrollIndicator={false}>
             <View style={[styles.avatar, speaking && styles.avatarActive]}>
               <Text style={styles.avatarEmoji}>🎧</Text>
             </View>
@@ -525,6 +566,14 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'web' ? 10 : 8,
     paddingBottom: Platform.OS === 'web' ? 10 : 8,
     outlineStyle: 'none',
+  },
+  micBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center', marginLeft: 4,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  micBtnActive: {
+    borderColor: colors.danger, backgroundColor: colors.danger + '1A', // transparent light red
   },
   sendBtn: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary,
