@@ -9,7 +9,8 @@ import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import TopRightActions from '../../components/TopRightActions';
 import SegmentedToggle from '../../components/SegmentedToggle';
-
+import { useCheckin } from '../../services/hooks';
+import { analyzeConversation } from '../../services/ollamaClient';
 const OLLAMA = "http://127.0.0.1:11434";
 const CHAT = OLLAMA + "/api/chat";
 const TAGS = OLLAMA + "/api/tags";
@@ -29,6 +30,7 @@ function Bubble({ message }) {
 
 export default function ChatScreen({ navigation }) {
   const { tier } = useResponsive();
+  const submitMutation = useCheckin();
   const [mode, setMode] = useState('text'); // 'text' | 'voice'
   const [model, setModel] = useState('gemma3:4b');
   const [models, setModels] = useState([]);
@@ -320,64 +322,37 @@ export default function ChatScreen({ navigation }) {
     
     setAnalysis({ score: 'Analyzing...', description: 'Reviewing the conversation for signs of distress...', meta: `Local analysis via ${model}` });
     
-    const transcriptText = messagesRef.current
-      .filter(m => m.role === "user" || m.role === "assistant")
-      .map(m => (m.role === "user" ? "USER: " : "MANSAKHA: ") + m.content)
-      .join("\\n");
-      
-    const prompt = `Analyze ONLY the user's messages in the conversation below for apparent emotional distress.
-
-Return ONLY valid JSON with exactly these fields:
-{
-  "score": number,
-  "description": "string"
-}
-
-Rules:
-- score must be a whole number from 0 to 10.
-- 0 means no clear distress in the conversation.
-- 10 means very strong signs of distress.
-- Base the score on the actual conversation, not assumptions.
-- The description must briefly explain the main evidence from what the user said.
-- Mention concrete themes or statements from the conversation, but do not invent facts.
-- Do not diagnose a mental illness.
-- Do not call the score a medical diagnosis.
-- Do not recommend treatment.
-- This is an experimental conversational distress indicator, not a clinical assessment.
-
-CONVERSATION:
-${transcriptText}`;
-
     try {
-      const r = await fetch(CHAT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: model,
-          stream: false,
-          messages: [{ role: "system", content: "You are a careful post-conversation distress analysis module. Output only the requested JSON." }, { role: "user", content: prompt }],
-          options: { temperature: 0.1 }
-        })
-      });
-      if (!r.ok) throw new Error(await r.text());
-      const d = await r.json();
-      let raw = d?.message?.content?.trim() || "";
-      raw = raw.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/\s*```$/, "").trim();
-      const result = JSON.parse(raw);
-      let scoreVal = Math.round(Number(result.score));
-      if (!Number.isFinite(scoreVal)) throw new Error("Invalid score");
-      scoreVal = Math.max(0, Math.min(10, scoreVal));
+      // 1. Analyze the conversation using the standard ollamaClient logic
+      const aiAnalysis = await analyzeConversation(messagesRef.current, model);
       
+      // 2. Format responses for the backend
+      const formattedResponses = messagesRef.current
+        .filter(m => m.role === "user" || m.role === "assistant")
+        .map(m => (m.role === "user" ? "Person: " : "Mansakha: ") + m.content);
+
+      // 3. Submit to backend to update distress scores in the DB
+      const result = await submitMutation.mutateAsync({
+        channel: mode === 'voice' ? 'Voice Call' : 'Chatbot',
+        responses: formattedResponses,
+        aiAnalysis
+      });
+
+      // 4. Update the UI with the final result
+      let scoreVal = Math.round(Number(result.scoreValue));
+      if (!Number.isFinite(scoreVal)) throw new Error("Invalid score returned from backend");
+      scoreVal = Math.max(0, Math.min(10, scoreVal));
+
       setAnalysis({
         score: scoreVal,
-        description: result.description || "No description returned.",
+        description: result.summary || "Conversation analyzed and safely stored.",
         meta: `Post-conversation analysis • ${new Date().toLocaleTimeString()}`
       });
       setStatus(`● Distress analysis complete • ${model}`);
     } catch (e) {
       setAnalysis({
         score: 'Error',
-        description: 'The local model returned an invalid analysis.',
+        description: 'Failed to analyze or save the distress score.',
         meta: e.message
       });
       setStatus("✕ Distress analysis failed");
