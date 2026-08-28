@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
 import { Download } from 'lucide-react';
-import { useMyJurisdiction, useAdminDashboard, useCounsellorDashboard } from '../../../services/hooks';
+import { useMyJurisdiction, useAdminDashboard, useCounsellorDashboard, useExportReportCsv } from '../../../services/hooks';
 
 export default function Reports() {
   const [timeRange, setTimeRange] = useState('Last 30 Days');
@@ -12,6 +12,7 @@ export default function Reports() {
   const { jurisdictionId } = useMyJurisdiction();
   const { data: adminData } = useAdminDashboard(isCounsellor ? null : jurisdictionId);
   const { data: counsellorData } = useCounsellorDashboard();
+  const exportReport = useExportReportCsv();
   
   const dashboardData = isCounsellor ? counsellorData : adminData;
   const total = dashboardData?.totalCases || dashboardData?.total || 0;
@@ -19,12 +20,20 @@ export default function Reports() {
   const critical = dashboardData?.criticalCases || dashboardData?.critical || 0;
   const moderate = dashboardData?.vulnerableVictims || dashboardData?.moderate || 0;
 
+  const handleExportCsv = async () => {
+    try {
+      await exportReport.mutate(jurisdictionId);
+    } catch (err) {
+      console.error('CSV Export Error:', err);
+    }
+  };
+
   const stackedData = [
-    { month: 'May', high: 30, moderate: 45, low: 25 },
-    { month: 'Jun', high: 25, moderate: 50, low: 25 },
-    { month: 'Jul', high: 20, moderate: 40, low: 40 },
-    { month: 'Aug', high: 35, moderate: 45, low: 20 },
-    { month: 'Sep', bg: true, high: 30, moderate: 45, low: 25 },
+    { month: 'May', high: isCounsellor ? 0 : 30, moderate: isCounsellor ? 0 : 45, low: isCounsellor ? 0 : 25 },
+    { month: 'Jun', high: isCounsellor ? 0 : 25, moderate: isCounsellor ? 0 : 50, low: isCounsellor ? 0 : 25 },
+    { month: 'Jul', high: isCounsellor ? 0 : 20, moderate: isCounsellor ? 0 : 40, low: isCounsellor ? 0 : 40 },
+    { month: 'Aug', high: isCounsellor ? 0 : 35, moderate: isCounsellor ? 0 : 45, low: isCounsellor ? 0 : 20 },
+    { month: 'Sep', bg: true, high: isCounsellor ? 0 : 30, moderate: isCounsellor ? 0 : 45, low: isCounsellor ? 0 : 25 },
   ];
 
   return (
@@ -49,9 +58,13 @@ export default function Reports() {
             ))}
           </div>
 
-          <button className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition">
+          <button
+            onClick={handleExportCsv}
+            disabled={exportReport.loading}
+            className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
+          >
             <Download size={14} />
-            Export System Audit (PDF)
+            {exportReport.loading ? 'Exporting CSV...' : 'Export Audit CSV'}
           </button>
         </div>
 
@@ -68,7 +81,7 @@ export default function Reports() {
               <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
                 <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
                 <path
-                  d="M 0 65 L 125 45 L 250 55 L 340 10 L 450 45"
+                  d={isCounsellor ? "M 0 50 L 125 50 L 250 50 L 340 50 L 450 50" : "M 0 65 L 125 45 L 250 55 L 340 10 L 450 45"}
                   fill="none"
                   stroke="#DC2626"
                   strokeWidth="2.5"
@@ -147,39 +160,39 @@ export default function Reports() {
                     stroke="#F3F4F6"
                     strokeWidth="4"
                   />
-                  {/* Completed (40%) */}
+                  {/* Completed */}
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
                     stroke="#10B981"
                     strokeWidth="4"
-                    strokeDasharray="40, 100"
+                    strokeDasharray={isCounsellor ? "0, 100" : "40, 100"}
                     className="transition-all duration-1000 ease-out"
                   />
-                  {/* In Progress (35%) */}
+                  {/* In Progress */}
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
                     stroke="#3B82F6"
                     strokeWidth="4"
-                    strokeDasharray="35, 100"
+                    strokeDasharray={isCounsellor ? "0, 100" : "35, 100"}
                     strokeDashoffset="-40"
                     className="transition-all duration-1000 ease-out delay-150"
                   />
-                  {/* Planned (25%) */}
+                  {/* Planned */}
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
                     stroke="#F59E0B"
                     strokeWidth="4"
-                    strokeDasharray="25, 100"
+                    strokeDasharray={isCounsellor ? "0, 100" : "25, 100"}
                     strokeDashoffset="-75"
                     className="transition-all duration-1000 ease-out delay-300"
                   />
                 </svg>
                 {/* Center text */}
                 <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-extrabold text-gray-800">100%</span>
+                  <span className="text-xl font-extrabold text-gray-800">{isCounsellor ? '0%' : '100%'}</span>
                   <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Total</span>
                 </div>
               </div>
@@ -188,15 +201,15 @@ export default function Reports() {
               <div className="space-y-4 mt-6 sm:mt-0 text-sm font-semibold text-gray-700">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm ring-2 ring-emerald-100"></div>
-                  <span>Completed Actions <span className="text-gray-400 ml-2">40%</span></span>
+                  <span>Completed Actions <span className="text-gray-400 ml-2">{isCounsellor ? '0%' : '40%'}</span></span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-100"></div>
-                  <span>In Progress Queue <span className="text-gray-400 ml-2">35%</span></span>
+                  <span>In Progress Queue <span className="text-gray-400 ml-2">{isCounsellor ? '0%' : '35%'}</span></span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm ring-2 ring-amber-100"></div>
-                  <span>Planned / Referred <span className="text-gray-400 ml-2">25%</span></span>
+                  <span>Planned / Referred <span className="text-gray-400 ml-2">{isCounsellor ? '0%' : '25%'}</span></span>
                 </div>
               </div>
             </div>

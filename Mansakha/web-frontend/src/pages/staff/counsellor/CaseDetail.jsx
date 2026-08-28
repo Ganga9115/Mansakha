@@ -130,21 +130,6 @@ export default function CaseDetail() {
                   </a>
                 </>
               )}
-              {data.interventionStatus === 'pending' && data.interventionId && (
-                <button
-                  onClick={handleComplete}
-                  disabled={completeIntervention.loading}
-                  className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium shadow-sm hover:bg-[#3d83b3] transition disabled:opacity-60"
-                >
-                  Mark Intervention Complete
-                </button>
-              )}
-              <button
-                onClick={() => navigate(`/counsellor/interventions?victimId=${victimId}${data.suggestedInterventionType ? `&suggested=${data.suggestedInterventionType.id}` : ''}`)}
-                className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-[#519BCE]/10 transition"
-              >
-                Log Intervention
-              </button>
             </div>
           )}
         </div>
@@ -236,28 +221,6 @@ export default function CaseDetail() {
 
             {!readOnly && (
               <>
-                {/* Decision-making panel - one button per seeded intervention
-                    type, pre-filling Log Intervention rather than defaulting
-                    to the dropdown's first option. */}
-                <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
-                  <h3 className="font-bold text-sm text-gray-800 mb-3">Decision Making</h3>
-                  {interventionTypesQuery.loading ? (
-                    <p className="text-xs text-gray-400">Loading options...</p>
-                  ) : (
-                    <div className="grid grid-cols-1 gap-2">
-                      {(interventionTypesQuery.data?.interventionTypes || []).map((t) => (
-                        <button
-                          key={t.intervention_type_id}
-                          onClick={() => navigate(`/counsellor/interventions?victimId=${victimId}&suggested=${t.intervention_type_id}`)}
-                          className="px-3 py-2 text-left border border-gray-200 hover:border-[#519BCE] hover:bg-[#519BCE]/5 rounded-lg text-xs font-medium text-gray-700 transition"
-                        >
-                          {t.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
                 {/* Scheduled Counsellings */}
                 <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
                   <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2"><CalendarPlus size={16} /> Schedule a Session</h3>

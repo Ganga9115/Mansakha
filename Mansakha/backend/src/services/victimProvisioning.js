@@ -61,7 +61,7 @@ class ProvisioningError extends Error {
 // 'Investigation') - per explicit request, stage is something the operator
 // sets later via the Victims list's editable dropdown (PATCH .../victims/:id
 // below), not a decision made at intake time.
-async function createVictim({ docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, provisionedVia, address = null, caseBackground = null }) {
+async function createVictim({ docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, provisionedVia, address = null, caseBackground = null, password = null }) {
   if (!docketNumber || !fullName || !contactNumber || !jurisdictionId || !caseTypeId) {
     throw new ProvisioningError('docketNumber, fullName, contactNumber, jurisdictionId, and caseTypeId are required', 400);
   }
@@ -79,7 +79,8 @@ async function createVictim({ docketNumber, fullName, contactNumber, jurisdictio
   const { data: existing } = await supabase.from('victims').select('victim_id').eq('docket_number', docketNumber.trim()).maybeSingle();
   if (existing) throw new ProvisioningError('A victim with this docket number already exists', 409);
 
-  const passwordHash = await bcrypt.hash(DEFAULT_VICTIM_PASSWORD, 12);
+  const initialPassword = (password && String(password).trim()) ? String(password).trim() : DEFAULT_VICTIM_PASSWORD;
+  const passwordHash = await bcrypt.hash(initialPassword, 12);
 
   // victims + victim_identity in one transaction - a victim row must never exist
   // without its identity row (or vice versa); two independent supabase-js calls
@@ -104,10 +105,7 @@ async function createVictim({ docketNumber, fullName, contactNumber, jurisdictio
     throw new ProvisioningError(`Could not create victim: ${err.message}`, 500);
   }
 
-  // temporaryPassword returned so the calling route can show it to the
-  // provisioning admin alongside the docket number - it's the same fixed
-  // value every time, but the admin still needs to actually tell the victim.
-  return { victimId, docketNumber: docketNumber.trim(), temporaryPassword: DEFAULT_VICTIM_PASSWORD };
+  return { victimId, docketNumber: docketNumber.trim(), temporaryPassword: initialPassword };
 }
 
 // Case stage / status / contact detail updates only - docket number, name, and
