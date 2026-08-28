@@ -15,7 +15,7 @@ export default function TopRightActions() {
   // to talk to Mansakha's AI from anywhere in the app. Revisit if voice input
   // comes back to the questionnaire flow.
   const handleAiCall = () => {
-    navigation?.navigate('checkin', { screen: 'CheckinMain' });
+    navigation?.navigate('Chatbot');
   };
 
   return (

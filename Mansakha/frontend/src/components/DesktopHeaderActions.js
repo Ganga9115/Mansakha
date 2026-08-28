@@ -6,12 +6,23 @@ import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
 import SosButton from './SosButton';
+import { useNavigation } from '@react-navigation/native';
 
 export default function DesktopHeaderActions({ fullName, roleLabel = 'Victim', alertCount = 0, onBellPress }) {
+  const navigation = useNavigation();
+
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <SosButton asHeaderIcon />
+        <Pressable
+          style={styles.bellBtn}
+          onPress={() => navigation?.navigate('Chatbot')}
+          accessibilityRole="button"
+          accessibilityLabel="Talk to Mansakha by voice"
+        >
+          <Feather name="phone-call" size={20} color={colors.primaryDark} />
+        </Pressable>
         <Pressable style={styles.bellBtn} onPress={onBellPress}>
           <Feather name="bell" size={20} color={colors.primaryDark} />
           {alertCount > 0 && <View style={styles.bellDot} />}
