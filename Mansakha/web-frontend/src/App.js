@@ -7,6 +7,7 @@ import { ToastProvider } from './context/ToastContext';
 import StaffLoginPage from './pages/staff/Login';
 import CounsellorDashboard from './pages/staff/counsellor/CounsellorDashboard';
 import CaseQueue from './pages/staff/counsellor/CaseQueue';
+import MyVictims from './pages/staff/counsellor/MyVictims';
 import CaseDetail from './pages/staff/counsellor/CaseDetail';
 import LogIntervention from './pages/staff/counsellor/LogIntervention';
 import AlertsFeed from './pages/staff/counsellor/AlertsFeed';
@@ -16,7 +17,7 @@ import NationalDashboard from './pages/staff/administration/NationalDashboard';
 import AdminAlerts from './pages/staff/administration/AdminAlerts';
 import VictimRegistration from './pages/staff/administration/VictimRegistration';
 import StaffReports from './pages/staff/shared/Reports';
-import Graphs from './pages/staff/shared/Graphs';
+import Analysis from './pages/staff/shared/Analysis';
 import StaffSettings from './pages/staff/shared/Settings';
 
 import MinistryLayout from './layouts/MinistryLayout';
@@ -50,7 +51,8 @@ export default function App() {
             else now, so which role's shell to show never has to be guessed
             from a shared, prefix-less route. */}
         <Route path="/counsellor" element={<RequireAuth><CounsellorDashboard /></RequireAuth>} />
-        <Route path="/counsellor/case-queue" element={<RequireAuth><CaseQueue /></RequireAuth>} />
+        <Route path="/counsellor/queue" element={<RequireAuth><CaseQueue /></RequireAuth>} />
+        <Route path="/counsellor/my-victims" element={<RequireAuth><MyVictims /></RequireAuth>} />
         <Route path="/counsellor/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
         <Route path="/counsellor/interventions" element={<RequireAuth><LogIntervention /></RequireAuth>} />
         <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
@@ -58,10 +60,9 @@ export default function App() {
         <Route path="/counsellor/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
 
         {/* District Admin - case-level dashboard is the default view;
-            Register Victim is District-only per the Feature Catalog. */}
+            district admin has no sub-jurisdictions to break down. */}
         <Route path="/districtadmin" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
         <Route path="/districtadmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
-        <Route path="/districtadmin/register-victim" element={<RequireAuth><VictimRegistration /></RequireAuth>} />
         <Route path="/districtadmin/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
         <Route path="/districtadmin/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
         <Route path="/districtadmin/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
@@ -72,7 +73,7 @@ export default function App() {
         <Route path="/stateadmin" element={<RequireAuth><StateDashboard /></RequireAuth>} />
         <Route path="/stateadmin/district/:jurisdictionId" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
         <Route path="/stateadmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
-        <Route path="/stateadmin/graphs" element={<RequireAuth><Graphs /></RequireAuth>} />
+        <Route path="/stateadmin/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />
         <Route path="/stateadmin/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
         <Route path="/stateadmin/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
         <Route path="/stateadmin/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
@@ -81,7 +82,9 @@ export default function App() {
             state (StateDashboard), then a district (AdminDashboard), then a
             case (CaseDetail), each keeping the national sidebar. */}
         <Route path="/nationaladmin" element={<RequireAuth><NationalDashboard /></RequireAuth>} />
-        <Route path="/nationaladmin/graphs" element={<RequireAuth><Graphs /></RequireAuth>} />
+        <Route path="/nationaladmin/analysis" element={<RequireAuth><Analysis /></RequireAuth>} />
+        <Route path="/nationaladmin/alerts" element={<RequireAuth><AdminAlerts /></RequireAuth>} />
+        <Route path="/nationaladmin/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
         <Route path="/nationaladmin/state/:jurisdictionId" element={<RequireAuth><StateDashboard /></RequireAuth>} />
         <Route path="/nationaladmin/district/:jurisdictionId" element={<RequireAuth><AdminDashboard /></RequireAuth>} />
         <Route path="/nationaladmin/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />

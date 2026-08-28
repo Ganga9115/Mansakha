@@ -114,14 +114,14 @@ async function countVictimsByRisk(jurisdictionIds) {
     [jurisdictionIds]
   );
 
-  const counts = { total: 0, vulnerable: 0, highRisk: 0, critical: 0 };
+  const counts = { totalCases: 0, vulnerableVictims: 0, highRiskCases: 0, criticalCases: 0 };
   const caseRows = [];
   for (const v of rows) {
-    counts.total += 1;
+    counts.totalCases += 1;
     const riskLevel = v.risk_level_name || null;
-    if (riskLevel === 'Moderate') counts.vulnerable += 1;
-    if (riskLevel === 'High') counts.highRisk += 1;
-    if (riskLevel === 'Critical') counts.critical += 1;
+    if (riskLevel === 'Moderate') counts.vulnerableVictims += 1;
+    if (riskLevel === 'High') counts.highRiskCases += 1;
+    if (riskLevel === 'Critical') counts.criticalCases += 1;
     caseRows.push({ victimId: v.victim_id, score: v.score_value !== null ? Number(v.score_value) : null, riskLevel });
   }
   return { counts, caseRows };
@@ -209,29 +209,45 @@ router.get(
     const { jurisdictionId } = req.params;
 
     const { data: jurisdiction } = await supabase.from('jurisdictions').select('level').eq('jurisdiction_id', jurisdictionId).single();
-    if (!jurisdiction || jurisdiction.level !== 'district') {
-      return fail(res, 'Live alert feed is only available at the district tier', 400);
+    if (!jurisdiction) {
+      return fail(res, 'Jurisdiction not found', 404);
     }
 
-    // Capped, not full-page-UI paginated - same reasoning as the Counsellor
-    // alerts feed (routes/counsellor.js): polled and rendered live, not
-    // paged through by the user.
-    const { data, error } = await supabase
-      .from('alert_notifications')
-      .select('alert_id, notified_at, alerts(victim_id, triggered_at, alert_statuses(name))')
-      .eq('official_id', req.auth.officialId)
-      .order('notified_at', { ascending: false })
-      .limit(50);
-    if (error) return fail(res, 'Could not load alerts', 500);
+    let formattedAlerts = [];
+    if (jurisdiction.level === 'district') {
+      const { data, error } = await supabase
+        .from('alert_notifications')
+        .select('alert_id, notified_at, alerts(victim_id, triggered_at, alert_statuses(name))')
+        .eq('official_id', req.auth.officialId)
+        .order('notified_at', { ascending: false })
+        .limit(50);
+      if (error) return fail(res, 'Could not load alerts', 500);
 
-    return ok(res, {
-      alerts: (data || []).map((n) => ({
+      formattedAlerts = (data || []).map((n) => ({
         alertId: n.alert_id,
         victimId: n.alerts.victim_id,
         triggeredAt: n.alerts.triggered_at,
         status: n.alerts.alert_statuses.name,
-      })),
-    });
+      }));
+    } else {
+      const descendants = await getDescendantJurisdictionIds(jurisdictionId);
+      const { data, error } = await supabase
+        .from('alerts')
+        .select('alert_id, victim_id, triggered_at, alert_statuses(name), victims!inner(jurisdiction_id)')
+        .in('victims.jurisdiction_id', descendants)
+        .order('triggered_at', { ascending: false })
+        .limit(50);
+      if (error) return fail(res, 'Could not load alerts', 500);
+
+      formattedAlerts = (data || []).map((a) => ({
+        alertId: a.alert_id,
+        victimId: a.victim_id,
+        triggeredAt: a.triggered_at,
+        status: a.alert_statuses.name,
+      }));
+    }
+
+    return ok(res, { alerts: formattedAlerts });
   }
 );
 
