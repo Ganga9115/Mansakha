@@ -13,6 +13,7 @@ import {
   FileSearch,
   Users,
   User,
+  Inbox,
 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
