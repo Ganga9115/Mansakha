@@ -1,8 +1,18 @@
 // Thin fetch wrapper - attaches the JWT, unwraps the { success, data, message }
 // envelope from Build Prompt Section 7, and throws on failure so callers can just
 // await and try/catch instead of checking `.success` everywhere.
+import { Platform } from 'react-native';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+// Use the Mac's LAN IP when running on a physical Android device.
+// Use localhost when running on web/Mac.
+const API_BASE_URL =
+  Platform.OS === 'android'
+    ? process.env.EXPO_PUBLIC_API_LAN_URL
+    : process.env.EXPO_PUBLIC_API_BASE_URL;
+    console.log('Platform:', Platform.OS);
+console.log('API_BASE_URL:', API_BASE_URL);
+
+// const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:4000';
 
 async function request(path, { method = 'GET', body, token } = {}) {
   const headers = { 'Content-Type': 'application/json' };
