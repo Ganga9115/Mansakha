@@ -104,7 +104,8 @@ export default function SettingsScreen({ navigation }) {
     setLocalOptedForCounsellor(value);
     try {
       await updateCounsellorPreference.mutateAsync(value);
-      toast.success(value ? 'You will now be matched with a human counsellor.' : 'Counsellor preference updated.');
+      await Promise.all([assignedCounsellorQuery.refetch(), dashboardQuery.refetch()]);
+      toast.success(value ? 'Assigned to a human counsellor.' : 'Counsellor preference updated.');
     } catch (err) {
       setLocalOptedForCounsellor(!value);
       toast.error(err.message || 'Could not update this preference.');

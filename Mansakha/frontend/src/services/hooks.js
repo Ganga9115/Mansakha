@@ -41,8 +41,8 @@ export function useLanguageOptions() {
 // first login.
 export function useVictimLogin() {
   return useMutation({
-    mutationFn: ({ docketNumber, fullName, contactNumber, password }) =>
-      apiClient.post('/api/auth/victim/login', { docketNumber, fullName, contactNumber, password }),
+    mutationFn: ({ docketNumber, password }) =>
+      apiClient.post('/api/auth/victim/login', { docketNumber, password }),
   });
 }
 

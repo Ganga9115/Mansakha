@@ -65,19 +65,14 @@ const TAB_ICONS = {
 function TabNavigator() {
   const dashboard = useVictimDashboard();
   const counsellor = useAssignedCounsellor();
-  const navItems = [...getNavItemsForRole('Victim')];
-  
-  if (dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned) {
-    const insertIndex = navItems.findIndex(i => i.key === 'settings');
-    navItems.splice(insertIndex !== -1 ? insertIndex : navItems.length, 0, { key: 'mycounsellor', label: 'My Counsellor', screen: 'mycounsellor', icon: 'message-square' });
-  }
+  const showMyCounsellor = !!(dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned);
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
-        headerShown: false, // Let custom screens handle their top titles
-        tabBarActiveTintColor: colors.primary,      // #519BCE Soft Blue
-        tabBarInactiveTintColor: colors.borderStrong, // #9D9D9D Soft Gray
+        headerShown: false,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.borderStrong,
         tabBarStyle: {
           backgroundColor: colors.surface,
           borderTopColor: colors.border,
@@ -99,14 +94,19 @@ function TabNavigator() {
         },
       })}
     >
-      {navItems.map((item) => (
-        <Tab.Screen
-          key={item.key}
-          name={item.key}
-          component={SCREENS[item.key]}
-          options={{ title: item.label }}
-        />
-      ))}
+      <Tab.Screen name="home" component={SCREENS.home} options={{ title: 'Home' }} />
+      <Tab.Screen name="checkin" component={SCREENS.checkin} options={{ title: 'Check-in' }} />
+      <Tab.Screen name="history" component={SCREENS.history} options={{ title: 'History' }} />
+      <Tab.Screen name="support" component={SCREENS.support} options={{ title: 'Support' }} />
+      <Tab.Screen
+        name="mycounsellor"
+        component={SCREENS.mycounsellor}
+        options={{
+          title: 'My Counsellor',
+          tabBarButton: showMyCounsellor ? undefined : () => null,
+        }}
+      />
+      <Tab.Screen name="settings" component={SCREENS.settings} options={{ title: 'Profile' }} />
     </Tab.Navigator>
   );
 }
@@ -117,12 +117,7 @@ function TabNavigator() {
 function DesktopNavigator() {
   const dashboard = useVictimDashboard();
   const counsellor = useAssignedCounsellor();
-  const navItems = [...getNavItemsForRole('Victim')];
-  
-  if (dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned) {
-    const insertIndex = navItems.findIndex(i => i.key === 'settings');
-    navItems.splice(insertIndex !== -1 ? insertIndex : navItems.length, 0, { key: 'mycounsellor', label: 'My Counsellor', screen: 'mycounsellor', icon: 'message-square' });
-  }
+  const showMyCounsellor = !!(dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned);
 
   return (
     <Drawer.Navigator
@@ -137,16 +132,14 @@ function DesktopNavigator() {
         },
         sceneContainerStyle: { backgroundColor: colors.background },
       }}
-      drawerContent={(props) => <SidebarNav {...props} icons={TAB_ICONS} />}
+      drawerContent={(props) => <SidebarNav {...props} icons={TAB_ICONS} showMyCounsellor={showMyCounsellor} />}
     >
-      {navItems.map((item) => (
-        <Drawer.Screen
-          key={item.key}
-          name={item.key}
-          component={SCREENS[item.key]}
-          options={{ title: item.label }}
-        />
-      ))}
+      <Drawer.Screen name="home" component={SCREENS.home} options={{ title: 'Home' }} />
+      <Drawer.Screen name="checkin" component={SCREENS.checkin} options={{ title: 'Check-in' }} />
+      <Drawer.Screen name="history" component={SCREENS.history} options={{ title: 'History' }} />
+      <Drawer.Screen name="support" component={SCREENS.support} options={{ title: 'Support' }} />
+      <Drawer.Screen name="mycounsellor" component={SCREENS.mycounsellor} options={{ title: 'My Counsellor' }} />
+      <Drawer.Screen name="settings" component={SCREENS.settings} options={{ title: 'Profile' }} />
       <Drawer.Screen name="Chatbot" component={ChatScreen} />
       <Drawer.Screen name="Wellbeing" component={WellnessScreen} />
       <Drawer.Screen name="Journal" component={JournalScreen} />

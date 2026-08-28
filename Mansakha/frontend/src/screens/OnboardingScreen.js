@@ -1,11 +1,21 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, SafeAreaView } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, Pressable, StyleSheet, SafeAreaView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { authContentWidth } from '../theme/layout';
 import { useResponsive } from '../hooks/useResponsive';
 
 export default function OnboardingScreen({ navigation }) {
   const { tier } = useResponsive();
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      navigation.replace('VictimLogin');
+    }
+  }, [navigation]);
+
+  if (Platform.OS === 'web') {
+    return null;
+  }
   return (
     <SafeAreaView style={styles.container}>
       <View style={{ flex: 1, width: '100%', maxWidth: authContentWidth[tier], alignSelf: 'center' }}>

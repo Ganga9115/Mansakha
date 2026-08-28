@@ -27,8 +27,6 @@ export default function LoginScreen({ navigation }) {
   const toast = useToast();
 
   const [docketNumber, setDocketNumber] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [contactNumber, setContactNumber] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -40,15 +38,13 @@ export default function LoginScreen({ navigation }) {
   const loginMutation = useVictimLogin();
 
   const handleLogin = async () => {
-    if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim() || !password.trim()) {
+    if (!docketNumber.trim() || !password.trim()) {
       toast.error('Please fill in all fields.');
       return;
     }
     try {
       const data = await loginMutation.mutateAsync({
         docketNumber: docketNumber.trim(),
-        fullName: fullName.trim(),
-        contactNumber: contactNumber.trim(),
         password: password.trim(),
       });
       if (data.mustChangePassword) {
@@ -116,22 +112,6 @@ export default function LoginScreen({ navigation }) {
                     value={docketNumber} 
                     onChangeText={setDocketNumber} 
                     autoCapitalize="characters" 
-                    containerStyle={styles.customInput}
-                  />
-                  <IconInput 
-                    icon="user" 
-                    placeholder="Full Name" 
-                    value={fullName} 
-                    onChangeText={setFullName} 
-                    containerStyle={styles.customInput}
-                  />
-                  <IconInput 
-                    icon="phone" 
-                    placeholder="Mobile Number" 
-                    value={contactNumber} 
-                    onChangeText={(text) => setContactNumber(text.replace(/[^0-9]/g, ''))}
-                    keyboardType="phone-pad" 
-                    maxLength={10}
                     containerStyle={styles.customInput}
                   />
                   <IconInput 

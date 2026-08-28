@@ -1,23 +1,47 @@
-import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Easing } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Easing,
+  Image,
+} from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 
 export default function SplashScreen({ onFinish }) {
+  const logoAnim = useRef(new Animated.Value(0)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
-    // Smoothly animate progress bar line from 0% to 100% over 3000ms (3 seconds)
+    // Logo fade-in animation
+    Animated.timing(logoAnim, {
+      toValue: 1,
+      duration: 1200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: true,
+    }).start();
+
+    // Fallback progress bar animation
     Animated.timing(progressAnim, {
       toValue: 1,
       duration: 3000,
       easing: Easing.linear,
       useNativeDriver: false,
-    }).start(() => {
-      if (onFinish) onFinish();
-    });
+    }).start();
+
+    // Keep splash screen for 3 seconds
+    const timer = setTimeout(() => {
+      if (onFinish) {
+        onFinish();
+      }
+    }, 3000);
+
+    return () => clearTimeout(timer);
   }, []);
 
   const progressWidth = progressAnim.interpolate({
@@ -27,26 +51,44 @@ export default function SplashScreen({ onFinish }) {
 
   return (
     <View style={styles.container}>
-      <View style={styles.content}>
-        {/* Soft Mind & Peace Logo Badge */}
-        <View style={styles.logoBadgeOuter}>
-          <View style={styles.logoBadgeInner}>
-            <View style={styles.iconCircle}>
-              <Feather name="heart" size={18} color={colors.primary} />
+      {!imageError ? (
+        <Animated.View
+          style={[
+            styles.logoContainer,
+            {
+              opacity: logoAnim,
+            },
+          ]}
+        >
+          <Image
+            source={require('../../assets/mansakha-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+            onError={() => setImageError(true)}
+          />
+        </Animated.View>
+      ) : (
+        <View style={styles.content}>
+          {/* Soft Mind & Peace Logo Badge */}
+          <View style={styles.logoBadgeOuter}>
+            <View style={styles.logoBadgeInner}>
+              <View style={styles.iconCircle}>
+                <Feather name="heart" size={18} color={colors.primary} />
+              </View>
+              <Feather name="sun" size={32} color={colors.primary} style={styles.backgroundSunIcon} />
             </View>
-            <Feather name="sun" size={32} color={colors.primary} style={styles.backgroundSunIcon} />
+          </View>
+
+          {/* Brand Name & Tagline */}
+          <Text style={styles.title}>Mansakha</Text>
+          <Text style={styles.tagline}>Mind matters. We’re listening.</Text>
+
+          {/* 3-Second Loading Line Indicator */}
+          <View style={styles.progressBarTrack}>
+            <Animated.View style={[styles.progressBarFill, { width: progressWidth }]} />
           </View>
         </View>
-
-        {/* Brand Name & Tagline */}
-        <Text style={styles.title}>Mansakha</Text>
-        <Text style={styles.tagline}>Mind matters. We’re listening.</Text>
-
-        {/* 3-Second Loading Line Indicator */}
-        <View style={styles.progressBarTrack}>
-          <Animated.View style={[styles.progressBarFill, { width: progressWidth }]} />
-        </View>
-      </View>
+      )}
     </View>
   );
 }
@@ -54,9 +96,17 @@ export default function SplashScreen({ onFinish }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.surface,
-    justifyContent: 'center', // Vertically centers content on screen
-    alignItems: 'center',     // Horizontally centers content on screen
+    backgroundColor: '#F0F9FF', // Soft Sky Blue
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logo: {
+    width: 300,
+    height: 300,
   },
   content: {
     alignItems: 'center',
