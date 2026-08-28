@@ -18,7 +18,12 @@ function intensityClass(avgScore) {
 
 export default function Heatmap() {
   const { data, loading, error } = useHeatmap();
+  const [showAll, setShowAll] = React.useState(false);
   const regions = data?.heatmap || [];
+
+  // Sort regions by highest distress score to get the top worst-affected states
+  const sortedRegions = [...regions].sort((a, b) => (b.averageScore || 0) - (a.averageScore || 0));
+  const displayedRegions = showAll ? sortedRegions : sortedRegions.slice(0, 6);
 
   return (
     <MinistryLayout title="Analysis by State / Region">
@@ -30,18 +35,31 @@ export default function Heatmap() {
         <p className="text-sm text-gray-400">No regional data yet.</p>
       ) : (
         <div className="space-y-6">
-          {/* Section 6.3's own card grid, unchanged - a quick-scan snapshot
-              of every state at once, complementary to the ranked comparisons
-              below rather than replaced by them. */}
-          <div className="grid grid-cols-4 gap-4">
-            {regions.map((r) => (
-              <div key={r.jurisdictionId} className={`p-4 rounded-xl border ${intensityClass(r.averageScore)}`}>
-                <p className="font-bold text-sm">{r.name}</p>
-                <p className="text-2xl font-bold mt-2">{r.averageScore != null ? r.averageScore.toFixed(0) : '-'}</p>
-                <p className="text-[11px] opacity-80 mt-1">avg. distress score</p>
-                <p className="text-[11px] opacity-80">{r.victimCount} victims</p>
+          {/* Top 6 States Grid (3x2) or All States if expanded */}
+          <div>
+            <div className="flex justify-between items-end mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-800">Critical Heatmap</h2>
+                <p className="text-sm text-gray-500">Showing {showAll ? 'all states' : 'top 6 worst-affected states'}</p>
               </div>
-            ))}
+              <button 
+                onClick={() => setShowAll(!showAll)}
+                className="text-sm font-semibold text-rose-600 hover:text-rose-700"
+              >
+                {showAll ? 'Show Less' : 'See all states →'}
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {displayedRegions.map((r) => (
+                <div key={r.jurisdictionId} className={`p-4 rounded-xl border ${intensityClass(r.averageScore)}`}>
+                  <p className="font-bold text-sm">{r.name}</p>
+                  <p className="text-2xl font-bold mt-2">{r.averageScore != null ? r.averageScore.toFixed(0) : '-'}</p>
+                  <p className="text-[11px] opacity-80 mt-1">avg. distress score</p>
+                  <p className="text-[11px] opacity-80">{r.victimCount} victims</p>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Ranked comparisons - answers "which states need attention"
