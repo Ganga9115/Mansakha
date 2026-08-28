@@ -198,13 +198,24 @@ export default function ChatScreen({ navigation }) {
         setStatus("● Microphone active");
       }
     };
+    r.onspeechstart = () => {
+      if (speakingRef.current) {
+        window.speechSynthesis?.cancel();
+        setSpeaking(false);
+        setVoiceState("Listening...");
+      }
+    };
     r.onresult = e => {
       let f = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
         if (e.results[i].isFinal) f += e.results[i][0].transcript;
       }
-      setTranscript(f);
       if (f.trim()) {
+        if (speakingRef.current) {
+          window.speechSynthesis?.cancel();
+          setSpeaking(false);
+          setVoiceState("Listening...");
+        }
         handleVoiceInput(f.trim());
       }
     };
@@ -216,7 +227,7 @@ export default function ChatScreen({ navigation }) {
       }
     };
     r.onend = () => {
-      if (inCallRef.current && !speakingRef.current) {
+      if (inCallRef.current) {
         setTimeout(startListening, 300);
       }
     };
@@ -232,7 +243,7 @@ export default function ChatScreen({ navigation }) {
   messagesRef.current = messages;
 
   const startListening = () => {
-    if (!inCallRef.current || speakingRef.current) return;
+    if (!inCallRef.current) return;
     if (!recognitionRef.current) {
       recognitionRef.current = makeRecognition();
     }
@@ -254,11 +265,9 @@ export default function ChatScreen({ navigation }) {
   const handleVoiceInput = async (text) => {
     if (!inCallRef.current) return;
     stopListening();
-    setTranscript("You: " + text);
     setStatus("Mansakha is thinking...");
     try {
       const reply = await askOllama(text, messagesRef.current);
-      setTranscript(`You: ${text}\n\nMansakha: ${reply}`);
       await speak(reply);
       if (inCallRef.current) {
         setTimeout(startListening, 250);
@@ -481,7 +490,6 @@ ${transcriptText}`;
               <Text style={styles.avatarEmoji}>🎧</Text>
             </View>
             <Text style={styles.voiceState}>{voiceState}</Text>
-            <Text style={styles.transcript}>{transcript}</Text>
             
             <Pressable style={[styles.callBtn, inCall && styles.callBtnDanger]} onPress={toggleCall}>
               <Feather name={inCall ? "phone-off" : "phone"} size={28} color={colors.white} />
