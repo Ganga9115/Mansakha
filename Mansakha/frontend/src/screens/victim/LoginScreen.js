@@ -30,6 +30,7 @@ export default function LoginScreen({ navigation }) {
   const [fullName, setFullName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [tempToken, setTempToken] = useState(null);
@@ -128,8 +129,9 @@ export default function LoginScreen({ navigation }) {
                     icon="phone" 
                     placeholder="Mobile Number" 
                     value={contactNumber} 
-                    onChangeText={setContactNumber} 
+                    onChangeText={(text) => setContactNumber(text.replace(/[^0-9]/g, ''))}
                     keyboardType="phone-pad" 
+                    maxLength={10}
                     containerStyle={styles.customInput}
                   />
                   <IconInput 
@@ -137,7 +139,9 @@ export default function LoginScreen({ navigation }) {
                     placeholder="Password" 
                     value={password} 
                     onChangeText={setPassword} 
-                    secureTextEntry 
+                    secureTextEntry={!showPassword} 
+                    trailingIcon={showPassword ? 'eye-off' : 'eye'}
+                    onTrailingPress={() => setShowPassword(!showPassword)}
                     containerStyle={styles.customInput}
                   />
                 </View>

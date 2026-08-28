@@ -65,6 +65,12 @@ async function createVictim({ docketNumber, fullName, contactNumber, jurisdictio
   if (!docketNumber || !fullName || !contactNumber || !jurisdictionId || !caseTypeId) {
     throw new ProvisioningError('docketNumber, fullName, contactNumber, jurisdictionId, and caseTypeId are required', 400);
   }
+  
+  const normalizedContact = String(contactNumber).replace(/[^0-9]/g, '').slice(-10);
+  if (normalizedContact.length !== 10) {
+    throw new ProvisioningError('Contact number must be exactly 10 digits', 400);
+  }
+
   const resolvedCaseStage = caseStage || VALID_CASE_STAGES[0];
   if (!VALID_CASE_STAGES.includes(resolvedCaseStage)) {
     throw new ProvisioningError(`caseStage must be one of: ${VALID_CASE_STAGES.join(', ')}`, 400);
@@ -90,7 +96,7 @@ async function createVictim({ docketNumber, fullName, contactNumber, jurisdictio
       const id = rows[0].victim_id;
       await client.query(
         `insert into victim_identity (victim_id, full_name, contact_number, address) values ($1, $2, $3, $4)`,
-        [id, fullName.trim(), contactNumber.trim(), address || null]
+        [id, fullName.trim(), normalizedContact, address || null]
       );
       return id;
     });

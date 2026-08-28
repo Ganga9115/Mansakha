@@ -50,8 +50,9 @@ router.post('/login', staffLoginLimiter, async (req, res) => {
   // number victims call/WhatsApp via /assigned-counsellor). Same generic
   // failure message as the other checks, for the same anti-probing reason.
   if (roleName === 'Counsellor') {
-    const officialPhone = (match.official.phone || '').trim();
-    if (!officialPhone || officialPhone !== String(mobileNumber).trim()) {
+    const normalizePhone = (phone) => String(phone || '').trim().replace(/^\+91/, '');
+    const officialPhone = normalizePhone(match.official.phone);
+    if (!officialPhone || officialPhone !== normalizePhone(mobileNumber)) {
       return fail(res, 'Invalid credentials', 401);
     }
   }
