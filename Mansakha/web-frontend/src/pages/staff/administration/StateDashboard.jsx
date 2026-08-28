@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
 import { ArrowUpRight, ArrowDownRight, Minus, FileDown } from 'lucide-react';
-import { useMyJurisdiction, useAdminDashboard, useGenerateReport } from '../../../services/hooks';
+import { useMyJurisdiction, useAdminDashboard, useExportReportCsv } from '../../../services/hooks';
 
 const TREND_META = {
   up: { icon: ArrowUpRight, color: 'text-red-600', label: 'Rising' },
@@ -35,44 +35,44 @@ export default function StateDashboard() {
   const jurisdictionId = routeJurisdictionId || myJurisdictionId;
   const section = location.pathname.startsWith('/nationaladmin') ? 'nationaladmin' : 'stateadmin';
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
-  const generateReport = useGenerateReport();
+  const exportReport = useExportReportCsv();
   const [reportStatus, setReportStatus] = useState(null);
 
-  const districts = [...(data?.trends || [])].sort((a, b) => {
-    // Rising-trend districts surfaced first, not buried in alphabetical order.
-    const rank = { up: 0, flat: 1, down: 2 };
-    return (rank[a.trendDirection] ?? 1) - (rank[b.trendDirection] ?? 1);
-  });
+  const districts = data?.trends || [];
 
   const handleGenerateReport = async () => {
     setReportStatus(null);
     try {
-      await generateReport.mutate(jurisdictionId);
-      setReportStatus('Report generated - visible to Ministry.');
+      await exportReport.mutate(jurisdictionId, 'state_report');
+      setReportStatus('Report downloaded successfully.');
     } catch (err) {
-      setReportStatus(err.message || 'Could not generate report.');
+      setReportStatus(err.message || 'Could not download report.');
     }
   };
 
   return (
-    <StaffLayout title="State Dashboard" section={section}>
+    <StaffLayout title="State Dashboard" section="stateadmin">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="grid grid-cols-3 gap-6 flex-1 mr-6">
-            <StatCard title="Total Cases (State)" value={data?.totalCases ?? '-'} />
+            <StatCard title="Total Cases (Statewide)" value={data?.totalCases ?? '-'} />
             <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? '-'} tone="text-rose-600" />
             <StatCard title="Critical Cases" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
           </div>
-          <button
-            onClick={handleGenerateReport}
-            disabled={generateReport.loading || !jurisdictionId}
-            className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 shrink-0"
-          >
-            <FileDown size={14} />
-            {generateReport.loading ? 'Generating...' : 'Generate Report'}
-          </button>
+          <div className="text-right">
+            <button
+              onClick={handleGenerateReport}
+              disabled={exportReport.loading || !jurisdictionId}
+              className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 shrink-0"
+            >
+              <FileDown size={14} />
+              {exportReport.loading ? 'Downloading...' : 'Download CSV Report'}
+            </button>
+            {reportStatus && (
+              <div className="text-xs mt-2 font-medium text-emerald-600">{reportStatus}</div>
+            )}
+          </div>
         </div>
-        {reportStatus && <p className="text-xs text-gray-500">{reportStatus}</p>}
 
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-100">

@@ -98,6 +98,30 @@ export function useGenerateReport() {
   return { mutate, loading };
 }
 
+export function useExportReportCsv() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (jurisdictionId, name = 'report') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_BASE_URL || 'http://localhost:4000'}/api/admin/dashboard/${jurisdictionId}/export`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to export report');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 // Ministry Analytics & Workflow Task 2E - PATCH /api/admin/reports/:reportId/status.
 // Called by the RECIPIENT tier (the report's target_jurisdiction_id) to mark
 // a received report 'Reviewed' (backend also allows 'Draft'/'Submitted' for
