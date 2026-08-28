@@ -85,9 +85,6 @@ export default function HomeScreen({ navigation }) {
                           <RiskBadge riskLevel={riskLevel} />
                         </View>
                       </View>
-                      <Text style={styles.distressSubtext}>
-                        Next check-in: {data.nextCheckIn ? new Date(data.nextCheckIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Today, 4:00 PM'}
-                      </Text>
                     </View>
 
                     {/* Circular Percentage Badge */}
