@@ -252,3 +252,37 @@ export function useSendCounsellorMessage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['victim', 'messages'] }),
   });
 }
+
+async function request(path, { method = 'GET', body, token } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  console.log('API URL:', `${API_BASE_URL}${path}`);
+  console.log('METHOD:', method);
+  console.log('BODY:', body);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    console.log('STATUS:', res.status);
+
+    const envelope = await res.json();
+
+    console.log('RESPONSE:', envelope);
+
+    if (!envelope.success) {
+      const error = new Error(envelope.message || 'Request failed');
+      error.status = res.status;
+      throw error;
+    }
+
+    return envelope.data;
+  } catch (error) {
+    console.error('API REQUEST FAILED:', error);
+    throw error;
+  }
+}

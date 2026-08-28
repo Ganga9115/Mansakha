@@ -54,9 +54,7 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mansakha backend listening on port ${PORT}`);
-  // Scans for overdue check-ins + drains the alert/checkin dispatch queue -
-  // see services/dispatchWorker.js for what's real vs. still frontend-pending.
   startDispatchWorker();
 });
