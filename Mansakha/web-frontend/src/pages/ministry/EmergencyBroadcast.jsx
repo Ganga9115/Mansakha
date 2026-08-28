@@ -90,13 +90,8 @@ export default function EmergencyBroadcast() {
   };
 
   return (
-    <MinistryLayout title="Emergency Broadcast">
+    <MinistryLayout title="Broadcast">
       <div className="max-w-2xl space-y-6">
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold px-4 py-3 rounded-lg">
-          <AlertTriangle size={16} className="shrink-0" />
-          This sends a real SMS and push notification to every active victim in the chosen jurisdiction. This cannot be undone once sent.
-        </div>
-
         <form onSubmit={handleOpenConfirm} className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-6 space-y-5">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -169,7 +164,7 @@ export default function EmergencyBroadcast() {
             <button
               type="submit"
               disabled={!canSend || sendBroadcast.loading}
-              className="flex items-center gap-2 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Radio size={15} />
               Send Broadcast
@@ -178,15 +173,14 @@ export default function EmergencyBroadcast() {
         </form>
 
         {showConfirm && (
-          <div className="bg-amber-50 border border-amber-300 rounded-xl p-5 space-y-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 space-y-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle size={20} className="text-amber-600 shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-bold text-amber-900">
-                  You are about to broadcast to {estimatedCount ?? (dashboardQuery.loading ? '...' : 0)} victims in {selectedJurisdiction?.name || 'this jurisdiction'}.
+                <p className="text-sm font-bold text-gray-900">
+                  Ready to send broadcast to {estimatedCount ?? (dashboardQuery.loading ? '...' : 0)} recipient(s) in {selectedJurisdiction?.name || 'the selected jurisdiction'}.
                 </p>
-                <p className="text-xs text-amber-800 mt-1">
-                  Priority: <span className="font-semibold capitalize">{priority}</span>. This figure is the jurisdiction's total registered victim count; only victims currently marked active will actually receive the message, and the exact number queued is confirmed once sent.
+                <p className="text-xs text-gray-600 mt-1">
+                  Priority: <span className="font-semibold capitalize">{priority}</span>.
                 </p>
               </div>
             </div>
@@ -194,7 +188,7 @@ export default function EmergencyBroadcast() {
               <button
                 onClick={handleConfirmSend}
                 disabled={sendBroadcast.loading}
-                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition disabled:opacity-60"
+                className="px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-bold transition disabled:opacity-60"
               >
                 {sendBroadcast.loading ? 'Sending...' : 'Confirm & Send'}
               </button>
