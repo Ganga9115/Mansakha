@@ -13,7 +13,7 @@ export default function DesktopHeaderActions({ fullName, roleLabel = 'Victim', a
 
   return (
     <View style={styles.container}>
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <SosButton asHeaderIcon />
         <Pressable
           style={styles.bellBtn}
