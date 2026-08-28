@@ -14,7 +14,7 @@ import { sendCompanionMessage, analyzeConversation, OPENING_GREETING } from '../
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import TopRightActions from '../../components/TopRightActions';
 
-const TOTAL_QUESTIONS = 15;
+const TOTAL_QUESTIONS = 5;
 
 export default function CheckinScreen({ navigation }) {
   const toast = useToast();
