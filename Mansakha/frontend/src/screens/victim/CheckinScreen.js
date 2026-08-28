@@ -40,7 +40,7 @@ export default function CheckinScreen({ navigation }) {
   useEffect(() => {
     async function fetchHistory() {
       try {
-        const token = await SecureStore.getItemAsync('victim_jwt');
+        const token = await AsyncStorage.getItem('victim_jwt');
         if (!token) return;
         const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/victim/history`, {
           headers: { Authorization: `Bearer ${token}` }
@@ -97,6 +97,8 @@ const FALLBACK_QUESTIONS = [
   };
 
   const handleNext = async (isSkipped = false) => {
+    if (loading || submitting || isFinished || responses.length >= TOTAL_QUESTIONS) return;
+
     const isOtherSelected = selectedOptions.includes('Other...');
     const combinedAnswer = isSkipped ? "Skipped." : 
       (selectedOptions.filter(o => o !== 'Other...').join(', ') + (isOtherSelected && draft.trim() ? (selectedOptions.length > 1 ? ', ' : '') + draft.trim() : ''));
@@ -109,11 +111,13 @@ const FALLBACK_QUESTIONS = [
     // Async save
     try {
       const token = await AsyncStorage.getItem('victim_jwt');
-      fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/victim/interaction/append`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: `Mansakha: ${currentQuestion.text}\nPerson: ${combinedAnswer}` })
-      }).catch(() => {});
+      if (token) {
+        fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/victim/interaction/append`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ text: `Mansakha: ${currentQuestion.text}\nPerson: ${combinedAnswer}` })
+        }).catch(() => {});
+      }
     } catch(e) {}
     
     if (newHistory.length >= TOTAL_QUESTIONS) {
@@ -145,7 +149,7 @@ const FALLBACK_QUESTIONS = [
       const formattedResponses = finalResponses.map(r => `Mansakha: ${r.q}\nPerson: ${r.a}`);
       
       const result = await submitMutation.mutateAsync({ 
-        channel: 'App', 
+        channel: 'Mobile App', 
         responses: formattedResponses, 
         aiAnalysis 
       });
@@ -157,12 +161,6 @@ const FALLBACK_QUESTIONS = [
       });
     } catch (err) {
       toast.error(err.message || 'Could not submit your check-in.');
-      setIsFinished(false);
-      if (finalResponses.length > 0) {
-        const last = finalResponses[finalResponses.length - 1];
-        setDraft(last.a === "Skipped." ? "" : last.a);
-        setResponses(finalResponses.slice(0, -1));
-      }
     } finally {
       setSubmitting(false);
     }

@@ -17,6 +17,7 @@ async function recordInteraction({ victimId, channelName, transcriptText }) {
     'Voice Call': 'IVRS',
     'Voice': 'IVRS',
     'Chat': 'Chatbot',
+    'App': 'Mobile App',
   };
   const resolvedChannelName = CHANNEL_ALIASES[channelName] || channelName;
   const { data: channelRow } = await supabase.from('channels').select('channel_id').eq('channel_name', resolvedChannelName).is('deleted_at', null).maybeSingle();
