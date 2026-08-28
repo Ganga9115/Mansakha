@@ -152,7 +152,7 @@ export default function HomeScreen({ navigation }) {
                       <View style={styles.gridIconCircle}>
                         <Feather name="message-square" size={20} color={colors.primary} />
                       </View>
-                      <Text style={styles.gridTitle}>My Counsellor</Text>
+                      <Text style={styles.gridTitle}>Chat with counsellor</Text>
                       <Text style={styles.gridSub}>Chat directly</Text>
                     </Pressable>
                   )}
