@@ -8,7 +8,7 @@ import { typography } from '../theme/typography';
 import SosButton from './SosButton';
 import { useNavigation } from '@react-navigation/native';
 
-export default function DesktopHeaderActions({ fullName, roleLabel = 'Victim', alertCount = 0, onBellPress }) {
+export default function DesktopHeaderActions({ fullName, roleLabel = '', alertCount = 0, onBellPress }) {
   const navigation = useNavigation();
 
   return (
@@ -35,7 +35,7 @@ export default function DesktopHeaderActions({ fullName, roleLabel = 'Victim', a
         </View>
         <View>
           <Text style={styles.profileName} numberOfLines={1}>{fullName || 'Loading...'}</Text>
-          <Text style={styles.profileRole} numberOfLines={1}>{roleLabel}</Text>
+          {!!roleLabel && <Text style={styles.profileRole} numberOfLines={1}>{roleLabel}</Text>}
         </View>
       </View>
     </View>
