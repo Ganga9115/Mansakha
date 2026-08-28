@@ -21,10 +21,10 @@ Respond ONLY with the question itself. Keep it under 2 sentences. Do not use mar
 Here is the conversation history so far:
 ${history}
 
-Based on their last answer, ask ONE gentle, empathetic follow-up question to gently explore their current emotional state, feelings of safety, or any anxiety they might be experiencing. 
-If they seem distressed, ask about what might be causing it or how it feels.
-If they seem okay, ask a gentle concluding question about how they plan to care for themselves today.
-Respond ONLY with the next question. Keep it under 2 sentences. Do not use markdown.`;
+Based on their last answer, validate their feelings and offer a gentle, comforting affirmation. 
+If they seem distressed, offer a soft suggestion to help them feel safe or grounded (like taking a deep breath).
+You do NOT need to ask a question if they gave a short answer. Do not interrogate them. If you do ask a question, ask a maximum of ONE gentle follow-up question.
+Respond ONLY with your reply. Keep it under 2 sentences. Do not use markdown.`;
   }
 
   const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
