@@ -21,44 +21,23 @@ const router = express.Router();
 const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Operator'];
 
 router.post('/login', staffLoginLimiter, async (req, res) => {
-  const { email, password, roleName, staffId, mobileNumber } = req.body;
-  if (!email || !password || !staffId) return fail(res, 'email, password, and staffId are required', 400);
-  if (!STAFF_LOGIN_ROLES.includes(roleName)) {
-    return fail(res, `roleName must be one of: ${STAFF_LOGIN_ROLES.join(', ')}`, 400);
-  }
-  // Counsellor-specific 4th credential, per explicit request: their mobile
-  // number (chat/call features depend on it actually being real and on file,
-  // so login itself enforces it's set and known) - Administration/Data
-  // Operator logins are unaffected, still 3 credentials.
-  if (roleName === 'Counsellor' && !mobileNumber) {
-    return fail(res, 'mobileNumber is required for Counsellor login', 400);
-  }
+  const { email, password, roleName } = req.body;
+  if (!email || !password) return fail(res, 'email and password are required', 400);
 
-  const match = await findOfficialForLogin(email, [roleName]);
-  if (!match) return fail(res, `Invalid credentials, or this account has no active ${roleName} role`, 401);
+  const rolesToSearch = (roleName && STAFF_LOGIN_ROLES.includes(roleName))
+    ? [roleName]
+    : STAFF_LOGIN_ROLES;
+
+  const match = await findOfficialForLogin(email, rolesToSearch);
+  if (!match) return fail(res, 'Invalid credentials', 401);
 
   const passwordOk = await verifyPassword(password, match.official.password_hash);
   if (!passwordOk) return fail(res, 'Invalid credentials', 401);
 
-  // Third required credential (Feature Catalog: "State Admin ID" etc., all
-  // currently '1' - see migration_003_staff_id.sql). Same generic failure
-  // message as a bad password, not "wrong ID", so a valid email+password
-  // guess can't be used to probe for the right ID separately.
-  if (String(staffId).trim() !== match.official.staff_id) return fail(res, 'Invalid credentials', 401);
+  const selectedRole = match.matchingRole.roles.role_name;
 
-  // Fourth credential, Counsellor only - must match officials.phone (the same
-  // number victims call/WhatsApp via /assigned-counsellor). Same generic
-  // failure message as the other checks, for the same anti-probing reason.
-  if (roleName === 'Counsellor') {
-    const normalizePhone = (phone) => String(phone || '').trim().replace(/^\+91/, '');
-    const officialPhone = normalizePhone(match.official.phone);
-    if (!officialPhone || officialPhone !== normalizePhone(mobileNumber)) {
-      return fail(res, 'Invalid credentials', 401);
-    }
-  }
-
-  const token = signToken({ type: 'official', officialId: match.official.official_id, selectedRole: roleName });
-  return ok(res, { token, mustChangePassword: match.official.must_change_password });
+  const token = signToken({ type: 'official', officialId: match.official.official_id, selectedRole });
+  return ok(res, { token, mustChangePassword: match.official.must_change_password, selectedRole });
 });
 
 router.post('/change-password', verifyToken, async (req, res) => {
