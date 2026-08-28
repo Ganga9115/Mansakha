@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
-import { useMyJurisdiction, useAdminDashboard } from '../../../services/hooks';
+import { FileDown } from 'lucide-react';
+import { useMyJurisdiction, useAdminDashboard, useExportReportCsv } from '../../../services/hooks';
 
 function StatCard({ title, value, tone }) {
   return (
@@ -22,16 +23,43 @@ export default function NationalDashboard() {
   const navigate = useNavigate();
   const { jurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
+  const exportReport = useExportReportCsv();
+  const [reportStatus, setReportStatus] = useState(null);
 
   const states = data?.trends || [];
+
+  const handleGenerateReport = async () => {
+    setReportStatus(null);
+    try {
+      await exportReport.mutate(jurisdictionId, 'national_report');
+      setReportStatus('Report downloaded successfully.');
+    } catch (err) {
+      setReportStatus(err.message || 'Could not download report.');
+    }
+  };
 
   return (
     <StaffLayout title="National Dashboard" section="nationaladmin">
       <div className="space-y-6">
-        <div className="grid grid-cols-3 gap-6">
-          <StatCard title="Total Cases (National)" value={data?.totalCases ?? '-'} />
-          <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? '-'} tone="text-rose-600" />
-          <StatCard title="Critical Cases" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
+        <div className="flex items-center justify-between">
+          <div className="grid grid-cols-3 gap-6 flex-1 mr-6">
+            <StatCard title="Total Cases (National)" value={data?.totalCases ?? '-'} />
+            <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? '-'} tone="text-rose-600" />
+            <StatCard title="Critical Cases" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
+          </div>
+          <div className="text-right">
+            <button
+              onClick={handleGenerateReport}
+              disabled={exportReport.loading || !jurisdictionId}
+              className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 shrink-0"
+            >
+              <FileDown size={14} />
+              {exportReport.loading ? 'Downloading...' : 'Download CSV Report'}
+            </button>
+            {reportStatus && (
+              <div className="text-xs mt-2 font-medium text-emerald-600">{reportStatus}</div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-3 gap-6">

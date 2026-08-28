@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
-import { FileDown } from 'lucide-react';
-import { useMyJurisdiction, useAdminDashboard, useGenerateReport } from '../../../services/hooks';
+import { FileDown, ShieldAlert, ArrowRight, Activity, Phone } from 'lucide-react';
+import { useMyJurisdiction, useAdminDashboard, useExportReportCsv } from '../../../services/hooks';
 
 const RISK_BADGE = {
   Critical: 'bg-purple-100 text-purple-700',
@@ -20,38 +20,32 @@ function StatCard({ title, value, tone }) {
   );
 }
 
-// District Administration's case-level default view - the district tier of
-// GET /api/admin/dashboard/:jurisdictionId. Read-only case list; drilling
-// into a case reuses Counsellor's CaseDetail with its intervention/note
-// controls hidden (see CaseDetail.jsx's `readOnly` check).
-//
-// Doubles as the State/National drill-down target: reached either bare as
-// `/districtadmin` (a District Admin's own view, jurisdiction from
-// useMyJurisdiction) or as `/stateadmin/district/:jurisdictionId` /
-// `/nationaladmin/district/:jurisdictionId` (a specific district someone
-// drilled into) - the route param wins when present, and the sidebar
-// section follows the actual URL prefix so it never flips to a role the
-// viewer doesn't hold.
+// District Administration is the "operational" admin tier - they see the
+// case list and can drill directly into CaseDetail (same as a counsellor),
+// rather than State/National which just see aggregate breakdowns of their
+// children. Handled via the exact same backend route though - it detects
+// jurisdiction.level and returns `cases` instead of `trends`.
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { jurisdictionId: routeJurisdictionId } = useParams();
   const location = useLocation();
   const { jurisdictionId: myJurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
+  
   const jurisdictionId = routeJurisdictionId || myJurisdictionId;
   const section = location.pathname.startsWith('/stateadmin') ? 'stateadmin'
     : location.pathname.startsWith('/nationaladmin') ? 'nationaladmin'
     : 'districtadmin';
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
-  const generateReport = useGenerateReport();
+  const exportReport = useExportReportCsv();
   const [reportStatus, setReportStatus] = useState(null);
 
   const handleGenerateReport = async () => {
     setReportStatus(null);
     try {
-      await generateReport.mutate(jurisdictionId);
-      setReportStatus('Report generated - visible to Ministry.');
+      await exportReport.mutate(jurisdictionId, 'district_report');
+      setReportStatus('Report downloaded successfully.');
     } catch (err) {
-      setReportStatus(err.message || 'Could not generate report.');
+      setReportStatus(err.message || 'Could not download report.');
     }
   };
 
@@ -59,22 +53,30 @@ export default function AdminDashboard() {
     <StaffLayout title="District Dashboard" section={section}>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="grid grid-cols-4 gap-6 flex-1 mr-6">
+          <div className="grid grid-cols-4 gap-4 w-full">
             <StatCard title="Total Cases" value={data?.totalCases ?? '-'} />
-            <StatCard title="Vulnerable Victims" value={data?.vulnerableVictims ?? '-'} />
+            <StatCard title="Vulnerable (Moderate)" value={data?.vulnerableVictims ?? '-'} tone="text-emerald-600" />
             <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? '-'} tone="text-rose-600" />
-            <StatCard title="Critical Cases" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
+            <StatCard title="Critical (SOS)" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
           </div>
-          <button
-            onClick={handleGenerateReport}
-            disabled={generateReport.loading || !jurisdictionId}
-            className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 shrink-0"
-          >
-            <FileDown size={14} />
-            {generateReport.loading ? 'Generating...' : 'Generate Report'}
-          </button>
         </div>
-        {reportStatus && <p className="text-xs text-gray-500">{reportStatus}</p>}
+
+        <div className="flex items-start justify-between">
+          <h2 className="text-xl font-bold text-gray-800">Cases</h2>
+          <div className="text-right">
+            <button
+              onClick={handleGenerateReport}
+              disabled={exportReport.loading || !jurisdictionId}
+              className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 shrink-0"
+            >
+              <FileDown size={14} />
+              {exportReport.loading ? 'Downloading...' : 'Download CSV Report'}
+            </button>
+            {reportStatus && (
+              <div className="text-xs mt-2 font-medium text-emerald-600">{reportStatus}</div>
+            )}
+          </div>
+        </div>
 
         <div className="grid grid-cols-3 gap-6">
           <div className="col-span-2 bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
