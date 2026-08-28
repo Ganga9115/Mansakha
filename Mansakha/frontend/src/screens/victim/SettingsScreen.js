@@ -211,7 +211,7 @@ export default function SettingsScreen({ navigation }) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardHeaderTitle}>
-                {session?.accountType === 'victim' ? 'Victim Account' : session?.accountType || 'User'}
+                {session?.accountType === 'victim' ? 'User Profile' : session?.accountType || 'User'}
               </Text>
               <Text style={styles.cardHeaderSubtitle}>Registered User Profile</Text>
             </View>
