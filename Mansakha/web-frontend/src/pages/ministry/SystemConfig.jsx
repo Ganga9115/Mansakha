@@ -4,14 +4,12 @@ import { Plus, Trash2, Pencil } from 'lucide-react';
 import {
   caseTypesResource,
   interventionTypesResource,
-  channelsResource,
   languagesResource,
 } from '../../services/hooks';
 
 const TABS = [
   { key: 'caseTypes', label: 'Case Types', resource: caseTypesResource },
   { key: 'interventionTypes', label: 'Intervention Types', resource: interventionTypesResource },
-  { key: 'channels', label: 'Channels', resource: channelsResource },
   { key: 'languages', label: 'Languages', resource: languagesResource },
 ];
 

@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { name: 'Audit Log', icon: FileText, path: '/ministry/audit-log' },
   { name: 'Analysis', icon: Map, path: '/ministry/heatmap' },
   { name: 'Reports Inbox', icon: Inbox, path: '/ministry/reports' },
-  { name: 'Emergency Broadcast', icon: Radio, path: '/ministry/broadcast' },
+  { name: 'Broadcast', icon: Radio, path: '/ministry/broadcast' },
   { name: 'Profile', icon: User, path: '/ministry/profile' },
 ];
 
