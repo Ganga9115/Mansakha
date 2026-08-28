@@ -104,13 +104,52 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   return ok(res, { cases, total });
 });
 
+router.get('/my-victims', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
+  const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
+  if (jurisdictionIds.length === 0) return ok(res, { cases: [], total: 0 });
+
+  const { riskLevel, page = 1 } = req.query;
+  const pageSize = 20;
+  const offset = (Math.max(1, parseInt(page, 10)) - 1) * pageSize;
+
+  const { data, error } = await supabase
+    .from('victims')
+    .select('victim_id, case_stage, case_background, distress_scores(score_value, computed_at, risk_levels(name))')
+    .eq('assigned_counsellor_id', req.auth.officialId)
+    .in('jurisdiction_id', jurisdictionIds)
+    .order('computed_at', { referencedTable: 'distress_scores', ascending: false });
+  if (error) return fail(res, 'Could not load cases', 500);
+
+  const BACKSTORY_EXCERPT_LENGTH = 140;
+
+  let cases = (data || []).map((v) => {
+    const latest = v.distress_scores?.[0];
+    return {
+      victimId: v.victim_id,
+      caseStage: v.case_stage,
+      score: latest ? latest.score_value : null,
+      riskLevel: latest ? latest.risk_levels.name : null,
+      caseBackground: v.case_background
+        ? (v.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${v.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : v.case_background)
+        : null,
+    };
+  });
+
+  if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
+  cases.sort((a, b) => (RISK_SORT_ORDER[b.riskLevel] || 0) - (RISK_SORT_ORDER[a.riskLevel] || 0));
+
+  const total = cases.length;
+  cases = cases.slice(offset, offset + pageSize);
+  return ok(res, { cases, total });
+});
+
 // Administration gets this GET too (Section 8: District Administration has a
 // read-only Case Detail screen) - but NOT the POST intervention route below,
 // per Section 4.4's explicit "no intervention action for Administration."
 router.get('/cases/:victimId', requireRole(['Counsellor', 'Administration']), generalApiLimiter, requireJurisdiction(resolveVictimJurisdiction), async (req, res) => {
   const { victimId } = req.params;
 
-  const { data: victimRow } = await supabase.from('victims').select('case_background').eq('victim_id', victimId).maybeSingle();
+  const { data: victimRow } = await supabase.from('victims').select('case_background, phone').eq('victim_id', victimId).maybeSingle();
 
   const { data: scores } = await supabase
     .from('distress_scores')
@@ -151,6 +190,7 @@ router.get('/cases/:victimId', requireRole(['Counsellor', 'Administration']), ge
 
   return ok(res, {
     caseBackground: victimRow?.case_background || null,
+    phone: victimRow?.phone || null,
     score: latest.score_value,
     previousScore: previous ? previous.score_value : null,
     trend,
@@ -274,29 +314,36 @@ router.post('/cases/:victimId/notes', requireRole(['Counsellor']), generalApiLim
 // never both (see schema.sql's XOR check constraint) - the response always
 // includes `source` so the frontend can render the distinct SOS badge.
 router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
+  const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
+  if (jurisdictionIds.length === 0) return ok(res, { alerts: [] });
+
   const { data, error } = await supabase
     .from('alert_notifications')
-    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, victim_id, triggered_at, alert_statuses(name)), sos_events(sos_event_id, victim_id, triggered_at, resolved_at)')
+    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, victim_id, triggered_at, alert_statuses(name), victims(jurisdiction_id)), sos_events(sos_event_id, victim_id, triggered_at, resolved_at, victims(jurisdiction_id))')
     .eq('official_id', req.auth.officialId)
     .order('notified_at', { ascending: false })
-    .limit(50);
+    .limit(100); // Increased limit slightly to account for filtered items
   if (error) return fail(res, 'Could not load alerts', 500);
 
-  return ok(res, {
-    alerts: (data || []).map((n) => {
-      const isSos = n.source === 'sos';
-      return {
-        alertId: isSos ? n.sos_events.sos_event_id : n.alerts.alert_id,
-        source: n.source,
-        priority: n.priority,
-        autoAssigned: n.auto_assigned,
-        victimId: isSos ? n.sos_events.victim_id : n.alerts.victim_id,
-        triggeredAt: isSos ? n.sos_events.triggered_at : n.alerts.triggered_at,
-        status: isSos ? (n.sos_events.resolved_at ? 'Resolved' : 'Open') : n.alerts.alert_statuses.name,
-        notifiedAt: n.notified_at,
-      };
-    }),
-  });
+  const alerts = [];
+  for (const n of data || []) {
+    const isSos = n.source === 'sos';
+    const jId = isSos ? n.sos_events?.victims?.jurisdiction_id : n.alerts?.victims?.jurisdiction_id;
+    if (!jurisdictionIds.includes(jId)) continue;
+    
+    alerts.push({
+      alertId: isSos ? n.sos_events.sos_event_id : n.alerts.alert_id,
+      source: n.source,
+      priority: n.priority,
+      autoAssigned: n.auto_assigned,
+      victimId: isSos ? n.sos_events.victim_id : n.alerts.victim_id,
+      triggeredAt: isSos ? n.sos_events.triggered_at : n.alerts.triggered_at,
+      status: isSos ? (n.sos_events.resolved_at ? 'Resolved' : 'Open') : n.alerts.alert_statuses.name,
+      notifiedAt: n.notified_at,
+    });
+  }
+
+  return ok(res, { alerts: alerts.slice(0, 50) });
 });
 
 // Marks an SOS event resolved - the sos_events equivalent of acknowledging/

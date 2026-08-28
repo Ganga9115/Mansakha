@@ -119,7 +119,17 @@ export default function CaseDetail() {
           </div>
 
           {!readOnly && (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap justify-end">
+              {data.phone && (
+                <>
+                  <a href={`tel:${data.phone}`} className="px-4 py-2 border border-emerald-500 text-emerald-600 rounded-lg text-xs font-medium hover:bg-emerald-50 transition flex items-center gap-2">
+                    <MessageCircle size={14} /> Call Victim
+                  </a>
+                  <a href={`https://wa.me/${data.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-medium shadow-sm hover:bg-emerald-600 transition flex items-center gap-2">
+                    <MessageCircle size={14} /> WhatsApp
+                  </a>
+                </>
+              )}
               {data.interventionStatus === 'pending' && data.interventionId && (
                 <button
                   onClick={handleComplete}

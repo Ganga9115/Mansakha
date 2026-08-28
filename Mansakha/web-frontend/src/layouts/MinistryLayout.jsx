@@ -11,7 +11,7 @@ const NAV_ITEMS = [
   { name: 'Performance & Efficacy', icon: Trophy, path: '/ministry/performance' },
   { name: 'System Configuration', icon: Settings, path: '/ministry/system-config' },
   { name: 'Audit Log', icon: FileText, path: '/ministry/audit-log' },
-  { name: 'Graphs', icon: Map, path: '/ministry/heatmap' },
+  { name: 'Analysis', icon: Map, path: '/ministry/heatmap' },
   { name: 'Reports Inbox', icon: Inbox, path: '/ministry/reports' },
   { name: 'Emergency Broadcast', icon: Radio, path: '/ministry/broadcast' },
   { name: 'Profile', icon: User, path: '/ministry/profile' },

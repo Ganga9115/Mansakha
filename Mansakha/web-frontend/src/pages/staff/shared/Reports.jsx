@@ -114,111 +114,79 @@ export default function Reports() {
 
         </div>
 
-        {/* BOTTOM ROW: DONUT CHART & WORKLOAD */}
-        <div className="grid grid-cols-2 gap-6">
+        {/* BOTTOM ROW: DONUT CHART */}
+        <div className="grid grid-cols-1 gap-6">
           
           {/* Intervention Phase Breakdown */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
-            <h3 className="font-bold text-sm text-gray-800">
+          <div className="bg-gradient-to-br from-white to-gray-50 p-6 rounded-2xl border border-gray-200/60 shadow-md space-y-4">
+            <h3 className="font-bold text-sm text-gray-800 tracking-wide">
               Intervention Phase Breakdown
             </h3>
 
-            <div className="flex items-center justify-around py-4">
+            <div className="flex flex-col sm:flex-row items-center justify-around py-4">
               {/* SVG Donut */}
-              <div className="relative w-36 h-36">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+              <div className="relative w-40 h-40">
+                <svg className="w-full h-full -rotate-90 drop-shadow-sm" viewBox="0 0 36 36">
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
-                    stroke="#E5E7EB"
+                    stroke="#F3F4F6"
                     strokeWidth="4"
                   />
                   {/* Completed (40%) */}
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
-                    stroke="#16a34a"
+                    stroke="#10B981"
                     strokeWidth="4"
                     strokeDasharray="40, 100"
+                    className="transition-all duration-1000 ease-out"
                   />
                   {/* In Progress (35%) */}
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
-                    stroke="#519BCE"
+                    stroke="#3B82F6"
                     strokeWidth="4"
                     strokeDasharray="35, 100"
                     strokeDashoffset="-40"
+                    className="transition-all duration-1000 ease-out delay-150"
                   />
                   {/* Planned (25%) */}
                   <path
                     d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
                     fill="none"
-                    stroke="#ea580c"
+                    stroke="#F59E0B"
                     strokeWidth="4"
                     strokeDasharray="25, 100"
                     strokeDashoffset="-75"
+                    className="transition-all duration-1000 ease-out delay-300"
                   />
                 </svg>
+                {/* Center text */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-xl font-extrabold text-gray-800">100%</span>
+                  <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Total</span>
+                </div>
               </div>
 
               {/* Legend List */}
-              <div className="space-y-3 text-xs font-semibold text-gray-600">
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
-                  <span>Completed Actions (40%)</span>
+              <div className="space-y-4 mt-6 sm:mt-0 text-sm font-semibold text-gray-700">
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm ring-2 ring-emerald-100"></div>
+                  <span>Completed Actions <span className="text-gray-400 ml-2">40%</span></span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#519BCE]"></span>
-                  <span>In Progress Queue (35%)</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-100"></div>
+                  <span>In Progress Queue <span className="text-gray-400 ml-2">35%</span></span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-orange-600"></span>
-                  <span>Planned / Referred (25%)</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Counsellor Workload Allocation */}
-          <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-6">
-            <h3 className="font-bold text-sm text-gray-800">
-              Counsellor Workload Allocation
-            </h3>
-
-            <div className="space-y-5">
-              <div>
-                <div className="flex justify-between text-xs font-bold text-gray-800 mb-2">
-                  <span>Dr. Jenkins (You)</span>
-                  <span>28 Active Cases</span>
-                </div>
-                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#519BCE] rounded-full" style={{ width: '85%' }}></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs font-bold text-gray-800 mb-2">
-                  <span>Dr. K. Raghav</span>
-                  <span>19 Active Cases</span>
-                </div>
-                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#519BCE] rounded-full" style={{ width: '55%' }}></div>
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs font-bold text-gray-800 mb-2">
-                  <span>Counsellor A. Sen</span>
-                  <span>32 Active Cases</span>
-                </div>
-                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#519BCE] rounded-full" style={{ width: '95%' }}></div>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm ring-2 ring-amber-100"></div>
+                  <span>Planned / Referred <span className="text-gray-400 ml-2">25%</span></span>
                 </div>
               </div>
             </div>
           </div>
-
         </div>
 
         {/* 4 STATS CARDS AT THE BOTTOM */}
@@ -227,21 +195,25 @@ export default function Reports() {
             title="TOTAL ACTIVE PROTOCOLS" 
             value="142" 
             subtitle="Across all clinical layers" 
+            accent="blue"
           />
           <StatCard 
             title="AVG CALLBACK RESPONSE" 
             value="14.5m" 
-            subtitle="Crisis response average" 
+            subtitle="Crisis response average"
+            accent="emerald"
           />
           <StatCard 
             title="CASES SUCCESSFULLY RESOLVED" 
             value="94" 
             subtitle="During selected timeframe" 
+            accent="purple"
           />
           <StatCard 
             title="SYSTEM ESCALATION RATE" 
             value="4.8%" 
             subtitle="To critical emergency layer" 
+            accent="rose"
           />
         </div>
 
@@ -250,16 +222,33 @@ export default function Reports() {
   );
 }
 
-function StatCard({ title, value, subtitle }) {
+function StatCard({ title, value, subtitle, accent = 'gray' }) {
+  const accents = {
+    blue: 'border-blue-200 bg-blue-50/50 text-blue-600',
+    emerald: 'border-emerald-200 bg-emerald-50/50 text-emerald-600',
+    purple: 'border-purple-200 bg-purple-50/50 text-purple-600',
+    rose: 'border-rose-200 bg-rose-50/50 text-rose-600',
+    gray: 'border-gray-200 bg-gray-50/50 text-gray-600'
+  };
+
+  const ringAccents = {
+    blue: 'ring-blue-100',
+    emerald: 'ring-emerald-100',
+    purple: 'ring-purple-100',
+    rose: 'ring-rose-100',
+    gray: 'ring-gray-100'
+  };
+
   return (
-    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-1">
-      <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">
+    <div className={`relative p-5 rounded-2xl border ${accents[accent].split(' ')[0]} bg-white shadow-sm hover:shadow-md transition-shadow duration-300 space-y-2 overflow-hidden group`}>
+      <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full ${accents[accent].split(' ')[1]} opacity-50 group-hover:scale-150 transition-transform duration-700 ease-out`}></div>
+      <span className="relative text-[10px] font-bold tracking-wider text-gray-500 uppercase block">
         {title}
       </span>
-      <span className="text-2xl font-bold text-gray-800 block">
+      <span className="relative text-3xl font-extrabold text-gray-900 block tracking-tight">
         {value}
       </span>
-      <span className="text-[11px] font-medium text-gray-400 block">
+      <span className="relative text-[11px] font-semibold text-gray-400 block">
         {subtitle}
       </span>
     </div>

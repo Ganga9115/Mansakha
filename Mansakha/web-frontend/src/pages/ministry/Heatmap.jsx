@@ -21,7 +21,7 @@ export default function Heatmap() {
   const regions = data?.heatmap || [];
 
   return (
-    <MinistryLayout title="Graphs by State / Region">
+    <MinistryLayout title="Analysis by State / Region">
       {loading ? (
         <p className="text-sm text-gray-400">Loading...</p>
       ) : error ? (

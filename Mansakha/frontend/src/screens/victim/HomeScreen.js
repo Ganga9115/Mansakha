@@ -144,22 +144,6 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.gridSub}>Write it down</Text>
                   </Pressable>
 
-                  {data.optedForManualCounsellor && hasAssignedCounsellor && (assignedCounsellorQuery.data?.counsellor?.whatsappNumber || assignedCounsellorQuery.data?.counsellor?.phone) && (
-                    <Pressable
-                      style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
-                      onPress={() => {
-                        const number = assignedCounsellorQuery.data.counsellor.whatsappNumber || assignedCounsellorQuery.data.counsellor.phone;
-                        const digits = number.replace(/[^\d]/g, '');
-                        Linking.openURL(`https://wa.me/${digits}`).catch(() => {});
-                      }}
-                    >
-                      <View style={styles.gridIconCircle}>
-                        <Feather name="message-square" size={20} color={colors.primary} />
-                      </View>
-                      <Text style={styles.gridTitle}>Chat with Counsellor</Text>
-                      <Text style={styles.gridSub}>Chat directly via WhatsApp</Text>
-                    </Pressable>
-                  )}
                 </View>
 
                 {/* Upcoming Counselling Session - scheduled by the assigned

@@ -13,7 +13,8 @@ const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compens
 // jurisdiction, not chosen, since this is *their* district's intake.
 export default function VictimRegistration() {
   const toast = useToast();
-  const { jurisdictionId } = useMyJurisdiction();
+  const { data: myJurisdiction } = useMyJurisdiction();
+  const jurisdictionId = myJurisdiction?.jurisdictionId;
   const createVictim = useCreateVictim();
   const searchVictim = useSearchVictimByDocket();
   const updateVictim = useUpdateVictim();

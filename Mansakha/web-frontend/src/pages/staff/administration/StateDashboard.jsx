@@ -59,9 +59,9 @@ export default function StateDashboard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="grid grid-cols-3 gap-6 flex-1 mr-6">
-            <StatCard title="Total Cases (State)" value={data?.total ?? '-'} />
-            <StatCard title="High-Risk Cases" value={data?.highRisk ?? '-'} tone="text-rose-600" />
-            <StatCard title="Critical Cases" value={data?.critical ?? '-'} tone="text-purple-700" />
+            <StatCard title="Total Cases (State)" value={data?.totalCases ?? '-'} />
+            <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? '-'} tone="text-rose-600" />
+            <StatCard title="Critical Cases" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
           </div>
           <button
             onClick={handleGenerateReport}
@@ -103,9 +103,9 @@ export default function StateDashboard() {
                   return (
                     <tr key={d.jurisdictionId} className="hover:bg-gray-50/70 transition">
                       <td className="py-3.5 px-6 font-bold text-gray-800">{d.name}</td>
-                      <td className="py-3.5 px-4 text-gray-700 font-medium">{d.total}</td>
-                      <td className="py-3.5 px-4 text-rose-600 font-bold">{d.highRisk}</td>
-                      <td className="py-3.5 px-4 text-purple-700 font-bold">{d.critical}</td>
+                      <td className="py-3.5 px-4 text-gray-700 font-medium">{d.totalCases}</td>
+                      <td className="py-3.5 px-4 text-rose-600 font-bold">{d.highRiskCases}</td>
+                      <td className="py-3.5 px-4 text-purple-700 font-bold">{d.criticalCases}</td>
                       <td className="py-3.5 px-4">
                         <span className={`flex items-center gap-1 font-bold ${trend.color}`}>
                           <TrendIcon size={14} /> {trend.label}

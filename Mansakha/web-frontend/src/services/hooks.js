@@ -181,6 +181,14 @@ export function useGenerateAnalytics() {
   return { mutate, loading };
 }
 
+export function useAdminAlerts(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/alerts/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
 // Task 2B - GET /api/admin/policies/:jurisdictionId.
 export function useFetchPolicies(jurisdictionId) {
   const token = getToken();
@@ -462,14 +470,28 @@ export function useCounsellorDashboard() {
   return useQuery(() => apiClient.get('/api/counsellor/dashboard', token), [token]);
 }
 
-export function useCounsellorCases(riskLevel, page) {
+export function useCounsellorCases(riskLevel, page = 1) {
   const token = getToken();
-  return useQuery(() => {
-    const params = new URLSearchParams();
-    if (riskLevel) params.set('riskLevel', riskLevel);
-    params.set('page', String(page || 1));
-    return apiClient.get(`/api/counsellor/cases?${params.toString()}`, token);
-  }, [token, riskLevel, page]);
+  return useQuery(
+    () => {
+      const q = new URLSearchParams({ page });
+      if (riskLevel) q.set('risk', riskLevel);
+      return apiClient.get(`/api/counsellor/cases?${q.toString()}`, token);
+    },
+    [token, riskLevel, page]
+  );
+}
+
+export function useMyVictims(riskLevel, page = 1) {
+  const token = getToken();
+  return useQuery(
+    () => {
+      const q = new URLSearchParams({ page });
+      if (riskLevel) q.set('risk', riskLevel);
+      return apiClient.get(`/api/counsellor/my-victims?${q.toString()}`, token);
+    },
+    [token, riskLevel, page]
+  );
 }
 
 export function useCaseDetail(victimId) {
@@ -499,12 +521,7 @@ export function useCounsellorAlerts(enabled = true) {
   const token = getToken();
   const query = useQuery(() => (enabled ? apiClient.get('/api/counsellor/alerts', token) : Promise.resolve(null)), [token, enabled]);
 
-  useEffect(() => {
-    if (!enabled) return undefined;
-    const interval = setInterval(query.refetch, ALERTS_POLL_MS);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, query.refetch]);
+
 
   return query;
 }

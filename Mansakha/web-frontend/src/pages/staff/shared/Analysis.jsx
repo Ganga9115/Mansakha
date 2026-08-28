@@ -10,7 +10,7 @@ import { useMyJurisdiction, useAdminDashboard } from '../../../services/hooks';
 // charting its `trends` array instead of tabling it, so these numbers can
 // never drift from what those dashboards already show. District Admin has
 // no sub-jurisdictions to compare, so it doesn't get this page at all.
-export default function Graphs() {
+export default function Analysis() {
   const location = useLocation();
   const section = location.pathname.startsWith('/nationaladmin') ? 'nationaladmin' : 'stateadmin';
   const { jurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
@@ -20,7 +20,7 @@ export default function Graphs() {
   const unitLabel = section === 'nationaladmin' ? 'State' : 'District';
 
   return (
-    <StaffLayout title="Graphs" section={section}>
+    <StaffLayout title="Analysis" section={section}>
       {jurisdictionLoading || loading ? (
         <p className="text-sm text-gray-400">Loading...</p>
       ) : error ? (

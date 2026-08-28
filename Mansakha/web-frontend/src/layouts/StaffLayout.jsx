@@ -22,14 +22,14 @@ import NotificationBell from '../components/NotificationBell';
 // underlying jurisdiction level, and (District only) Victim Registration
 // differ. National Admin's Feature Catalog entry is Dashboard-only, so it
 // doesn't take this generator at all.
-// graphs: State/National only - comparing sub-jurisdictions only makes
+// analysis: State/National only - comparing sub-jurisdictions only makes
 // sense where there ARE sub-jurisdictions to compare (District Admin has
 // none, so it never gets this item).
-function adminNavItems(prefix, { extraItems = [], graphs = false } = {}) {
+function adminNavItems(prefix, { extraItems = [], analysis = false } = {}) {
   return [
     { name: 'Dashboard', icon: LayoutDashboard, path: `/${prefix}` },
     ...extraItems,
-    ...(graphs ? [{ name: 'Graphs', icon: BarChart3, path: `/${prefix}/graphs` }] : []),
+    ...(analysis ? [{ name: 'Analysis', icon: BarChart3, path: `/${prefix}/analysis` }] : []),
     { name: 'Alerts', icon: Bell, path: `/${prefix}/alerts` },
     { name: 'Reports', icon: BarChart3, path: `/${prefix}/reports` },
     { name: 'Profile', icon: User, path: `/${prefix}/profile` },
@@ -39,21 +39,16 @@ function adminNavItems(prefix, { extraItems = [], graphs = false } = {}) {
 const NAV_ITEMS_BY_SECTION = {
   counsellor: [
     { name: 'Dashboard', icon: LayoutDashboard, path: '/counsellor' },
-    { name: 'Case Queue', icon: ListOrdered, path: '/counsellor/case-queue' },
+    { name: 'Case Queue', icon: Inbox, path: '/counsellor/queue' },
+    { name: 'My Victims', icon: Users, path: '/counsellor/my-victims' },
     { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
     { name: 'Interventions', icon: MessageSquare, path: '/counsellor/interventions' },
     { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
     { name: 'Profile', icon: User, path: '/counsellor/profile' },
   ],
-  districtadmin: adminNavItems('districtadmin', {
-    extraItems: [{ name: 'Register Victim', icon: UserPlus, path: '/districtadmin/register-victim' }],
-  }),
-  stateadmin: adminNavItems('stateadmin', { graphs: true }),
-  nationaladmin: [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/nationaladmin' },
-    { name: 'Graphs', icon: BarChart3, path: '/nationaladmin/graphs' },
-    { name: 'Profile', icon: User, path: '/nationaladmin/profile' },
-  ],
+  districtadmin: adminNavItems('districtadmin'),
+  stateadmin: adminNavItems('stateadmin', { analysis: true }),
+  nationaladmin: adminNavItems('nationaladmin', { analysis: true }),
   dataintake: [
     { name: 'Register Victim', icon: UserPlus, path: '/dataintake' },
     { name: 'Victims', icon: Users, path: '/dataintake/victims' },

@@ -23,8 +23,7 @@ export default function NationalDashboard() {
   const { jurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
 
-  const states = data?.states || [];
-  const trend = data?.trend || [];
+  const states = data?.trends || [];
 
   return (
     <StaffLayout title="National Dashboard" section="nationaladmin">
@@ -81,21 +80,7 @@ export default function NationalDashboard() {
 
           <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
             <h3 className="font-bold text-sm text-gray-800 mb-4">Policy-Input Trend (National)</h3>
-            {trend.length === 0 ? (
-              <p className="text-xs text-gray-400">Not enough data yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {trend.map((t) => (
-                  <div key={t.period} className="flex items-center gap-3 text-xs">
-                    <span className="w-16 text-gray-500 shrink-0">{t.period}</span>
-                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#519BCE] rounded-full" style={{ width: `${Math.min(100, t.avgScore)}%` }} />
-                    </div>
-                    <span className="font-bold text-gray-700 w-8 text-right">{t.avgScore}</span>
-                  </div>
-                ))}
-              </div>
-            )}
+            <p className="text-xs text-gray-400">Not enough data yet.</p>
           </div>
         </div>
       </div>
