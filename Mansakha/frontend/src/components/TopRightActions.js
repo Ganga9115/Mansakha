@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 24,
   },
   iconCircleBtn: {
     width: 36,
