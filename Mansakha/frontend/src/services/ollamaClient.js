@@ -119,4 +119,57 @@ async function analyzeConversation(conversation, model = OLLAMA_MODEL) {
   };
 }
 
-export { checkOllamaConnection, sendCompanionMessage, analyzeConversation, OPENING_GREETING, OLLAMA_MODEL };
+// Generates an interactive multiple-choice question based on history and past context.
+async function generateInteractiveQuestion(conversation, pastContext = '', model = OLLAMA_MODEL) {
+  const INTERACTIVE_PROMPT = `You are Mansakha, a highly empathetic conversational companion for a victim of trauma.
+Your task is to generate the next question to check in on their mental health. 
+Use the user's past interaction summaries as context to make the question highly personalized and relevant.
+
+Past Context:
+"""
+${pastContext || 'No past context available.'}
+"""
+
+Instead of an open-ended question, you MUST provide 2 to 10 multiple-choice options for the user to select from.
+The options should represent plausible ways the user might be feeling or want to respond. Include gentle, coping-oriented options.
+
+Respond ONLY with a JSON object in this exact format:
+{
+  "question": "<your gentle, empathetic question>",
+  "type": "single", // use "single" if they should choose one, or "multi" if they can choose multiple
+  "options": ["<option 1>", "<option 2>", ...]
+}
+`;
+
+  const res = await fetch(CHAT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model,
+      stream: false,
+      format: 'json',
+      messages: [{ role: 'system', content: INTERACTIVE_PROMPT }, ...conversation],
+      options: { temperature: 0.4 },
+    }),
+  });
+
+  if (!res.ok) throw new Error(await res.text().catch(() => `Ollama error ${res.status}`));
+  const data = await res.json();
+  const raw = data?.message?.content;
+  if (!raw) throw new Error('Ollama returned no question');
+
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error('Ollama returned a non-JSON question');
+  }
+  
+  if (!parsed.question || !Array.isArray(parsed.options) || parsed.options.length < 2) {
+    throw new Error('Ollama returned invalid question structure');
+  }
+
+  return parsed;
+}
+
+export { checkOllamaConnection, sendCompanionMessage, generateInteractiveQuestion, analyzeConversation, OPENING_GREETING, OLLAMA_MODEL };

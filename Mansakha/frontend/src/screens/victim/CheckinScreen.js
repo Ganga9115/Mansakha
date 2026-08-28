@@ -10,7 +10,8 @@ import { formContentWidth } from '../../theme/layout';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useToast } from '../../context/ToastContext';
 import { useCheckin, useVictimDashboard } from '../../services/hooks';
-import { sendCompanionMessage, analyzeConversation, OPENING_GREETING } from '../../services/ollamaClient';
+import * as SecureStore from 'expo-secure-store';
+import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING } from '../../services/ollamaClient';
 import DesktopHeaderActions from '../../components/DesktopHeaderActions';
 import TopRightActions from '../../components/TopRightActions';
 
@@ -24,11 +25,36 @@ export default function CheckinScreen({ navigation }) {
   const submitMutation = useCheckin();
 
   const [responses, setResponses] = useState([]); // Array of { q, a }
-  const [currentQuestion, setCurrentQuestion] = useState(OPENING_GREETING);
+  const [currentQuestion, setCurrentQuestion] = useState({
+    text: OPENING_GREETING,
+    type: 'single',
+    options: ['I am doing okay', 'I am feeling anxious', 'I need some help', 'Other...']
+  });
   const [draft, setDraft] = useState('');
+  const [selectedOptions, setSelectedOptions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [isFinished, setIsFinished] = useState(false);
+  const [pastContext, setPastContext] = useState('');
+
+  useEffect(() => {
+    async function fetchHistory() {
+      try {
+        const token = await SecureStore.getItemAsync('victim_jwt');
+        if (!token) return;
+        const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/victim/history`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (res.ok && data.data?.history) {
+          setPastContext(data.data.history);
+        }
+      } catch (e) {
+        console.warn('Failed to load history', e);
+      }
+    }
+    fetchHistory();
+  }, []);
 
 const FALLBACK_QUESTIONS = [
   "Take your time. Can you tell me a little more about how you're feeling?",
@@ -47,30 +73,62 @@ const FALLBACK_QUESTIONS = [
         conversation.push({ role: 'user', content: item.a });
       }
 
-      const nextQ = await sendCompanionMessage(conversation);
-      setCurrentQuestion(nextQ);
+      const nextQ = await generateInteractiveQuestion(conversation, pastContext);
+      setCurrentQuestion({
+        text: nextQ.question,
+        type: nextQ.type || 'single',
+        options: nextQ.options || ['Yes', 'No']
+      });
+      setSelectedOptions([]);
+      setDraft('');
     } catch (err) {
       toast.error('Ollama is offline or slow. Using a fallback question so you can continue.');
       const fallbackQ = FALLBACK_QUESTIONS[history.length % FALLBACK_QUESTIONS.length];
-      setCurrentQuestion(fallbackQ);
+      setCurrentQuestion({
+        text: fallbackQ,
+        type: 'single',
+        options: ['Yes', 'No', 'A little bit', 'Other...']
+      });
+      setSelectedOptions([]);
+      setDraft('');
     } finally {
       setLoading(false);
     }
   };
 
   const handleNext = async (isSkipped = false) => {
-    if (!isSkipped && !draft.trim()) return;
+    const isOtherSelected = selectedOptions.includes('Other...');
+    const combinedAnswer = isSkipped ? "Skipped." : 
+      (selectedOptions.filter(o => o !== 'Other...').join(', ') + (isOtherSelected && draft.trim() ? (selectedOptions.length > 1 ? ', ' : '') + draft.trim() : ''));
+      
+    if (!isSkipped && !combinedAnswer) return;
     
-    const answer = isSkipped ? "Skipped." : draft.trim();
-    const newHistory = [...responses, { q: currentQuestion, a: answer }];
+    const newHistory = [...responses, { q: currentQuestion.text, a: combinedAnswer }];
     setResponses(newHistory);
-    setDraft('');
+    
+    // Async save
+    try {
+      const token = await SecureStore.getItemAsync('victim_jwt');
+      fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/victim/interaction/append`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: `Mansakha: ${currentQuestion.text}\nPerson: ${combinedAnswer}` })
+      }).catch(() => {});
+    } catch(e) {}
     
     if (newHistory.length >= TOTAL_QUESTIONS) {
       setIsFinished(true);
       await handleSubmit(newHistory);
     } else {
       await loadNextQuestion(newHistory);
+    }
+  };
+
+  const toggleOption = (opt) => {
+    if (currentQuestion.type === 'single') {
+      setSelectedOptions([opt]);
+    } else {
+      setSelectedOptions(prev => prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]);
     }
   };
 
@@ -175,18 +233,35 @@ const FALLBACK_QUESTIONS = [
                   <Text style={styles.aiBadgeText}>AI Companion</Text>
                 </View>
                 
-                <Text style={styles.questionText}>{currentQuestion}</Text>
+                <Text style={styles.questionText}>{currentQuestion.text}</Text>
 
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Type your answer here..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={draft}
-                  onChangeText={setDraft}
-                  multiline
-                  numberOfLines={4}
-                  autoFocus
-                />
+                <View style={styles.optionsContainer}>
+                  {currentQuestion.options.map((opt, i) => {
+                    const isSelected = selectedOptions.includes(opt);
+                    return (
+                      <Pressable 
+                        key={i} 
+                        style={[styles.optionChip, isSelected && styles.optionChipSelected]}
+                        onPress={() => toggleOption(opt)}
+                      >
+                        <Text style={[styles.optionChipText, isSelected && styles.optionChipTextSelected]}>{opt}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                {selectedOptions.includes('Other...') && (
+                  <TextInput
+                    style={[styles.textInput, { marginTop: spacing.md }]}
+                    placeholder="Type your own answer here..."
+                    placeholderTextColor={colors.textSecondary}
+                    value={draft}
+                    onChangeText={setDraft}
+                    multiline
+                    numberOfLines={3}
+                    autoFocus
+                  />
+                )}
 
                 <View style={styles.actionRow}>
                   <Pressable style={styles.skipBtn} onPress={() => handleNext(true)}>
@@ -195,9 +270,9 @@ const FALLBACK_QUESTIONS = [
                     </Text>
                   </Pressable>
                   <Pressable 
-                    style={[styles.nextBtn, !draft.trim() && styles.nextBtnDisabled]} 
+                    style={[styles.nextBtn, (!selectedOptions.length) && styles.nextBtnDisabled]} 
                     onPress={() => handleNext(false)}
-                    disabled={!draft.trim()}
+                    disabled={!selectedOptions.length}
                   >
                     <Text style={styles.nextBtnText}>
                       {responses.length === TOTAL_QUESTIONS - 1 ? 'Finish & Submit' : 'Next'}
@@ -300,8 +375,38 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg
   },
   aiBadgeText: { ...typography.caption, color: colors.primaryDark, fontWeight: '600' },
-  questionText: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.xl, lineHeight: 32 },
-  
+  questionText: {
+    ...typography.h3,
+    color: colors.textPrimary,
+    marginBottom: spacing.xl,
+    lineHeight: 28,
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  optionChip: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  optionChipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  optionChipText: {
+    ...typography.body,
+    color: colors.textPrimary,
+  },
+  optionChipTextSelected: {
+    color: colors.white,
+    fontWeight: '600',
+  },
   textInput: {
     ...typography.body,
     color: colors.textPrimary,
