@@ -17,6 +17,7 @@ const pool = new Pool({
   user: process.env.SUPABASE_DB_USER,
   password: process.env.SUPABASE_DB_PASSWORD,
   ssl: { rejectUnauthorized: false },
+  max: 50,
 });
 
 // Runs `fn` inside a single BEGIN/COMMIT, rolling back on any thrown error -

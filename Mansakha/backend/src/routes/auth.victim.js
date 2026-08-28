@@ -52,9 +52,11 @@ router.post('/login', victimLoginLimiter, async (req, res) => {
   const { data: identity, error: identityError } = await supabase.from('victim_identity').select('full_name, contact_number').eq('victim_id', victim.victim_id).maybeSingle();
   if (identityError) console.error('Identity query error:', identityError);
 
+  const normalizePhone = (phone) => String(phone || '').trim().replace(/^\+91/, '');
+
   if (!identity ||
       identity.full_name.trim().toLowerCase() !== fullName.trim().toLowerCase() ||
-      (identity.contact_number || '').trim() !== contactNumber.trim()) {
+      normalizePhone(identity.contact_number) !== normalizePhone(contactNumber)) {
     console.log('Identity mismatch:', identity, { providedName: fullName, providedPhone: contactNumber });
     return genericFailure();
   }
