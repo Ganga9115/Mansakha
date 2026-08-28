@@ -13,7 +13,13 @@ class PipelineError extends Error {
 // (bucket "transcripts", at-rest encrypted by Storage itself), inserts the
 // interactions row. Same 3 Supabase calls every one of those routes needs.
 async function recordInteraction({ victimId, channelName, transcriptText }) {
-  const { data: channelRow } = await supabase.from('channels').select('channel_id').eq('channel_name', channelName).is('deleted_at', null).maybeSingle();
+  const CHANNEL_ALIASES = {
+    'Voice Call': 'IVRS',
+    'Voice': 'IVRS',
+    'Chat': 'Chatbot',
+  };
+  const resolvedChannelName = CHANNEL_ALIASES[channelName] || channelName;
+  const { data: channelRow } = await supabase.from('channels').select('channel_id').eq('channel_name', resolvedChannelName).is('deleted_at', null).maybeSingle();
   if (!channelRow) throw new PipelineError(`Unknown channel: ${channelName}`, 400);
 
   const transcriptPath = `${victimId}/${crypto.randomUUID()}.txt`;

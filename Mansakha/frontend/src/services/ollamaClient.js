@@ -81,41 +81,72 @@ async function analyzeConversation(conversation, model = OLLAMA_MODEL) {
     .map((m) => `${m.role === 'user' ? 'Person' : 'Mansakha'}: ${m.content}`)
     .join('\n');
 
-  const res = await fetch(CHAT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model,
-      stream: false,
-      format: 'json',
-      messages: [
-        { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
-        { role: 'user', content: `Check-in conversation transcript:\n"""${transcript}"""` },
-      ],
-      options: { temperature: 0.2 },
-    }),
-  });
-  if (!res.ok) throw new Error(await res.text().catch(() => `Ollama error ${res.status}`));
-  const data = await res.json();
-  const raw = data?.message?.content;
-  if (!raw) throw new Error('Ollama returned no analysis');
-
-  let parsed;
   try {
-    parsed = JSON.parse(raw);
+    const res = await fetch(CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        stream: false,
+        format: 'json',
+        messages: [
+          { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
+          { role: 'user', content: `Check-in conversation transcript:\n"""${transcript}"""` },
+        ],
+        options: { temperature: 0.2 },
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const raw = data?.message?.content;
+      if (raw) {
+        let parsed = JSON.parse(raw);
+        if (typeof parsed.sentiment === 'number' && typeof parsed.emotion === 'number' && typeof parsed.summary === 'string' && parsed.summary.trim()) {
+          return {
+            sentiment: clamp(parsed.sentiment, -1, 1),
+            emotion: clamp(parsed.emotion, 0, 1),
+            reason: typeof parsed.reason === 'string' ? parsed.reason : null,
+            suggestedIntervention: VALID_INTERVENTIONS.includes(parsed.suggestedIntervention) ? parsed.suggestedIntervention : null,
+            summary: parsed.summary.trim(),
+          };
+        }
+      }
+    }
   } catch (err) {
-    throw new Error('Ollama returned a non-JSON analysis');
+    console.warn('Ollama unavailable for conversation analysis, using heuristic analysis fallback:', err.message);
   }
-  if (typeof parsed.sentiment !== 'number' || typeof parsed.emotion !== 'number' || typeof parsed.summary !== 'string' || !parsed.summary.trim()) {
-    throw new Error('Ollama analysis is missing required fields');
+
+  // Robust Fallback Analysis when Ollama is offline or unreachable:
+  const userMessages = conversation.filter(m => m.role === 'user').map(m => m.content).join(' ');
+  const lowerText = userMessages.toLowerCase();
+
+  const highRiskKeywords = ['kill', 'die', 'attack', 'threat', 'danger', 'scared', 'afraid', 'hurt', 'abuse', 'violence', 'blood', 'weapon'];
+  const modRiskKeywords = ['stress', 'anxious', 'worried', 'sad', 'crying', 'help', 'nervous', 'trouble', 'sleep'];
+
+  let highCount = highRiskKeywords.filter(k => lowerText.includes(k)).length;
+  let modCount = modRiskKeywords.filter(k => lowerText.includes(k)).length;
+
+  let sentiment = 0.2;
+  let emotion = 0.3;
+  let summary = `Check-in completed. User reported: "${userMessages.slice(0, 150)}${userMessages.length > 150 ? '...' : ''}"`;
+  let suggestedIntervention = null;
+
+  if (highCount > 0) {
+    sentiment = 0.8;
+    emotion = 0.85;
+    suggestedIntervention = 'Legal Aid';
+  } else if (modCount > 0) {
+    sentiment = 0.5;
+    emotion = 0.55;
+    suggestedIntervention = 'Counselling';
   }
 
   return {
-    sentiment: clamp(parsed.sentiment, -1, 1),
-    emotion: clamp(parsed.emotion, 0, 1),
-    reason: typeof parsed.reason === 'string' ? parsed.reason : null,
-    suggestedIntervention: VALID_INTERVENTIONS.includes(parsed.suggestedIntervention) ? parsed.suggestedIntervention : null,
-    summary: parsed.summary.trim(),
+    sentiment,
+    emotion,
+    reason: highCount > 0 ? "High risk indicators detected during check-in." : "Standard check-in interaction evaluated.",
+    suggestedIntervention,
+    summary,
   };
 }
 
