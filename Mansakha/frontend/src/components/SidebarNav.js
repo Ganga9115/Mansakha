@@ -38,7 +38,7 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
 
         {/* Mansakha Logo */}
         <Image
-          source={require('../../assets/mansakha-logo.png')}
+          source={require('../../assets/logo.png')}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -131,8 +131,8 @@ const styles = StyleSheet.create({
 
   // Mansakha logo
   logo: {
-    width: 140,
-    height: 70,
+    width: 160,
+    height: 90,
   },
 
   body: {
