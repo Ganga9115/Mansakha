@@ -333,14 +333,14 @@ export default function ChatScreen({ navigation }) {
 
       // 3. Submit to backend to update distress scores in the DB
       const result = await submitMutation.mutateAsync({
-        channel: mode === 'voice' ? 'Voice Call' : 'Chatbot',
+        channel: mode === 'voice' ? 'IVRS' : 'Chatbot',
         responses: formattedResponses,
         aiAnalysis
       });
 
       // 4. Update the UI with the final result
-      let scoreVal = Math.round(Number(result.scoreValue));
-      if (!Number.isFinite(scoreVal)) throw new Error("Invalid score returned from backend");
+      let rawScore = Number(result?.scoreValue);
+      let scoreVal = Number.isFinite(rawScore) ? Math.round(rawScore > 10 ? rawScore / 10 : rawScore) : 5;
       scoreVal = Math.max(0, Math.min(10, scoreVal));
 
       setAnalysis({
