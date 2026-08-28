@@ -432,7 +432,6 @@ ${transcriptText}`;
               keyExtractor={(_, i) => i.toString()}
               renderItem={({ item }) => <Bubble message={item} />}
               contentContainerStyle={styles.listContent}
-              ListEmptyComponent={<Text style={styles.emptyText}>This uses the same local Ollama connection as Voice Call.</Text>}
             />
             {analysis && (
               <View style={styles.analysisPanel}>
@@ -506,8 +505,6 @@ ${transcriptText}`;
                 <Text style={styles.analysisMeta}>{analysis.meta}</Text>
               </View>
             )}
-
-            <Text style={styles.note}>Gemma 3:4b via the same local Ollama endpoint.</Text>
           </ScrollView>
         )}
       </View>
