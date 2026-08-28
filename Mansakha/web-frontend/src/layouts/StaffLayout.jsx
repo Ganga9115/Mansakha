@@ -43,7 +43,6 @@ const NAV_ITEMS_BY_SECTION = {
     { name: 'Case Queue', icon: Inbox, path: '/counsellor/queue' },
     { name: 'My Victims', icon: Users, path: '/counsellor/my-victims' },
     { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
-    { name: 'Interventions', icon: MessageSquare, path: '/counsellor/interventions' },
     { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
     { name: 'Profile', icon: User, path: '/counsellor/profile' },
   ],

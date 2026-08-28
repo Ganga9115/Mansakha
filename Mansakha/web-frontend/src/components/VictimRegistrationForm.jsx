@@ -25,6 +25,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
   const [docketNumber, setDocketNumber] = useState('');
   const [fullName, setFullName] = useState('');
   const [contactNumber, setContactNumber] = useState('');
+  const [password, setPassword] = useState('');
   const [caseTypeId, setCaseTypeId] = useState('');
   const [caseStage, setCaseStage] = useState('');
   const [stateId, setStateId] = useState('');
@@ -43,7 +44,7 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
     setCreated(null);
     const jurisdictionId = lockedJurisdictionId || districtId;
     if (!docketNumber.trim() || !fullName.trim() || !contactNumber.trim() || !caseTypeId || !jurisdictionId) {
-      setError('Please fill in all fields.');
+      setError('Please fill in all required fields.');
       return;
     }
     try {
@@ -51,17 +52,19 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
         docketNumber: docketNumber.trim(),
         fullName: fullName.trim(),
         contactNumber: contactNumber.trim(),
+        password: password.trim() || undefined,
         jurisdictionId,
         caseTypeId,
         ...(showCaseStage && caseStage ? { caseStage } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
-        temporaryPassword: result?.temporaryPassword,
+        temporaryPassword: result?.temporaryPassword || password.trim() || 'Victim123',
       });
       setDocketNumber('');
       setFullName('');
       setContactNumber('');
+      setPassword('');
       setCaseTypeId('');
       setCaseStage('');
       setStateId('');
@@ -111,6 +114,17 @@ export default function VictimRegistrationForm({ lockedJurisdictionId, lockedJur
             placeholder="e.g. 9876543210"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Password</label>
+        <input
+          type="text"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="e.g. Victim123 (leave blank for default)"
+        />
       </div>
 
       {lockedJurisdictionId ? (

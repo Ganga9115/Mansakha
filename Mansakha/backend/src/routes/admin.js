@@ -219,19 +219,38 @@ router.get(
       // pg round trips through a 10-connection pool. Trend direction is
       // its own (smaller, still parallelized) pass per child below.
       const countsByChildId = await countVictimsByRiskGroupedByChild(allDescendantIds, { groupByParent: jurisdiction.level === 'national' });
-      const zeroCounts = { total: 0, vulnerable: 0, highRisk: 0, critical: 0 };
-      const counts = [...countsByChildId.values()].reduce(
-        (acc, c) => ({ total: acc.total + c.total, vulnerable: acc.vulnerable + c.vulnerable, highRisk: acc.highRisk + c.highRisk, critical: acc.critical + c.critical }),
-        { ...zeroCounts }
+      const zeroCounts = { total: 0, totalCases: 0, vulnerable: 0, vulnerableVictims: 0, highRisk: 0, highRiskCases: 0, critical: 0, criticalCases: 0 };
+      const rawCounts = [...countsByChildId.values()].reduce(
+        (acc, c) => ({
+          total: acc.total + c.total,
+          vulnerable: acc.vulnerable + c.vulnerable,
+          highRisk: acc.highRisk + c.highRisk,
+          critical: acc.critical + c.critical,
+        }),
+        { total: 0, vulnerable: 0, highRisk: 0, critical: 0 }
       );
+      const counts = {
+        ...rawCounts,
+        totalCases: rawCounts.total,
+        vulnerableVictims: rawCounts.vulnerable,
+        highRiskCases: rawCounts.highRisk,
+        criticalCases: rawCounts.critical,
+      };
 
       const breakdown = await Promise.all(children.map(async (child) => {
         const childDescendants = await getDescendantJurisdictionIds(child.jurisdiction_id);
-        // Section 4.3 "Rising-trend districts" - a per-row indicator, not a
-        // separate list, so the frontend can sort/highlight in place.
         const trendDirection = await computeTrendDirection(childDescendants);
         const childCounts = countsByChildId.get(child.jurisdiction_id) || zeroCounts;
-        return { jurisdictionId: child.jurisdiction_id, name: child.name, ...childCounts, trendDirection };
+        return {
+          jurisdictionId: child.jurisdiction_id,
+          name: child.name,
+          ...childCounts,
+          totalCases: childCounts.total,
+          vulnerableVictims: childCounts.vulnerable,
+          highRiskCases: childCounts.highRisk,
+          criticalCases: childCounts.critical,
+          trendDirection,
+        };
       }));
 
       return ok(res, { tier: jurisdiction.level, ...counts, trends: breakdown });
@@ -564,10 +583,10 @@ router.post(
   generalApiLimiter,
   requireJurisdiction((req) => req.body.jurisdictionId),
   async (req, res) => {
-    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground } = req.body;
+    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password } = req.body;
     try {
       const { victimId, temporaryPassword } = await createVictim({
-        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground,
+        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password,
         provisionedVia: 'district_admin',
       });
       await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'create', entityType: 'victim', entityId: victimId });

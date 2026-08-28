@@ -17,14 +17,14 @@ router.use(verifyToken, requireRole(['Data Operator']), generalApiLimiter);
 // intake role that can register a victim into any district, not a
 // district-operational one - so no requireJurisdiction here.
 router.post('/register-victim', async (req, res) => {
-  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground } = req.body;
+  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password } = req.body;
   try {
-    const { victimId } = await createVictim({
-      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground,
+    const { victimId, temporaryPassword } = await createVictim({
+      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password,
       provisionedVia: 'data_intake_admin',
     });
     await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'create', entityType: 'victim', entityId: victimId });
-    return ok(res, { victimId, docketNumber }, 'Victim record created', 201);
+    return ok(res, { victimId, docketNumber, temporaryPassword }, 'Victim record created', 201);
   } catch (err) {
     if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
     throw err;

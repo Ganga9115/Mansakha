@@ -43,9 +43,9 @@ export default function NationalDashboard() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="grid grid-cols-3 gap-6 flex-1 mr-6">
-            <StatCard title="Total Cases (National)" value={data?.totalCases ?? '-'} />
-            <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? '-'} tone="text-rose-600" />
-            <StatCard title="Critical Cases" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
+            <StatCard title="Total Cases (National)" value={data?.totalCases ?? data?.total ?? '-'} />
+            <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? data?.highRisk ?? '-'} tone="text-rose-600" />
+            <StatCard title="Critical Cases" value={data?.criticalCases ?? data?.critical ?? '-'} tone="text-purple-700" />
           </div>
           <div className="text-right">
             <button
@@ -88,9 +88,9 @@ export default function NationalDashboard() {
                   ) : states.map((s) => (
                     <tr key={s.jurisdictionId} className="hover:bg-gray-50/70 transition">
                       <td className="py-3.5 px-6 font-bold text-gray-800">{s.name}</td>
-                      <td className="py-3.5 px-4 text-gray-700 font-medium">{s.totalCases}</td>
-                      <td className="py-3.5 px-4 text-rose-600 font-bold">{s.highRiskCases}</td>
-                      <td className="py-3.5 px-4 text-purple-700 font-bold">{s.criticalCases}</td>
+                      <td className="py-3.5 px-4 text-gray-700 font-medium">{s.totalCases ?? s.total ?? 0}</td>
+                      <td className="py-3.5 px-4 text-rose-600 font-bold">{s.highRiskCases ?? s.highRisk ?? 0}</td>
+                      <td className="py-3.5 px-4 text-purple-700 font-bold">{s.criticalCases ?? s.critical ?? 0}</td>
                       <td className="py-3.5 px-6 text-right">
                         <button
                           onClick={() => navigate(`/nationaladmin/state/${s.jurisdictionId}`)}

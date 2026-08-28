@@ -9,7 +9,6 @@ import CounsellorDashboard from './pages/staff/counsellor/CounsellorDashboard';
 import CaseQueue from './pages/staff/counsellor/CaseQueue';
 import MyVictims from './pages/staff/counsellor/MyVictims';
 import CaseDetail from './pages/staff/counsellor/CaseDetail';
-import LogIntervention from './pages/staff/counsellor/LogIntervention';
 import AlertsFeed from './pages/staff/counsellor/AlertsFeed';
 import AdminDashboard from './pages/staff/administration/AdminDashboard';
 import StateDashboard from './pages/staff/administration/StateDashboard';
@@ -54,7 +53,6 @@ export default function App() {
         <Route path="/counsellor/queue" element={<RequireAuth><CaseQueue /></RequireAuth>} />
         <Route path="/counsellor/my-victims" element={<RequireAuth><MyVictims /></RequireAuth>} />
         <Route path="/counsellor/case-detail/:id" element={<RequireAuth><CaseDetail /></RequireAuth>} />
-        <Route path="/counsellor/interventions" element={<RequireAuth><LogIntervention /></RequireAuth>} />
         <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
         <Route path="/counsellor/reports" element={<RequireAuth><StaffReports /></RequireAuth>} />
         <Route path="/counsellor/profile" element={<RequireAuth><StaffSettings /></RequireAuth>} />
