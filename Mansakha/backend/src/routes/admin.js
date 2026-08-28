@@ -100,7 +100,7 @@ router.get('/root-jurisdiction', verifyToken, generalApiLimiter, async (req, res
 // the old embed's `distress_scores?.[0]` after an order-by-computed_at-desc.
 async function countVictimsByRisk(jurisdictionIds) {
   const { rows } = await pool.query(
-    `select v.victim_id, ds.score_value, rl.name as risk_level_name
+    `select v.victim_id, v.case_stage, ds.score_value, rl.name as risk_level_name
      from victims v
      left join lateral (
        select score_value, risk_level_id
@@ -122,7 +122,7 @@ async function countVictimsByRisk(jurisdictionIds) {
     if (riskLevel === 'Moderate') counts.vulnerableVictims += 1;
     if (riskLevel === 'High') counts.highRiskCases += 1;
     if (riskLevel === 'Critical') counts.criticalCases += 1;
-    caseRows.push({ victimId: v.victim_id, score: v.score_value !== null ? Number(v.score_value) : null, riskLevel });
+    caseRows.push({ victimId: v.victim_id, caseStage: v.case_stage, score: v.score_value !== null ? Number(v.score_value) : null, riskLevel });
   }
   return { counts, caseRows };
 }
