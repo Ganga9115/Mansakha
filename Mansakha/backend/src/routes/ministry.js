@@ -71,27 +71,30 @@ router.get('/staff', async (req, res) => {
   const whereClause = conditions.join(' and ');
 
   try {
-    const { rows: countRows } = await pool.query(
-      `select count(*) from officials o
-       join official_roles orl on orl.official_id = o.official_id
-       join roles r on r.role_id = orl.role_id
-       left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
-       where ${whereClause}`,
-      params
-    );
-
-    const { rows } = await pool.query(
-      `select o.official_id, o.full_name, o.email, o.phone, o.whatsapp_number, o.staff_id, o.must_change_password,
-              r.role_name, j.name as jurisdiction_name
-       from officials o
-       join official_roles orl on orl.official_id = o.official_id
-       join roles r on r.role_id = orl.role_id
-       left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
-       where ${whereClause}
-       order by o.full_name
-       limit ${pageSize} offset ${offset}`,
-      params
-    );
+    // Count and page are independent of each other - run concurrently
+    // instead of one waiting on the other.
+    const [{ rows: countRows }, { rows }] = await Promise.all([
+      pool.query(
+        `select count(*) from officials o
+         join official_roles orl on orl.official_id = o.official_id
+         join roles r on r.role_id = orl.role_id
+         left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
+         where ${whereClause}`,
+        params
+      ),
+      pool.query(
+        `select o.official_id, o.full_name, o.email, o.phone, o.whatsapp_number, o.staff_id, o.must_change_password,
+                r.role_name, j.name as jurisdiction_name
+         from officials o
+         join official_roles orl on orl.official_id = o.official_id
+         join roles r on r.role_id = orl.role_id
+         left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
+         where ${whereClause}
+         order by o.full_name
+         limit ${pageSize} offset ${offset}`,
+        params
+      ),
+    ]);
 
     const staff = rows.map((o) => ({
       officialId: o.official_id,
@@ -123,32 +126,35 @@ router.get('/victims', async (req, res) => {
   const pageSize = 30;
   const offset = (page - 1) * pageSize;
 
-  const { data, count, error } = await supabase
-    .from('victims')
-    .select(
-      `victim_id, docket_number, case_stage, status, auth_method, enrolled_at,
-       case_types(name), jurisdictions(name), victim_identity(full_name, contact_number, address)`,
-      { count: 'exact' }
-    )
-    .order('enrolled_at', { ascending: false })
-    .range(offset, offset + pageSize - 1);
-  if (error) return fail(res, `Could not load victims: ${error.message}`, 500);
+  const { rows } = await pool.query(
+    `select v.victim_id, v.docket_number, v.case_stage, v.status, v.auth_method, v.enrolled_at,
+            ct.name as case_type_name, j.name as jurisdiction_name,
+            vi.full_name, vi.contact_number, vi.address,
+            count(*) over() as total_count
+     from victims v
+     left join case_types ct on ct.case_type_id = v.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = v.jurisdiction_id
+     left join victim_identity vi on vi.victim_id = v.victim_id
+     order by v.enrolled_at desc
+     limit $1 offset $2`,
+    [pageSize, offset]
+  );
 
-  const victims = (data || []).map((v) => ({
+  const victims = rows.map((v) => ({
     victimId: v.victim_id,
     docketNumber: v.docket_number,
-    fullName: v.victim_identity?.full_name || null,
-    contactNumber: v.victim_identity?.contact_number || null,
-    address: v.victim_identity?.address || null,
-    caseType: v.case_types?.name || null,
-    jurisdictionName: v.jurisdictions?.name || null,
+    fullName: v.full_name || null,
+    contactNumber: v.contact_number || null,
+    address: v.address || null,
+    caseType: v.case_type_name || null,
+    jurisdictionName: v.jurisdiction_name || null,
     caseStage: v.case_stage,
     status: v.status,
     provisionedVia: v.auth_method === 'district_admin' ? 'District Admin' : 'Data Operator',
     enrolledAt: v.enrolled_at,
   }));
 
-  return ok(res, { victims, total: count || victims.length, page: Number(page), pageSize });
+  return ok(res, { victims, total: rows.length > 0 ? Number(rows[0].total_count) : 0, page: Number(page), pageSize });
 });
 
 // Extends Section 7's contract (explicitly allowed: "extend as needed, keep the
@@ -368,14 +374,18 @@ router.get('/audit-log', async (req, res) => {
   const pageSize = 50;
   const offset = (page - 1) * pageSize;
 
-  const { data, count, error } = await supabase
-    .from('audit_log')
-    .select('log_id, official_id, victim_id, action, entity_type, entity_id, occurred_at', { count: 'exact' })
-    .order('occurred_at', { ascending: false })
-    .range(offset, offset + pageSize - 1);
-  if (error) return fail(res, 'Could not load audit log', 500);
+  const { rows } = await pool.query(
+    `select log_id, official_id, victim_id, action, entity_type, entity_id, occurred_at, count(*) over() as total_count
+     from audit_log
+     order by occurred_at desc
+     limit $1 offset $2`,
+    [pageSize, offset]
+  );
 
-  return ok(res, { entries: data || [], total: count || 0 });
+  return ok(res, {
+    entries: rows.map(({ total_count, ...entry }) => entry),
+    total: rows.length > 0 ? Number(rows[0].total_count) : 0,
+  });
 });
 
 router.get('/languages', async (req, res) => {
@@ -558,52 +568,45 @@ router.delete('/channels/:channelId', async (req, res) => {
 // "Heatmaps by state / region" - pure aggregation, no new table. One row per
 // state: victim count + average of each victim's most recent distress score.
 router.get('/heatmap', async (req, res) => {
-  const { data: states, error: stateError } = await supabase.from('jurisdictions').select('jurisdiction_id, name').eq('level', 'state');
-  if (stateError) return fail(res, 'Could not load heatmap', 500);
-
-  // Same fix as admin.js's dashboard route: every state runs concurrently
-  // (Promise.all, not a sequential for-loop) and goes straight to Postgres
-  // (pgPool) instead of one Supabase REST call per state - confirmed live
-  // that REST overhead alone was ~1-2s per call, which a ~35-state
-  // sequential loop turned into tens of seconds for this one page.
-  const heatmap = await Promise.all((states || []).map(async (state) => {
-    const descendantIds = await getDescendantJurisdictionIds(state.jurisdiction_id);
-    const { rows } = await pool.query(
-      `select v.victim_id, ds.score_value, rl.name as risk_level_name
+  // One grouped query for every state at once (group by each district's
+  // parent_id) instead of one round trip per state - the ~35 separate pg
+  // queries this used to run were still the dominant cost even after moving
+  // off Supabase REST, all competing for the same 10-connection pool. Same
+  // fix as admin.js's countVictimsByRiskGroupedByChild, just also carrying
+  // the average score this page needs that the dashboard route doesn't.
+  const [{ rows: states }, { rows: grouped }] = await Promise.all([
+    pool.query(`select jurisdiction_id, name from jurisdictions where level = 'state'`),
+    pool.query(
+      `select j.parent_id as state_id,
+              count(distinct v.victim_id) as victim_count,
+              avg(ds.score_value) as avg_score,
+              count(distinct v.victim_id) filter (where rl.name = 'Moderate') as vulnerable,
+              count(distinct v.victim_id) filter (where rl.name = 'High') as high_risk,
+              count(distinct v.victim_id) filter (where rl.name = 'Critical') as critical
        from victims v
+       join jurisdictions j on j.jurisdiction_id = v.jurisdiction_id
        left join lateral (
          select score_value, risk_level_id from distress_scores where victim_id = v.victim_id order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       where v.jurisdiction_id = any($1::uuid[])`,
-      [descendantIds]
-    );
+       group by j.parent_id`
+    ),
+  ]);
 
-    let scoreSum = 0;
-    let scoredCount = 0;
-    let vulnerable = 0;
-    let highRisk = 0;
-    let critical = 0;
-    for (const r of rows) {
-      if (r.score_value !== null) {
-        scoreSum += Number(r.score_value);
-        scoredCount += 1;
-      }
-      if (r.risk_level_name === 'Moderate') vulnerable += 1;
-      if (r.risk_level_name === 'High') highRisk += 1;
-      if (r.risk_level_name === 'Critical') critical += 1;
-    }
+  const byStateId = new Map(grouped.map((r) => [r.state_id, r]));
 
+  const heatmap = states.map((state) => {
+    const g = byStateId.get(state.jurisdiction_id);
     return {
       jurisdictionId: state.jurisdiction_id,
       name: state.name,
-      victimCount: rows.length,
-      averageScore: scoredCount > 0 ? Math.round((scoreSum / scoredCount) * 10) / 10 : null,
-      vulnerable,
-      highRisk,
-      critical,
+      victimCount: g ? Number(g.victim_count) : 0,
+      averageScore: g && g.avg_score !== null ? Math.round(Number(g.avg_score) * 10) / 10 : null,
+      vulnerable: g ? Number(g.vulnerable) : 0,
+      highRisk: g ? Number(g.high_risk) : 0,
+      critical: g ? Number(g.critical) : 0,
     };
-  }));
+  });
 
   return ok(res, { heatmap });
 });
@@ -661,44 +664,46 @@ router.get('/reports', async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const offset = (page - 1) * pageSize;
 
-  const { data, count, error } = await supabase
-    .from('reports')
-    .select(
-      `report_id, jurisdiction_id, generated_by, generated_at, period_start, period_end, snapshot,
-       status, target_jurisdiction_id, commentary, insight_id,
-       origin:jurisdictions!reports_jurisdiction_id_fkey(name, level),
-       target:jurisdictions!reports_target_jurisdiction_id_fkey(name, level),
-       generator:officials(full_name)`,
-      { count: 'exact' }
-    )
-    .order('generated_at', { ascending: false })
-    .range(offset, offset + pageSize - 1);
-  if (error) return fail(res, `Could not load reports: ${error.message}`, 500);
+  const { rows } = await pool.query(
+    `select r.report_id, r.jurisdiction_id, r.generated_by, r.generated_at, r.period_start, r.period_end, r.snapshot,
+            r.status, r.target_jurisdiction_id, r.commentary, r.insight_id,
+            origin.name as origin_name, origin.level as origin_level,
+            target.name as target_name,
+            o.full_name as generator_name,
+            count(*) over() as total_count
+     from reports r
+     left join jurisdictions origin on origin.jurisdiction_id = r.jurisdiction_id
+     left join jurisdictions target on target.jurisdiction_id = r.target_jurisdiction_id
+     left join officials o on o.official_id = r.generated_by
+     order by r.generated_at desc
+     limit $1 offset $2`,
+    [pageSize, offset]
+  );
+  const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
 
   // jurisdictionLevel filter kept as a JS-side pass (not a server-side
-  // .eq() on the aliased embed) - no current caller passes this param, and
-  // filtering post-map avoids relying on untested alias-qualified embed
-  // filter syntax under time pressure.
-  let reports = (data || []).map((r) => ({
+  // filter) - no current caller passes this param, and filtering post-map
+  // avoids relying on untested filter syntax under time pressure.
+  let reports = rows.map((r) => ({
     reportId: r.report_id,
     jurisdictionId: r.jurisdiction_id,
-    jurisdictionName: r.origin ? r.origin.name : null,
-    jurisdictionLevel: r.origin ? r.origin.level : null,
+    jurisdictionName: r.origin_name || null,
+    jurisdictionLevel: r.origin_level || null,
     generatedBy: r.generated_by,
-    generatedByName: r.generator ? r.generator.full_name : null,
+    generatedByName: r.generator_name || null,
     generatedAt: r.generated_at,
     periodStart: r.period_start,
     periodEnd: r.period_end,
     snapshot: r.snapshot,
     status: r.status,
     targetJurisdictionId: r.target_jurisdiction_id,
-    targetJurisdictionName: r.target ? r.target.name : null,
+    targetJurisdictionName: r.target_name || null,
     commentary: r.commentary,
     insightId: r.insight_id,
   }));
   if (jurisdictionLevel) reports = reports.filter((r) => r.jurisdictionLevel === jurisdictionLevel);
 
-  return ok(res, { reports, total: count || 0 });
+  return ok(res, { reports, total: totalCount });
 });
 
 module.exports = router;

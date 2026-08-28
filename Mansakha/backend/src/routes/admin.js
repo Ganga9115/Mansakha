@@ -98,6 +98,47 @@ router.get('/root-jurisdiction', verifyToken, generalApiLimiter, async (req, res
 // Raw pg (see computeAverageScore's comment above for why) - LATERAL join
 // picks each victim's single latest distress_scores row (or none), matching
 // the old embed's `distress_scores?.[0]` after an order-by-computed_at-desc.
+// Computes total/vulnerable/highRisk/critical for every DIRECT CHILD of a
+// jurisdiction in one grouped query, instead of the N+1 loop below that ran
+// countVictimsByRisk once per child (35 separate round trips for a National-
+// tier load, all competing for the pg pool's limited connections - confirmed
+// live as the dominant remaining cost after moving those calls off REST).
+// Victims are always assigned to a district-level jurisdiction, so the
+// grouping key differs by tier: State's children are districts (group by
+// the victim's own jurisdiction_id directly); National's children are
+// states (group by that district's parent_id) - the hierarchy is exactly
+// national -> state -> district, never deeper, so one extra join covers it.
+async function countVictimsByRiskGroupedByChild(jurisdictionIds, { groupByParent }) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'v.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            count(distinct v.victim_id) as total,
+            count(distinct v.victim_id) filter (where rl.name = 'Moderate') as vulnerable,
+            count(distinct v.victim_id) filter (where rl.name = 'High') as high_risk,
+            count(distinct v.victim_id) filter (where rl.name = 'Critical') as critical
+     from victims v
+     join jurisdictions j on j.jurisdiction_id = v.jurisdiction_id
+     left join lateral (
+       select risk_level_id from distress_scores where victim_id = v.victim_id order by computed_at desc limit 1
+     ) ds on true
+     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+     where v.jurisdiction_id = any($1::uuid[])
+     group by ${groupExpr}`,
+    [jurisdictionIds]
+  );
+
+  const byGroupId = new Map();
+  for (const r of rows) {
+    byGroupId.set(r.group_id, {
+      total: Number(r.total),
+      vulnerable: Number(r.vulnerable),
+      highRisk: Number(r.high_risk),
+      critical: Number(r.critical),
+    });
+  }
+  return byGroupId;
+}
+
 async function countVictimsByRisk(jurisdictionIds) {
   const { rows } = await pool.query(
     `select v.victim_id, v.case_stage, ds.score_value, rl.name as risk_level_name
@@ -168,25 +209,28 @@ router.get(
       // State/National: aggregate-with-drill-down is the default, not case-level -
       // Section 4.5. State also sees its child districts side by side; National sees
       // its child states side by side.
-      //
-      // The top-level count and every child's row are fully independent of
-      // each other, so they run concurrently (Promise.all) rather than one
-      // child waiting on the previous one to finish - a National-tier load
-      // has ~35 states here, and a sequential for-loop meant the page's load
-      // time scaled with the state count instead of being roughly constant.
-      const [{ counts }, children] = await Promise.all([
-        getDescendantJurisdictionIds(jurisdictionId).then(countVictimsByRisk).then((r) => ({ counts: r.counts })),
-        getChildJurisdictions(jurisdictionId),
-      ]);
+      const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
+      const children = await getChildJurisdictions(jurisdictionId);
+
+      // One grouped query gets every child's counts at once (see
+      // countVictimsByRiskGroupedByChild's comment) instead of one query per
+      // child - this is what actually took the National tier from single-
+      // digit seconds down further, since it was still running 35 separate
+      // pg round trips through a 10-connection pool. Trend direction is
+      // its own (smaller, still parallelized) pass per child below.
+      const countsByChildId = await countVictimsByRiskGroupedByChild(allDescendantIds, { groupByParent: jurisdiction.level === 'national' });
+      const zeroCounts = { total: 0, vulnerable: 0, highRisk: 0, critical: 0 };
+      const counts = [...countsByChildId.values()].reduce(
+        (acc, c) => ({ total: acc.total + c.total, vulnerable: acc.vulnerable + c.vulnerable, highRisk: acc.highRisk + c.highRisk, critical: acc.critical + c.critical }),
+        { ...zeroCounts }
+      );
 
       const breakdown = await Promise.all(children.map(async (child) => {
         const childDescendants = await getDescendantJurisdictionIds(child.jurisdiction_id);
-        const [{ counts: childCounts }, trendDirection] = await Promise.all([
-          countVictimsByRisk(childDescendants),
-          // Section 4.3 "Rising-trend districts" - a per-row indicator, not a
-          // separate list, so the frontend can sort/highlight in place.
-          computeTrendDirection(childDescendants),
-        ]);
+        // Section 4.3 "Rising-trend districts" - a per-row indicator, not a
+        // separate list, so the frontend can sort/highlight in place.
+        const trendDirection = await computeTrendDirection(childDescendants);
+        const childCounts = countsByChildId.get(child.jurisdiction_id) || zeroCounts;
         return { jurisdictionId: child.jurisdiction_id, name: child.name, ...childCounts, trendDirection };
       }));
 
@@ -294,14 +338,17 @@ router.get(
       csv = toCsv(['victimId', 'score', 'riskLevel'], caseRows);
       filename = `${jurisdiction.name}-cases.csv`;
     } else {
-      const children = await getChildJurisdictions(jurisdictionId);
-      // Same concurrency fix as GET /dashboard/:jurisdictionId - each child's
-      // row is independent, so they run in parallel instead of one state
-      // waiting on the previous one.
-      const breakdown = await Promise.all(children.map(async (child) => {
-        const childDescendants = await getDescendantJurisdictionIds(child.jurisdiction_id);
-        const { counts } = await countVictimsByRisk(childDescendants);
-        return { jurisdictionId: child.jurisdiction_id, name: child.name, ...counts };
+      // Same one-query-per-tier fix as GET /dashboard/:jurisdictionId, instead
+      // of one round trip per child.
+      const [children, allDescendantIds] = await Promise.all([
+        getChildJurisdictions(jurisdictionId),
+        getDescendantJurisdictionIds(jurisdictionId),
+      ]);
+      const countsByChildId = await countVictimsByRiskGroupedByChild(allDescendantIds, { groupByParent: jurisdiction.level === 'national' });
+      const breakdown = children.map((child) => ({
+        jurisdictionId: child.jurisdiction_id,
+        name: child.name,
+        ...(countsByChildId.get(child.jurisdiction_id) || { total: 0, vulnerable: 0, highRisk: 0, critical: 0 }),
       }));
       csv = toCsv(['jurisdictionId', 'name', 'total', 'vulnerable', 'highRisk', 'critical'], breakdown);
       filename = `${jurisdiction.name}-breakdown.csv`;
@@ -330,29 +377,50 @@ router.get(
     const { jurisdictionId } = req.params;
     const months = Math.min(Math.max(Number(req.query.months) || 6, 1), 24);
 
+    const now = new Date();
+    const windowStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).toISOString();
+
+    // Score history and policies are independent (different tables, neither
+    // depends on the other's result) and both go straight to Postgres - the
+    // ID-chunked Supabase REST calls this used to make were both slow (REST's
+    // own per-call overhead) and, for a jurisdiction with a very large
+    // descendant set, exactly the kind of unbounded fan-out fixed elsewhere
+    // this session.
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
-    let victims;
-    try {
-      victims = await selectInChunks(allDescendantIds, (chunk) =>
-        supabase.from('victims').select('distress_scores(score_value, computed_at)').in('jurisdiction_id', chunk)
-      );
-    } catch (err) {
-      return fail(res, `Could not load trend data: ${err.message}`, 500);
-    }
+    const [{ rows: scoreRows }, { rows: policyRows }] = await Promise.all([
+      pool.query(
+        `select ds.score_value, ds.computed_at
+         from distress_scores ds
+         join victims v on v.victim_id = ds.victim_id
+         where v.jurisdiction_id = any($1::uuid[])`,
+        [allDescendantIds]
+      ),
+      // Ministry Analytics & Workflow spec Task 2B "Policy Impact Tracker" -
+      // overlays this SAME jurisdiction's own launched policies (not its
+      // descendant subtree - a policy is understood as authored by/scoped to
+      // exactly the jurisdiction it was created under, unlike the score
+      // aggregation above) onto the identical [windowStart, now] window the
+      // trend line already covers, so the frontend can plot a marker at each
+      // policy's launched_at against the score line without a second
+      // months-to-dates computation.
+      pool.query(
+        `select policy_id, title, launched_at from policies
+         where jurisdiction_id = $1 and launched_at >= $2 and launched_at <= $3
+         order by launched_at desc`,
+        [jurisdictionId, windowStart, now.toISOString()]
+      ),
+    ]);
 
     const scoresByMonth = new Map(); // 'YYYY-MM' -> { sum, count }
-    for (const v of victims || []) {
-      for (const s of v.distress_scores || []) {
-        const monthKey = s.computed_at.slice(0, 7);
-        const bucket = scoresByMonth.get(monthKey) || { sum: 0, count: 0 };
-        bucket.sum += s.score_value;
-        bucket.count += 1;
-        scoresByMonth.set(monthKey, bucket);
-      }
+    for (const s of scoreRows) {
+      const monthKey = s.computed_at.toISOString().slice(0, 7);
+      const bucket = scoresByMonth.get(monthKey) || { sum: 0, count: 0 };
+      bucket.sum += Number(s.score_value);
+      bucket.count += 1;
+      scoresByMonth.set(monthKey, bucket);
     }
 
     const points = [];
-    const now = new Date();
     for (let i = months - 1; i >= 0; i -= 1) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -360,23 +428,7 @@ router.get(
       points.push({ month: monthKey, averageScore: bucket ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null });
     }
 
-    // Ministry Analytics & Workflow spec Task 2B "Policy Impact Tracker" -
-    // overlays this SAME jurisdiction's own launched policies (not its
-    // descendant subtree - a policy is understood as authored by/scoped to
-    // exactly the jurisdiction it was created under, unlike the score
-    // aggregation above) onto the identical [windowStart, now] window the
-    // trend line already covers, so the frontend can plot a marker at each
-    // policy's launched_at against the score line without a second
-    // months-to-dates computation.
-    const windowStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).toISOString();
-    const { data: policyRows } = await supabase
-      .from('policies')
-      .select('policy_id, title, launched_at')
-      .eq('jurisdiction_id', jurisdictionId)
-      .gte('launched_at', windowStart)
-      .lte('launched_at', now.toISOString())
-      .order('launched_at', { ascending: false });
-    const policies = (policyRows || []).map((p) => ({ policyId: p.policy_id, title: p.title, launchedAt: p.launched_at }));
+    const policies = policyRows.map((p) => ({ policyId: p.policy_id, title: p.title, launchedAt: p.launched_at }));
 
     return ok(res, { points, policies });
   }
@@ -433,15 +485,14 @@ router.get(
   requireJurisdiction((req) => req.params.jurisdictionId),
   async (req, res) => {
     const { jurisdictionId } = req.params;
-    const { data, error } = await supabase
-      .from('policies')
-      .select('policy_id, title, description, launched_at, created_by')
-      .eq('jurisdiction_id', jurisdictionId)
-      .order('launched_at', { ascending: false });
-    if (error) return fail(res, `Could not load policies: ${error.message}`, 500);
+    const { rows: data } = await pool.query(
+      `select policy_id, title, description, launched_at, created_by from policies
+       where jurisdiction_id = $1 order by launched_at desc`,
+      [jurisdictionId]
+    );
 
     return ok(res, {
-      policies: (data || []).map((p) => ({
+      policies: data.map((p) => ({
         policyId: p.policy_id,
         title: p.title,
         description: p.description,
