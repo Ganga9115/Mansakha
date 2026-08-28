@@ -126,6 +126,7 @@ function DesktopNavigator() {
 
   return (
     <Drawer.Navigator
+      useLegacyImplementation={false}
       screenOptions={{
         headerShown: false,
         drawerType: 'permanent',

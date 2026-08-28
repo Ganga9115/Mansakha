@@ -1,5 +1,6 @@
 const express = require('express');
 const { supabase } = require('../db/supabaseClient');
+const { pool } = require('../db/pgPool');
 const { analyzeInteraction, analyzeChatMessage, analyzeInteractionFromClientAi } = require('../services/ai');
 const { writeAuditLog } = require('../services/auditLog');
 const { verifyToken } = require('../middleware/verifyToken');
@@ -165,18 +166,11 @@ router.post('/checkin', async (req, res) => {
 });
 
 router.get('/history', async (req, res) => {
-  const victimId = req.auth.victimId;
-  const { data, error } = await supabase
-    .from('case_notes')
-    .select('note_text, created_at')
-    .eq('victim_id', victimId)
-    .eq('authored_by', 'ai')
-    .order('created_at', { ascending: false })
-    .limit(3);
-    
-  if (error) return fail(res, 'Failed to fetch history', 500);
-  
-  const historyText = (data || []).map(n => n.note_text).join('\n\n');
+  const { rows } = await pool.query(
+    `select note_text from case_notes where victim_id = $1 and authored_by = 'ai' order by created_at desc limit 3`,
+    [req.auth.victimId]
+  );
+  const historyText = rows.map((n) => n.note_text).join('\n\n');
   return ok(res, { history: historyText });
 });
 
@@ -237,15 +231,12 @@ router.post('/chat', victimChatLimiter, async (req, res) => {
 // Chat history for the thread UI - oldest first, matching DistressHistoryScreen's
 // existing convention for time-series data.
 router.get('/chat', async (req, res) => {
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .select('message_id, sender, body, sent_at')
-    .eq('victim_id', req.auth.victimId)
-    .order('sent_at', { ascending: true });
-  if (error) return fail(res, 'Could not load chat history', 500);
-
+  const { rows } = await pool.query(
+    `select message_id, sender, body, sent_at from chat_messages where victim_id = $1 order by sent_at asc`,
+    [req.auth.victimId]
+  );
   return ok(res, {
-    messages: (data || []).map((m) => ({ messageId: m.message_id, sender: m.sender, body: m.body, sentAt: m.sent_at })),
+    messages: rows.map((m) => ({ messageId: m.message_id, sender: m.sender, body: m.body, sentAt: m.sent_at })),
   });
 });
 
@@ -354,18 +345,19 @@ router.patch('/counsellor-preference', async (req, res) => {
 // scheduled for. Upcoming only - a completed/cancelled session isn't
 // something the victim still needs to "prepare for."
 router.get('/counselling-sessions', async (req, res) => {
-  const { data, error } = await supabase
-    .from('counselling_sessions')
-    .select('session_id, counsellor_id, scheduled_at, status, officials(full_name)')
-    .eq('victim_id', req.auth.victimId)
-    .eq('status', 'upcoming')
-    .order('scheduled_at', { ascending: true });
-  if (error) return fail(res, 'Could not load scheduled sessions', 500);
+  const { rows } = await pool.query(
+    `select cs.session_id, cs.scheduled_at, cs.status, o.full_name
+     from counselling_sessions cs
+     left join officials o on o.official_id = cs.counsellor_id
+     where cs.victim_id = $1 and cs.status = 'upcoming'
+     order by cs.scheduled_at asc`,
+    [req.auth.victimId]
+  );
 
   return ok(res, {
-    sessions: (data || []).map((s) => ({
+    sessions: rows.map((s) => ({
       sessionId: s.session_id,
-      counsellorName: s.officials?.full_name || null,
+      counsellorName: s.full_name || null,
       scheduledAt: s.scheduled_at,
       status: s.status,
     })),
@@ -377,27 +369,23 @@ router.get('/counselling-sessions', async (req, res) => {
 // frontend renders a tel: link (Call) or a wa.me link (WhatsApp) from this.
 // No backend call-routing/VoIP infrastructure implied.
 router.get('/assigned-counsellor', async (req, res) => {
-  const { data: victim, error: victimError } = await supabase
-    .from('victims')
-    .select('opted_for_manual_counsellor, assigned_counsellor_id')
-    .eq('victim_id', req.auth.victimId)
-    .single();
-  if (victimError || !victim) return fail(res, 'Victim record not found', 404);
+  const { rows } = await pool.query(
+    `select v.opted_for_manual_counsellor, v.assigned_counsellor_id, o.full_name, o.phone, o.whatsapp_number
+     from victims v
+     left join officials o on o.official_id = v.assigned_counsellor_id
+     where v.victim_id = $1`,
+    [req.auth.victimId]
+  );
+  const victim = rows[0];
+  if (!victim) return fail(res, 'Victim record not found', 404);
 
-  if (!victim.opted_for_manual_counsellor || !victim.assigned_counsellor_id) {
+  if (!victim.opted_for_manual_counsellor || !victim.assigned_counsellor_id || !victim.full_name) {
     return ok(res, { assigned: false, counsellor: null });
   }
 
-  const { data: official } = await supabase
-    .from('officials')
-    .select('full_name, phone, whatsapp_number')
-    .eq('official_id', victim.assigned_counsellor_id)
-    .maybeSingle();
-  if (!official) return ok(res, { assigned: false, counsellor: null });
-
   return ok(res, {
     assigned: true,
-    counsellor: { fullName: official.full_name, phone: official.phone, whatsappNumber: official.whatsapp_number },
+    counsellor: { fullName: victim.full_name, phone: victim.phone, whatsappNumber: victim.whatsapp_number },
   });
 });
 
@@ -405,12 +393,12 @@ router.get('/assigned-counsellor', async (req, res) => {
 // read and write checks opted_for_manual_counsellor AND assigned_counsellor_id
 // at the query level, not just hidden in the UI.
 async function requireCounsellorOptIn(req, res) {
-  const { data: victim, error: victimError } = await supabase
-    .from('victims')
-    .select('opted_for_manual_counsellor, assigned_counsellor_id')
-    .eq('victim_id', req.auth.victimId)
-    .single();
-  if (victimError || !victim) {
+  const { rows } = await pool.query(
+    'select opted_for_manual_counsellor, assigned_counsellor_id from victims where victim_id = $1',
+    [req.auth.victimId]
+  );
+  const victim = rows[0];
+  if (!victim) {
     fail(res, 'Victim record not found', 404);
     return null;
   }
@@ -431,13 +419,10 @@ router.get('/messages', async (req, res) => {
   const officialId = await requireCounsellorOptIn(req, res);
   if (!officialId) return;
 
-  const { data, error } = await supabase
-    .from('messages')
-    .select('message_id, sender_type, body, sent_at')
-    .eq('victim_id', req.auth.victimId)
-    .eq('official_id', officialId)
-    .order('sent_at', { ascending: true });
-  if (error) return fail(res, 'Could not load messages', 500);
+  const { rows: data } = await pool.query(
+    `select message_id, sender_type, body, sent_at from messages where victim_id = $1 and official_id = $2 order by sent_at asc`,
+    [req.auth.victimId, officialId]
+  );
 
   return ok(res, {
     messages: (data || []).map((m) => ({ messageId: m.message_id, senderType: m.sender_type, body: m.body, sentAt: m.sent_at })),
@@ -468,12 +453,10 @@ router.get('/wellness-suggestions', async (req, res) => {
     return fail(res, 'category must be one of: exercise, meditation, music', 400);
   }
 
-  const { data, error } = await supabase
-    .from('wellness_content')
-    .select('content_id, title, body, duration_seconds')
-    .eq('category', category)
-    .order('created_at');
-  if (error) return fail(res, 'Could not load wellness suggestions', 500);
+  const { rows: data } = await pool.query(
+    `select content_id, title, body, duration_seconds from wellness_content where category = $1 order by created_at`,
+    [category]
+  );
 
   // wellness_content.body is jsonb ({text, url?} for exercise/music,
   // {steps:[...]} for meditation - see schema.sql's own comment on the
@@ -507,16 +490,19 @@ router.get('/journal', async (req, res) => {
   const pageSize = 20;
   const offset = (Number(page) - 1) * pageSize;
 
-  const { data, count, error } = await supabase
-    .from('journal_entries')
-    .select('entry_id, title, content, sentiment_score, created_at, updated_at', { count: 'exact' })
-    .eq('victim_id', req.auth.victimId)
-    .order('updated_at', { ascending: false })
-    .range(offset, offset + pageSize - 1);
-  if (error) return fail(res, 'Could not load journal entries', 500);
+  // count(*) over() rides along in the same query instead of a second
+  // round trip just to get the total for pagination.
+  const { rows } = await pool.query(
+    `select entry_id, title, content, sentiment_score, created_at, updated_at, count(*) over() as total_count
+     from journal_entries
+     where victim_id = $1
+     order by updated_at desc
+     limit $2 offset $3`,
+    [req.auth.victimId, pageSize, offset]
+  );
 
   return ok(res, {
-    entries: (data || []).map((e) => ({
+    entries: rows.map((e) => ({
       entryId: e.entry_id,
       title: e.title,
       content: e.content,
@@ -524,7 +510,7 @@ router.get('/journal', async (req, res) => {
       createdAt: e.created_at,
       updatedAt: e.updated_at,
     })),
-    total: count || 0,
+    total: rows.length > 0 ? Number(rows[0].total_count) : 0,
   });
 });
 
@@ -642,23 +628,28 @@ router.patch('/language', async (req, res) => {
 });
 
 router.get('/consent-status', async (req, res) => {
-  const { data } = await supabase.from('consent_records').select('consent_id').eq('victim_id', req.auth.victimId).is('revoked_at', null).limit(1);
-  return ok(res, { hasConsented: (data || []).length > 0 });
+  const { rows } = await pool.query(
+    'select consent_id from consent_records where victim_id = $1 and revoked_at is null limit 1',
+    [req.auth.victimId]
+  );
+  return ok(res, { hasConsented: rows.length > 0 });
 });
 
 router.get('/distress-history', async (req, res) => {
   const victimId = req.auth.victimId;
 
-  const { data: scores, error } = await supabase
-    .from('distress_scores')
-    .select('score_value, computed_at, risk_levels(name)')
-    .eq('victim_id', victimId)
-    .order('computed_at', { ascending: true });
-  if (error) return fail(res, 'Could not load distress history', 500);
+  const { rows: scores } = await pool.query(
+    `select ds.score_value, ds.computed_at, rl.name as risk_level_name
+     from distress_scores ds
+     join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+     where ds.victim_id = $1
+     order by ds.computed_at asc`,
+    [victimId]
+  );
 
   await writeAuditLog({ victimId, action: 'read', entityType: 'distress_history', entityId: victimId });
 
-  return ok(res, { scores: (scores || []).map((s) => ({ score: s.score_value, riskLevel: s.risk_levels.name, computedAt: s.computed_at })) });
+  return ok(res, { scores: scores.map((s) => ({ score: Number(s.score_value), riskLevel: s.risk_level_name, computedAt: s.computed_at })) });
 });
 
 router.post('/questionnaire/next', async (req, res) => {

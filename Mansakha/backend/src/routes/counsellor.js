@@ -1,5 +1,6 @@
 const express = require('express');
 const { supabase } = require('../db/supabaseClient');
+const { pool } = require('../db/pgPool');
 const { writeAuditLog } = require('../services/auditLog');
 const { verifyToken } = require('../middleware/verifyToken');
 const { requireRole } = require('../middleware/requireRole');
@@ -36,16 +37,26 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
   const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
   if (jurisdictionIds.length === 0) return ok(res, { total: 0, low: 0, moderate: 0, high: 0, critical: 0 });
 
-  const { data: victims } = await supabase
-    .from('victims')
-    .select('victim_id, distress_scores(score_value, computed_at, risk_levels(name))')
-    .in('jurisdiction_id', jurisdictionIds)
-    .order('computed_at', { referencedTable: 'distress_scores', ascending: false });
+  // Raw pg (not Supabase REST) - this is the Counsellor's own landing screen,
+  // so its latency is felt on every login/reload; a single PostgREST round
+  // trip alone costs ~1-2s here regardless of how little data comes back
+  // (confirmed live elsewhere this session), while a warmed pg connection
+  // is a few hundred ms at most.
+  const { rows } = await pool.query(
+    `select v.victim_id, rl.name as risk_level_name
+     from victims v
+     left join lateral (
+       select risk_level_id from distress_scores where victim_id = v.victim_id order by computed_at desc limit 1
+     ) ds on true
+     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+     where v.jurisdiction_id = any($1::uuid[])`,
+    [jurisdictionIds]
+  );
 
   const counts = { total: 0, low: 0, moderate: 0, high: 0, critical: 0 };
-  for (const v of victims || []) {
+  for (const v of rows) {
     counts.total += 1;
-    const riskLevel = v.distress_scores?.[0]?.risk_levels?.name;
+    const riskLevel = v.risk_level_name;
     if (riskLevel === 'Low') counts.low += 1;
     if (riskLevel === 'Moderate') counts.moderate += 1;
     if (riskLevel === 'High') counts.high += 1;
@@ -68,27 +79,32 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   // priority means the whole jurisdiction's cases have to be fetched and sorted
   // in application code before paginating - a DB-level `.range()` would only
   // sort within one already-arbitrary page, not across the whole queue.
-  const { data, error } = await supabase
-    .from('victims')
-    .select('victim_id, case_stage, case_background, distress_scores(score_value, computed_at, risk_levels(name))')
-    .in('jurisdiction_id', jurisdictionIds)
-    .order('computed_at', { referencedTable: 'distress_scores', ascending: false });
-  if (error) return fail(res, 'Could not load cases', 500);
+  //
+  // Raw pg, not Supabase REST - the Case Queue is a screen a Counsellor
+  // reloads constantly through a shift; see /dashboard above for the
+  // measured REST-vs-pg latency gap this is closing.
+  const { rows } = await pool.query(
+    `select v.victim_id, v.case_stage, v.case_background, ds.score_value, rl.name as risk_level_name
+     from victims v
+     left join lateral (
+       select score_value, risk_level_id from distress_scores where victim_id = v.victim_id order by computed_at desc limit 1
+     ) ds on true
+     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+     where v.jurisdiction_id = any($1::uuid[])`,
+    [jurisdictionIds]
+  );
 
   const BACKSTORY_EXCERPT_LENGTH = 140; // Section 2.2: a truncated excerpt on the list, full text on Case Detail
 
-  let cases = (data || []).map((v) => {
-    const latest = v.distress_scores?.[0];
-    return {
-      victimId: v.victim_id,
-      caseStage: v.case_stage,
-      score: latest ? latest.score_value : null,
-      riskLevel: latest ? latest.risk_levels.name : null,
-      caseBackground: v.case_background
-        ? (v.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${v.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : v.case_background)
-        : null,
-    };
-  });
+  let cases = rows.map((v) => ({
+    victimId: v.victim_id,
+    caseStage: v.case_stage,
+    score: v.score_value !== null ? Number(v.score_value) : null,
+    riskLevel: v.risk_level_name,
+    caseBackground: v.case_background
+      ? (v.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${v.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : v.case_background)
+      : null,
+  }));
 
   if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
 
@@ -112,28 +128,28 @@ router.get('/my-victims', requireRole(['Counsellor']), generalApiLimiter, async 
   const pageSize = 20;
   const offset = (Math.max(1, parseInt(page, 10)) - 1) * pageSize;
 
-  const { data, error } = await supabase
-    .from('victims')
-    .select('victim_id, case_stage, case_background, distress_scores(score_value, computed_at, risk_levels(name))')
-    .eq('assigned_counsellor_id', req.auth.officialId)
-    .in('jurisdiction_id', jurisdictionIds)
-    .order('computed_at', { referencedTable: 'distress_scores', ascending: false });
-  if (error) return fail(res, 'Could not load cases', 500);
+  const { rows } = await pool.query(
+    `select v.victim_id, v.case_stage, v.case_background, ds.score_value, rl.name as risk_level_name
+     from victims v
+     left join lateral (
+       select score_value, risk_level_id from distress_scores where victim_id = v.victim_id order by computed_at desc limit 1
+     ) ds on true
+     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+     where v.assigned_counsellor_id = $1 and v.jurisdiction_id = any($2::uuid[])`,
+    [req.auth.officialId, jurisdictionIds]
+  );
 
   const BACKSTORY_EXCERPT_LENGTH = 140;
 
-  let cases = (data || []).map((v) => {
-    const latest = v.distress_scores?.[0];
-    return {
-      victimId: v.victim_id,
-      caseStage: v.case_stage,
-      score: latest ? latest.score_value : null,
-      riskLevel: latest ? latest.risk_levels.name : null,
-      caseBackground: v.case_background
-        ? (v.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${v.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : v.case_background)
-        : null,
-    };
-  });
+  let cases = rows.map((v) => ({
+    victimId: v.victim_id,
+    caseStage: v.case_stage,
+    score: v.score_value !== null ? Number(v.score_value) : null,
+    riskLevel: v.risk_level_name,
+    caseBackground: v.case_background
+      ? (v.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${v.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : v.case_background)
+      : null,
+  }));
 
   if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
   cases.sort((a, b) => (RISK_SORT_ORDER[b.riskLevel] || 0) - (RISK_SORT_ORDER[a.riskLevel] || 0));
@@ -149,35 +165,56 @@ router.get('/my-victims', requireRole(['Counsellor']), generalApiLimiter, async 
 router.get('/cases/:victimId', requireRole(['Counsellor', 'Administration']), generalApiLimiter, requireJurisdiction(resolveVictimJurisdiction), async (req, res) => {
   const { victimId } = req.params;
 
-  const { data: victimRow } = await supabase.from('victims').select('case_background, phone').eq('victim_id', victimId).maybeSingle();
+  // Raw pg (not Supabase REST) with the two truly-independent lookups run
+  // concurrently, same fix as elsewhere this session. victims.phone doesn't
+  // exist - the previous query silently failed on that bad column reference
+  // (error was never checked), which is why Case Detail's Call/WhatsApp
+  // buttons never showed: victimRow always came back undefined. Fixed to
+  // pull the real contact number from victim_identity instead.
+  const [{ rows: victimRows }, { rows: scoreRows }] = await Promise.all([
+    pool.query(
+      `select v.case_background, vi.contact_number as phone
+       from victims v
+       left join victim_identity vi on vi.victim_id = v.victim_id
+       where v.victim_id = $1`,
+      [victimId]
+    ),
+    pool.query(
+      `select ds.score_id, ds.score_value, ds.computed_at, ds.interaction_id, ds.explanation, ds.suggested_intervention_type_id,
+              it.name as intervention_type_name, rl.name as risk_level_name
+       from distress_scores ds
+       left join intervention_types it on it.intervention_type_id = ds.suggested_intervention_type_id
+       join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where ds.victim_id = $1
+       order by ds.computed_at desc
+       limit 3`,
+      [victimId]
+    ),
+  ]);
+  const victimRow = victimRows[0];
 
-  const { data: scores } = await supabase
-    .from('distress_scores')
-    .select('score_id, score_value, computed_at, interaction_id, explanation, suggested_intervention_type_id, intervention_types(name), risk_levels(name)')
-    .eq('victim_id', victimId)
-    .order('computed_at', { ascending: false })
-    .limit(3);
+  if (scoreRows.length === 0) return fail(res, 'No check-ins recorded for this case yet', 404);
 
-  if (!scores || scores.length === 0) return fail(res, 'No check-ins recorded for this case yet', 404);
+  const [latest, previous] = scoreRows;
+  // isEscalatingTrend wants oldest-first; `scoreRows` came back newest-first.
+  const escalating = scoreRows.length >= 3 && isEscalatingTrend([...scoreRows].reverse().map((s) => Number(s.score_value)));
 
-  const [latest, previous] = scores;
-  // isEscalatingTrend wants oldest-first; `scores` came back newest-first.
-  const escalating = scores.length >= 3 && isEscalatingTrend([...scores].reverse().map((s) => s.score_value));
-
-  // Explainability: real signal-level breakdown from that interaction's
-  // interaction_signals, not a placeholder - Build Prompt Section 4.4.
-  const { data: signals } = await supabase
-    .from('interaction_signals')
-    .select('value, signal_types(name)')
-    .eq('interaction_id', latest.interaction_id);
-
-  const { data: openIntervention } = await supabase
-    .from('interventions')
-    .select('intervention_id, completed_at')
-    .eq('victim_id', victimId)
-    .order('recommended_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Explainability + intervention status are independent of each other, so
+  // they run concurrently too - both only need ids already known above.
+  const [{ rows: signals }, { rows: interventionRows }] = await Promise.all([
+    pool.query(
+      `select isg.value, st.name as signal_type_name
+       from interaction_signals isg
+       join signal_types st on st.signal_type_id = isg.signal_type_id
+       where isg.interaction_id = $1`,
+      [latest.interaction_id]
+    ),
+    pool.query(
+      `select intervention_id, completed_at from interventions where victim_id = $1 order by recommended_at desc limit 1`,
+      [victimId]
+    ),
+  ]);
+  const openIntervention = interventionRows[0];
 
   await writeAuditLog({ officialId: req.auth.officialId, victimId, action: 'read', entityType: 'case_detail', entityId: victimId });
 
@@ -185,20 +222,20 @@ router.get('/cases/:victimId', requireRole(['Counsellor', 'Administration']), ge
   // unit-tested) takes priority when there's enough history; the cruder
   // 2-point comparison is only a fallback for a case with just 2 check-ins.
   const trend = previous
-    ? (escalating || latest.score_value > previous.score_value ? 'escalating' : 'stable_or_improving')
+    ? (escalating || Number(latest.score_value) > Number(previous.score_value) ? 'escalating' : 'stable_or_improving')
     : 'insufficient_data';
 
   return ok(res, {
     caseBackground: victimRow?.case_background || null,
     phone: victimRow?.phone || null,
-    score: latest.score_value,
-    previousScore: previous ? previous.score_value : null,
+    score: Number(latest.score_value),
+    previousScore: previous ? Number(previous.score_value) : null,
     trend,
-    riskLevel: latest.risk_levels.name,
-    riskFactors: (signals || []).map((s) => ({ signal: s.signal_types.name, value: s.value })),
+    riskLevel: latest.risk_level_name,
+    riskFactors: signals.map((s) => ({ signal: s.signal_type_name, value: Number(s.value) })),
     explanation: latest.explanation || null,
     suggestedInterventionType: latest.suggested_intervention_type_id
-      ? { id: latest.suggested_intervention_type_id, name: latest.intervention_types.name }
+      ? { id: latest.suggested_intervention_type_id, name: latest.intervention_type_name }
       : null,
     interventionStatus: openIntervention ? (openIntervention.completed_at ? 'completed' : 'pending') : 'none',
     interventionId: openIntervention ? openIntervention.intervention_id : null,
@@ -266,22 +303,24 @@ router.patch('/cases/:victimId/intervention/:interventionId/complete', requireRo
 // interventions above and from audit_log's read/write record.
 router.get('/cases/:victimId/notes', requireRole(['Counsellor', 'Administration']), generalApiLimiter, requireJurisdiction(resolveVictimJurisdiction), async (req, res) => {
   const { victimId } = req.params;
-  const { data, error } = await supabase
-    .from('case_notes')
-    .select('note_id, note_text, authored_by, created_at, officials(full_name)')
-    .eq('victim_id', victimId)
-    .order('created_at', { ascending: false });
-  if (error) return fail(res, 'Could not load case notes', 500);
+  const { rows } = await pool.query(
+    `select cn.note_id, cn.note_text, cn.authored_by, cn.created_at, o.full_name
+     from case_notes cn
+     left join officials o on o.official_id = cn.official_id
+     where cn.victim_id = $1
+     order by cn.created_at desc`,
+    [victimId]
+  );
 
   return ok(res, {
-    notes: (data || []).map((n) => ({
+    notes: rows.map((n) => ({
       noteId: n.note_id,
       noteText: n.note_text,
       // Section 2.3: AI-drafted notes (authored_by: 'ai') have no official_id
       // yet - officials is null for those (nullable FK), so authorName falls
       // back to a fixed label instead of crashing on a null embed.
       authoredBy: n.authored_by,
-      authorName: n.officials ? n.officials.full_name : 'Mansakha AI (drafted)',
+      authorName: n.full_name || 'Mansakha AI (drafted)',
       createdAt: n.created_at,
     })),
   });
@@ -369,16 +408,14 @@ router.patch('/sos/:sosEventId/resolve', requireRole(['Counsellor']), generalApi
 
 // Feature Catalog Section 2.2 "Scheduled counsellings".
 router.get('/scheduled', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  const { data, error } = await supabase
-    .from('counselling_sessions')
-    .select('session_id, victim_id, scheduled_at, status')
-    .eq('counsellor_id', req.auth.officialId)
-    .eq('status', 'upcoming')
-    .order('scheduled_at', { ascending: true });
-  if (error) return fail(res, 'Could not load scheduled sessions', 500);
+  const { rows } = await pool.query(
+    `select session_id, victim_id, scheduled_at, status from counselling_sessions
+     where counsellor_id = $1 and status = 'upcoming' order by scheduled_at asc`,
+    [req.auth.officialId]
+  );
 
   return ok(res, {
-    sessions: (data || []).map((s) => ({ sessionId: s.session_id, victimId: s.victim_id, scheduledAt: s.scheduled_at, status: s.status })),
+    sessions: rows.map((s) => ({ sessionId: s.session_id, victimId: s.victim_id, scheduledAt: s.scheduled_at, status: s.status })),
   });
 });
 
