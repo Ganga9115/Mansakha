@@ -144,6 +144,18 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.gridSub}>Write it down</Text>
                   </Pressable>
 
+                  {hasAssignedCounsellor && (
+                    <Pressable
+                      style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
+                      onPress={() => navigation?.navigate('mycounsellor')}
+                    >
+                      <View style={styles.gridIconCircle}>
+                        <Feather name="message-square" size={20} color={colors.primary} />
+                      </View>
+                      <Text style={styles.gridTitle}>My Counsellor</Text>
+                      <Text style={styles.gridSub}>Chat directly</Text>
+                    </Pressable>
+                  )}
                 </View>
 
                 {/* Upcoming Counselling Session - scheduled by the assigned
