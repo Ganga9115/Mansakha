@@ -1,9 +1,23 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import StaffLayout from '../../../layouts/StaffLayout';
 import { Download } from 'lucide-react';
+import { useMyJurisdiction, useAdminDashboard, useCounsellorDashboard } from '../../../services/hooks';
 
 export default function Reports() {
   const [timeRange, setTimeRange] = useState('Last 30 Days');
+  const location = useLocation();
+  const isCounsellor = location.pathname.startsWith('/counsellor');
+  
+  const { jurisdictionId } = useMyJurisdiction();
+  const { data: adminData } = useAdminDashboard(isCounsellor ? null : jurisdictionId);
+  const { data: counsellorData } = useCounsellorDashboard();
+  
+  const dashboardData = isCounsellor ? counsellorData : adminData;
+  const total = dashboardData?.totalCases || dashboardData?.total || 0;
+  const high = dashboardData?.highRiskCases || dashboardData?.high || 0;
+  const critical = dashboardData?.criticalCases || dashboardData?.critical || 0;
+  const moderate = dashboardData?.vulnerableVictims || dashboardData?.moderate || 0;
 
   const stackedData = [
     { month: 'May', high: 30, moderate: 45, low: 25 },
@@ -192,28 +206,28 @@ export default function Reports() {
         {/* 4 STATS CARDS AT THE BOTTOM */}
         <div className="grid grid-cols-4 gap-6">
           <StatCard 
-            title="TOTAL ACTIVE PROTOCOLS" 
-            value="142" 
-            subtitle="Across all clinical layers" 
+            title="TOTAL CASELOAD" 
+            value={total} 
+            subtitle="Across all layers" 
             accent="blue"
           />
           <StatCard 
-            title="AVG CALLBACK RESPONSE" 
-            value="14.5m" 
-            subtitle="Crisis response average"
+            title="VULNERABLE (MODERATE)" 
+            value={moderate} 
+            subtitle="Requires monitoring"
             accent="emerald"
           />
           <StatCard 
-            title="CASES SUCCESSFULLY RESOLVED" 
-            value="94" 
-            subtitle="During selected timeframe" 
-            accent="purple"
+            title="HIGH-RISK CASES" 
+            value={high} 
+            subtitle="Active intervention" 
+            accent="rose"
           />
           <StatCard 
-            title="SYSTEM ESCALATION RATE" 
-            value="4.8%" 
-            subtitle="To critical emergency layer" 
-            accent="rose"
+            title="CRITICAL / SOS" 
+            value={critical} 
+            subtitle="Emergency response" 
+            accent="purple"
           />
         </div>
 
