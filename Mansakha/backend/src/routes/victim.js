@@ -648,7 +648,48 @@ router.post('/consent', async (req, res) => {
   const { channel } = req.body;
   if (!channel) return fail(res, 'channel is required', 400);
 
-  const { data: channelRow } = await supabase.from('channels').select('channel_id').eq('channel_name', channel).maybeSingle();
+  const CHANNEL_ALIASES = {
+    'Voice Call': 'IVRS',
+    'Voice': 'IVRS',
+    'IVRS Call': 'IVRS',
+    'Chat': 'Chatbot',
+    'Text Chat': 'Chatbot',
+    'App': 'Mobile App',
+    'Broadcast': 'Emergency Broadcast',
+  };
+  const resolvedChannelName = CHANNEL_ALIASES[channel] || channel;
+
+  let { data: channelRow } = await supabase
+    .from('channels')
+    .select('channel_id')
+    .or(`channel_name.eq."${resolvedChannelName}",channel_name.eq."${channel}"`)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (!channelRow) {
+    const { data: softDeleted } = await supabase
+      .from('channels')
+      .select('channel_id')
+      .or(`channel_name.eq."${resolvedChannelName}",channel_name.eq."${channel}"`)
+      .maybeSingle();
+
+    if (softDeleted) {
+      channelRow = softDeleted;
+      await supabase.from('channels').update({ deleted_at: null }).eq('channel_id', softDeleted.channel_id);
+    }
+  }
+
+  if (!channelRow) {
+    const { data: inserted, error: insErr } = await supabase
+      .from('channels')
+      .insert({ channel_name: resolvedChannelName })
+      .select('channel_id')
+      .single();
+    if (!insErr && inserted) {
+      channelRow = inserted;
+    }
+  }
+
   if (!channelRow) return fail(res, `Unknown channel: ${channel}`, 400);
 
   const { error } = await supabase.from('consent_records').insert({ victim_id: victimId, channel_id: channelRow.channel_id });
