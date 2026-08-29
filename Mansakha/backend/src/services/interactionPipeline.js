@@ -16,11 +16,48 @@ async function recordInteraction({ victimId, channelName, transcriptText }) {
   const CHANNEL_ALIASES = {
     'Voice Call': 'IVRS',
     'Voice': 'IVRS',
+    'IVRS Call': 'IVRS',
     'Chat': 'Chatbot',
+    'Text Chat': 'Chatbot',
     'App': 'Mobile App',
+    'Broadcast': 'Emergency Broadcast',
   };
   const resolvedChannelName = CHANNEL_ALIASES[channelName] || channelName;
-  const { data: channelRow } = await supabase.from('channels').select('channel_id').eq('channel_name', resolvedChannelName).is('deleted_at', null).maybeSingle();
+
+  // 1. Try active channel matching resolvedChannelName or raw channelName
+  let { data: channelRow } = await supabase
+    .from('channels')
+    .select('channel_id')
+    .or(`channel_name.eq."${resolvedChannelName}",channel_name.eq."${channelName}"`)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  // 2. Fallback: try including soft-deleted rows and auto-restore
+  if (!channelRow) {
+    const { data: softDeleted } = await supabase
+      .from('channels')
+      .select('channel_id')
+      .or(`channel_name.eq."${resolvedChannelName}",channel_name.eq."${channelName}"`)
+      .maybeSingle();
+
+    if (softDeleted) {
+      channelRow = softDeleted;
+      await supabase.from('channels').update({ deleted_at: null }).eq('channel_id', softDeleted.channel_id);
+    }
+  }
+
+  // 3. Fallback: if channel still doesn't exist, dynamically insert it
+  if (!channelRow) {
+    const { data: inserted, error: insErr } = await supabase
+      .from('channels')
+      .insert({ channel_name: resolvedChannelName })
+      .select('channel_id')
+      .single();
+    if (!insErr && inserted) {
+      channelRow = inserted;
+    }
+  }
+
   if (!channelRow) throw new PipelineError(`Unknown channel: ${channelName}`, 400);
 
   const transcriptPath = `${victimId}/${crypto.randomUUID()}.txt`;
