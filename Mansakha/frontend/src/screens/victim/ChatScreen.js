@@ -470,11 +470,7 @@ export default function ChatScreen({ navigation }) {
               <Feather name={inCall ? "phone-off" : "phone"} size={28} color={colors.white} />
             </Pressable>
             
-            {!inCall && messages.length > 0 && !analysis && (
-              <Pressable style={styles.analyzeBtn} onPress={analyzeDistress}>
-                <Text style={styles.analyzeBtnText}>Analyze Distress</Text>
-              </Pressable>
-            )}
+            {/* Automated background distress analysis runs when call ends or messages update */}
 
             {analysis && (
               <View style={[styles.analysisPanel, { marginTop: spacing.xl, width: '100%' }]}>
