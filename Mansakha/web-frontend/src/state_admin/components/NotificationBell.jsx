@@ -9,10 +9,15 @@ import { useMe, useMyNotifications } from '../services/hooks';
 // here is correct, not a bug.
 export default function NotificationBell() {
   const { data: me } = useMe();
-  const { data, loading } = useMyNotifications();
+  const { data, loading, refetch } = useMyNotifications();
   const notifications = data?.notifications || [];
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => refetch(), 15000);
+    return () => clearInterval(interval);
+  }, [refetch]);
   const containerRef = useRef(null);
   const storageKey = me?.officialId ? `mansakha_notifications_last_seen_${me.officialId}` : null;
 

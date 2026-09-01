@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './apiClient';
 import { useAuth } from '../context/AuthContext';
@@ -147,18 +148,25 @@ export function useSendChatMessage() {
   });
 }
 
-// --- SOS (Feature Catalog: Check-in & Interaction > SOS button) ---
-
-export function useTriggerSOS() {
-  const token = useToken();
-  return useMutation({ mutationFn: () => apiClient.post('/api/user/sos', {}, token) });
-}
-
 // --- IVRS call request ---
 
 export function useTriggerIvrsCall() {
   const token = useToken();
   return useMutation({ mutationFn: () => apiClient.post('/api/user/ivrs/trigger', {}, token) });
+}
+
+// --- Get Help Now / urgent-help (replaces the old SOS button) ---
+
+// Notifies the assigned counsellor (or auto-assigns the least-loaded one
+// nationwide), every District Administration official in the user's
+// district, and every State Administration official in that district's
+// parent state. Returns { sosEventId, triggeredAt, pcrNumber,
+// contactNumber } - the caller dials `tel:${pcrNumber}` client-side, since
+// the backend's IVRS/Exotel dispatch is a deliberate stub that doesn't
+// actually place calls.
+export function useTriggerUrgentHelp() {
+  const token = useToken();
+  return useMutation({ mutationFn: () => apiClient.post('/api/user/urgent-help', {}, token) });
 }
 
 // --- Wellness & Self-Care ---
@@ -226,10 +234,20 @@ export function useUpdateCounsellorPreference() {
   });
 }
 
+// Pings the backend to mark this user as actively typing in the counsellor
+// chat - the counsellor's own message-polling response surfaces this back
+// as `otherPartyTyping`. Callers should throttle calls to roughly once
+// every 1.5-2s while typing, not on every keystroke.
+export function useSendTypingPing() {
+  const token = useToken();
+  return useMutation({ mutationFn: () => apiClient.post('/api/user/messages/typing', {}, token) });
+}
+
 export function useAssignedCounsellor() {
   const token = useToken();
   return useQuery({ queryKey: ['user', 'assigned-counsellor'], queryFn: () => apiClient.get('/api/user/assigned-counsellor', token), enabled: !!token });
 }
+
 
 // Feature Catalog Section 2.2 "Scheduled counsellings" - a session the
 // assigned Counsellor scheduled (POST /api/counsellor/cases/:userId/schedule)
@@ -239,16 +257,57 @@ export function useUpcomingSessions() {
   return useQuery({ queryKey: ['user', 'counselling-sessions'], queryFn: () => apiClient.get('/api/user/counselling-sessions', token), enabled: !!token });
 }
 
+// In-app chat with the assigned counsellor (replaces the WhatsApp redirect).
+// Polled every 3s while a screen using this is mounted (react-query pauses
+// refetchInterval once unmounted) for "live enough" delivery without a
+// WebSocket - a support chat, not a fast-paced consumer messenger.
 export function useCounsellorMessages() {
   const token = useToken();
-  return useQuery({ queryKey: ['user', 'messages'], queryFn: () => apiClient.get('/api/user/messages', token), enabled: !!token });
+  return useQuery({
+    queryKey: ['user', 'messages'],
+    queryFn: () => apiClient.get('/api/user/messages', token),
+    enabled: !!token,
+    refetchInterval: 3000,
+  });
 }
 
 export function useSendCounsellorMessage() {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (message) => apiClient.post('/api/user/messages', { message }, token),
+    // The backend route reads req.body.body (matching the counsellor-side
+    // POST /api/counsellor/cases/:userId/messages contract) - this was
+    // previously sending { message }, which the server always rejected with
+    // "body is required".
+    mutationFn: (message) => apiClient.post('/api/user/messages', { body: message }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'messages'] }),
+  });
+}
+
+// WhatsApp-style recorded voice note - `uri` is whatever the audio package's
+// recorder produced (a file:// URI on native, a blob: URI on web).
+// FormData's file-part shape differs by platform: React Native's fetch
+// polyfill wants the {uri,name,type} object form, while a real browser
+// FormData only accepts a Blob/File (an object literal there just gets
+// stringified to "[object Object]"), so a blob: URI is re-fetched into an
+// actual Blob first.
+export function useSendCounsellorVoiceMessage() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ uri, durationSeconds }) => {
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const blob = await fetch(uri).then((r) => r.blob());
+        const ext = blob.type.includes('webm') ? 'webm' : blob.type.includes('ogg') ? 'ogg' : blob.type.includes('wav') ? 'wav' : 'm4a';
+        formData.append('audio', blob, `voice-message.${ext}`);
+      } else {
+        const ext = (uri.split('.').pop() || 'm4a').toLowerCase();
+        formData.append('audio', { uri, name: `voice-message.${ext}`, type: `audio/${ext}` });
+      }
+      formData.append('duration', String(Math.max(1, Math.round(durationSeconds || 0))));
+      return apiClient.uploadFile('/api/user/messages/voice', formData, token);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'messages'] }),
   });
 }

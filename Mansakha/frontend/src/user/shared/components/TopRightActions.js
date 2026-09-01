@@ -2,36 +2,27 @@ import React from 'react';
 import { View, Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import SosButton from './SosButton';
+import GetHelpButton from './GetHelpButton';
 import { colors } from '../theme/colors';
 
-export default function TopRightActions() {
+// The notification bell is Home-screen-only (showNotifications) - every
+// other screen that renders this in its header just gets the call icon.
+export default function TopRightActions({ showNotifications = false }) {
   const navigation = useNavigation();
 
-  // Was previously wired to auto-start CheckinScreen's voice "Call mode" -
-  // that mode was removed when Check-in was rewritten into the 15-question
-  // Ollama questionnaire flow (no Chat/Call toggle exists there anymore), so
-  // this now just opens the check-in flow itself, still the most direct way
-  // to talk to Mansakha's AI from anywhere in the app. Revisit if voice input
-  // comes back to the questionnaire flow.
-  const handleAiCall = () => {
-    navigation?.navigate('Chatbot');
-  };
+  // The header's old "Talk to Mansakha by voice" phone-call icon has been
+  // repurposed into the Get Help Now emergency action below (the AI
+  // chatbot is still reachable via the floating AiChatButton FAB, so no
+  // entry point is actually lost).
 
   return (
     <View style={styles.container}>
-      <SosButton asHeaderIcon />
-      <Pressable
-        style={styles.iconCircleBtn}
-        onPress={handleAiCall}
-        accessibilityRole="button"
-        accessibilityLabel="Talk to Mansakha by voice"
-      >
-        <Feather name="phone-call" size={18} color={colors.primaryDark} />
-      </Pressable>
-      <Pressable style={styles.iconCircleBtn} onPress={() => navigation?.navigate('support')}>
-        <Feather name="bell" size={18} color={colors.primaryDark} />
-      </Pressable>
+      {showNotifications && (
+        <Pressable style={styles.iconCircleBtn} onPress={() => navigation?.navigate('support')}>
+          <Feather name="bell" size={18} color={colors.primaryDark} />
+        </Pressable>
+      )}
+      <GetHelpButton asHeaderIcon />
     </View>
   );
 }

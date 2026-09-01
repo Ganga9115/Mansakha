@@ -1,4 +1,6 @@
 const express = require('express');
+const multer = require('multer');
+const crypto = require('crypto');
 const { supabase } = require('../../core/db/supabaseClient');
 const { pool } = require('../../core/db/pgPool');
 const { analyzeInteraction, analyzeChatMessage, analyzeInteractionFromClientAi } = require('../../ai/ai');
@@ -10,6 +12,15 @@ const { recordInteraction, recordAiDistressScore, PipelineError } = require('../
 const { applyStressResponse, selectLeastLoadedCounsellor } = require('../../core/services/stressResponse');
 const { enqueueAlertDispatch } = require('../../core/services/dispatchWorker');
 const { generateNextQuestion, predictDistressScore } = require('../../ai/ollama');
+
+// Fixed national Police Control Room number - the mobile app dials this
+// directly via the device's own phone dialer (Linking.openURL('tel:...'))
+// when "Get Help Now" is triggered, rather than routing it through
+// dispatch_queue's IVRS path: that path requires real Exotel credentials
+// this project doesn't have (services/dispatchWorker.js's placeIvrsCall is
+// a disclosed, deliberate stub that always throws "not yet implemented"),
+// so a real emergency call must not depend on it.
+const PCR_NUMBER = '100';
 
 const router = express.Router();
 
@@ -47,7 +58,7 @@ router.get('/dashboard', async (req, res) => {
   ] = await Promise.all([
     supabase
       .from('users')
-      .select('status, case_stage, preferred_language, docket_number, opted_for_manual_counsellor, sms_checkin_enabled')
+      .select('status, case_stage, preferred_language, docket_number, opted_for_manual_counsellor, sms_checkin_enabled, assigned_counsellor_id')
       .eq('user_id', userId)
       .single(),
     supabase.from('user_identity').select('full_name').eq('user_id', userId).maybeSingle(),
@@ -73,6 +84,21 @@ router.get('/dashboard', async (req, res) => {
   ]);
   if (userError || !user) return fail(res, 'User record not found', 404);
 
+  // Red-dot indicator for the "Chat with counsellor" Home tile - a separate
+  // follow-up query (not part of the Promise.all above) since it needs
+  // user.assigned_counsellor_id, which that batch itself is fetching.
+  let hasUnreadCounsellorMessage = false;
+  if (user.assigned_counsellor_id) {
+    const { count } = await supabase
+      .from('messages')
+      .select('message_id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('official_id', user.assigned_counsellor_id)
+      .eq('sender_type', 'official')
+      .is('read_at', null);
+    hasUnreadCounsellorMessage = (count || 0) > 0;
+  }
+
   // Placeholder cadence rule - there's no scheduler built yet (Section 4.2's
   // "scheduling and dispatch" is a future pass), so this is a real computed date
   // from real data, but not a true dispatch schedule.
@@ -89,6 +115,7 @@ router.get('/dashboard', async (req, res) => {
     preferredLanguageId: user.preferred_language,
     optedForManualCounsellor: user.opted_for_manual_counsellor,
     smsCheckinEnabled: user.sms_checkin_enabled,
+    hasUnreadCounsellorMessage,
     currentDistressLevel: latestScore
       ? { score: latestScore.score_value, riskLevel: latestScore.risk_levels.name }
       : null,
@@ -240,14 +267,20 @@ router.get('/chat', async (req, res) => {
   });
 });
 
-// Feature Catalog Section 1.5 SOS - one tap, no AI call (must be fast, must
-// not depend on an external API that could be slow/down/rate-limited).
-// Deliberately bypasses interactions/distress_scores/alerts entirely - see
-// sos_events in schema.sql. Notifies the assigned counsellor if the user
-// has one, otherwise auto-selects (and assigns) the least-loaded counsellor
-// in the jurisdiction, same selection logic Critical-tier routing uses
-// (services/stressResponse.js).
-router.post('/sos', async (req, res) => {
+// "Get Help Now" - one tap, no AI call (must be fast, must not depend on an
+// external API that could be slow/down/rate-limited). Deliberately bypasses
+// interactions/distress_scores/alerts entirely - see sos_events in
+// schema.sql (source = 'sos' in alert_notifications predates this feature's
+// rename, kept rather than a migration for a label). Notifies THREE roles,
+// not just the counsellor: the assigned counsellor (or, if none yet,
+// whichever counsellor nationwide currently has the lightest caseload - see
+// stressResponse.js's selectLeastLoadedCounsellor, which is no longer
+// district-scoped), every District Administration official over the user's
+// own district, and every State Administration official over that
+// district's parent state. The actual call to the Police Control Room
+// (100) happens client-side (Linking.openURL('tel:100')) - see PCR_NUMBER's
+// comment above for why that can't go through dispatch_queue's IVRS path.
+router.post('/urgent-help', async (req, res) => {
   const userId = req.auth.userId;
 
   const { data: user, error: userError } = await supabase
@@ -257,12 +290,14 @@ router.post('/sos', async (req, res) => {
     .single();
   if (userError || !user) return fail(res, 'User record not found', 404);
 
+  const { data: identity } = await supabase.from('user_identity').select('contact_number').eq('user_id', userId).maybeSingle();
+
   const { data: sosEvent, error: sosError } = await supabase
     .from('sos_events')
     .insert({ user_id: userId })
     .select('sos_event_id, triggered_at')
     .single();
-  if (sosError) return fail(res, `Could not record SOS: ${sosError.message}`, 500);
+  if (sosError) return fail(res, `Could not record urgent-help request: ${sosError.message}`, 500);
 
   let counsellorId = user.assigned_counsellor_id;
   if (!counsellorId) {
@@ -272,22 +307,57 @@ router.post('/sos', async (req, res) => {
     }
   }
 
-  if (counsellorId) {
+  // Walk the jurisdiction tree up from the user's own district to find its
+  // parent state - State Administration is scoped to that state row, not
+  // the district itself, so this can't be a simple eq() on the user's own
+  // jurisdiction_id the way District Administration's lookup below is.
+  let stateJurisdictionId = null;
+  const { data: districtRow } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', user.jurisdiction_id).maybeSingle();
+  if (districtRow?.parent_id) {
+    const { data: parentRow } = await supabase.from('jurisdictions').select('jurisdiction_id, level').eq('jurisdiction_id', districtRow.parent_id).maybeSingle();
+    if (parentRow?.level === 'state') stateJurisdictionId = parentRow.jurisdiction_id;
+  }
+
+  const { data: districtAdminRoles } = await supabase
+    .from('official_roles')
+    .select('official_id, roles(role_name)')
+    .eq('jurisdiction_id', user.jurisdiction_id)
+    .is('revoked_at', null);
+  const districtAdminIds = (districtAdminRoles || []).filter((r) => r.roles?.role_name === 'Administration').map((r) => r.official_id);
+
+  let stateAdminIds = [];
+  if (stateJurisdictionId) {
+    const { data: stateAdminRoles } = await supabase
+      .from('official_roles')
+      .select('official_id, roles(role_name)')
+      .eq('jurisdiction_id', stateJurisdictionId)
+      .is('revoked_at', null);
+    stateAdminIds = (stateAdminRoles || []).filter((r) => r.roles?.role_name === 'Administration').map((r) => r.official_id);
+  }
+
+  const recipientIds = [...new Set([counsellorId, ...districtAdminIds, ...stateAdminIds].filter(Boolean))];
+
+  if (recipientIds.length > 0) {
     const { error: notifyError } = await supabase
       .from('alert_notifications')
-      .insert({ sos_event_id: sosEvent.sos_event_id, official_id: counsellorId, source: 'sos', priority: 'urgent' });
+      .insert(recipientIds.map((officialId) => ({ sos_event_id: sosEvent.sos_event_id, official_id: officialId, source: 'sos', priority: 'urgent' })));
     if (notifyError) {
-      console.error('POST /sos: could not write alert_notifications', notifyError.message);
+      console.error('POST /urgent-help: could not write alert_notifications', notifyError.message);
     } else {
-      await enqueueAlertDispatch(null, userId, [counsellorId]);
+      await enqueueAlertDispatch(null, userId, recipientIds);
     }
   } else {
-    console.error('POST /sos: no counsellor available to notify', { sosEventId: sosEvent.sos_event_id, userId });
+    console.error('POST /urgent-help: no counsellor or admin available to notify', { sosEventId: sosEvent.sos_event_id, userId });
   }
 
   await writeAuditLog({ userId, action: 'create', entityType: 'sos_event', entityId: sosEvent.sos_event_id });
 
-  return ok(res, { sosEventId: sosEvent.sos_event_id, triggeredAt: sosEvent.triggered_at }, 'Emergency alert sent', 201);
+  return ok(
+    res,
+    { sosEventId: sosEvent.sos_event_id, triggeredAt: sosEvent.triggered_at, pcrNumber: PCR_NUMBER, contactNumber: identity?.contact_number || null },
+    'Help is on the way',
+    201
+  );
 });
 
 // Feature Catalog Section 1.3 "IVRS Call" - queues a dispatch, never returns
@@ -459,18 +529,76 @@ async function requireCounsellorOptIn(req, res) {
   return user.assigned_counsellor_id;
 }
 
+// A ping older than this is treated as "stopped typing" - the composer
+// pings roughly every 2s while actively typing, so 4s comfortably survives
+// one missed/delayed ping without the indicator flickering, while still
+// disappearing quickly once the other party actually stops.
+const TYPING_ACTIVE_MS = 4000;
+
+// Voice messages: WhatsApp-style - recorded client-side, uploaded as one
+// audio file, played back with a duration rather than transcribed. Stored
+// in Supabase Storage's private `voice-messages` bucket (not public, unlike
+// profile-photos - these are private counsellor<->user conversations), so
+// GET below exchanges the stored path for a short-lived signed URL on every
+// fetch rather than a permanent public link.
+const VOICE_MESSAGE_URL_TTL_SECONDS = 3600;
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB - comfortably covers a few minutes of compressed voice audio
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('audio/')) return cb(new Error('File must be audio'));
+    cb(null, true);
+  },
+});
+
+function audioExtensionFromMime(mimetype) {
+  if (mimetype.includes('webm')) return 'webm';
+  if (mimetype.includes('mp4') || mimetype.includes('m4a') || mimetype.includes('aac')) return 'm4a';
+  if (mimetype.includes('ogg')) return 'ogg';
+  if (mimetype.includes('wav')) return 'wav';
+  return 'audio';
+}
+
+async function getVoiceMessageUrl(audioPath) {
+  if (!audioPath) return null;
+  const { data, error } = await supabase.storage.from('voice-messages').createSignedUrl(audioPath, VOICE_MESSAGE_URL_TTL_SECONDS);
+  return error ? null : data.signedUrl;
+}
+
 router.get('/messages', async (req, res) => {
   const officialId = await requireCounsellorOptIn(req, res);
   if (!officialId) return;
 
   const { rows: data } = await pool.query(
-    `select message_id, sender_type, body, sent_at from messages where user_id = $1 and official_id = $2 order by sent_at asc`,
+    `select message_id, sender_type, body, sent_at, message_type, audio_path, duration_seconds from messages where user_id = $1 and official_id = $2 order by sent_at asc`,
     [req.auth.userId, officialId]
   );
 
-  return ok(res, {
-    messages: (data || []).map((m) => ({ messageId: m.message_id, senderType: m.sender_type, body: m.body, sentAt: m.sent_at })),
-  });
+  // Opening/polling this thread is what marks the counsellor's messages
+  // read - matches ordinary chat-app semantics, no separate "mark read"
+  // call needed.
+  await pool.query(
+    `update messages set read_at = now() where user_id = $1 and official_id = $2 and sender_type = 'official' and read_at is null`,
+    [req.auth.userId, officialId]
+  );
+
+  const { rows: typingRows } = await pool.query(
+    `select updated_at from typing_status where user_id = $1 and official_id = $2 and sender_type = 'official'`,
+    [req.auth.userId, officialId]
+  );
+  const otherPartyTyping = !!typingRows[0] && (Date.now() - new Date(typingRows[0].updated_at).getTime()) < TYPING_ACTIVE_MS;
+
+  const messages = await Promise.all((data || []).map(async (m) => ({
+    messageId: m.message_id,
+    senderType: m.sender_type,
+    messageType: m.message_type,
+    body: m.body,
+    audioUrl: m.message_type === 'voice' ? await getVoiceMessageUrl(m.audio_path) : null,
+    durationSeconds: m.duration_seconds,
+    sentAt: m.sent_at,
+  })));
+
+  return ok(res, { messages, otherPartyTyping });
 });
 
 router.post('/messages', async (req, res) => {
@@ -482,12 +610,56 @@ router.post('/messages', async (req, res) => {
 
   const { data, error } = await supabase
     .from('messages')
-    .insert({ user_id: req.auth.userId, official_id: officialId, sender_type: 'user', body: body.trim() })
+    .insert({ user_id: req.auth.userId, official_id: officialId, sender_type: 'user', message_type: 'text', body: body.trim() })
     .select('message_id, sent_at')
     .single();
   if (error) return fail(res, `Could not send message: ${error.message}`, 500);
 
+  // Sending implies typing has stopped - clears the indicator on the
+  // counsellor's side immediately rather than waiting out TYPING_ACTIVE_MS.
+  await supabase.from('typing_status').delete().eq('user_id', req.auth.userId).eq('official_id', officialId).eq('sender_type', 'user');
+
   return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
+});
+
+router.post('/messages/voice', audioUpload.single('audio'), async (req, res) => {
+  const officialId = await requireCounsellorOptIn(req, res);
+  if (!officialId) return;
+  if (!req.file) return fail(res, 'audio file is required', 400);
+
+  const durationSeconds = Math.max(0, Math.round(Number(req.body.duration) || 0));
+  const audioPath = `${req.auth.userId}/${crypto.randomUUID()}.${audioExtensionFromMime(req.file.mimetype)}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('voice-messages')
+    .upload(audioPath, req.file.buffer, { contentType: req.file.mimetype });
+  if (uploadError) return fail(res, `Could not upload voice message: ${uploadError.message}`, 500);
+
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ user_id: req.auth.userId, official_id: officialId, sender_type: 'user', message_type: 'voice', audio_path: audioPath, duration_seconds: durationSeconds })
+    .select('message_id, sent_at')
+    .single();
+  if (error) return fail(res, `Could not send voice message: ${error.message}`, 500);
+
+  await supabase.from('typing_status').delete().eq('user_id', req.auth.userId).eq('official_id', officialId).eq('sender_type', 'user');
+
+  return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
+});
+
+// Fire-and-forget ping while the user is actively composing a reply -
+// upserted (not inserted) since only the most recent "still typing" moment
+// matters, not a history of keystrokes.
+router.post('/messages/typing', async (req, res) => {
+  const officialId = await requireCounsellorOptIn(req, res);
+  if (!officialId) return;
+
+  const { error } = await supabase
+    .from('typing_status')
+    .upsert({ user_id: req.auth.userId, official_id: officialId, sender_type: 'user', updated_at: new Date().toISOString() }, { onConflict: 'user_id,official_id,sender_type' });
+  if (error) return fail(res, `Could not update typing status: ${error.message}`, 500);
+
+  return ok(res, null);
 });
 
 // Feature Catalog Section 1.6 Wellness & Self-Care - static content, no AI.

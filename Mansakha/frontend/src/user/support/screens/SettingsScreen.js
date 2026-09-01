@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Switch } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../shared/context/AuthContext';
@@ -129,6 +129,7 @@ export default function SettingsScreen({ navigation }) {
   const [passwordError, setPasswordError] = useState(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
+  const confirmPasswordInputRef = useRef(null);
 
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
@@ -137,6 +138,16 @@ export default function SettingsScreen({ navigation }) {
 
   const currentDisplayLanguageId = displayLanguageId ?? dashboardQuery.data?.preferredLanguageId ?? 'en';
   const currentSpeakingLanguageId = speakingLanguageId ?? 'en';
+
+  // Enter on the Confirm field submits, same as the "Confirm New Password"
+  // button - only once both fields have something typed, mirroring the
+  // Login screen's pattern; handleChangePassword's own length/match checks
+  // still run and surface errors as usual.
+  const handleConfirmPasswordSubmit = () => {
+    if (newPassword.trim() && confirmPassword.trim()) {
+      handleChangePassword();
+    }
+  };
 
   const handleChangePassword = async () => {
     setPasswordError(null);
@@ -404,13 +415,19 @@ export default function SettingsScreen({ navigation }) {
                 value={newPassword}
                 onChangeText={setNewPassword}
                 secureTextEntry
+                returnKeyType="next"
+                blurOnSubmit={false}
+                onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
               />
               <IconInput
+                ref={confirmPasswordInputRef}
                 icon="lock"
                 placeholder="Confirm new password"
                 value={confirmPassword}
                 onChangeText={setConfirmPassword}
                 secureTextEntry
+                returnKeyType="done"
+                onSubmitEditing={handleConfirmPasswordSubmit}
               />
               {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
               {passwordSuccess && <Text style={styles.successText}>Password updated.</Text>}

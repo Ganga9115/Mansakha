@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, Linking, Platform, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../shared/context/AuthContext';
@@ -35,6 +35,8 @@ export default function LoginScreen({ navigation }) {
   const [newPassword, setNewPassword] = useState('');
   const [changingPassword, setChangingPassword] = useState(false);
 
+  const passwordInputRef = useRef(null);
+
   const loginMutation = useUserLogin();
 
   const handleLogin = async () => {
@@ -56,6 +58,16 @@ export default function LoginScreen({ navigation }) {
     } catch (err) {
       console.error('Login error:', err);
       toast.error(err.message || 'Login failed - check your details and try again');
+    }
+  };
+
+  // Enter on the Password field submits the same way clicking "Sign in
+  // now" does - but only once both fields actually have something in them,
+  // so a bare Enter press doesn't preemptively flash the "fill in all
+  // fields" toast before the user has typed anything.
+  const handlePasswordSubmit = () => {
+    if (docketNumber.trim() && password.trim()) {
+      handleLogin();
     }
   };
 
@@ -106,23 +118,29 @@ export default function LoginScreen({ navigation }) {
             {!requirePasswordChange ? (
               <>
                 <View style={styles.formContainer}>
-                  <IconInput 
-                    icon="hash" 
-                    placeholder="Docket ID" 
-                    value={docketNumber} 
-                    onChangeText={setDocketNumber} 
-                    autoCapitalize="characters" 
+                  <IconInput
+                    icon="hash"
+                    placeholder="Docket ID"
+                    value={docketNumber}
+                    onChangeText={setDocketNumber}
+                    autoCapitalize="characters"
                     containerStyle={styles.customInput}
+                    returnKeyType="next"
+                    blurOnSubmit={false}
+                    onSubmitEditing={() => passwordInputRef.current?.focus()}
                   />
-                  <IconInput 
-                    icon="lock" 
-                    placeholder="Password" 
-                    value={password} 
-                    onChangeText={setPassword} 
-                    secureTextEntry={!showPassword} 
+                  <IconInput
+                    ref={passwordInputRef}
+                    icon="lock"
+                    placeholder="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry={!showPassword}
                     trailingIcon={showPassword ? 'eye-off' : 'eye'}
                     onTrailingPress={() => setShowPassword(!showPassword)}
                     containerStyle={styles.customInput}
+                    returnKeyType="done"
+                    onSubmitEditing={handlePasswordSubmit}
                   />
                 </View>
 
@@ -162,7 +180,16 @@ export default function LoginScreen({ navigation }) {
                   This is your first time signing in - set a new password to continue.
                 </Text>
                 <View style={styles.formContainer}>
-                  <IconInput icon="lock" placeholder="New password (min 8 characters)" value={newPassword} onChangeText={setNewPassword} secureTextEntry containerStyle={styles.customInput} />
+                  <IconInput
+                    icon="lock"
+                    placeholder="New password (min 8 characters)"
+                    value={newPassword}
+                    onChangeText={setNewPassword}
+                    secureTextEntry
+                    containerStyle={styles.customInput}
+                    returnKeyType="done"
+                    onSubmitEditing={handleChangePassword}
+                  />
                 </View>
 
                 <Pressable style={styles.primaryBtn} onPress={handleChangePassword} disabled={changingPassword}>

@@ -22,7 +22,15 @@ export default function AiChatButton() {
     return currentRoute.name;
   });
 
-  if (currentRouteName === 'Chatbot') {
+  // Also hidden on the counsellor chat screen - registered under two route
+  // names depending on tier/entry point ('mycounsellor' for the phone tab
+  // bar and desktop drawer item, 'CounsellorChat' for the desktop drawer's
+  // second entry and the stack-pushed path from Home's quick actions). That
+  // screen has its own composer with a Send button pinned to the same
+  // bottom-right corner this FAB occupies, so the two visually overlapped
+  // and the FAB intercepted taps meant for Send (confirmed live via
+  // automated testing).
+  if (currentRouteName === 'Chatbot' || currentRouteName === 'CounsellorChat' || currentRouteName === 'mycounsellor') {
     return null;
   }
 

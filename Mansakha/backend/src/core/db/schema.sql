@@ -382,8 +382,33 @@ create table messages (
   user_id    uuid not null references users(user_id),
   official_id   uuid not null references officials(official_id),
   sender_type    text not null check (sender_type in ('user', 'official')),
-  body            text not null,
-  sent_at          timestamptz not null default now()
+  -- Nullable: a voice message (message_type = 'voice') carries no text body,
+  -- just audio_path/duration_seconds instead.
+  body            text,
+  sent_at          timestamptz not null default now(),
+  -- Set when the OTHER party's GET fetches this message - backs the
+  -- unread-dot indicator on the "Chat with User"/"My Counsellor" entry
+  -- points. Null = unread.
+  read_at          timestamptz,
+  -- WhatsApp-style voice messages: recorded client-side, uploaded whole,
+  -- played back with a duration. audio_path is a path inside the private
+  -- `voice-messages` Storage bucket (see security_and_realtime.sql) -
+  -- exchanged for a short-lived signed URL on every GET, never stored as a
+  -- permanent public link.
+  message_type     text not null default 'text' check (message_type in ('text', 'voice')),
+  audio_path       text,
+  duration_seconds integer
+);
+
+-- Ephemeral typing-indicator ping - one row per (user_id, official_id,
+-- sender_type), upserted on every ping, polled by the OTHER party alongside
+-- messages. No history kept, an old row is just overwritten.
+create table typing_status (
+  user_id      uuid not null references users(user_id),
+  official_id  uuid not null references officials(official_id),
+  sender_type  text not null check (sender_type in ('user', 'official')),
+  updated_at   timestamptz not null default now(),
+  primary key (user_id, official_id, sender_type)
 );
 
 -- Section 1.6 Wellness & Self-Care - static content, not AI-generated.

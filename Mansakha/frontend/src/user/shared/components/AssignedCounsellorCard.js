@@ -9,11 +9,14 @@ import { typography } from '../theme/typography';
 import { shadow } from '../theme/shadow';
 import Card from './Card';
 
-// Feature Catalog Section 1.4 "Call Counsellor button" / in-app chat / WhatsApp
-// redirect - the "opted in AND assigned" card, shared between SettingsScreen.js
-// (where this button logic first lived) and SupportScreen.js, so the tel:/wa.me
-// link-building isn't duplicated. `counsellor` is
-// useAssignedCounsellor()'s `data.counsellor` - { fullName, phone, whatsappNumber }.
+// Feature Catalog Section 1.4 "Call Counsellor button" / in-app chat - the
+// "opted in AND assigned" card, shared between SettingsScreen.js (where this
+// button logic first lived) and SupportScreen.js, so the tel: link-building
+// isn't duplicated. `counsellor` is useAssignedCounsellor()'s
+// `data.counsellor` - { fullName, phone }. The WhatsApp redirect this used
+// to offer alongside Call/Chat has been removed - all communication with
+// the assigned counsellor now goes through the in-app chat
+// (user/chat/screens/CounsellorChatScreen.js), not an external app.
 export default function AssignedCounsellorCard({ counsellor, navigation }) {
   const toast = useToast();
 
@@ -22,12 +25,8 @@ export default function AssignedCounsellorCard({ counsellor, navigation }) {
     Linking.openURL(`tel:${counsellor.phone}`).catch(() => toast.error('Could not start a call on this device.'));
   };
 
-  const handleWhatsApp = () => {
-    const number = counsellor?.whatsappNumber || counsellor?.phone;
-    if (!number) return;
-    // wa.me expects digits only (no +, spaces, or dashes).
-    const digits = number.replace(/[^\d]/g, '');
-    Linking.openURL(`https://wa.me/${digits}`).catch(() => toast.error('Could not open WhatsApp on this device.'));
+  const handleChat = () => {
+    navigation?.navigate('CounsellorChat');
   };
 
   return (
@@ -46,10 +45,10 @@ export default function AssignedCounsellorCard({ counsellor, navigation }) {
           <Feather name="phone" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
           <Text style={styles.outlineBtnText}>Call</Text>
         </Pressable>
-        {(!!counsellor?.whatsappNumber || !!counsellor?.phone) && (
-          <Pressable style={[styles.outlineBtn, { flex: 1 }]} onPress={handleWhatsApp}>
+        {!!navigation && (
+          <Pressable style={[styles.outlineBtn, { flex: 1 }]} onPress={handleChat}>
             <Feather name="message-square" size={16} color={colors.textPrimary} style={{ marginRight: spacing.xs }} />
-            <Text style={styles.outlineBtnText}>WhatsApp</Text>
+            <Text style={styles.outlineBtnText}>Chat</Text>
           </Pressable>
         )}
       </View>

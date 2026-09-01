@@ -5,7 +5,10 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "platforms": ["android", "web"],
+    "platforms": [
+      "android",
+      "web"
+    ],
     "android": {
       "package": "in.gov.mosje.mansakha",
       "adaptiveIcon": {
@@ -21,7 +24,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Mansakha uses your location to auto-fill your State and District at login."
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }

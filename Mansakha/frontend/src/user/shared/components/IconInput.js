@@ -9,7 +9,14 @@ import { typography } from '../theme/typography';
 // Icon-prefixed text input with an optional trailing action (used for the
 // password show/hide toggle) - @expo/vector-icons is already bundled with Expo,
 // not a new dependency. `error`: string shown as helper text + red border.
-export default function IconInput({ icon, prefix, trailingIcon, onTrailingPress, error, onFocus, onBlur, ...textInputProps }) {
+// forwardRef so callers can attach a ref (e.g. to call .focus() on the next
+// field from an onSubmitEditing handler) straight to the underlying
+// TextInput - arbitrary TextInput props (onSubmitEditing, returnKeyType,
+// blurOnSubmit, etc.) already pass through via the ...textInputProps rest.
+const IconInput = React.forwardRef(function IconInput(
+  { icon, prefix, trailingIcon, onTrailingPress, error, onFocus, onBlur, ...textInputProps },
+  ref
+) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -23,6 +30,7 @@ export default function IconInput({ icon, prefix, trailingIcon, onTrailingPress,
           </>
         )}
         <TextInput
+          ref={ref}
           style={[styles.input, trailingIcon && styles.inputWithTrailing]}
           placeholderTextColor={colors.textSecondary}
           onFocus={(e) => { setFocused(true); onFocus?.(e); }}
@@ -38,7 +46,9 @@ export default function IconInput({ icon, prefix, trailingIcon, onTrailingPress,
       {!!error && <Text style={styles.errorText}>{error}</Text>}
     </View>
   );
-}
+});
+
+export default IconInput;
 
 const styles = StyleSheet.create({
   container: { marginBottom: spacing.md },

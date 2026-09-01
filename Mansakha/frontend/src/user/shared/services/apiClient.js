@@ -44,10 +44,34 @@ async function downloadBlob(path, token) {
   return res.blob();
 }
 
+// multipart/form-data POST (e.g. voice message upload) - deliberately does
+// NOT set Content-Type itself so fetch can set the multipart boundary, but
+// otherwise follows the same envelope-unwrapping/error-throwing contract as
+// request() above so callers can treat it like any other apiClient method.
+async function uploadFile(path, formData, token) {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  const envelope = await res.json();
+  if (!envelope.success) {
+    const error = new Error(envelope.message || 'Request failed');
+    error.status = res.status;
+    throw error;
+  }
+  return envelope.data;
+}
+
 export const apiClient = {
   get: (path, token) => request(path, { method: 'GET', token }),
   post: (path, body, token) => request(path, { method: 'POST', body, token }),
   patch: (path, body, token) => request(path, { method: 'PATCH', body, token }),
   delete: (path, token) => request(path, { method: 'DELETE', token }),
   downloadBlob,
+  uploadFile,
 };

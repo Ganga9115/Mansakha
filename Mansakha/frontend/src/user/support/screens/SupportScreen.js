@@ -36,7 +36,7 @@ export default function SupportScreen({ navigation }) {
 
   // Same three states SettingsScreen.js already handles for this preference -
   // see its own comment: the backend shape is
-  // { assigned, counsellor: {fullName, phone, whatsappNumber} | null }, never
+  // { assigned, counsellor: {fullName, phone} | null }, never
   // a top-level officialId/phone.
   const optedForCounsellor = query.data?.optedForManualCounsellor ?? false;
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
@@ -70,6 +70,14 @@ export default function SupportScreen({ navigation }) {
       {/* Header Banner */}
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
+          {/* Support used to be a permanent tab/sidebar item, so it never
+              needed a way back. Now that it's only reachable via Home's
+              "Support Helpline" tile or the header bell (pushed onto the
+              stack like Journal/Wellbeing), it needs the same back arrow
+              those screens already have. */}
+          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+            <Feather name="arrow-left" size={20} color={colors.primaryDark} />
+          </Pressable>
           {isDesktop ? (
             <Feather name="file-text" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
@@ -160,7 +168,7 @@ export default function SupportScreen({ navigation }) {
             <Feather name="user-plus" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
             <Text style={styles.label}>Want to talk to someone?</Text>
             <Text style={styles.detail}>
-              Opt in below to get matched with a real counsellor you can message, call, or reach on WhatsApp directly.
+              Opt in below to get matched with a real counsellor you can message or call directly, right here in the app.
             </Text>
             <View style={styles.inviteToggleRow}>
               <Text style={styles.inviteToggleLabel}>Prefer a human counsellor</Text>
@@ -205,6 +213,7 @@ const styles = StyleSheet.create({
   topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, alignItems: 'center' },
   headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  backBtn: { marginRight: spacing.sm, padding: spacing.xs },
   avatarContainer: {
     width: 56,
     height: 56,

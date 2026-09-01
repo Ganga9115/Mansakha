@@ -45,19 +45,19 @@ const SCREENS = {
   home: HomeScreen,
   checkin: CheckinTab,
   history: DistressHistoryScreen,
-  support: SupportScreen,
   settings: SettingsScreen,
   mycounsellor: CounsellorChatScreen,
 };
 
 // Map screen keys to Feather icons - shared between the bottom tab bar
 // (mobile/tablet) and the sidebar (desktop) so the same icon appears
-// either way.
+// either way. Support has no entry here - it's no longer a tab/sidebar
+// item (see the "support" RootStack.Screen in ShellStack below), and
+// SidebarNav already skips any route missing from this map.
 const TAB_ICONS = {
   home: 'home',
   checkin: 'mic',
   history: 'bar-chart-2',
-  support: 'file-text',
   settings: 'user',
   mycounsellor: 'message-square',
 };
@@ -97,7 +97,6 @@ function TabNavigator() {
       <Tab.Screen name="home" component={SCREENS.home} options={{ title: 'Home' }} />
       <Tab.Screen name="checkin" component={SCREENS.checkin} options={{ title: 'Check-in' }} />
       <Tab.Screen name="history" component={SCREENS.history} options={{ title: 'History' }} />
-      <Tab.Screen name="support" component={SCREENS.support} options={{ title: 'Support' }} />
       <Tab.Screen
         name="mycounsellor"
         component={SCREENS.mycounsellor}
@@ -137,7 +136,6 @@ function DesktopNavigator() {
       <Drawer.Screen name="home" component={SCREENS.home} options={{ title: 'Home' }} />
       <Drawer.Screen name="checkin" component={SCREENS.checkin} options={{ title: 'Check-in' }} />
       <Drawer.Screen name="history" component={SCREENS.history} options={{ title: 'History' }} />
-      <Drawer.Screen name="support" component={SCREENS.support} options={{ title: 'Support' }} />
       <Drawer.Screen name="mycounsellor" component={SCREENS.mycounsellor} options={{ title: 'My Counsellor' }} />
       <Drawer.Screen name="settings" component={SCREENS.settings} options={{ title: 'Profile' }} />
       <Drawer.Screen name="Chatbot" component={ChatScreen} />
@@ -172,10 +170,18 @@ function DesktopNavigatorWithFAB() {
 // adding more tabs, keeps the 5-item tab bar/sidebar from getting crowded;
 // `navigation.navigate('Chatbot')` called from any screen inside MainTabs
 // bubbles up to this stack automatically.
+//
+// "support" is registered here unconditionally (regardless of includeExtras/
+// tier) rather than as a Tab.Screen/Drawer.Screen - it's no longer a
+// persistent nav item in the tab bar or the desktop sidebar, but Home's
+// "Support Helpline" quick-action tile and the header bell still both call
+// navigation.navigate('support'), so the route itself has to keep existing
+// somewhere reachable on every tier.
 function ShellStack({ tabs, includeExtras = true }) {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={tabs} />
+      <RootStack.Screen name="support" component={SupportScreen} />
       {includeExtras && (
         <>
           <RootStack.Screen name="Chatbot" component={ChatScreen} />

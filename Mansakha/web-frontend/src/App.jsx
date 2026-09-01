@@ -9,6 +9,8 @@ import CounsellorDashboard from './counsellor/pages/CounsellorDashboard';
 import CaseQueue from './counsellor/pages/CaseQueue';
 import MyUsers from './counsellor/pages/MyUsers';
 import CounsellorCaseDetail from './counsellor/pages/CaseDetail';
+import CounsellorCaseNotes from './counsellor/pages/CaseNotes';
+import CounsellorCaseChat from './counsellor/pages/CaseChat';
 import AlertsFeed from './counsellor/pages/AlertsFeed';
 import CounsellorReports from './counsellor/pages/Reports';
 import CounsellorSettings from './counsellor/pages/Settings';
@@ -72,6 +74,8 @@ export default function App() {
         <Route path="/counsellor/queue" element={<RequireAuth><CaseQueue /></RequireAuth>} />
         <Route path="/counsellor/my-users" element={<RequireAuth><MyUsers /></RequireAuth>} />
         <Route path="/counsellor/case-detail/:id" element={<RequireAuth><CounsellorCaseDetail /></RequireAuth>} />
+        <Route path="/counsellor/case-detail/:id/notes" element={<RequireAuth><CounsellorCaseNotes /></RequireAuth>} />
+        <Route path="/counsellor/case-detail/:id/chat" element={<RequireAuth><CounsellorCaseChat /></RequireAuth>} />
         <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
         <Route path="/counsellor/reports" element={<RequireAuth><CounsellorReports /></RequireAuth>} />
         <Route path="/counsellor/profile" element={<RequireAuth><CounsellorSettings /></RequireAuth>} />

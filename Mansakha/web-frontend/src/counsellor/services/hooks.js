@@ -124,12 +124,43 @@ export function useSendCaseMessage(userId) {
   const mutate = async (message) => {
     setLoading(true);
     try {
-      return await apiClient.post(`/api/counsellor/cases/${userId}/messages`, { message }, token);
+      // The backend route reads req.body.body (matching the user-side POST
+      // /api/user/messages contract) - this was previously sending
+      // { message }, which the server always rejected with "body is
+      // required" (confirmed live).
+      return await apiClient.post(`/api/counsellor/cases/${userId}/messages`, { body: message }, token);
     } finally {
       setLoading(false);
     }
   };
   return { mutate, loading };
+}
+
+export function useSendCaseVoiceMessage(userId) {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (blob, durationSeconds) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('audio', blob);
+      formData.append('duration', String(Math.round(durationSeconds)));
+      return await apiClient.uploadFile(`/api/counsellor/cases/${userId}/messages/voice`, formData, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Fire-and-forget typing ping - throttled by the caller (CaseChat.jsx), not
+// here, since the throttle needs to compare against the composer's own
+// keystroke timing, not this hook's lifecycle.
+export function useSendTypingPing(userId) {
+  const token = getToken();
+  return async () => {
+    await apiClient.post(`/api/counsellor/cases/${userId}/messages/typing`, {}, token);
+  };
 }
 
 export function useAddCaseNote(userId) {

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -8,7 +8,6 @@ import { typography } from '../../shared/theme/typography';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import TopRightActions from '../../shared/components/TopRightActions';
-import SegmentedToggle from '../../shared/components/SegmentedToggle';
 import { useCheckin } from '../../shared/services/hooks';
 import { analyzeConversation } from '../../shared/services/ollamaClient';
 const OLLAMA = "http://127.0.0.1:11434";
@@ -31,23 +30,25 @@ function Bubble({ message }) {
 export default function ChatScreen({ navigation }) {
   const { tier } = useResponsive();
   const submitMutation = useCheckin();
-  const [mode, setMode] = useState('text'); // 'text' | 'voice'
   const [model, setModel] = useState('gemma3:4b');
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('Connecting to Ollama...');
-  
-  // Voice Call State
+
+  // Voice Call state - triggered from the composer's mic button (see
+  // toggleCall below), not a separate tab/mode anymore. Recognized speech
+  // and spoken replies flow into the same `messages` array as typed text,
+  // so a call's turns render as ordinary bubbles in the one chat thread.
   const [inCall, setInCall] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [voiceState, setVoiceState] = useState('Ready to talk');
-  const [transcript, setTranscript] = useState('Press the call button and Mansakha will speak first.');
   const recognitionRef = useRef(null);
+  // Set once a call happens this session - read by analyzeDistress to
+  // decide whether to report this check-in as 'IVRS' or 'Chatbot', now that
+  // there's no explicit mode toggle to read that from.
+  const usedVoiceRef = useRef(false);
 
-  // Dictation State (for Text Chat)
-  const [isDictating, setIsDictating] = useState(false);
-  const dictationRef = useRef(null);
   // Analysis State
   const [analysis, setAnalysis] = useState(null);
 
@@ -117,39 +118,6 @@ export default function ChatScreen({ navigation }) {
       // error handled in askOllama
     }
   };
-
-  const toggleDictation = () => {
-    if (isDictating) {
-      try { dictationRef.current?.stop(); } catch (e) {}
-      setIsDictating(false);
-      return;
-    }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) {
-      alert("Speech recognition unavailable in this browser.");
-      return;
-    }
-    const r = new SR();
-    r.continuous = false;
-    r.interimResults = true;
-    r.lang = "en-IN";
-    r.onstart = () => setIsDictating(true);
-    r.onresult = (e) => {
-      let finalStr = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) finalStr += e.results[i][0].transcript;
-      }
-      if (finalStr.trim()) {
-        setDraft(prev => (prev ? prev + " " + finalStr.trim() : finalStr.trim()));
-      }
-    };
-    r.onerror = () => setIsDictating(false);
-    r.onend = () => setIsDictating(false);
-    
-    dictationRef.current = r;
-    r.start();
-  };
-
 
   // --- Voice Logic (Web Only for Prototype) ---
   const getVoice = () => {
@@ -297,12 +265,13 @@ export default function ChatScreen({ navigation }) {
       alert("No Ollama models connected.");
       return;
     }
+    usedVoiceRef.current = true;
     setInCall(true);
-    setMessages([]);
     setAnalysis(null);
+    // Appended, not a reset - a call picks up in the same thread as any
+    // typed messages already here, since both now share one chat view.
     const greeting = "Hello. I'm here to listen. Take your time. How are you feeling today?";
-    setMessages([{ role: "assistant", content: greeting }]);
-    setTranscript("Mansakha: " + greeting);
+    setMessages(prev => [...prev, { role: "assistant", content: greeting }]);
     await speak(greeting);
     if (inCallRef.current) {
       startListening();
@@ -333,7 +302,7 @@ export default function ChatScreen({ navigation }) {
 
       // 3. Submit to backend to update distress scores in the DB
       const result = await submitMutation.mutateAsync({
-        channel: mode === 'voice' ? 'IVRS' : 'Chatbot',
+        channel: usedVoiceRef.current ? 'IVRS' : 'Chatbot',
         responses: formattedResponses,
         aiAnalysis
       });
@@ -359,14 +328,6 @@ export default function ChatScreen({ navigation }) {
     }
   };
 
-  const handleClear = () => {
-    if (inCall) toggleCall();
-    setMessages([]);
-    setTranscript('Ready to talk');
-    setVoiceState('Ready to talk');
-    setAnalysis(null);
-  };
-
   const getScoreColor = (score) => {
     if (typeof score !== 'number') return colors.textPrimary;
     if (score >= 7) return colors.danger;
@@ -387,105 +348,66 @@ export default function ChatScreen({ navigation }) {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.statusTitle}>Local AI</Text>
-          <Text style={styles.subtext}>{status}</Text>
+          <Text style={styles.subtext}>{inCall ? voiceState : status}</Text>
         </View>
-        <Pressable onPress={handleClear} style={styles.clearBtn}><Text style={styles.clearBtnText}>Clear</Text></Pressable>
-        <Pressable onPress={loadModels} style={[styles.clearBtn, { marginLeft: spacing.xs }]}><Text style={styles.clearBtnText}>Refresh</Text></Pressable>
         <TopRightActions />
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center', paddingTop: spacing.md }]}>
-        <SegmentedToggle
-          options={[
-            { value: 'text', label: 'Text Chat', icon: 'message-square' },
-            { value: 'voice', label: 'Voice Call', icon: 'phone' }
-          ]}
-          value={mode}
-          onChange={(v) => {
-            if (inCall) toggleCall();
-            setMode(v);
-          }}
+        <FlatList
+          ref={listRef}
+          data={messages}
+          showsVerticalScrollIndicator={false}
+          keyExtractor={(_, i) => i.toString()}
+          renderItem={({ item }) => <Bubble message={item} />}
+          contentContainerStyle={styles.listContent}
         />
-
-        {mode === 'text' && (
-          <>
-            <FlatList
-              ref={listRef}
-              data={messages}
-              showsVerticalScrollIndicator={false}
-              keyExtractor={(_, i) => i.toString()}
-              renderItem={({ item }) => <Bubble message={item} />}
-              contentContainerStyle={styles.listContent}
+        {analysis && (
+          <View style={styles.analysisPanel}>
+            <View style={styles.analysisHeader}>
+              <Text style={styles.analysisTitle}>Distress Analysis</Text>
+              <Text style={[styles.score, { color: getScoreColor(analysis.score) }]}>
+                {analysis.score !== null && analysis.score !== 'Error' && analysis.score !== 'Analyzing...' ? `${analysis.score} / 10` : analysis.score}
+              </Text>
+            </View>
+            <Text style={styles.analysisDesc}>{analysis.description}</Text>
+            <Text style={styles.analysisMeta}>{analysis.meta}</Text>
+          </View>
+        )}
+        <View style={styles.inputContainer}>
+          <View style={styles.inputPill}>
+            <TextInput
+              style={styles.textInput}
+              placeholder="Type a message..."
+              placeholderTextColor={colors.textSecondary}
+              value={draft}
+              onChangeText={setDraft}
+              onKeyPress={(e) => {
+                if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                  e.preventDefault();
+                  handleSendText();
+                }
+              }}
+              multiline
             />
-            {analysis && (
-              <View style={styles.analysisPanel}>
-                <View style={styles.analysisHeader}>
-                  <Text style={styles.analysisTitle}>Distress Analysis</Text>
-                  <Text style={[styles.score, { color: getScoreColor(analysis.score) }]}>
-                    {analysis.score !== null && analysis.score !== 'Error' && analysis.score !== 'Analyzing...' ? `${analysis.score} / 10` : analysis.score}
-                  </Text>
-                </View>
-                <Text style={styles.analysisDesc}>{analysis.description}</Text>
-                <Text style={styles.analysisMeta}>{analysis.meta}</Text>
-              </View>
-            )}
-            <View style={styles.inputContainer}>
-              <View style={styles.inputPill}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Type a message..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={draft}
-                  onChangeText={setDraft}
-                  onKeyPress={(e) => {
-                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                      e.preventDefault();
-                      handleSendText();
-                    }
-                  }}
-                  multiline
-                />
-                <Pressable
-                  style={[styles.micBtn, isDictating && styles.micBtnActive]}
-                  onPress={toggleDictation}
-                >
-                  <Feather name={isDictating ? "mic-off" : "mic"} size={20} color={isDictating ? colors.danger : colors.primary} />
-                </Pressable>
-                <Pressable style={[styles.sendBtn, !draft.trim() && styles.sendBtnDisabled]} onPress={handleSendText} disabled={!draft.trim()}>
-                  <Feather name="send" size={18} color={colors.white} />
-                </Pressable>
-              </View>
-            </View>
-          </>
-        )}
-
-        {mode === 'voice' && (
-          <ScrollView contentContainerStyle={styles.voiceCenter} showsVerticalScrollIndicator={false}>
-            <View style={[styles.avatar, speaking && styles.avatarActive]}>
-              <Text style={styles.avatarEmoji}>🎧</Text>
-            </View>
-            <Text style={styles.voiceState}>{voiceState}</Text>
-            
-            <Pressable style={[styles.callBtn, inCall && styles.callBtnDanger]} onPress={toggleCall}>
-              <Feather name={inCall ? "phone-off" : "phone"} size={28} color={colors.white} />
+            {/* Mic now starts/ends a live voice call with Mansakha (what the
+                old separate "Voice Call" tab did) rather than dictating text
+                into the composer - tap again (shown as a red phone-off
+                button while a call is active) to hang up. Recognized speech
+                and spoken replies land in the same bubble list above as any
+                typed message. */}
+            <Pressable
+              style={[styles.micBtn, inCall && styles.micBtnActive]}
+              onPress={toggleCall}
+              accessibilityLabel={inCall ? 'End voice call with Mansakha' : 'Start voice call with Mansakha'}
+            >
+              <Feather name={inCall ? "phone-off" : "mic"} size={18} color={inCall ? colors.white : colors.primary} />
             </Pressable>
-            
-            {/* Automated background distress analysis runs when call ends or messages update */}
-
-            {analysis && (
-              <View style={[styles.analysisPanel, { marginTop: spacing.xl, width: '100%' }]}>
-                <View style={styles.analysisHeader}>
-                  <Text style={styles.analysisTitle}>Distress Analysis</Text>
-                  <Text style={[styles.score, { color: getScoreColor(analysis.score) }]}>
-                    {analysis.score !== null && analysis.score !== 'Error' && analysis.score !== 'Analyzing...' ? `${analysis.score} / 10` : analysis.score}
-                  </Text>
-                </View>
-                <Text style={styles.analysisDesc}>{analysis.description}</Text>
-                <Text style={styles.analysisMeta}>{analysis.meta}</Text>
-              </View>
-            )}
-          </ScrollView>
-        )}
+            <Pressable style={[styles.sendBtn, !draft.trim() && styles.sendBtnDisabled]} onPress={handleSendText} disabled={!draft.trim()}>
+              <Feather name="send" size={18} color={colors.white} />
+            </Pressable>
+          </View>
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -509,8 +431,6 @@ const styles = StyleSheet.create({
   },
   statusTitle: { ...typography.h3, color: colors.primaryDark },
   subtext: { ...typography.caption, color: colors.textSecondary },
-  clearBtn: { padding: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border },
-  clearBtnText: { ...typography.bodySmall, color: colors.textPrimary },
   body: { flex: 1, paddingHorizontal: spacing.lg },
   listContent: { paddingBottom: spacing.xl },
   emptyText: { textAlign: 'center', color: colors.textSecondary, marginTop: spacing.xxl },
@@ -548,22 +468,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginLeft: 4,
     borderWidth: 1, borderColor: colors.border,
   },
+  // Solid red "in a call, tap to hang up" state - same red-active convention
+  // used for the counsellor chat's own voice-note recording button.
   micBtnActive: {
-    borderColor: colors.danger, backgroundColor: colors.danger + '1A', // transparent light red
+    borderColor: colors.danger, backgroundColor: colors.danger,
   },
   sendBtn: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center', marginLeft: 4,
   },
   sendBtnDisabled: { opacity: 0.5 },
-  voiceCenter: { alignItems: 'center', padding: spacing.xl, paddingBottom: 100 },
-  avatar: { width: 130, height: 130, borderRadius: 65, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center', marginVertical: spacing.xl },
-  avatarActive: { backgroundColor: colors.primaryLight, shadowColor: colors.primary, shadowOpacity: 0.5, shadowRadius: 20, shadowOffset: { width: 0, height: 0 }, elevation: 10 },
-  avatarEmoji: { fontSize: 52 },
-  voiceState: { ...typography.h2, fontWeight: '600', marginBottom: spacing.md, color: colors.textPrimary },
-  transcript: { minHeight: 100, textAlign: 'center', color: colors.textSecondary, marginBottom: spacing.xl, ...typography.body },
-  callBtn: { width: 76, height: 76, borderRadius: 38, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xl },
-  callBtnDanger: { backgroundColor: colors.danger },
   analyzeBtn: { width: '100%', padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
   analyzeBtnText: { ...typography.body, color: colors.textPrimary, fontWeight: '600' },
   note: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xl },
