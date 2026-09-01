@@ -61,7 +61,7 @@ export default function SplashScreen({ onFinish }) {
           ]}
         >
           <Image
-            source={require('../../../../assets/mansakha-logo.png')}
+            source={require('../../../../assets/logo-2.png')}
             style={styles.logo}
             resizeMode="contain"
             onError={() => setImageError(true)}
@@ -105,8 +105,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    width: 300,
-    height: 300,
+    width: 500,
+    height: 500,
   },
   content: {
     alignItems: 'center',
