@@ -1,0 +1,260 @@
+import { useCallback, useEffect, useState } from 'react';
+import { apiClient } from './apiClient';
+import { getToken } from './auth';
+
+// Ministry's own copy of the shared data-hooks file - trimmed to only the
+// hooks Ministry's pages actually call. Ministry is a jurisdiction-
+// unrestricted superset of Administration (Section 3), so its dashboard/
+// broadcast/policy/analytics calls reuse the National tier's own mount
+// (backend/src/national_admin/routes/nationalAdmin.routes.js allows
+// Ministry through requireRole(['Administration','Ministry'])), scoped to
+// the root national jurisdiction id.
+
+function useQuery(queryFn, deps) {
+  const [state, setState] = useState({ data: null, loading: true, error: null });
+
+  const refetch = useCallback(() => {
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    queryFn()
+      .then((data) => { if (!cancelled) setState({ data, loading: false, error: null }); })
+      .catch((err) => { if (!cancelled) setState({ data: null, loading: false, error: err.message }); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  useEffect(() => refetch(), [refetch]);
+
+  return { ...state, refetch };
+}
+
+export function useMe() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/me', token), [token]);
+}
+
+export function useMyNotifications() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/me/notifications', token), [token]);
+}
+
+export function useJurisdictionOptions(level, parentId) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ level });
+    if (parentId) params.set('parentId', parentId);
+    return apiClient.get(`/api/lookups/jurisdictions?${params.toString()}`, token);
+  }, [token, level, parentId]);
+}
+
+// --- National-tier dashboard/broadcast/policy/analytics (Ministry's own
+// "home" view reuses these, scoped to the root national jurisdiction). ---
+
+export function useAdminDashboard(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/national/dashboard/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+export function useCreatePolicy() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/national/policies', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Task 2A - admin-triggered only (never polled/auto-called - GEMINI_API_KEY
+// is a small shared free-tier quota, see backend/src/ai/gemini.js).
+export function useGenerateAnalytics() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/national/analytics/generate', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Task 2C - mass SMS+push to every active user in a jurisdiction, resolves
+// to { queuedCount }.
+export function useSendBroadcast() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/national/broadcast', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// --- Ministry: Staff/Account Management ---
+
+export function useStaffList(role, level, page = 1) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (role) params.set('role', role);
+    if (level) params.set('level', level);
+    return apiClient.get(`/api/ministry/staff?${params.toString()}`, token);
+  }, [token, role, level, page]);
+}
+
+export function useMinistryUsers(page = 1) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/ministry/users?page=${page}`, token), [token, page]);
+}
+
+export function useCreateStaff() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/ministry/staff', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useUpdateStaff() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (officialId, payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/ministry/staff/${officialId}`, payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useDeleteStaff() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (officialId) => {
+    setLoading(true);
+    try {
+      return await apiClient.delete(`/api/ministry/staff/${officialId}`, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// --- Ministry: System Configuration (Case Types / Intervention Types /
+// Languages) - all three share one CRUD shape, so one factory generates the
+// three hook sets instead of repeating them three times. ---
+
+function makeConfigResource(resourcePath, listKey) {
+  return {
+    useList: () => {
+      const token = getToken();
+      return useQuery(() => apiClient.get(`/api/ministry/${resourcePath}`, token), [token]);
+    },
+    useCreate: () => {
+      const token = getToken();
+      const [loading, setLoading] = useState(false);
+      const mutate = async (payload) => {
+        setLoading(true);
+        try {
+          return await apiClient.post(`/api/ministry/${resourcePath}`, payload, token);
+        } finally {
+          setLoading(false);
+        }
+      };
+      return { mutate, loading };
+    },
+    useUpdate: () => {
+      const token = getToken();
+      const [loading, setLoading] = useState(false);
+      const mutate = async (id, payload) => {
+        setLoading(true);
+        try {
+          return await apiClient.patch(`/api/ministry/${resourcePath}/${id}`, payload, token);
+        } finally {
+          setLoading(false);
+        }
+      };
+      return { mutate, loading };
+    },
+    useDelete: () => {
+      const token = getToken();
+      const [loading, setLoading] = useState(false);
+      const mutate = async (id) => {
+        setLoading(true);
+        try {
+          return await apiClient.delete(`/api/ministry/${resourcePath}/${id}`, token);
+        } finally {
+          setLoading(false);
+        }
+      };
+      return { mutate, loading };
+    },
+    listKey,
+  };
+}
+
+export const caseTypesResource = makeConfigResource('case-types', 'caseTypes');
+export const interventionTypesResource = makeConfigResource('intervention-types', 'interventionTypes');
+export const languagesResource = makeConfigResource('languages', 'languages');
+
+// --- Ministry: Oversight ---
+
+export function useAuditLog(page) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/ministry/audit-log?page=${page || 1}`, token), [token, page]);
+}
+
+export function useHeatmap() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/heatmap', token), [token]);
+}
+
+export function useReportsInbox() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/reports', token), [token]);
+}
+
+export function useUpdateReportStatus() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, status) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/national/reports/${reportId}/status`, { status }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useCounsellorPerformance(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/national/counsellors/performance/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}

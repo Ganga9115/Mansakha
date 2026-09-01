@@ -11,13 +11,13 @@ import {
   PublicSans_600SemiBold,
   PublicSans_700Bold,
 } from '@expo-google-fonts/public-sans';
-import { AuthProvider } from './src/context/AuthContext';
-import { ToastProvider } from './src/context/ToastContext';
-import { LanguageProvider } from './src/context/LanguageContext';
-import RootNavigator from './src/navigation/RootNavigator';
-import ErrorBoundary from './src/components/ErrorBoundary';
-import SplashScreen from './src/screens/SplashScreen';
-import { colors } from './src/theme/colors';
+import { AuthProvider } from './src/user/shared/context/AuthContext';
+import { ToastProvider } from './src/user/shared/context/ToastContext';
+import { LanguageProvider } from './src/user/shared/context/LanguageContext';
+import RootNavigator from './src/user/navigation/RootNavigator';
+import ErrorBoundary from './src/user/shared/components/ErrorBoundary';
+import SplashScreen from './src/user/onboarding/screens/SplashScreen';
+import { colors } from './src/user/shared/theme/colors';
 
 const queryClient = new QueryClient({
   defaultOptions: {

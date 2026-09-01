@@ -1,7 +1,7 @@
 require('dotenv').config();
 const fs = require('fs');
 const bcrypt = require('bcrypt'); // unused directly, routes hash server-side; kept for parity if needed
-const { signToken } = require('./src/utils/jwt');
+const { signToken } = require('./src/core/utils/jwt');
 
 const BASE = 'http://localhost:4000';
 const districts = JSON.parse(fs.readFileSync('seed_districts.json', 'utf8'));
@@ -139,24 +139,24 @@ async function main() {
 
   const counsellorByDistrict = new Map(counsellorRecords.map((c) => [c.districtId, c]));
 
-  // ---- 3. Pick victim districts: the 50 counsellor districts + 15 extra with no counsellor ----
+  // ---- 3. Pick user districts: the 50 counsellor districts + 15 extra with no counsellor ----
   const usedIds = new Set(counsellorDistricts.map((d) => d.district_id));
   const extraDistricts = shuffle(districts.filter((d) => !usedIds.has(d.district_id))).slice(0, 15);
-  const victimDistricts = shuffle([...counsellorDistricts, ...extraDistricts]);
+  const userDistricts = shuffle([...counsellorDistricts, ...extraDistricts]);
 
-  // ---- 4. Create 500 victims spread across those districts ----
-  const TOTAL_VICTIMS = 500;
-  const victimJobs = [];
-  for (let i = 0; i < TOTAL_VICTIMS; i++) {
-    const d = victimDistricts[i % victimDistricts.length];
-    victimJobs.push({ i, district: d });
+  // ---- 4. Create 500 users spread across those districts ----
+  const TOTAL_USERS = 500;
+  const userJobs = [];
+  for (let i = 0; i < TOTAL_USERS; i++) {
+    const d = userDistricts[i % userDistricts.length];
+    userJobs.push({ i, district: d });
   }
 
-  console.log(`Creating ${TOTAL_VICTIMS} victims...`);
+  console.log(`Creating ${TOTAL_USERS} users...`);
   const seedRunId = Date.now().toString().slice(-6);
-  const victimRecords = [];
+  const userRecords = [];
   let created = 0;
-  await runPool(victimJobs, async ({ i, district }) => {
+  await runPool(userJobs, async ({ i, district }) => {
     const caseType = rand(caseTypes);
     const fullName = randomName();
     const docketNumber = `SEED${seedRunId}-${pad(i + 1, 4)}`;
@@ -174,27 +174,27 @@ async function main() {
       address: `${district.district_name}, ${district.state_name}`,
       caseBackground: randomCaseBackground(caseType.name),
     };
-    const { status, json } = await postJson('/api/data-intake/register-victim', token, body);
+    const { status, json } = await postJson('/api/data-intake/register-user', token, body);
     if (status === 201 && json.success) {
       created++;
-      victimRecords.push({
-        victimId: json.data.victimId, docketNumber, fullName, district: district.district_name, state: district.state_name,
+      userRecords.push({
+        userId: json.data.userId, docketNumber, fullName, district: district.district_name, state: district.state_name,
         districtId: district.district_id, caseStage, wantsManual, hasCounsellorInDistrict: counsellorByDistrict.has(district.district_id),
       });
     } else {
-      console.error('victim create failed', status, json.message, docketNumber);
+      console.error('user create failed', status, json.message, docketNumber);
     }
   }, 12);
-  console.log(`Victims created: ${created}/${TOTAL_VICTIMS}`);
+  console.log(`Users created: ${created}/${TOTAL_USERS}`);
 
-  // ---- 5. For victims wanting manual counsellor, opt in via their own victim JWT (real assignment path) ----
-  const manualCandidates = victimRecords.filter((v) => v.wantsManual);
-  console.log(`Opting in ${manualCandidates.length} victims for manual counsellor assignment...`);
+  // ---- 5. For users wanting manual counsellor, opt in via their own user JWT (real assignment path) ----
+  const manualCandidates = userRecords.filter((v) => v.wantsManual);
+  console.log(`Opting in ${manualCandidates.length} users for manual counsellor assignment...`);
   let assignedCount = 0;
   let noneAvailableCount = 0;
   await runPool(manualCandidates, async (v) => {
-    const victimToken = signToken({ type: 'victim', victimId: v.victimId });
-    const { status, json } = await postJson('/api/victim/counsellor-preference', victimToken, { optedIn: true });
+    const userToken = signToken({ type: 'user', userId: v.userId });
+    const { status, json } = await postJson('/api/user/counsellor-preference', userToken, { optedIn: true });
     if (status === 200 && json.success) {
       assignedCount++;
     } else {
@@ -220,12 +220,12 @@ async function main() {
 
   fs.writeFileSync('seed_summary.json', JSON.stringify({
     counsellors: counsellorRecords.length,
-    victims: victimRecords.length,
+    users: userRecords.length,
     manualOptIns: manualCandidates.length,
     manualAssigned: assignedCount,
     manualNoneAvailable: noneAvailableCount,
     seedRunId,
-    sampleVictimDistrictIds: [...new Set(victimRecords.map(v => v.districtId))].slice(0, 5),
+    sampleUserDistrictIds: [...new Set(userRecords.map(v => v.districtId))].slice(0, 5),
     counsellorRecords: counsellorRecords.map(c => ({ officialId: c.officialId, districtId: c.districtId, district: c.district, state: c.state })),
   }, null, 2));
   console.log('Wrote seed_summary.json');
