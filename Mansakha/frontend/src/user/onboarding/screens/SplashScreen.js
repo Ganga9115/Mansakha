@@ -51,6 +51,8 @@ export default function SplashScreen({ onFinish }) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.bgBlob1} />
+      <View style={styles.bgBlob2} />
       {!imageError ? (
         <Animated.View
           style={[
@@ -99,6 +101,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F9FF', // Soft Sky Blue
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  bgBlob1: {
+    position: 'absolute', top: -150, right: -100, width: 450, height: 450,
+    borderRadius: 225, backgroundColor: '#BAE6FD', opacity: 0.6,
+  },
+  bgBlob2: {
+    position: 'absolute', bottom: -100, left: -150, width: 350, height: 350,
+    borderRadius: 175, backgroundColor: '#7DD3FC', opacity: 0.4,
   },
   logoContainer: {
     justifyContent: 'center',
