@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { useCounsellorAlerts } from '../services/hooks';
+import { useToast } from '../../shared/context/ToastContext';
+import { useCounsellorAlerts, useResolveSosEvent, useResolveAlert, useAcknowledgeSosEvent, useAcknowledgeAlert } from '../services/hooks';
 
 const STATUS_STYLE = {
   Open: 'bg-rose-100 text-rose-700',
@@ -21,8 +22,41 @@ function timeAgo(iso) {
 
 export default function AlertsFeed() {
   const [filter, setFilter] = useState('All');
-  const { data, loading, error } = useCounsellorAlerts();
+  const { data, loading, error, refetch } = useCounsellorAlerts();
   const navigate = useNavigate();
+  const toast = useToast();
+  const resolveSos = useResolveSosEvent();
+  const resolveAlert = useResolveAlert();
+  const acknowledgeSos = useAcknowledgeSosEvent();
+  const acknowledgeAlert = useAcknowledgeAlert();
+
+  const handleResolve = async (item) => {
+    try {
+      if (item.source === 'sos') {
+        await resolveSos.mutate(item.alertId);
+      } else {
+        await resolveAlert.mutate(item.alertId);
+      }
+      toast.success('Marked as resolved.');
+      refetch();
+    } catch (err) {
+      toast.error(err.message || 'Could not resolve this alert.');
+    }
+  };
+
+  const handleAcknowledge = async (item) => {
+    try {
+      if (item.source === 'sos') {
+        await acknowledgeSos.mutate(item.alertId);
+      } else {
+        await acknowledgeAlert.mutate(item.alertId);
+      }
+      toast.success('Marked as acknowledged.');
+      refetch();
+    } catch (err) {
+      toast.error(err.message || 'Could not acknowledge this alert.');
+    }
+  };
 
   const allAlerts = data?.alerts || [];
   const counts = {
@@ -86,6 +120,24 @@ export default function AlertsFeed() {
                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${STATUS_STYLE[item.status] || 'bg-gray-100 text-gray-600'}`}>
                   {item.status}
                 </span>
+                {item.status === 'Open' && (
+                  <button
+                    onClick={() => handleAcknowledge(item)}
+                    disabled={acknowledgeSos.loading || acknowledgeAlert.loading}
+                    className="px-3 py-1.5 border border-amber-500 text-amber-600 hover:bg-amber-50 rounded-lg text-xs font-medium transition disabled:opacity-60"
+                  >
+                    Acknowledge
+                  </button>
+                )}
+                {item.status !== 'Resolved' && (
+                  <button
+                    onClick={() => handleResolve(item)}
+                    disabled={resolveSos.loading || resolveAlert.loading}
+                    className="px-3 py-1.5 border border-emerald-500 text-emerald-600 hover:bg-emerald-50 rounded-lg text-xs font-medium transition disabled:opacity-60"
+                  >
+                    Mark Resolved
+                  </button>
+                )}
                 <button
                   onClick={() => navigate(`/counsellor/case-detail/${item.userId}`)}
                   className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE]/10 rounded-lg text-xs font-medium transition"

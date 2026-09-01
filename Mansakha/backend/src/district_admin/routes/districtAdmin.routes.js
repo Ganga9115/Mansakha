@@ -10,6 +10,7 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { createUser, updateUser, ProvisioningError } = require('../../user/services/userProvisioning');
 const { generateJurisdictionAnalytics } = require('../../ai/gemini');
+const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
 
 const router = express.Router();
 
@@ -173,6 +174,81 @@ async function countUsersByRisk(jurisdictionIds) {
   }
   return { counts, caseRows };
 }
+
+// Reports page's 3 charts (trend line, severity-distribution stacked bars,
+// intervention-phase donut) - previously all hardcoded/static markup in
+// Reports.jsx regardless of tier, with a time-range filter that only
+// changed which button looked selected. This is the real data those charts
+// should read from, scoped to jurisdictionId's own subtree (a district's
+// own cases; a state's or nation's descendant districts' cases) exactly
+// like /dashboard/:jurisdictionId above.
+router.get(
+  '/reports-analytics/:jurisdictionId',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.params.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId } = req.params;
+    const { since, until, buckets } = resolveDateWindow(req.query);
+    const jurisdictionIds = await getDescendantJurisdictionIds(jurisdictionId);
+
+    const [{ rows: scoreRows }, { rows: interventionRows }] = await Promise.all([
+      pool.query(
+        `select ds.computed_at, ds.score_value, rl.name as risk_level_name
+         from distress_scores ds
+         join users u on u.user_id = ds.user_id
+         join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+         where u.jurisdiction_id = any($1::uuid[]) and ds.computed_at >= $2 and ds.computed_at <= $3`,
+        [jurisdictionIds, since.toISOString(), until.toISOString()]
+      ),
+      // "In Progress" vs "Planned/Referred" isn't a stored status - the
+      // schema only has recommended_at/completed_at - so an intervention
+      // counts as in-progress once its assigned official has actually
+      // logged a case note on that user, and planned/referred until then.
+      pool.query(
+        `select i.completed_at,
+                exists(
+                  select 1 from case_notes cn
+                  where cn.user_id = i.user_id and cn.official_id = i.assigned_official_id
+                    and cn.created_at > i.recommended_at
+                ) as has_notes
+         from interventions i
+         join users u on u.user_id = i.user_id
+         where u.jurisdiction_id = any($1::uuid[]) and i.recommended_at >= $2 and i.recommended_at <= $3`,
+        [jurisdictionIds, since.toISOString(), until.toISOString()]
+      ),
+    ]);
+
+    const scoreBuckets = bucketize(scoreRows, buckets, 'computed_at');
+    const trend = buckets.map((b, i) => {
+      const rowsInBucket = scoreBuckets[i];
+      const avg = rowsInBucket.length
+        ? rowsInBucket.reduce((sum, r) => sum + Number(r.score_value), 0) / rowsInBucket.length
+        : null;
+      return { label: b.label, avgScore: avg !== null ? Math.round(avg * 10) / 10 : null };
+    });
+    const severityDistribution = buckets.map((b, i) => {
+      const rowsInBucket = scoreBuckets[i];
+      return {
+        label: b.label,
+        critical: rowsInBucket.filter((r) => r.risk_level_name === 'Critical').length,
+        high: rowsInBucket.filter((r) => r.risk_level_name === 'High').length,
+        moderate: rowsInBucket.filter((r) => r.risk_level_name === 'Moderate').length,
+        low: rowsInBucket.filter((r) => r.risk_level_name === 'Low').length,
+      };
+    });
+
+    const interventionPhases = { completed: 0, inProgress: 0, planned: 0 };
+    for (const i of interventionRows) {
+      if (i.completed_at) interventionPhases.completed += 1;
+      else if (i.has_notes) interventionPhases.inProgress += 1;
+      else interventionPhases.planned += 1;
+    }
+
+    return ok(res, { trend, severityDistribution, interventionPhases });
+  }
+);
 
 // Both routes below are protected by requireJurisdiction(req => req.params.jurisdictionId)
 // - this is what actually enforces that a District Admin can't edit the URL to view

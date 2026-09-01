@@ -22,6 +22,7 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
   const location = useLocation();
   const { data: me } = useMe();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const profilePath = '/stateadmin/profile';
   const activeNavItem = NAV_ITEMS
     .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
@@ -80,16 +81,6 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
             );
           })}
         </nav>
-
-        <div className="px-6 pb-4 pt-2 mt-auto border-t border-blue-400/30 shrink-0">
-          <button
-            onClick={() => { logout(); navigate('/login'); }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg font-medium text-blue-100 hover:bg-white/10 transition text-sm"
-          >
-            <LogOut size={18} />
-            <span>Log Out</span>
-          </button>
-        </div>
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -130,6 +121,18 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
                 <p className="text-[#3D5A80]/70">State Administration</p>
               </div>
             </button>
+
+            {/* Log Out - relocated here from the sidebar bottom per product
+                request: top-right, icon-only, red/destructive, and gated
+                behind a confirm dialog instead of logging out immediately. */}
+            <button
+              onClick={() => setShowLogoutConfirm(true)}
+              className="p-2 rounded-full text-rose-600 hover:bg-rose-50 transition shrink-0"
+              aria-label="Log Out"
+              title="Log Out"
+            >
+              <LogOut size={20} />
+            </button>
           </div>
         </header>
 
@@ -137,6 +140,31 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
           {children}
         </main>
       </div>
+
+      {/* Log Out confirm dialog - plain Tailwind overlay, no UI library
+          needed for a two-button confirm. */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Log out?</h3>
+            <p className="text-sm text-gray-500 mb-6">Are you sure you want to log out of your account?</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { logout(); navigate('/login'); }}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 transition"
+              >
+                Log Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

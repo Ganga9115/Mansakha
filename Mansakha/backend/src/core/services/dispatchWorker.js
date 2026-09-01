@@ -27,6 +27,11 @@ const { generateProactiveContactMessage } = require('../../ai/gemini');
 const MAX_ATTEMPTS = 5;
 const CHECKIN_DUE_DAYS = 7; // matches NEXT_CHECKIN_CADENCE_DAYS in user/routes/user.routes.js
 const RETRY_BACKOFF_MS = 5 * 60 * 1000;
+// Feature improvement point 2: same 7-day window as CHECKIN_DUE_DAYS above,
+// but where that only pings the USER with a reminder, this actually gets a
+// human counsellor involved.
+const DISENGAGEMENT_THRESHOLD_DAYS = 7;
+const IVRS_SHORT_CALL_SECONDS = 5;
 
 async function sendExpoPush(token, title, body) {
   const res = await fetch('https://exp.host/--/api/v2/push/send', {
@@ -77,6 +82,86 @@ async function scanCheckinsDue() {
     if (existing) continue; // already queued
 
     await supabase.from('dispatch_queue').insert({ kind: 'checkin_due', user_id: user.user_id });
+  }
+}
+
+// Feature improvement point 2 - "if the user stops interacting with the
+// system, human intervention is triggered": auto-assigns a counsellor (if
+// this user doesn't already have one) and notifies them so they can reach
+// out directly, rather than just nudging the user again. Shared by the
+// 7-day-inactivity scan below AND the IVRS call-result webhook
+// (user/routes/user.routes.js) for the "unanswered" / "hung up within 5s"
+// cases - both are the same underlying signal: the app isn't reaching this
+// person, so a human needs to.
+//
+// Idempotent per DISENGAGEMENT_THRESHOLD_DAYS window via alert_notifications
+// itself (no separate tracking table) - if a disengagement notice already
+// fired for this user within the window, this is a no-op, so re-running the
+// scan every tick (or a second short IVRS call on the same bad day) doesn't
+// spam the counsellor.
+async function notifyDisengagement(userId, jurisdictionId) {
+  const cutoff = new Date(Date.now() - DISENGAGEMENT_THRESHOLD_DAYS * 86400000).toISOString();
+
+  const { data: recentNotice } = await supabase
+    .from('alert_notifications')
+    .select('alert_notification_id')
+    .eq('user_id', userId)
+    .eq('source', 'disengagement')
+    .gt('notified_at', cutoff)
+    .maybeSingle();
+  if (recentNotice) return { notified: false, reason: 'already notified this window' };
+
+  const { data: userRow } = await supabase.from('users').select('assigned_counsellor_id').eq('user_id', userId).maybeSingle();
+  let counsellorId = userRow?.assigned_counsellor_id;
+  let autoAssigned = false;
+
+  if (!counsellorId) {
+    // Lazy require - avoids a circular dependency at module-load time.
+    // stressResponse.js itself requires this file for enqueueAlertDispatch,
+    // so requiring it back at the top of this file would hand
+    // stressResponse.js a half-initialized module during server startup.
+    // eslint-disable-next-line global-require
+    const { selectLeastLoadedCounsellor } = require('./stressResponse');
+    counsellorId = await selectLeastLoadedCounsellor(jurisdictionId);
+    if (!counsellorId) return { notified: false, reason: 'no counsellor available' };
+    await supabase.from('users').update({ assigned_counsellor_id: counsellorId }).eq('user_id', userId);
+    autoAssigned = true;
+  }
+
+  const { error } = await supabase.from('alert_notifications').insert({
+    user_id: userId,
+    official_id: counsellorId,
+    source: 'disengagement',
+    priority: 'normal',
+    auto_assigned: autoAssigned,
+  });
+  if (error) throw new Error(`Could not notify counsellor of disengagement: ${error.message}`);
+
+  return { notified: true, counsellorId, autoAssigned };
+}
+
+// Same 7-day cutoff as scanCheckinsDue - deliberately a separate scan
+// (rather than folded into that one) since a user who's overdue always gets
+// the push reminder above regardless of counsellor-notification state, and
+// the two have different idempotency mechanisms (dispatch_queue's
+// delivered_at vs. alert_notifications' own notified_at window).
+async function scanDisengagedUsers() {
+  const cutoff = new Date(Date.now() - DISENGAGEMENT_THRESHOLD_DAYS * 86400000).toISOString();
+
+  const { data: users, error } = await supabase.from('users').select('user_id, jurisdiction_id').eq('status', 'active');
+  if (error) throw new Error(`Could not scan for disengaged users: ${error.message}`);
+
+  for (const user of users || []) {
+    const { data: lastInteraction } = await supabase
+      .from('interactions')
+      .select('occurred_at')
+      .eq('user_id', user.user_id)
+      .order('occurred_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (lastInteraction && lastInteraction.occurred_at > cutoff) continue; // still active
+
+    await notifyDisengagement(user.user_id, user.jurisdiction_id);
   }
 }
 
@@ -233,6 +318,7 @@ function startDispatchWorker(intervalMs = 60000) {
   const tick = async () => {
     try {
       await scanCheckinsDue();
+      await scanDisengagedUsers();
       await drainDispatchQueue();
     } catch (err) {
       console.error('Dispatch worker tick failed:', err.message);
@@ -242,4 +328,12 @@ function startDispatchWorker(intervalMs = 60000) {
   return setInterval(tick, intervalMs);
 }
 
-module.exports = { enqueueAlertDispatch, scanCheckinsDue, drainDispatchQueue, startDispatchWorker, sendExpoPush };
+module.exports = {
+  enqueueAlertDispatch,
+  scanCheckinsDue,
+  scanDisengagedUsers,
+  notifyDisengagement,
+  drainDispatchQueue,
+  startDispatchWorker,
+  sendExpoPush,
+};

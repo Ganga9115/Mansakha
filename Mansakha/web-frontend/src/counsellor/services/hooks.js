@@ -43,6 +43,25 @@ export function useCounsellorDashboard() {
   return useQuery(() => apiClient.get('/api/counsellor/dashboard', token), [token]);
 }
 
+// Reports page's 3 charts (trend line, severity-distribution stacked bars,
+// intervention-phase donut). `range` is one of '7d'|'30d'|'90d'|'custom';
+// `start`/`end` (YYYY-MM-DD) are only used/required when range is 'custom' -
+// until both are filled with a valid (end >= start) order, this resolves to
+// null without hitting the network, so Reports.jsx can render a "pick a
+// date range" prompt instead of firing a doomed/partial request.
+export function useReportsAnalytics(range, start, end) {
+  const token = getToken();
+  return useQuery(() => {
+    if (range === 'custom' && !(start && end && end >= start)) return Promise.resolve(null);
+    const q = new URLSearchParams({ range });
+    if (range === 'custom') {
+      q.set('start', start);
+      q.set('end', end);
+    }
+    return apiClient.get(`/api/counsellor/reports-analytics?${q.toString()}`, token);
+  }, [token, range, start, end]);
+}
+
 export function useCounsellorCases(riskLevel, page = 1) {
   const token = getToken();
   return useQuery(
@@ -92,6 +111,69 @@ export function useCounsellorAlerts(enabled = true) {
   const token = getToken();
   const query = useQuery(() => (enabled ? apiClient.get('/api/counsellor/alerts', token) : Promise.resolve(null)), [token, enabled]);
   return query;
+}
+
+// Neither of these existed before - every alert (SOS or distress-score) had
+// no way to ever leave "Open" except an SOS-adjacent intervention log
+// incidentally moving it to "Acknowledged". `item.alertId` is actually a
+// sos_event_id when item.source === 'sos', an alert_id otherwise (see the
+// backend GET /alerts mapping) - route to the matching endpoint accordingly.
+export function useResolveSosEvent() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (sosEventId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/counsellor/sos/${sosEventId}/resolve`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useResolveAlert() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (alertId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/counsellor/alerts/${alertId}/resolve`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// The "seen it, on it" middle state - same alertId-is-actually-a-sos_event_id
+// caveat as useResolveSosEvent/useResolveAlert above.
+export function useAcknowledgeSosEvent() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (sosEventId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/counsellor/sos/${sosEventId}/acknowledge`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useAcknowledgeAlert() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (alertId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/counsellor/alerts/${alertId}/acknowledge`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
 }
 
 export function useScheduledSessions() {
@@ -170,6 +252,25 @@ export function useAddCaseNote(userId) {
     setLoading(true);
     try {
       return await apiClient.post(`/api/counsellor/cases/${userId}/notes`, { noteText }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Was never called from anywhere in this app - useInterventionTypes()/
+// useCompleteIntervention() below both existed, but no UI ever created the
+// intervention those act on, so "Intervention Phase Breakdown" was always
+// empty and alerts never left "Open" (only this route's success path
+// acknowledges the case's open alert - see backend counsellor.routes.js).
+export function useLogIntervention(userId) {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async ({ interventionTypeId, notes }) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/counsellor/cases/${userId}/intervention`, { interventionTypeId, notes }, token);
     } finally {
       setLoading(false);
     }

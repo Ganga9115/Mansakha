@@ -1,14 +1,42 @@
 import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
-import { useCounsellorDashboard } from '../services/hooks';
+import { useCounsellorDashboard, useReportsAnalytics } from '../services/hooks';
 
 // Counsellor's own copy of the shared Analytics & Reports page - simplified
 // to just Counsellor's own dashboard data (no admin/jurisdiction branching,
 // since this file only ever serves Counsellor now). No CSV export here -
 // that's an Administration-only action (GET /api/admin/.../export).
+
+const RANGE_MAP = {
+  'Last 7 Days': '7d',
+  'Last 30 Days': '30d',
+  'Last 90 Days': '90d',
+  'Custom Range': 'custom',
+};
+
 export default function Reports() {
   const [timeRange, setTimeRange] = useState('Last 30 Days');
+  const [customStart, setCustomStart] = useState('');
+  const [customEnd, setCustomEnd] = useState('');
+
   const { data: counsellorData } = useCounsellorDashboard();
+
+  const range = RANGE_MAP[timeRange];
+  const isCustom = range === 'custom';
+  const customBothFilled = Boolean(customStart && customEnd);
+  const customRangeInvalid = customBothFilled && customEnd < customStart;
+  const customReady = customBothFilled && !customRangeInvalid;
+  const chartsPending = isCustom && !customReady;
+
+  const {
+    data: analyticsData,
+    loading: analyticsLoading,
+    error: analyticsError,
+  } = useReportsAnalytics(range, customStart, customEnd);
+
+  const trend = analyticsData?.trend || [];
+  const severityDistribution = analyticsData?.severityDistribution || [];
+  const interventionPhases = analyticsData?.interventionPhases || { completed: 0, inProgress: 0, planned: 0 };
 
   const total = counsellorData?.total || 0;
   const high = counsellorData?.high || 0;
@@ -20,22 +48,50 @@ export default function Reports() {
       <div className="space-y-6">
 
         {/* TOP CONTROLS & DATE FILTER */}
-        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            {['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Custom Range'].map((range) => (
+            {['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Custom Range'].map((r) => (
               <button
-                key={range}
-                onClick={() => setTimeRange(range)}
+                key={r}
+                onClick={() => setTimeRange(r)}
                 className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
-                  timeRange === range
+                  timeRange === r
                     ? 'bg-[#519BCE]/15 text-[#519BCE]'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                {range}
+                {r}
               </button>
             ))}
           </div>
+
+          {isCustom && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5 text-gray-600 font-semibold">
+                From
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-gray-600 font-semibold">
+                To
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700"
+                />
+              </label>
+              {customRangeInvalid && (
+                <span className="text-rose-600 font-semibold">End date can't be before start date.</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* TOP ROW: 2 CHARTS */}
@@ -44,27 +100,17 @@ export default function Reports() {
           {/* Average Distress Severity Trends */}
           <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
             <h3 className="font-bold text-sm text-gray-800">
-              Average Distress Severity Trends (6 Months)
+              Average Distress Severity Trends
             </h3>
 
-            <div className="h-44 relative flex flex-col justify-between pt-4">
-              <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
-                <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
-                <path
-                  d="M 0 50 L 125 50 L 250 50 L 340 50 L 450 50"
-                  fill="none"
-                  stroke="#DC2626"
-                  strokeWidth="2.5"
-                />
-              </svg>
-              <div className="flex justify-between text-xs font-semibold text-gray-400 px-2 pt-2 border-t border-gray-100">
-                <span>May</span>
-                <span>Jun</span>
-                <span>Jul</span>
-                <span>Aug</span>
-                <span>Sep</span>
-              </div>
-            </div>
+            <ChartStatus
+              pending={chartsPending}
+              invalid={customRangeInvalid}
+              loading={analyticsLoading}
+              error={analyticsError}
+            >
+              <TrendChart trend={trend} />
+            </ChartStatus>
           </div>
 
           {/* Severity Distribution Stacked Matrix */}
@@ -73,40 +119,14 @@ export default function Reports() {
               Severity Distribution Stacked Matrix
             </h3>
 
-            <div className="h-44 flex flex-col justify-between">
-              <div className="h-32 flex items-end justify-between px-6 pt-2">
-                {['May', 'Jun', 'Jul', 'Aug', 'Sep'].map((month) => (
-                  <div key={month} className="flex flex-col items-center gap-2 w-8">
-                    <div className="w-4 h-28 flex flex-col justify-end gap-1 rounded overflow-hidden">
-                      <div className="bg-red-600 w-full rounded-sm" style={{ height: '0%' }}></div>
-                      <div className="bg-amber-500 w-full rounded-sm" style={{ height: '0%' }}></div>
-                      <div className="bg-emerald-600 w-full rounded-sm" style={{ height: '0%' }}></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex justify-between text-xs font-semibold text-gray-400 px-6 pt-2 border-t border-gray-100">
-                <span>May</span>
-                <span>Jun</span>
-                <span>Jul</span>
-                <span>Aug</span>
-                <span>Sep</span>
-              </div>
-            </div>
-
-            {/* Legend */}
-            <div className="flex items-center gap-4 text-[11px] font-semibold text-gray-600 pt-1">
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-red-600"></span> High
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-amber-500"></span> Moderate
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-600"></span> Low
-              </span>
-            </div>
+            <ChartStatus
+              pending={chartsPending}
+              invalid={customRangeInvalid}
+              loading={analyticsLoading}
+              error={analyticsError}
+            >
+              <SeverityStackedChart severityDistribution={severityDistribution} />
+            </ChartStatus>
           </div>
 
         </div>
@@ -120,69 +140,14 @@ export default function Reports() {
               Intervention Phase Breakdown
             </h3>
 
-            <div className="flex flex-col sm:flex-row items-center justify-around py-4">
-              {/* SVG Donut */}
-              <div className="relative w-40 h-40">
-                <svg className="w-full h-full -rotate-90 drop-shadow-sm" viewBox="0 0 36 36">
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="#F3F4F6"
-                    strokeWidth="4"
-                  />
-                  {/* Completed */}
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="#10B981"
-                    strokeWidth="4"
-                    strokeDasharray="0, 100"
-                    className="transition-all duration-1000 ease-out"
-                  />
-                  {/* In Progress */}
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="#3B82F6"
-                    strokeWidth="4"
-                    strokeDasharray="0, 100"
-                    strokeDashoffset="-40"
-                    className="transition-all duration-1000 ease-out delay-150"
-                  />
-                  {/* Planned */}
-                  <path
-                    d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    fill="none"
-                    stroke="#F59E0B"
-                    strokeWidth="4"
-                    strokeDasharray="0, 100"
-                    strokeDashoffset="-75"
-                    className="transition-all duration-1000 ease-out delay-300"
-                  />
-                </svg>
-                {/* Center text */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span className="text-xl font-extrabold text-gray-800">0%</span>
-                  <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Total</span>
-                </div>
-              </div>
-
-              {/* Legend List */}
-              <div className="space-y-4 mt-6 sm:mt-0 text-sm font-semibold text-gray-700">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm ring-2 ring-emerald-100"></div>
-                  <span>Completed Actions <span className="text-gray-400 ml-2">0%</span></span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-100"></div>
-                  <span>In Progress Queue <span className="text-gray-400 ml-2">0%</span></span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm ring-2 ring-amber-100"></div>
-                  <span>Planned / Referred <span className="text-gray-400 ml-2">0%</span></span>
-                </div>
-              </div>
-            </div>
+            <ChartStatus
+              pending={chartsPending}
+              invalid={customRangeInvalid}
+              loading={analyticsLoading}
+              error={analyticsError}
+            >
+              <InterventionDonut interventionPhases={interventionPhases} />
+            </ChartStatus>
           </div>
         </div>
 
@@ -191,7 +156,7 @@ export default function Reports() {
           <StatCard
             title="TOTAL CASELOAD"
             value={total}
-            subtitle="Across all layers"
+            subtitle="Assigned to you"
             accent="blue"
           />
           <StatCard
@@ -203,19 +168,218 @@ export default function Reports() {
           <StatCard
             title="HIGH-RISK CASES"
             value={high}
-            subtitle="Active intervention"
+            subtitle="High risk level"
             accent="rose"
           />
           <StatCard
-            title="CRITICAL / SOS"
+            title="CRITICAL CASES"
             value={critical}
-            subtitle="Emergency response"
+            subtitle="Immediate attention"
             accent="purple"
           />
         </div>
 
       </div>
     </StaffLayout>
+  );
+}
+
+// --- Shared chart building blocks (kept local to this file, per the
+// no-shared-imports rule other pages/services in this role folder follow) ---
+
+function ChartStatus({ pending, invalid, loading, error, children }) {
+  if (pending) {
+    return (
+      <div className="h-44 flex items-center justify-center text-center text-xs text-gray-400 px-6">
+        {invalid ? 'Fix the date range above to load this chart.' : 'Select a start and end date above to load this chart.'}
+      </div>
+    );
+  }
+  if (loading) {
+    return (
+      <div className="h-44 flex items-center justify-center text-xs text-gray-400">
+        Loading...
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="h-44 flex items-center justify-center text-center text-xs text-rose-600 px-6">
+        {error}
+      </div>
+    );
+  }
+  return children;
+}
+
+function TrendChart({ trend }) {
+  const points = trend.map((t, i) => {
+    const x = trend.length > 1 ? (i / (trend.length - 1)) * 500 : 250;
+    const y = t.avgScore === null || t.avgScore === undefined
+      ? null
+      : 90 - (Math.max(0, Math.min(100, t.avgScore)) / 100) * 80;
+    return { x, y, label: t.label };
+  });
+
+  const path = buildGappedPath(points);
+
+  return (
+    <div className="h-44 relative flex flex-col justify-between pt-4">
+      <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
+        <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
+        {path && <path d={path} fill="none" stroke="#DC2626" strokeWidth="2.5" />}
+        {points.map((p, i) => p.y !== null && (
+          <circle key={i} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
+        ))}
+      </svg>
+      <div
+        className="grid text-[8px] font-semibold text-gray-400 px-2 pt-2 border-t border-gray-100"
+        style={{ gridTemplateColumns: `repeat(${Math.max(trend.length, 1)}, minmax(0, 1fr))` }}
+      >
+        {trend.map((t, i) => <span key={i} className="text-center whitespace-nowrap">{t.label}</span>)}
+      </div>
+    </div>
+  );
+}
+
+function buildGappedPath(points) {
+  const segments = [];
+  let current = [];
+  points.forEach((p) => {
+    if (p.y === null) {
+      if (current.length) { segments.push(current); current = []; }
+      return;
+    }
+    current.push(`${current.length === 0 ? 'M' : 'L'} ${p.x} ${p.y}`);
+  });
+  if (current.length) segments.push(current);
+  return segments.map((seg) => seg.join(' ')).join(' ');
+}
+
+function SeverityStackedChart({ severityDistribution }) {
+  const maxTotal = Math.max(1, ...severityDistribution.map((b) => b.critical + b.high + b.moderate + b.low));
+
+  return (
+    <div className="h-44 flex flex-col justify-between">
+      <div className="h-32 flex items-end justify-between px-6 pt-2">
+        {severityDistribution.map((item, i) => (
+          <div key={i} className="flex flex-col items-center gap-2 w-8">
+            <div className="w-4 h-28 flex flex-col justify-end gap-1 rounded overflow-hidden">
+              <div className="bg-purple-700 w-full rounded-sm" style={{ height: `${(item.critical / maxTotal) * 100}%` }}></div>
+              <div className="bg-red-600 w-full rounded-sm" style={{ height: `${(item.high / maxTotal) * 100}%` }}></div>
+              <div className="bg-amber-500 w-full rounded-sm" style={{ height: `${(item.moderate / maxTotal) * 100}%` }}></div>
+              <div className="bg-emerald-600 w-full rounded-sm" style={{ height: `${(item.low / maxTotal) * 100}%` }}></div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div
+        className="grid text-[8px] font-semibold text-gray-400 px-2 pt-2 border-t border-gray-100"
+        style={{ gridTemplateColumns: `repeat(${Math.max(severityDistribution.length, 1)}, minmax(0, 1fr))` }}
+      >
+        {severityDistribution.map((item, i) => <span key={i} className="text-center whitespace-nowrap">{item.label}</span>)}
+      </div>
+
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-[11px] font-semibold text-gray-600 pt-1">
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-purple-700"></span> Critical
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-red-600"></span> High
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-amber-500"></span> Moderate
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-emerald-600"></span> Low
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function InterventionDonut({ interventionPhases }) {
+  const { completed = 0, inProgress = 0, planned = 0 } = interventionPhases || {};
+  const donutTotal = completed + inProgress + planned;
+
+  if (donutTotal === 0) {
+    return (
+      <div className="py-10 text-center text-sm text-gray-400">
+        No interventions in this period.
+      </div>
+    );
+  }
+
+  const completedPct = (completed / donutTotal) * 100;
+  const inProgressPct = (inProgress / donutTotal) * 100;
+  const plannedPct = (planned / donutTotal) * 100;
+
+  return (
+    <div className="flex flex-col sm:flex-row items-center justify-around py-4">
+      {/* SVG Donut */}
+      <div className="relative w-40 h-40">
+        <svg className="w-full h-full -rotate-90 drop-shadow-sm" viewBox="0 0 36 36">
+          <path
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="#F3F4F6"
+            strokeWidth="4"
+          />
+          {/* Completed */}
+          <path
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="#10B981"
+            strokeWidth="4"
+            strokeDasharray={`${completedPct}, 100`}
+            className="transition-all duration-1000 ease-out"
+          />
+          {/* In Progress */}
+          <path
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="#3B82F6"
+            strokeWidth="4"
+            strokeDasharray={`${inProgressPct}, 100`}
+            strokeDashoffset={`${-completedPct}`}
+            className="transition-all duration-1000 ease-out delay-150"
+          />
+          {/* Planned */}
+          <path
+            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+            fill="none"
+            stroke="#F59E0B"
+            strokeWidth="4"
+            strokeDasharray={`${plannedPct}, 100`}
+            strokeDashoffset={`${-(completedPct + inProgressPct)}`}
+            className="transition-all duration-1000 ease-out delay-300"
+          />
+        </svg>
+        {/* Center text */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xl font-extrabold text-gray-800">{Math.round(completedPct)}%</span>
+          <span className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">Completed</span>
+        </div>
+      </div>
+
+      {/* Legend List */}
+      <div className="space-y-4 mt-6 sm:mt-0 text-sm font-semibold text-gray-700">
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm ring-2 ring-emerald-100"></div>
+          <span>Completed Actions <span className="text-gray-400 ml-2">{Math.round(completedPct)}%</span></span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-100"></div>
+          <span>In Progress Queue <span className="text-gray-400 ml-2">{Math.round(inProgressPct)}%</span></span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-3 h-3 rounded-full bg-amber-500 shadow-sm ring-2 ring-amber-100"></div>
+          <span>Planned / Referred <span className="text-gray-400 ml-2">{Math.round(plannedPct)}%</span></span>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -100,7 +100,122 @@ Respond STRICTLY in the following JSON format:
   }
 }
 
+/**
+ * Feature improvement point 1: score a chunk of AI-chat conversation once it
+ * crosses the 5,000-word threshold (see POST /api/user/chat/log). Same
+ * prompt/response shape as predictDistressScore's 0-100 scale, just fed a
+ * running chat transcript instead of a fixed 15-question interview.
+ * @param {Array<{sender: 'user'|'ai', body: string}>} messages
+ * @returns {Promise<{score: number, summary: string}>}
+ */
+async function analyzeChatTranscript(messages) {
+  const transcript = messages.map((m) => `${m.sender === 'user' ? 'Person' : 'Mansakha'}: ${m.body}`).join('\n');
+  const promptText = `You are an expert psychological AI analyzing an ongoing chat conversation between a supportive assistant ("Mansakha") and a user who is a victim of a crime.
+Here is the conversation so far:
+${transcript}
+
+Task 1: Analyze the person's (not Mansakha's) distress level based on their messages. Return a distress score between 0 and 100, where:
+0-29: Low distress, feeling safe and coping well.
+30-54: Moderate distress, some anxiety but manageable.
+55-79: High distress, feeling overwhelmed, unsafe, or struggling.
+80-100: Critical distress, immediate risk of harm, severe trauma symptoms.
+
+Task 2: Provide a brief clinical summary (2-3 sentences) of their current state for a counsellor.
+
+Respond STRICTLY in the following JSON format:
+{
+  "score": <number>,
+  "summary": "<string>"
+}`;
+
+  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      prompt: promptText,
+      stream: false,
+      format: 'json',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  try {
+    const parsed = JSON.parse(data.response);
+    return {
+      score: typeof parsed.score === 'number' ? parsed.score : parseInt(parsed.score, 10),
+      summary: parsed.summary || 'No summary provided.',
+    };
+  } catch (err) {
+    console.error('Failed to parse Ollama chat-analysis JSON:', data.response);
+    return { score: 50, summary: 'Could not parse AI summary.' };
+  }
+}
+
+/**
+ * Feature improvement point 2: analyze a real IVRS call transcript, once the
+ * (separately-integrated) IVRS provider delivers one via
+ * POST /api/user/:userId/ivrs-call-result. Same 0-100/summary contract as
+ * the other two analyzers here, just fed a raw call transcript.
+ * @param {string} transcriptText
+ * @returns {Promise<{score: number, summary: string}>}
+ */
+async function analyzeCallTranscript(transcriptText) {
+  const promptText = `You are an expert psychological AI analyzing the transcript of a phone call (IVRS) with a user who is a victim of a crime.
+Here is the call transcript:
+${transcriptText}
+
+Task 1: Analyze the caller's distress level based on what they said. Return a distress score between 0 and 100, where:
+0-29: Low distress, feeling safe and coping well.
+30-54: Moderate distress, some anxiety but manageable.
+55-79: High distress, feeling overwhelmed, unsafe, or struggling.
+80-100: Critical distress, immediate risk of harm, severe trauma symptoms.
+
+Task 2: Provide a brief clinical summary (2-3 sentences) of their current state for a counsellor.
+
+Respond STRICTLY in the following JSON format:
+{
+  "score": <number>,
+  "summary": "<string>"
+}`;
+
+  const response = await fetch(`${OLLAMA_BASE_URL}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      prompt: promptText,
+      stream: false,
+      format: 'json',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  try {
+    const parsed = JSON.parse(data.response);
+    return {
+      score: typeof parsed.score === 'number' ? parsed.score : parseInt(parsed.score, 10),
+      summary: parsed.summary || 'No summary provided.',
+    };
+  } catch (err) {
+    console.error('Failed to parse Ollama call-analysis JSON:', data.response);
+    return { score: 50, summary: 'Could not parse AI summary.' };
+  }
+}
+
 module.exports = {
   generateNextQuestion,
-  predictDistressScore
+  predictDistressScore,
+  analyzeChatTranscript,
+  analyzeCallTranscript,
 };

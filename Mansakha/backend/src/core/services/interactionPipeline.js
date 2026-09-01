@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { supabase } = require('../db/supabaseClient');
+const { classifyRiskLevel } = require('../../ai/scoring');
 
 class PipelineError extends Error {
   constructor(message, status) {
@@ -112,4 +113,35 @@ async function recordAiDistressScore(userId, interactionId, analysis, modelVersi
   return { scoreId: scoreRow.score_id };
 }
 
-module.exports = { recordInteraction, recordAiDistressScore, PipelineError };
+// Feature improvement point 1/2: a distress_scores row from an Ollama
+// {score, summary} result (ai/ollama.js's analyzeChatTranscript/
+// analyzeCallTranscript) - deliberately lighter than recordAiDistressScore
+// above, which also writes 4 interaction_signals rows (sentiment/voice-
+// stress/emotion/engagement) that Ollama's prompt was never asked to
+// produce. Fabricating those sub-scores just to satisfy that function's
+// shape would be worse than not recording them - the score_value/risk_level
+// (the only fields any dashboard/trend/alert actually reads) are real
+// either way.
+async function recordOllamaDistressScore(userId, interactionId, { score, summary }, modelVersion) {
+  const riskLevelName = classifyRiskLevel(score);
+  const { data: riskLevelRow, error: riskLevelError } = await supabase.from('risk_levels').select('risk_level_id').eq('name', riskLevelName).single();
+  if (riskLevelError || !riskLevelRow) throw new PipelineError(`Could not resolve risk level: ${riskLevelName}`, 500);
+
+  const { data: scoreRow, error } = await supabase
+    .from('distress_scores')
+    .insert({
+      user_id: userId,
+      interaction_id: interactionId,
+      score_value: score,
+      risk_level_id: riskLevelRow.risk_level_id,
+      model_version: modelVersion,
+      explanation: summary || null,
+    })
+    .select('score_id')
+    .single();
+  if (error) throw new PipelineError('Could not record distress score', 500);
+
+  return { scoreId: scoreRow.score_id, riskLevel: riskLevelName };
+}
+
+module.exports = { recordInteraction, recordAiDistressScore, recordOllamaDistressScore, PipelineError };

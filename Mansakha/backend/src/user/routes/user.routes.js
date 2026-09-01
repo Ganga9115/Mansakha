@@ -8,10 +8,10 @@ const { writeAuditLog } = require('../../core/services/auditLog');
 const { verifyToken } = require('../../core/middleware/verifyToken');
 const { generalApiLimiter, userChatLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
-const { recordInteraction, recordAiDistressScore, PipelineError } = require('../../core/services/interactionPipeline');
+const { recordInteraction, recordAiDistressScore, recordOllamaDistressScore, PipelineError } = require('../../core/services/interactionPipeline');
 const { applyStressResponse, selectLeastLoadedCounsellor } = require('../../core/services/stressResponse');
 const { enqueueAlertDispatch } = require('../../core/services/dispatchWorker');
-const { generateNextQuestion, predictDistressScore } = require('../../ai/ollama');
+const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = require('../../ai/ollama');
 
 // Fixed national Police Control Room number - the mobile app dials this
 // directly via the device's own phone dialer (Linking.openURL('tel:...'))
@@ -25,9 +25,63 @@ const PCR_NUMBER = '100';
 const router = express.Router();
 
 const NEXT_CHECKIN_CADENCE_DAYS = 7;
+// 15 questions/day x 7 days - see the weekly-score trigger in
+// POST /questionnaire/submit.
+const WEEKLY_CHECKIN_ANSWER_THRESHOLD = 105;
 const SUPPORT_LINKS = [
   { label: 'NHAA Helpline', detail: 'Call 14566, 24/7, available in Hindi/English/regional languages' },
 ];
+
+// Feature improvement: tier-based recommendation shown on Home below the
+// distress summary, and a short teaser of check-in prompts shown below the
+// "Start Check-in" button - both driven by whichever risk tier the user's
+// LATEST distress_scores row landed in, regardless of which channel produced
+// it (AI chat, an IVRS call transcript, or the 15-question check-in all
+// write to the same table, so this needs no per-channel branching).
+const RECOMMENDATION_BY_TIER = {
+  Low: () => ({
+    message: 'Enjoy Life / Live a Happy Life.',
+    detail: 'Suggested: activities that promote a happy and healthy lifestyle.',
+    actionType: 'wellness',
+  }),
+  Moderate: () => ({
+    message: 'Exercise / My Well-being activities.',
+    detail: 'Recommended: activities that improve your physical and mental well-being.',
+    actionType: 'wellness',
+  }),
+  High: (optedIn) => (optedIn
+    ? {
+      message: 'Talk to your assigned counsellor.',
+      detail: 'A real person is here for you - reach out to your counsellor directly.',
+      actionType: 'counsellor_chat',
+    }
+    : {
+      message: 'Consider opting in for counselling support.',
+      detail: 'A human counsellor can offer more direct support during a time like this.',
+      actionType: 'opt_in_counsellor',
+    }),
+  Critical: () => ({
+    message: 'Please seek professional medical treatment.',
+    detail: 'Immediate mental health support is strongly recommended - you are not alone in this.',
+    actionType: 'medical',
+  }),
+};
+
+const CHECKIN_QUESTION_PROMPTS_BY_TIER = {
+  Low: ['What made you smile today?', 'What are you grateful for this week?', "What's one small win you had recently?"],
+  Moderate: ['How have you been sleeping this week?', "What's been on your mind lately?", 'Is there anything weighing on you right now?'],
+  High: ['How are you feeling right now, in this moment?', 'Do you feel safe where you are?', 'Is there someone you trust that you can talk to today?'],
+  Critical: ['Are you safe right now?', 'Is someone with you at this moment?', 'Would you like us to connect you with your counsellor immediately?'],
+};
+
+function buildRecommendation(riskLevel, optedForManualCounsellor) {
+  if (!riskLevel || !RECOMMENDATION_BY_TIER[riskLevel]) return null;
+  return {
+    riskLevel,
+    ...RECOMMENDATION_BY_TIER[riskLevel](optedForManualCounsellor),
+    suggestedQuestions: CHECKIN_QUESTION_PROMPTS_BY_TIER[riskLevel],
+  };
+}
 
 function requireUser(req, res, next) {
   if (!req.auth || req.auth.type !== 'user') return fail(res, 'User account required', 403);
@@ -119,6 +173,7 @@ router.get('/dashboard', async (req, res) => {
     currentDistressLevel: latestScore
       ? { score: latestScore.score_value, riskLevel: latestScore.risk_levels.name }
       : null,
+    recommendation: buildRecommendation(latestScore?.risk_levels?.name || null, user.opted_for_manual_counsellor),
     nextCheckIn,
     alerts: (openAlerts || []).map((a) => ({ alertId: a.alert_id, triggeredAt: a.triggered_at, status: a.alert_statuses.name })),
     supportLinks: SUPPORT_LINKS,
@@ -265,6 +320,85 @@ router.get('/chat', async (req, res) => {
   return ok(res, {
     messages: rows.map((m) => ({ messageId: m.message_id, sender: m.sender, body: m.body, sentAt: m.sent_at })),
   });
+});
+
+// Feature improvement point 1: the local-Ollama AI chat screen
+// (ChatScreen.js) talks to Ollama directly for replies (no per-message round
+// trip through the backend, unlike /chat above), so this is purely a
+// persistence + scoring endpoint - call it once per exchange (both sides at
+// once, including a voice-call turn once the browser's speech recognition
+// has already turned it into text) rather than once per keystroke.
+//
+// No separate "daily score" table: once the running word count crosses
+// CHAT_SCORE_WORD_THRESHOLD, this inserts one more ordinary distress_scores
+// row (same table every check-in/questionnaire score already lands in), so
+// the Counsellor dashboard/case detail/Reports trend chart all pick it up
+// with no other change - "most recent score" and "7-day average" already
+// read from exactly this table.
+const CHAT_SCORE_WORD_THRESHOLD = 5000;
+const CHAT_SCORE_LOOKBACK_MESSAGES = 200; // enough recent turns for a meaningful read without scanning the whole history
+
+function countWords(text) {
+  return (text || '').trim().split(/\s+/).filter(Boolean).length;
+}
+
+router.post('/chat/log', async (req, res) => {
+  const userId = req.auth.userId;
+  const { userMessage, aiMessage } = req.body;
+  if (typeof userMessage !== 'string' || !userMessage.trim()) return fail(res, 'userMessage is required', 400);
+
+  const toInsert = [{ user_id: userId, sender: 'user', body: userMessage.trim() }];
+  if (typeof aiMessage === 'string' && aiMessage.trim()) {
+    toInsert.push({ user_id: userId, sender: 'ai', body: aiMessage.trim() });
+  }
+  const { error: insertError } = await supabase.from('chat_messages').insert(toInsert);
+  if (insertError) return fail(res, `Could not save chat message: ${insertError.message}`, 500);
+
+  const addedWords = toInsert.reduce((sum, r) => sum + countWords(r.body), 0);
+  const { rows: updatedRows } = await pool.query(
+    `update users set chat_word_count = chat_word_count + $2 where user_id = $1 returning chat_word_count`,
+    [userId, addedWords]
+  );
+  const wordCount = updatedRows[0]?.chat_word_count ?? addedWords;
+
+  if (wordCount < CHAT_SCORE_WORD_THRESHOLD) {
+    return ok(res, { scored: false, wordCount });
+  }
+
+  // Threshold crossed - score the recent conversation via Ollama (never
+  // Gemini, per how this feature was specced) and reset the counter only on
+  // success, so a transient Ollama failure just retries on the next message
+  // instead of silently losing the word count that already accrued.
+  const { rows: recentMessages } = await pool.query(
+    `select sender, body from (
+       select sender, body, sent_at from chat_messages where user_id = $1 order by sent_at desc limit $2
+     ) recent order by sent_at asc`,
+    [userId, CHAT_SCORE_LOOKBACK_MESSAGES]
+  );
+
+  let scoreResult;
+  try {
+    scoreResult = await analyzeChatTranscript(recentMessages);
+  } catch (err) {
+    return ok(res, { scored: false, wordCount, scoringError: err.message });
+  }
+
+  let interactionId;
+  try {
+    ({ interactionId } = await recordInteraction({
+      userId,
+      channelName: 'Chatbot',
+      transcriptText: recentMessages.map((m) => `${m.sender === 'user' ? 'Person' : 'Mansakha'}: ${m.body}`).join('\n'),
+    }));
+  } catch (err) {
+    return ok(res, { scored: false, wordCount, scoringError: err instanceof PipelineError ? err.message : 'Could not record interaction' });
+  }
+
+  const { scoreId, riskLevel } = await recordOllamaDistressScore(userId, interactionId, scoreResult, `ollama-chat-v1`);
+  const { alertId } = await applyStressResponse(userId, scoreId, riskLevel);
+  await pool.query(`update users set chat_word_count = 0 where user_id = $1`, [userId]);
+
+  return ok(res, { scored: true, wordCount: 0, scoreValue: scoreResult.score, riskLevel, alertTriggered: alertId !== null });
 });
 
 // "Get Help Now" - one tap, no AI call (must be fast, must not depend on an
@@ -987,12 +1121,51 @@ router.post('/questionnaire/submit', async (req, res) => {
 
     await writeAuditLog({ userId, action: 'create', entityType: 'interaction', entityId: interactionId });
 
+    // Feature improvement: once this user has answered 105 questions
+    // (15/day x 7 days) across their check-ins, score the last 7
+    // questionnaires' combined responses as one more distress_scores row -
+    // a weekly-scoped reading, not a separate table, so it flows through
+    // the exact same dashboard/trend/alert machinery every other score does.
+    let weeklyScored = false;
+    try {
+      const { rows: countRows } = await pool.query(
+        `update users set questionnaire_answer_count = questionnaire_answer_count + $2 where user_id = $1 returning questionnaire_answer_count`,
+        [userId, allResponses.length]
+      );
+      const answerCount = countRows[0]?.questionnaire_answer_count ?? allResponses.length;
+
+      if (answerCount >= WEEKLY_CHECKIN_ANSWER_THRESHOLD) {
+        const { rows: recentQuestionnaires } = await pool.query(
+          `select responses from user_questionnaires where user_id = $1 order by created_at desc limit 7`,
+          [userId]
+        );
+        const weeklyResponses = recentQuestionnaires.flatMap((q) => q.responses || []);
+        if (weeklyResponses.length > 0) {
+          const weekly = await predictDistressScore(weeklyResponses);
+          const { interactionId: weeklyInteractionId } = await recordInteraction({
+            userId,
+            channelName: 'App',
+            transcriptText: weeklyResponses.map((r) => `Q: ${r.q}\nA: ${r.a}`).join('\n\n'),
+          });
+          const { scoreId: weeklyScoreId, riskLevel: weeklyRiskLevel } = await recordOllamaDistressScore(
+            userId, weeklyInteractionId, weekly, 'ollama-checkin-weekly-v1'
+          );
+          await applyStressResponse(userId, weeklyScoreId, weeklyRiskLevel);
+          weeklyScored = true;
+        }
+        await pool.query(`update users set questionnaire_answer_count = 0 where user_id = $1`, [userId]);
+      }
+    } catch (err) {
+      console.warn('checkin: weekly score computation failed (non-fatal):', err.message);
+    }
+
     return ok(res, {
       questionnaireId: qData.id,
       scoreValue: score,
       riskLevel,
       alertTriggered: alertId !== null,
-      summary
+      summary,
+      weeklyScored
     }, 'Questionnaire submitted successfully', 201);
 
   } catch (err) {
