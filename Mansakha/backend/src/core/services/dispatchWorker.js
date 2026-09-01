@@ -1,4 +1,5 @@
 const { supabase } = require('../db/supabaseClient');
+const { pool } = require('../db/pgPool');
 const { generateProactiveContactMessage } = require('../../ai/gemini');
 
 // Closes both "no proactive scheduling" and "no real alert-dispatch worker"
@@ -56,33 +57,36 @@ async function enqueueAlertDispatch(alertId, userId, officialIds) {
 
 // Idempotent scan: a user already has an undelivered checkin_due row
 // skipped, so re-running this on every tick doesn't pile up duplicates.
+//
+// Was previously one Supabase REST call to list every active user, then TWO
+// MORE REST calls per user in a sequential loop (last interaction, existing
+// dispatch row) - each REST round trip costs ~1-2s regardless of payload
+// size (confirmed live elsewhere this session), so with even a modest user
+// count this alone could take tens of seconds EVERY 60-SECOND TICK, run
+// forever in the background, competing with real page-load requests for
+// the same Supabase connection/rate-limit budget - confirmed as the actual
+// cause of "all pages loading slowly" after this and scanDisengagedUsers
+// below were both added. Now one raw-pg query finds exactly who's due (a
+// `not exists` anti-join, no per-row round trips at all), then one batched
+// insert queues all of them at once.
 async function scanCheckinsDue() {
   const cutoff = new Date(Date.now() - CHECKIN_DUE_DAYS * 86400000).toISOString();
 
-  const { data: users, error } = await supabase.from('users').select('user_id').eq('status', 'active');
-  if (error) throw new Error(`Could not scan for due check-ins: ${error.message}`);
+  const { rows: dueUsers } = await pool.query(
+    `select u.user_id
+     from users u
+     where u.status = 'active'
+       and not exists (select 1 from interactions i where i.user_id = u.user_id and i.occurred_at > $1)
+       and not exists (
+         select 1 from dispatch_queue dq
+         where dq.kind = 'checkin_due' and dq.user_id = u.user_id and dq.delivered_at is null
+       )`,
+    [cutoff]
+  );
+  if (dueUsers.length === 0) return;
 
-  for (const user of users || []) {
-    const { data: lastInteraction } = await supabase
-      .from('interactions')
-      .select('occurred_at')
-      .eq('user_id', user.user_id)
-      .order('occurred_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (lastInteraction && lastInteraction.occurred_at > cutoff) continue; // not due yet
-
-    const { data: existing } = await supabase
-      .from('dispatch_queue')
-      .select('dispatch_id')
-      .eq('kind', 'checkin_due')
-      .eq('user_id', user.user_id)
-      .is('delivered_at', null)
-      .maybeSingle();
-    if (existing) continue; // already queued
-
-    await supabase.from('dispatch_queue').insert({ kind: 'checkin_due', user_id: user.user_id });
-  }
+  const values = dueUsers.map((_, i) => `($${i + 1}, 'checkin_due')`).join(', ');
+  await pool.query(`insert into dispatch_queue (user_id, kind) values ${values}`, dueUsers.map((u) => u.user_id));
 }
 
 // Feature improvement point 2 - "if the user stops interacting with the
@@ -102,17 +106,14 @@ async function scanCheckinsDue() {
 async function notifyDisengagement(userId, jurisdictionId) {
   const cutoff = new Date(Date.now() - DISENGAGEMENT_THRESHOLD_DAYS * 86400000).toISOString();
 
-  const { data: recentNotice } = await supabase
-    .from('alert_notifications')
-    .select('alert_notification_id')
-    .eq('user_id', userId)
-    .eq('source', 'disengagement')
-    .gt('notified_at', cutoff)
-    .maybeSingle();
-  if (recentNotice) return { notified: false, reason: 'already notified this window' };
+  const { rows: recentRows } = await pool.query(
+    `select 1 from alert_notifications where user_id = $1 and source = 'disengagement' and notified_at > $2 limit 1`,
+    [userId, cutoff]
+  );
+  if (recentRows.length > 0) return { notified: false, reason: 'already notified this window' };
 
-  const { data: userRow } = await supabase.from('users').select('assigned_counsellor_id').eq('user_id', userId).maybeSingle();
-  let counsellorId = userRow?.assigned_counsellor_id;
+  const { rows: userRows } = await pool.query(`select assigned_counsellor_id from users where user_id = $1`, [userId]);
+  let counsellorId = userRows[0]?.assigned_counsellor_id;
   let autoAssigned = false;
 
   if (!counsellorId) {
@@ -124,18 +125,14 @@ async function notifyDisengagement(userId, jurisdictionId) {
     const { selectLeastLoadedCounsellor } = require('./stressResponse');
     counsellorId = await selectLeastLoadedCounsellor(jurisdictionId);
     if (!counsellorId) return { notified: false, reason: 'no counsellor available' };
-    await supabase.from('users').update({ assigned_counsellor_id: counsellorId }).eq('user_id', userId);
+    await pool.query(`update users set assigned_counsellor_id = $2 where user_id = $1`, [userId, counsellorId]);
     autoAssigned = true;
   }
 
-  const { error } = await supabase.from('alert_notifications').insert({
-    user_id: userId,
-    official_id: counsellorId,
-    source: 'disengagement',
-    priority: 'normal',
-    auto_assigned: autoAssigned,
-  });
-  if (error) throw new Error(`Could not notify counsellor of disengagement: ${error.message}`);
+  await pool.query(
+    `insert into alert_notifications (user_id, official_id, source, priority, auto_assigned) values ($1, $2, 'disengagement', 'normal', $3)`,
+    [userId, counsellorId, autoAssigned]
+  );
 
   return { notified: true, counsellorId, autoAssigned };
 }
@@ -145,22 +142,28 @@ async function notifyDisengagement(userId, jurisdictionId) {
 // the push reminder above regardless of counsellor-notification state, and
 // the two have different idempotency mechanisms (dispatch_queue's
 // delivered_at vs. alert_notifications' own notified_at window).
+//
+// One raw-pg anti-join finds exactly who needs a NEW disengagement notice
+// (same fix rationale as scanCheckinsDue above) - the per-user loop below
+// only runs over that already-small, already-filtered set (near-zero on
+// most ticks, since a user already notified this window is excluded by the
+// query itself), not every active user in the system.
 async function scanDisengagedUsers() {
   const cutoff = new Date(Date.now() - DISENGAGEMENT_THRESHOLD_DAYS * 86400000).toISOString();
 
-  const { data: users, error } = await supabase.from('users').select('user_id, jurisdiction_id').eq('status', 'active');
-  if (error) throw new Error(`Could not scan for disengaged users: ${error.message}`);
+  const { rows: disengagedUsers } = await pool.query(
+    `select u.user_id, u.jurisdiction_id
+     from users u
+     where u.status = 'active'
+       and not exists (select 1 from interactions i where i.user_id = u.user_id and i.occurred_at > $1)
+       and not exists (
+         select 1 from alert_notifications an
+         where an.user_id = u.user_id and an.source = 'disengagement' and an.notified_at > $1
+       )`,
+    [cutoff]
+  );
 
-  for (const user of users || []) {
-    const { data: lastInteraction } = await supabase
-      .from('interactions')
-      .select('occurred_at')
-      .eq('user_id', user.user_id)
-      .order('occurred_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (lastInteraction && lastInteraction.occurred_at > cutoff) continue; // still active
-
+  for (const user of disengagedUsers) {
     await notifyDisengagement(user.user_id, user.jurisdiction_id);
   }
 }
