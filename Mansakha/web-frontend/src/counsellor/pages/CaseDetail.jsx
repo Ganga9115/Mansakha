@@ -6,6 +6,7 @@ import {
   useCaseDetail,
   useScheduleSession,
 } from '../services/hooks';
+import { useToast } from '../../shared/context/ToastContext';
 
 const RISK_BADGE = {
   Critical: 'bg-purple-100 text-purple-700',
@@ -30,17 +31,16 @@ export default function CaseDetail() {
   const { data, loading, error } = useCaseDetail(userId);
   const scheduleSession = useScheduleSession(userId);
   const [scheduleDate, setScheduleDate] = useState('');
-  const [scheduleStatus, setScheduleStatus] = useState(null);
+  const toast = useToast();
 
   const handleSchedule = async () => {
     if (!scheduleDate) return;
-    setScheduleStatus(null);
     try {
       await scheduleSession.mutate(new Date(scheduleDate).toISOString());
-      setScheduleStatus('Session scheduled.');
+      toast.success('Session scheduled successfully.');
       setScheduleDate('');
     } catch (err) {
-      setScheduleStatus(err.message || 'Could not schedule this session.');
+      toast.error(err.message || 'Could not schedule this session.');
     }
   };
 
@@ -167,7 +167,6 @@ export default function CaseDetail() {
                 onChange={(e) => setScheduleDate(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
               />
-              {scheduleStatus && <p className="text-[11px] text-gray-500">{scheduleStatus}</p>}
               <button
                 onClick={handleSchedule}
                 disabled={scheduleSession.loading || !scheduleDate}
