@@ -6,6 +6,7 @@ import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
 import GetHelpButton from './GetHelpButton';
+import NotificationBell from './NotificationBell';
 
 // The header's old "Talk to Mansakha by voice" phone-call icon has been
 // repurposed into the Get Help Now emergency action below (the AI chatbot
@@ -13,16 +14,19 @@ import GetHelpButton from './GetHelpButton';
 // is actually lost).
 // The notification bell is Home-screen-only (showNotifications) - every
 // other screen that renders this in its header just gets the call icon.
-export default function DesktopHeaderActions({ fullName, roleLabel = '', alertCount = 0, onBellPress, showNotifications = false }) {
+//
+// `onBellPress`/`alertCount` used to drive this bell, but every caller
+// passed `onBellPress={() => {}}` and an unrelated alert count - meaning on
+// desktop/wide-browser width (this component, not TopRightActions, renders
+// there) the bell never actually did anything. Now uses the same
+// NotificationBell (dropdown panel, not a full-screen navigate) as
+// TopRightActions, so both tiers behave identically; `onBellPress`/
+// `alertCount` are no longer read.
+export default function DesktopHeaderActions({ fullName, roleLabel = '', showNotifications = false }) {
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 24 }}>
-        {showNotifications && (
-          <Pressable style={styles.bellBtn} onPress={onBellPress}>
-            <Feather name="bell" size={20} color={colors.primaryDark} />
-            {alertCount > 0 && <View style={styles.bellDot} />}
-          </Pressable>
-        )}
+        {showNotifications && <NotificationBell color={colors.primaryDark} />}
         <GetHelpButton asHeaderIcon />
       </View>
 
@@ -54,16 +58,6 @@ const styles = StyleSheet.create({
   },
   searchIcon: { marginRight: spacing.sm },
   searchInput: { flex: 1, fontSize: 13, color: colors.textPrimary, outlineStyle: 'none' },
-  bellBtn: { padding: spacing.xs, alignItems: 'center', justifyContent: 'center' },
-  bellDot: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 8,
-    height: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.danger,
-  },
   profileChip: {
     flexDirection: 'row',
     alignItems: 'center',
