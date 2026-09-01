@@ -1,9 +1,9 @@
 const express = require('express');
 const multer = require('multer');
-const { supabase } = require('../db/supabaseClient');
-const { pool } = require('../db/pgPool');
-const { verifyToken } = require('../middleware/verifyToken');
-const { ok, fail } = require('../services/responseEnvelope');
+const { supabase } = require('../core/db/supabaseClient');
+const { pool } = require('../core/db/pgPool');
+const { verifyToken } = require('../core/middleware/verifyToken');
+const { ok, fail } = require('../core/services/responseEnvelope');
 
 const router = express.Router();
 
@@ -19,12 +19,12 @@ const upload = multer({
 });
 
 // The Staff Login surface covers Administration + Counsellor + Ministry with one
-// email+password check (see routes/auth.staff.js, auth.ministry.js); the frontend
+// email+password check (see core/routes/auth.staff.routes.js, ministry/routes/auth.ministry.routes.js); the frontend
 // needs to know WHICH role/jurisdiction actually came back before it can pick the
 // right dashboard shell (Build Prompt Section 3/4.5) - this is that lookup.
 router.get('/', verifyToken, async (req, res) => {
-  if (req.auth.type === 'victim') {
-    return ok(res, { type: 'victim', victimId: req.auth.victimId });
+  if (req.auth.type === 'user') {
+    return ok(res, { type: 'user', userId: req.auth.userId });
   }
 
   // Profile page needs real per-role fields (phone/WhatsApp only mean
@@ -68,7 +68,7 @@ router.get('/', verifyToken, async (req, res) => {
 // count instead of this). alert_notifications (schema.sql) is written for
 // whichever officials actually need to know about an alert/SOS - the
 // assigned Counsellor and every District Administration official in that
-// victim's jurisdiction (see the table's own comment) - so State/National
+// user's jurisdiction (see the table's own comment) - so State/National
 // Admin, Ministry, and Data Operator legitimately just see an empty list
 // today, not a bug, since nothing currently targets them.
 router.get('/notifications', verifyToken, async (req, res) => {
@@ -77,13 +77,13 @@ router.get('/notifications', verifyToken, async (req, res) => {
   try {
     const { rows } = await pool.query(
       `select an.alert_notification_id, an.notified_at, an.source, an.priority, an.auto_assigned,
-              an.alert_id, an.sos_event_id, vi.full_name as victim_name, rl.name as risk_level
+              an.alert_id, an.sos_event_id, ui.full_name as user_name, rl.name as risk_level
        from alert_notifications an
        left join alerts al on al.alert_id = an.alert_id
        left join sos_events se on se.sos_event_id = an.sos_event_id
        left join distress_scores ds on ds.score_id = al.distress_score_id
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       left join victim_identity vi on vi.victim_id = coalesce(al.victim_id, se.victim_id)
+       left join user_identity ui on ui.user_id = coalesce(al.user_id, se.user_id)
        where an.official_id = $1
        order by an.notified_at desc
        limit 20`,
@@ -95,8 +95,8 @@ router.get('/notifications', verifyToken, async (req, res) => {
       notifiedAt: n.notified_at,
       priority: n.priority,
       message: n.source === 'sos'
-        ? `SOS from ${n.victim_name || 'a victim'}`
-        : `${n.risk_level || 'New'} alert - ${n.victim_name || 'a victim'}`,
+        ? `SOS from ${n.user_name || 'a user'}`
+        : `${n.risk_level || 'New'} alert - ${n.user_name || 'a user'}`,
     }));
 
     return ok(res, { notifications });
@@ -132,7 +132,7 @@ router.post('/profile-photo', verifyToken, upload.single('photo'), async (req, r
   return ok(res, { profileImageUrl }, 'Profile photo updated');
 });
 
-// Frontend-pending (see services/dispatchWorker.js's header comment) - real
+// Frontend-pending (see core/services/dispatchWorker.js's header comment) - real
 // device token registration needs expo-notifications wired on native
 // platforms, not done this pass since web (this session's only reliably
 // testable platform) isn't supported by that package at all. Endpoint is
@@ -141,10 +141,10 @@ router.patch('/push-token', verifyToken, async (req, res) => {
   const { token } = req.body;
   if (!token) return fail(res, 'token is required', 400);
 
-  const isVictim = req.auth.type === 'victim';
-  const table = isVictim ? 'victims' : 'officials';
-  const idColumn = isVictim ? 'victim_id' : 'official_id';
-  const id = isVictim ? req.auth.victimId : req.auth.officialId;
+  const isUser = req.auth.type === 'user';
+  const table = isUser ? 'users' : 'officials';
+  const idColumn = isUser ? 'user_id' : 'official_id';
+  const id = isUser ? req.auth.userId : req.auth.officialId;
 
   const { error } = await supabase.from(table).update({ expo_push_token: token }).eq(idColumn, id);
   if (error) return fail(res, `Could not register push token: ${error.message}`, 500);

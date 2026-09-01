@@ -9,11 +9,11 @@ test.describe('Loading State Verification', () => {
       await page.goto('/');
 
       // 2. We should see the Login Screen.
-      // Fill out the victim login form
+      // Fill out the user login form
       await page.fill('input[placeholder="Docket ID"]', 'DUMMY-0001');
-      await page.fill('input[placeholder="Full Name"]', 'Dummy Victim');
+      await page.fill('input[placeholder="Full Name"]', 'Dummy User');
       await page.fill('input[placeholder="Mobile Number"]', '1234567890');
-      await page.fill('input[placeholder="Password"]', 'Victim123');
+      await page.fill('input[placeholder="Password"]', 'User1234');
 
       // 3. Click Login
       // This triggers the API call which previously caused infinite loading if it failed

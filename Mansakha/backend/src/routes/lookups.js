@@ -1,11 +1,11 @@
 const express = require('express');
-const { supabase } = require('../db/supabaseClient');
-const { generalApiLimiter } = require('../middleware/rateLimiter');
-const { ok, fail } = require('../services/responseEnvelope');
+const { supabase } = require('../core/db/supabaseClient');
+const { generalApiLimiter } = require('../core/middleware/rateLimiter');
+const { ok, fail } = require('../core/services/responseEnvelope');
 
 const router = express.Router();
 
-// Public, unauthenticated reference data the Victim Login screen needs
+// Public, unauthenticated reference data the User Login screen needs
 // before a session exists - none of it is sensitive (case type names,
 // jurisdiction names, language names), unlike everything else in the API.
 router.use(generalApiLimiter);
