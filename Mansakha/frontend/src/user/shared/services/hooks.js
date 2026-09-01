@@ -97,6 +97,24 @@ export function useCheckin() {
   });
 }
 
+// Persists one AI-chat exchange (both sides at once) and, server-side, fires
+// an Ollama-scored distress reading once the running word count crosses
+// 5,000 - see POST /api/user/chat/log. Fire-and-forget from the caller's
+// perspective (ChatScreen.js doesn't need to block on this to keep
+// chatting), but still surfaces errors so a persistent failure isn't silent.
+export function useLogChatTurn() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userMessage, aiMessage }) => apiClient.post('/api/user/chat/log', { userMessage, aiMessage }, token),
+    onSuccess: (data) => {
+      if (data?.scored) {
+        queryClient.invalidateQueries({ queryKey: ['user', 'dashboard'] });
+      }
+    },
+  });
+}
+
 export function useQuestionnaireNext() {
   const token = useToken();
   return useMutation({
@@ -246,6 +264,14 @@ export function useSendTypingPing() {
 export function useAssignedCounsellor() {
   const token = useToken();
   return useQuery({ queryKey: ['user', 'assigned-counsellor'], queryFn: () => apiClient.get('/api/user/assigned-counsellor', token), enabled: !!token });
+}
+
+// The header bell used to just navigate to the static Support page - this is
+// real data behind it now (unread counsellor messages + upcoming scheduled
+// sessions), via the same /api/me/notifications the staff bell already uses.
+export function useMyNotifications({ enabled = true } = {}) {
+  const token = useToken();
+  return useQuery({ queryKey: ['user', 'notifications'], queryFn: () => apiClient.get('/api/me/notifications', token), enabled: !!token && enabled });
 }
 
 

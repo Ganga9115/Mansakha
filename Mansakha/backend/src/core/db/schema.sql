@@ -157,6 +157,19 @@ create table users (
                             -- registers a device (see services/dispatchWorker.js) - null until then
   enrolled_at        timestamptz not null default now(),
   status             text not null default 'active' check (status in ('active', 'inactive')),
+  -- Running total of words in this user's AI-chat messages since the last
+  -- automatic distress score fired - reset to 0 each time it crosses 5,000
+  -- (see POST /api/user/chat/log). Deliberately not a separate "daily
+  -- score" table - each threshold-crossing just inserts one more
+  -- distress_scores row, so every existing dashboard/trend query that
+  -- already reads "latest"/"average over N days" from that table picks
+  -- these up with no other change needed.
+  chat_word_count    integer not null default 0,
+  -- Same pattern, for the 15-question daily check-in: counts total answers
+  -- across questionnaire submissions, reset to 0 once it crosses 105
+  -- (15 questions x 7 days) and a weekly-scoped score fires (see
+  -- POST /api/user/questionnaire/submit).
+  questionnaire_answer_count integer not null default 0,
   -- Workload reporting AND real auto-assignment target (Section 1.5: a
   -- Critical case where the user hasn't opted for manual counsellor
   -- selection gets auto-assigned to whichever eligible counsellor has the
@@ -258,6 +271,11 @@ create table sos_events (
   sos_event_id  uuid primary key default gen_random_uuid(),
   user_id      uuid not null references users(user_id),
   triggered_at    timestamptz not null default now(),
+  -- A "seen it, on it" middle state (PATCH .../sos/:sosEventId/acknowledge)
+  -- distinct from fully resolved - without it, an urgent-help alert could
+  -- only ever be Open or Resolved with no way to signal active work on it.
+  acknowledged_at   timestamptz,
+  acknowledged_by     uuid references officials(official_id),
   resolved_at       timestamptz,
   resolved_by         uuid references officials(official_id)
 );
@@ -271,11 +289,16 @@ create table alert_notifications (
   alert_notification_id  uuid primary key default gen_random_uuid(),
   alert_id                 uuid references alerts(alert_id),
   sos_event_id              uuid references sos_events(sos_event_id),
+  -- Set only for source = 'disengagement' - a 7+-day-inactive notice has no
+  -- alerts/sos_events row to hang off of, just the user directly.
+  user_id                    uuid references users(user_id),
   official_id                uuid not null references officials(official_id),
   notified_at                  timestamptz not null default now(),
   -- Feature Catalog Section 2.2/2.4: lets the Counsellor/Admin UI visually
-  -- distinguish a user-initiated SOS from a normal threshold-triggered alert.
-  source                       text not null default 'distress_score' check (source in ('distress_score', 'sos')),
+  -- distinguish a user-initiated SOS from a normal threshold-triggered alert,
+  -- plus a disengagement notice (7+ days inactive - see dispatchWorker.js's
+  -- scanCheckinsDue).
+  source                       text not null default 'distress_score' check (source in ('distress_score', 'sos', 'disengagement')),
   -- Section 1.5: a Critical case already opted for manual counsellor
   -- selection (or any SOS) gets an 'urgent'-priority notification, distinct
   -- from a normal High/Critical alert.
@@ -284,8 +307,10 @@ create table alert_notifications (
   -- not opted for manual counsellor) rather than the alert routing to an
   -- already-assigned counsellor - lets the UI show that context.
   auto_assigned                    boolean not null default false,
-  constraint alert_notifications_alert_xor_sos check (
-    (alert_id is not null and sos_event_id is null) or (alert_id is null and sos_event_id is not null)
+  constraint alert_notifications_exactly_one_subject check (
+    (alert_id is not null and sos_event_id is null and user_id is null) or
+    (alert_id is null and sos_event_id is not null and user_id is null) or
+    (alert_id is null and sos_event_id is null and user_id is not null)
   )
 );
 

@@ -67,6 +67,27 @@ export function useAdminDashboard(jurisdictionId) {
   );
 }
 
+// Reports page's 3 charts (trend line, severity-distribution stacked bars,
+// intervention-phase donut), scoped to jurisdictionId's own subtree. `range`
+// is one of '7d'|'30d'|'90d'|'custom'; `start`/`end` (YYYY-MM-DD) are only
+// used/required when range is 'custom' - until both are filled with a valid
+// (end >= start) order, this resolves to null without hitting the network,
+// so Reports.jsx can render a "pick a date range" prompt instead of firing
+// a doomed/partial request.
+export function useReportsAnalytics(jurisdictionId, range, start, end) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve(null);
+    if (range === 'custom' && !(start && end && end >= start)) return Promise.resolve(null);
+    const q = new URLSearchParams({ range });
+    if (range === 'custom') {
+      q.set('start', start);
+      q.set('end', end);
+    }
+    return apiClient.get(`/api/admin/district/reports-analytics/${jurisdictionId}?${q.toString()}`, token);
+  }, [token, jurisdictionId, range, start, end]);
+}
+
 export function useExportReportCsv() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

@@ -102,6 +102,45 @@ export default function HomeScreen({ navigation }) {
                     <Feather name="mic" size={18} color={colors.white} style={{ marginRight: spacing.sm }} />
                     <Text style={styles.distressBtnText}>Start Check-in</Text>
                   </Pressable>
+
+                  {/* Tier-based recommendation, in the same tile as the score
+                      it's derived from - Low -> lifestyle activities,
+                      Moderate -> wellness activities, High -> talk to/opt
+                      into counselling, Critical -> seek professional medical
+                      help. Driven by whichever channel (AI chat, IVRS call,
+                      or the 15-question check-in) most recently produced a
+                      distress_scores row. */}
+                  {data.recommendation && (
+                    <View style={styles.recommendationInline}>
+                      <View style={styles.row}>
+                        <Feather name="heart" size={16} color={colors.primaryDark} style={{ marginRight: spacing.sm }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.recommendationInlineTitle}>{data.recommendation.message}</Text>
+                          <Text style={styles.recommendationInlineDetail}>{data.recommendation.detail}</Text>
+                        </View>
+                      </View>
+                      {data.recommendation.actionType === 'wellness' && (
+                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('Wellbeing')}>
+                          <Text style={styles.recommendationBtnText}>Explore Well-being Activities</Text>
+                        </Pressable>
+                      )}
+                      {data.recommendation.actionType === 'counsellor_chat' && (
+                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('mycounsellor')}>
+                          <Text style={styles.recommendationBtnText}>Chat with Your Counsellor</Text>
+                        </Pressable>
+                      )}
+                      {data.recommendation.actionType === 'opt_in_counsellor' && (
+                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('settings')}>
+                          <Text style={styles.recommendationBtnText}>Opt In for Counselling Support</Text>
+                        </Pressable>
+                      )}
+                      {data.recommendation.actionType === 'medical' && (
+                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('support')}>
+                          <Text style={styles.recommendationBtnText}>View Helpline Numbers</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  )}
                 </View>
 
                 {/* Quick Actions Header */}
@@ -323,6 +362,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   distressBtnText: { ...typography.bodyStrong, color: colors.white, fontSize: 16 },
+  row: { flexDirection: 'row', alignItems: 'flex-start' },
+  // Inline within distressCard (same tile as the score/Start Check-in
+  // button), not a separate card - a top border to visually separate it
+  // from the button above, but still one continuous tile.
+  recommendationInline: {
+    marginTop: spacing.lg,
+    paddingTop: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.08)',
+  },
+  recommendationInlineTitle: { ...typography.bodyStrong, color: colors.textPrimary },
+  recommendationInlineDetail: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
+  recommendationBtn: {
+    marginTop: spacing.md,
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  recommendationBtnText: { ...typography.bodyStrong, color: colors.white },
   sectionHeaderTitle: {
     ...typography.h3,
     color: colors.textPrimary,

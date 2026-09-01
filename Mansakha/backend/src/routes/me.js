@@ -75,15 +75,74 @@ router.get('/', verifyToken, async (req, res) => {
 // source = 'sos' in the DB is the urgent-help request kind (table/column
 // names predate the rename to "Get Help Now" - not worth a migration for a
 // label).
+// User (victim) side: the bell in TopRightActions used to just navigate to
+// the static Support page, showing nothing real - this is the actual
+// notification data behind it, mirroring the staff branch below (unread
+// counsellor messages + upcoming scheduled sessions, the two things a user
+// actually needs a heads-up about).
+async function getUserNotifications(userId) {
+  const [{ rows: unreadMessages }, { rows: sessions }] = await Promise.all([
+    pool.query(
+      `select m.message_id, m.sent_at, o.full_name
+       from messages m
+       join officials o on o.official_id = m.official_id
+       where m.user_id = $1 and m.sender_type = 'official' and m.read_at is null
+       order by m.sent_at desc
+       limit 20`,
+      [userId]
+    ),
+    pool.query(
+      `select cs.session_id, cs.scheduled_at, o.full_name
+       from counselling_sessions cs
+       join officials o on o.official_id = cs.counsellor_id
+       where cs.user_id = $1 and cs.status = 'upcoming' and cs.scheduled_at > now()
+       order by cs.scheduled_at asc
+       limit 5`,
+      [userId]
+    ),
+  ]);
+
+  const notifications = [
+    ...unreadMessages.map((m) => ({
+      notificationId: m.message_id,
+      notifiedAt: m.sent_at,
+      type: 'message',
+      message: `New message from ${m.full_name || 'your counsellor'}`,
+    })),
+    ...sessions.map((s) => ({
+      notificationId: s.session_id,
+      notifiedAt: s.scheduled_at,
+      type: 'session',
+      message: `Upcoming session with ${s.full_name || 'your counsellor'} on ${new Date(s.scheduled_at).toLocaleString()}`,
+    })),
+  ].sort((a, b) => new Date(b.notifiedAt).getTime() - new Date(a.notifiedAt).getTime());
+
+  return notifications;
+}
+
 router.get('/notifications', verifyToken, async (req, res) => {
-  if (req.auth.type !== 'official') return fail(res, 'Staff account required', 403);
+  if (req.auth.type === 'user') {
+    try {
+      const notifications = await getUserNotifications(req.auth.userId);
+      return ok(res, { notifications });
+    } catch (err) {
+      return fail(res, `Could not load notifications: ${err.message}`, 500);
+    }
+  }
+  if (req.auth.type !== 'official') return fail(res, 'Account required', 403);
 
   try {
     const { rows } = await pool.query(
       `select an.alert_notification_id, an.notified_at, an.source, an.priority, an.auto_assigned,
-              an.alert_id, an.sos_event_id, ui.full_name as user_name, rl.name as risk_level
+              an.alert_id, an.sos_event_id,
+              coalesce(al.user_id, se.user_id) as user_id,
+              coalesce(al.triggered_at, se.triggered_at) as triggered_at,
+              ast.name as alert_status, se.resolved_at,
+              ui.full_name as user_name, ui.contact_number as user_phone,
+              ds.score_value, rl.name as risk_level
        from alert_notifications an
        left join alerts al on al.alert_id = an.alert_id
+       left join alert_statuses ast on ast.alert_status_id = al.alert_status_id
        left join sos_events se on se.sos_event_id = an.sos_event_id
        left join distress_scores ds on ds.score_id = al.distress_score_id
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
@@ -94,10 +153,24 @@ router.get('/notifications', verifyToken, async (req, res) => {
       [req.auth.officialId]
     );
 
+    // `message` stays for callers that only render a one-line summary
+    // (unchanged) - everything else here is new, for a click-through detail
+    // view (who, what kind of alert, when it actually happened vs. when
+    // this official was notified, current status, and enough context -
+    // phone, distress score - to act without a second round trip).
     const notifications = rows.map((n) => ({
       notificationId: n.alert_notification_id,
       notifiedAt: n.notified_at,
+      triggeredAt: n.triggered_at,
       priority: n.priority,
+      source: n.source,
+      autoAssigned: n.auto_assigned,
+      userId: n.user_id,
+      userName: n.user_name || null,
+      userPhone: n.user_phone || null,
+      riskLevel: n.risk_level || null,
+      scoreValue: n.score_value !== null ? Number(n.score_value) : null,
+      status: n.source === 'sos' ? (n.resolved_at ? 'Resolved' : 'Open') : (n.alert_status || 'Open'),
       message: n.source === 'sos'
         ? `Urgent help requested by ${n.user_name || 'a user'}`
         : `${n.risk_level || 'New'} alert - ${n.user_name || 'a user'}`,

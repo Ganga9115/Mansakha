@@ -10,6 +10,7 @@ const { requireJurisdiction } = require('../../core/middleware/requireJurisdicti
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { isEscalatingTrend } = require('../../ai/scoring');
+const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
 
 const RISK_SORT_ORDER = { Critical: 4, High: 3, Moderate: 2, Low: 1 };
 
@@ -86,6 +87,69 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
     if (riskLevel === 'Critical') counts.critical += 1;
   }
   return ok(res, counts);
+});
+
+// Reports page's 3 charts (trend line, severity-distribution stacked bars,
+// intervention-phase donut) - previously all hardcoded/static markup in
+// Reports.jsx (a flat line, 0%-height bars, a 0% donut) with a time-range
+// filter that changed which button was highlighted but fetched nothing.
+// This is the real data those charts should have been reading from.
+router.get('/reports-analytics', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
+  const { since, until, buckets } = resolveDateWindow(req.query);
+
+  const [{ rows: scoreRows }, { rows: interventionRows }] = await Promise.all([
+    pool.query(
+      `select ds.computed_at, ds.score_value, rl.name as risk_level_name
+       from distress_scores ds
+       join users u on u.user_id = ds.user_id
+       join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where u.assigned_counsellor_id = $1 and ds.computed_at >= $2 and ds.computed_at <= $3`,
+      [req.auth.officialId, since.toISOString(), until.toISOString()]
+    ),
+    // "In Progress" vs "Planned/Referred" isn't a stored status - the schema
+    // only has recommended_at/completed_at - so an intervention counts as
+    // in-progress once the assigned official has actually logged a case
+    // note on it, and planned/referred until then. Completed always wins.
+    pool.query(
+      `select i.completed_at,
+              exists(
+                select 1 from case_notes cn
+                where cn.user_id = i.user_id and cn.official_id = i.assigned_official_id
+                  and cn.created_at > i.recommended_at
+              ) as has_notes
+       from interventions i
+       where i.assigned_official_id = $1 and i.recommended_at >= $2 and i.recommended_at <= $3`,
+      [req.auth.officialId, since.toISOString(), until.toISOString()]
+    ),
+  ]);
+
+  const scoreBuckets = bucketize(scoreRows, buckets, 'computed_at');
+  const trend = buckets.map((b, i) => {
+    const rowsInBucket = scoreBuckets[i];
+    const avg = rowsInBucket.length
+      ? rowsInBucket.reduce((sum, r) => sum + Number(r.score_value), 0) / rowsInBucket.length
+      : null;
+    return { label: b.label, avgScore: avg !== null ? Math.round(avg * 10) / 10 : null };
+  });
+  const severityDistribution = buckets.map((b, i) => {
+    const rowsInBucket = scoreBuckets[i];
+    return {
+      label: b.label,
+      critical: rowsInBucket.filter((r) => r.risk_level_name === 'Critical').length,
+      high: rowsInBucket.filter((r) => r.risk_level_name === 'High').length,
+      moderate: rowsInBucket.filter((r) => r.risk_level_name === 'Moderate').length,
+      low: rowsInBucket.filter((r) => r.risk_level_name === 'Low').length,
+    };
+  });
+
+  const interventionPhases = { completed: 0, inProgress: 0, planned: 0 };
+  for (const i of interventionRows) {
+    if (i.completed_at) interventionPhases.completed += 1;
+    else if (i.has_notes) interventionPhases.inProgress += 1;
+    else interventionPhases.planned += 1;
+  }
+
+  return ok(res, { trend, severityDistribution, interventionPhases });
 });
 
 router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
@@ -410,7 +474,7 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
 
   const { data, error } = await supabase
     .from('alert_notifications')
-    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, user_id, triggered_at, alert_statuses(name), users(jurisdiction_id)), sos_events(sos_event_id, user_id, triggered_at, resolved_at)')
+    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, user_id, triggered_at, alert_statuses(name), users(jurisdiction_id)), sos_events(sos_event_id, user_id, triggered_at, acknowledged_at, resolved_at)')
     .eq('official_id', req.auth.officialId)
     .order('notified_at', { ascending: false })
     .limit(100); // Increased limit slightly to account for filtered items
@@ -431,13 +495,134 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
       autoAssigned: n.auto_assigned,
       userId: isUrgentHelp ? n.sos_events.user_id : n.alerts.user_id,
       triggeredAt: isUrgentHelp ? n.sos_events.triggered_at : n.alerts.triggered_at,
-      status: isUrgentHelp ? (n.sos_events.resolved_at ? 'Resolved' : 'Open') : n.alerts.alert_statuses.name,
+      status: isUrgentHelp
+        ? (n.sos_events.resolved_at ? 'Resolved' : n.sos_events.acknowledged_at ? 'Acknowledged' : 'Open')
+        : n.alerts.alert_statuses.name,
       notifiedAt: n.notified_at,
     });
   }
 
   return ok(res, { alerts: alerts.slice(0, 50) });
 });
+
+// schema.sql's sos_events comment documents "resolved_at/resolved_by are
+// set by PATCH /api/counsellor/sos/:sosEventId/resolve" - that route never
+// actually existed, which is why every SOS-sourced alert (source: 'sos')
+// stayed "Open" forever on the Alerts feed with no way to change it. Scoped
+// the same way /cases/:userId's requireJurisdiction(resolveUserJurisdiction)
+// is - via the SOS event's own user, substituting the caller's own
+// jurisdiction when they're that user's assigned counsellor (the
+// nationwide-fallback-assignment case).
+async function resolveSosEventJurisdiction(req) {
+  const { data: sosEvent } = await supabase.from('sos_events').select('user_id').eq('sos_event_id', req.params.sosEventId).maybeSingle();
+  if (!sosEvent) return null;
+  return resolveUserJurisdiction({ ...req, params: { userId: sosEvent.user_id } });
+}
+
+router.patch(
+  '/sos/:sosEventId/resolve',
+  requireRole(['Counsellor']),
+  generalApiLimiter,
+  requireJurisdiction(resolveSosEventJurisdiction),
+  async (req, res) => {
+    const { sosEventId } = req.params;
+    const { data, error } = await supabase
+      .from('sos_events')
+      .update({ resolved_at: new Date().toISOString(), resolved_by: req.auth.officialId })
+      .eq('sos_event_id', sosEventId)
+      .is('resolved_at', null)
+      .select('sos_event_id, user_id')
+      .maybeSingle();
+    if (error) return fail(res, 'Could not resolve this urgent-help event', 500);
+    if (!data) return fail(res, 'Urgent-help event not found or already resolved', 404);
+
+    await writeAuditLog({ officialId: req.auth.officialId, userId: data.user_id, action: 'update', entityType: 'sos_event', entityId: sosEventId });
+    return ok(res, { sosEventId: data.sos_event_id, status: 'Resolved' });
+  }
+);
+
+// The "seen it, on it" middle state - without this, an SOS alert could only
+// ever be Open or fully Resolved, with no way to signal active work on it
+// while still investigating (see migration_016's acknowledged_at/by columns).
+router.patch(
+  '/sos/:sosEventId/acknowledge',
+  requireRole(['Counsellor']),
+  generalApiLimiter,
+  requireJurisdiction(resolveSosEventJurisdiction),
+  async (req, res) => {
+    const { sosEventId } = req.params;
+    const { data, error } = await supabase
+      .from('sos_events')
+      .update({ acknowledged_at: new Date().toISOString(), acknowledged_by: req.auth.officialId })
+      .eq('sos_event_id', sosEventId)
+      .is('resolved_at', null)
+      .select('sos_event_id, user_id')
+      .maybeSingle();
+    if (error) return fail(res, 'Could not acknowledge this urgent-help event', 500);
+    if (!data) return fail(res, 'Urgent-help event not found or already resolved', 404);
+
+    await writeAuditLog({ officialId: req.auth.officialId, userId: data.user_id, action: 'update', entityType: 'sos_event', entityId: sosEventId });
+    return ok(res, { sosEventId: data.sos_event_id, status: 'Acknowledged' });
+  }
+);
+
+// The only existing write path for a distress_score-sourced alert
+// (POST /cases/:userId/intervention) only ever moves Open -> Acknowledged,
+// as a side effect of logging an intervention - there was no way to move
+// Acknowledged (or Open, if no intervention was ever needed) -> Resolved.
+async function resolveAlertJurisdiction(req) {
+  const { data: alert } = await supabase.from('alerts').select('user_id').eq('alert_id', req.params.alertId).maybeSingle();
+  if (!alert) return null;
+  return resolveUserJurisdiction({ ...req, params: { userId: alert.user_id } });
+}
+
+router.patch(
+  '/alerts/:alertId/acknowledge',
+  requireRole(['Counsellor']),
+  generalApiLimiter,
+  requireJurisdiction(resolveAlertJurisdiction),
+  async (req, res) => {
+    const { alertId } = req.params;
+    const { data: ackStatus, error: statusError } = await supabase.from('alert_statuses').select('alert_status_id').eq('name', 'Acknowledged').single();
+    if (statusError || !ackStatus) return fail(res, 'Could not resolve "Acknowledged" status', 500);
+
+    const { data, error } = await supabase
+      .from('alerts')
+      .update({ alert_status_id: ackStatus.alert_status_id })
+      .eq('alert_id', alertId)
+      .select('alert_id, user_id')
+      .maybeSingle();
+    if (error) return fail(res, 'Could not acknowledge this alert', 500);
+    if (!data) return fail(res, 'Alert not found', 404);
+
+    await writeAuditLog({ officialId: req.auth.officialId, userId: data.user_id, action: 'update', entityType: 'alert', entityId: alertId });
+    return ok(res, { alertId: data.alert_id, status: 'Acknowledged' });
+  }
+);
+
+router.patch(
+  '/alerts/:alertId/resolve',
+  requireRole(['Counsellor']),
+  generalApiLimiter,
+  requireJurisdiction(resolveAlertJurisdiction),
+  async (req, res) => {
+    const { alertId } = req.params;
+    const { data: resolvedStatus, error: statusError } = await supabase.from('alert_statuses').select('alert_status_id').eq('name', 'Resolved').single();
+    if (statusError || !resolvedStatus) return fail(res, 'Could not resolve "Resolved" status', 500);
+
+    const { data, error } = await supabase
+      .from('alerts')
+      .update({ alert_status_id: resolvedStatus.alert_status_id, resolved_at: new Date().toISOString() })
+      .eq('alert_id', alertId)
+      .select('alert_id, user_id')
+      .maybeSingle();
+    if (error) return fail(res, 'Could not resolve this alert', 500);
+    if (!data) return fail(res, 'Alert not found', 404);
+
+    await writeAuditLog({ officialId: req.auth.officialId, userId: data.user_id, action: 'update', entityType: 'alert', entityId: alertId });
+    return ok(res, { alertId: data.alert_id, status: 'Resolved' });
+  }
+);
 
 // Feature Catalog Section 2.2 "Scheduled counsellings".
 router.get('/scheduled', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {

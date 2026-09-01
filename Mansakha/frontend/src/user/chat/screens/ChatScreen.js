@@ -8,7 +8,7 @@ import { typography } from '../../shared/theme/typography';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import TopRightActions from '../../shared/components/TopRightActions';
-import { useCheckin } from '../../shared/services/hooks';
+import { useCheckin, useLogChatTurn } from '../../shared/services/hooks';
 import { analyzeConversation } from '../../shared/services/ollamaClient';
 const OLLAMA = "http://127.0.0.1:11434";
 const CHAT = OLLAMA + "/api/chat";
@@ -30,6 +30,7 @@ function Bubble({ message }) {
 export default function ChatScreen({ navigation }) {
   const { tier } = useResponsive();
   const submitMutation = useCheckin();
+  const logChatTurn = useLogChatTurn();
   const [model, setModel] = useState('gemma3:4b');
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -98,6 +99,14 @@ export default function ChatScreen({ navigation }) {
       
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
       setStatus(`● Connected • ${model}`);
+
+      // Persist this exchange (was never actually saved anywhere before -
+      // the whole conversation lived only in this component's React state).
+      // Fire-and-forget: a save failure shouldn't interrupt the live chat,
+      // it just means this turn won't count toward the 5,000-word scoring
+      // trigger server-side.
+      logChatTurn.mutate({ userMessage: text, aiMessage: reply });
+
       return reply;
     } catch (e) {
       setMessages(currentMsgs); // revert

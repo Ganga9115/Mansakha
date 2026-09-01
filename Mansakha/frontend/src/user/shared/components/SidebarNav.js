@@ -6,7 +6,6 @@ import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
 import { topBarHeight } from '../theme/layout';
-import { useAuth } from '../context/AuthContext';
 
 // Same palette AND spacing rhythm as the Staff/Ministry web app's
 // Counsellor sidebar (web-frontend/src/layouts/StaffLayout.jsx: p-6
@@ -27,13 +26,13 @@ const SIDEBAR = {
 // shape react-navigation gives any custom nav surface, so route state
 // stays driven by the navigator - this only renders the chrome.
 export default function SidebarNav({ state, descriptors, navigation, icons = {}, showMyCounsellor = false }) {
-  const { logout } = useAuth();
-
   return (
     <View style={styles.container}>
       {/* Corner cell - pinned to topBarHeight, matching each screen's own
           compact desktop banner, so the two read as one continuous strip
-          across the top of the screen. */}
+          across the top of the screen. Logout lives in Profile at the
+          bottom, not here - one place for it, not duplicated in the
+          sidebar too. */}
       <View style={styles.cornerCell}>
 
         {/* Mansakha Logo */}
@@ -42,7 +41,6 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
           style={styles.logo}
           resizeMode="contain"
         />
-
       </View>
 
       <View style={styles.body}>
@@ -90,26 +88,6 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
             );
           })}
         </View>
-
-        <View style={styles.footer}>
-          <Pressable
-            onPress={logout}
-            style={({ pressed }) => [
-              styles.logoutItem,
-              pressed && styles.itemPressed,
-            ]}
-          >
-            <Feather
-              name="log-out"
-              size={18}
-              color={SIDEBAR.textInactive}
-            />
-
-            <Text style={styles.logoutItemLabel}>
-              Log Out
-            </Text>
-          </Pressable>
-        </View>
       </View>
     </View>
   );
@@ -131,26 +109,17 @@ const styles = StyleSheet.create({
 
   // Mansakha logo
   logo: {
-    width: 200,
-    height: 150,
+    width: 185,
+    height: 130,
   },
 
   body: {
     flex: 1,
-    justifyContent: 'space-between',
   },
 
   items: {
     padding: spacing.xxl,
     gap: spacing.sm,
-  },
-
-  footer: {
-    paddingHorizontal: spacing.xxl,
-    paddingBottom: 16,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: SIDEBAR.divider,
   },
 
   item: {
@@ -178,20 +147,5 @@ const styles = StyleSheet.create({
 
   itemLabelActive: {
     color: SIDEBAR.textActive,
-  },
-
-  logoutItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: radius.md,
-  },
-
-  logoutItemLabel: {
-    ...typography.bodyStrong,
-    color: SIDEBAR.textInactive,
-    marginLeft: 12,
-    fontSize: 14,
   },
 });

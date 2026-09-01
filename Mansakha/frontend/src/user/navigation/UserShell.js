@@ -18,6 +18,7 @@ import CheckinScreen from '../wellness/screens/CheckinScreen';
 import CheckinConfirmationScreen from '../wellness/screens/CheckinConfirmationScreen';
 import DistressHistoryScreen from '../wellness/screens/DistressHistoryScreen';
 import SupportScreen from '../support/screens/SupportScreen';
+import NotificationsScreen from '../support/screens/NotificationsScreen';
 import SettingsScreen from '../support/screens/SettingsScreen';
 import ChatScreen from '../chat/screens/ChatScreen';
 import WellnessScreen from '../wellness/screens/WellnessScreen';
@@ -182,6 +183,7 @@ function ShellStack({ tabs, includeExtras = true }) {
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={tabs} />
       <RootStack.Screen name="support" component={SupportScreen} />
+      <RootStack.Screen name="notifications" component={NotificationsScreen} />
       {includeExtras && (
         <>
           <RootStack.Screen name="Chatbot" component={ChatScreen} />

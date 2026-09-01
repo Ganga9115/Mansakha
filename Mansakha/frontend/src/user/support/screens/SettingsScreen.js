@@ -27,6 +27,7 @@ import SegmentedToggle from '../../shared/components/SegmentedToggle';
 import IconInput from '../../shared/components/IconInput';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
+import LogoutButton from '../../shared/components/LogoutButton';
 import { Skeleton } from '../../shared/components/Skeleton';
 
 function InfoTileRow({ icon, label, value, loading, iconColor = colors.primary, isLast = false }) {
@@ -74,7 +75,9 @@ const INDIAN_LANGUAGES = [
 ];
 
 export default function SettingsScreen({ navigation }) {
-  const { logout, session } = useAuth();
+  // `logout` itself is invoked inside LogoutButton (it owns the confirm
+  // dialog) - this screen only needs `session` directly.
+  const { session } = useAuth();
   const toast = useToast();
   const dashboardQuery = useUserDashboard();
   const consentQuery = useConsentStatus();
@@ -194,6 +197,9 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={styles.headerRight}>
           {isDesktop ? (
+            // Desktop tier already has a working logout in the persistent
+            // sidebar (SidebarNav) alongside this screen, so it isn't
+            // repeated here.
             <DesktopHeaderActions
               fullName={dashboardQuery.data?.fullName}
               alertCount={0}
@@ -443,6 +449,13 @@ export default function SettingsScreen({ navigation }) {
             </View>
           )}
         </Card>
+
+        {/* Log Out - always in Profile at the bottom, not just the header
+            icon variants elsewhere (desktop's sidebar, phone/tablet's top
+            bar) - a Profile screen without a Log Out entry here reads as
+            incomplete regardless of what the header already offers. */}
+        <Text style={styles.sectionHeaderTitle}>ACCOUNT</Text>
+        <LogoutButton variant="row" style={{ marginBottom: spacing.lg }} />
       </View>
     </ScrollView>
   );
@@ -499,6 +512,7 @@ const styles = StyleSheet.create({
   pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
   headerRight: { marginLeft: spacing.md },
+  headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   iconCircleBtn: {
     width: 36,
     height: 36,
