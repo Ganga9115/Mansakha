@@ -1,13 +1,9 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, ChevronRight } from 'lucide-react';
 import {
   useCaseDetail,
-  useCaseNotes,
-  useAddCaseNote,
-  useCaseMessages,
-  useSendCaseMessage,
   useScheduleSession,
 } from '../services/hooks';
 
@@ -30,21 +26,11 @@ const TREND_META = {
 // Counsellor/Administration split.
 export default function CaseDetail() {
   const { id: userId } = useParams();
+  const navigate = useNavigate();
   const { data, loading, error } = useCaseDetail(userId);
-  const notesQuery = useCaseNotes(userId);
-  const addNote = useAddCaseNote(userId);
   const scheduleSession = useScheduleSession(userId);
-  const [noteText, setNoteText] = useState('');
-  const [showChat, setShowChat] = useState(false);
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleStatus, setScheduleStatus] = useState(null);
-
-  const handleAddNote = async () => {
-    if (!noteText.trim()) return;
-    await addNote.mutate(noteText.trim());
-    setNoteText('');
-    notesQuery.refetch();
-  };
 
   const handleSchedule = async () => {
     if (!scheduleDate) return;
@@ -102,15 +88,18 @@ export default function CaseDetail() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap justify-end">
-            {data.phone && (
-              <>
-                <a href={`tel:${data.phone}`} className="px-4 py-2 border border-emerald-500 text-emerald-600 rounded-lg text-xs font-medium hover:bg-emerald-50 transition flex items-center gap-2">
-                  <MessageCircle size={14} /> Call User
-                </a>
-                <a href={`https://wa.me/${data.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="px-4 py-2 bg-emerald-500 text-white rounded-lg text-xs font-medium shadow-sm hover:bg-emerald-600 transition flex items-center gap-2">
-                  <MessageCircle size={14} /> WhatsApp
-                </a>
-              </>
+            {data.optedForManualCounsellor && (
+              <div className="relative inline-block">
+                <button
+                  onClick={() => navigate(`/counsellor/case-detail/${userId}/chat`)}
+                  className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-blue-50 transition flex items-center gap-2"
+                >
+                  <MessageCircle size={14} /> Chat with User
+                </button>
+                {data.hasUnreadMessage && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -148,46 +137,17 @@ export default function CaseDetail() {
               )}
             </div>
 
-            {/* Case notes */}
-            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+            {/* Case notes - own page (CaseNotes.jsx), not expanded inline
+                here: a case can accumulate a long thread (every AI-drafted
+                note per check-in included), which used to push the rest of
+                the case file below the fold. */}
+            <button
+              onClick={() => navigate(`/counsellor/case-detail/${userId}/notes`)}
+              className="w-full bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between hover:bg-gray-50 transition text-left"
+            >
               <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
-              {notesQuery.loading ? (
-                <p className="text-xs text-gray-400">Loading notes...</p>
-              ) : (notesQuery.data?.notes || []).length === 0 ? (
-                <p className="text-xs text-gray-400">No notes yet.</p>
-              ) : (
-                <div className="space-y-3 text-xs">
-                  {notesQuery.data.notes.map((n) => (
-                    <div key={n.noteId} className="border-b border-gray-50 pb-2">
-                      <div className="flex items-center gap-2 text-gray-400 mb-1">
-                        <span className="font-semibold text-gray-600">{n.authorName}</span>
-                        {n.authoredBy === 'ai' && (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#3D5A80] text-[9px] font-bold uppercase">AI-drafted</span>
-                        )}
-                        <span>{new Date(n.createdAt).toLocaleString()}</span>
-                      </div>
-                      <p className="text-gray-700">{n.noteText}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex gap-2 pt-2">
-                <input
-                  type="text"
-                  value={noteText}
-                  onChange={(e) => setNoteText(e.target.value)}
-                  placeholder="Add a note..."
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs"
-                />
-                <button
-                  onClick={handleAddNote}
-                  disabled={addNote.loading}
-                  className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium disabled:opacity-60"
-                >
-                  Add
-                </button>
-              </div>
-            </div>
+              <ChevronRight size={18} className="text-gray-400" />
+            </button>
 
           </div>
 
@@ -217,74 +177,11 @@ export default function CaseDetail() {
               </button>
             </div>
 
-            {/* In-app chat - only shown when the user has opted in to
-                a manual counsellor; hidden entirely (not disabled)
-                otherwise. */}
-            {data.optedForManualCounsellor && (
-              <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-                <button
-                  onClick={() => setShowChat((v) => !v)}
-                  className="w-full flex items-center justify-between px-6 py-4 text-left"
-                >
-                  <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2"><MessageCircle size={16} /> Chat with User</h3>
-                  <span className="text-xs text-[#519BCE] font-semibold">{showChat ? 'Hide' : 'Open'}</span>
-                </button>
-                {showChat && <CaseChatPanel userId={userId} />}
-              </div>
-            )}
           </div>
 
         </div>
 
       </div>
     </StaffLayout>
-  );
-}
-
-function CaseChatPanel({ userId }) {
-  const { data, loading } = useCaseMessages(userId);
-  const sendMessage = useSendCaseMessage(userId);
-  const [draft, setDraft] = useState('');
-
-  const handleSend = async () => {
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
-    await sendMessage.mutate(text);
-  };
-
-  return (
-    <div className="border-t border-gray-100 p-4 space-y-3">
-      <div className="max-h-64 overflow-y-auto space-y-2">
-        {loading ? (
-          <p className="text-xs text-gray-400">Loading messages...</p>
-        ) : (data?.messages || []).length === 0 ? (
-          <p className="text-xs text-gray-400">No messages yet.</p>
-        ) : data.messages.map((m) => (
-          <div key={m.messageId} className={`flex ${m.senderType === 'official' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] px-3 py-2 rounded-lg text-xs ${m.senderType === 'official' ? 'bg-[#519BCE] text-white' : 'bg-gray-100 text-gray-800'}`}>
-              {m.body}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Type a message..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs"
-        />
-        <button
-          onClick={handleSend}
-          disabled={sendMessage.loading || !draft.trim()}
-          className="px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-medium disabled:opacity-60"
-        >
-          Send
-        </button>
-      </div>
-    </div>
   );
 }

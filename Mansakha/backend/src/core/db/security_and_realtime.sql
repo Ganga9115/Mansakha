@@ -56,3 +56,14 @@ alter publication supabase_realtime add table alerts, alert_notifications;
 insert into storage.buckets (id, name, public)
 values ('profile-photos', 'profile-photos', true)
 on conflict (id) do nothing;
+
+-- Storage bucket for voice messages (POST /api/user/messages/voice,
+-- POST /api/counsellor/cases/:userId/messages/voice) - NOT public, unlike
+-- profile-photos: these are private counsellor<->user conversations, so
+-- playback always goes through a short-lived signed URL the backend
+-- generates per-fetch (see getVoiceMessageUrl in both routes files), never
+-- a permanent public link. Writes only ever happen via the backend's
+-- service_role key, same as profile-photos.
+insert into storage.buckets (id, name, public)
+values ('voice-messages', 'voice-messages', false)
+on conflict (id) do nothing;

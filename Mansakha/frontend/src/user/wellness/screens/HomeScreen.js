@@ -58,9 +58,10 @@ export default function HomeScreen({ navigation }) {
                       fullName={data.fullName}
                       alertCount={data.alerts.length}
                       onBellPress={() => {}}
+                      showNotifications
                     />
                   ) : (
-                    <TopRightActions />
+                    <TopRightActions showNotifications />
                   )}
                 </View>
               </View>
@@ -146,6 +147,7 @@ export default function HomeScreen({ navigation }) {
                       style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
                       onPress={() => navigation?.navigate('mycounsellor')}
                     >
+                      {!!data.hasUnreadCounsellorMessage && <View style={styles.unreadDot} />}
                       <View style={styles.gridIconCircle}>
                         <Feather name="message-square" size={20} color={colors.primary} />
                       </View>
@@ -335,9 +337,19 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.border,
+    position: 'relative',
     ...shadow.card,
   },
   gridCardDesktop: { width: '23%' },
+  unreadDot: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 10,
+    height: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.danger,
+  },
   gridIconCircle: {
     width: 44,
     height: 44,

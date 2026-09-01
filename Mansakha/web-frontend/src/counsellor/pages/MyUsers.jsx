@@ -91,12 +91,17 @@ export default function MyUsers() {
                       ) : <span className="text-gray-400">-</span>}
                     </td>
                     <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => navigate(`/counsellor/case-detail/${item.userId}`)}
-                        className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-medium transition"
-                      >
-                        View Case
-                      </button>
+                      <div className="relative inline-block">
+                        <button
+                          onClick={() => navigate(`/counsellor/case-detail/${item.userId}`)}
+                          className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-medium transition"
+                        >
+                          View Case
+                        </button>
+                        {item.hasUnreadMessage && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

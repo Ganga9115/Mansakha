@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { setToken } from '../services/auth';
@@ -12,6 +12,27 @@ export default function MinistryLogin() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Enter-to-next-field navigation, same pattern as shared/pages/Login.jsx:
+  // Enter on email focuses password; Enter on password clicks the real
+  // submit button so native `required` validation and the button's
+  // existing disabled={loading} guard apply without duplicating logic here.
+  const passwordRef = useRef(null);
+  const submitButtonRef = useRef(null);
+
+  const handleEmailKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      passwordRef.current?.focus();
+    }
+  };
+
+  const handlePasswordKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitButtonRef.current?.click();
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -92,6 +113,7 @@ export default function MinistryLogin() {
                     placeholder="Email Address"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={handleEmailKeyDown}
                     required
                     className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                   />
@@ -105,10 +127,12 @@ export default function MinistryLogin() {
                     <Lock className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
+                    ref={passwordRef}
                     type={showPassword ? 'text' : 'password'}
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    onKeyDown={handlePasswordKeyDown}
                     required
                     className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                   />
@@ -125,6 +149,7 @@ export default function MinistryLogin() {
               </div>
 
               <button
+                ref={submitButtonRef}
                 type="submit"
                 disabled={loading}
                 className="w-full bg-[#519BCE] hover:bg-[#4686b3] text-white py-3 rounded-lg text-sm font-semibold shadow-sm shadow-[#519BCE]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 mt-2"

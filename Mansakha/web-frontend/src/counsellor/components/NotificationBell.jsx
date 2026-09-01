@@ -7,10 +7,15 @@ import { useMe, useMyNotifications } from '../services/hooks';
 // imports rule, even though the implementation is identical across roles.
 export default function NotificationBell() {
   const { data: me } = useMe();
-  const { data, loading } = useMyNotifications();
+  const { data, loading, refetch } = useMyNotifications();
   const notifications = data?.notifications || [];
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => refetch(), 15000);
+    return () => clearInterval(interval);
+  }, [refetch]);
   const containerRef = useRef(null);
   // Keyed by officialId, not a shared key - otherwise one account's "seen"
   // timestamp would wrongly suppress another account's unread badge the

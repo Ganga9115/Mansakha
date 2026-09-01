@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Inbox, Users, Bell, BarChart3, User, LogOut, Search, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Inbox, Users, Bell, BarChart3, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -127,15 +127,6 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">
-            <div className="relative hidden md:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-[#3D5A80]/60" size={16} />
-              <input
-                type="text"
-                placeholder="Search cases, alerts..."
-                className="pl-9 pr-4 py-1.5 bg-white rounded-md text-sm border border-[#D6E8F5] focus:outline-none focus:ring-2 focus:ring-[#519BCE] w-40 lg:w-64 text-[#3D5A80]"
-              />
-            </div>
-
             <NotificationBell />
 
             <button

@@ -1,4 +1,6 @@
 const express = require('express');
+const multer = require('multer');
+const crypto = require('crypto');
 const { supabase } = require('../../core/db/supabaseClient');
 const { pool } = require('../../core/db/pgPool');
 const { writeAuditLog } = require('../../core/services/auditLog');
@@ -14,10 +16,27 @@ const RISK_SORT_ORDER = { Critical: 4, High: 3, Moderate: 2, Low: 1 };
 const router = express.Router();
 
 // No standing "assignment" table exists in the schema, so "cases this counsellor
-// handles" is scoped by the same jurisdiction model Administration uses.
+// handles" is scoped by the same jurisdiction model Administration uses -
+// EXCEPT when the caller is this user's own assigned_counsellor_id: the
+// system-wide fallback in stressResponse.js's selectLeastLoadedCounsellor
+// deliberately assigns a user to a counsellor outside their district when
+// their own district has none, so requiring a jurisdiction match on top of
+// that explicit assignment would 403 a counsellor out of their own patient's
+// case (confirmed live - a Porbandar user assigned to a Central Delhi
+// counsellor got "Outside your assigned jurisdiction" on every one of these
+// routes). Substituting the caller's own jurisdiction as the "target" here
+// makes requireJurisdiction's tree-walk trivially and correctly pass,
+// without changing requireJurisdiction itself (still used as-is by
+// Administration's read-only access to this same route, which SHOULD stay
+// jurisdiction-gated).
 async function resolveUserJurisdiction(req) {
-  const { data } = await supabase.from('users').select('jurisdiction_id').eq('user_id', req.params.userId).maybeSingle();
-  return data ? data.jurisdiction_id : null;
+  const { data } = await supabase.from('users').select('jurisdiction_id, assigned_counsellor_id').eq('user_id', req.params.userId).maybeSingle();
+  if (!data) return null;
+  if (req.auth.type === 'official' && data.assigned_counsellor_id === req.auth.officialId) {
+    const ownJurisdictionId = req.auth.roles.find((r) => r.jurisdictionId)?.jurisdictionId;
+    if (ownJurisdictionId) return ownJurisdictionId;
+  }
+  return data.jurisdiction_id;
 }
 
 router.use(verifyToken);
@@ -34,9 +53,13 @@ router.get('/intervention-types', requireRole(['Counsellor']), generalApiLimiter
 // page client-side, which would be wrong once a jurisdiction has more cases than
 // one page) - Screen Inventory's Counsellor Dashboard needs this.
 router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
-  if (jurisdictionIds.length === 0) return ok(res, { total: 0, low: 0, moderate: 0, high: 0, critical: 0 });
-
+  // assigned_counsellor_id is the sole source of truth for "is this my
+  // patient" - same fix/rationale as /my-users above: filtering by the
+  // counsellor's own jurisdiction roles silently hid every user assigned via
+  // selectLeastLoadedCounsellor's system-wide fallback (confirmed live - a
+  // user outside a counsellor's own jurisdiction never showed up here,
+  // Total Cases read 0 despite /my-users correctly showing that user).
+  //
   // Raw pg (not Supabase REST) - this is the Counsellor's own landing screen,
   // so its latency is felt on every login/reload; a single PostgREST round
   // trip alone costs ~1-2s here regardless of how little data comes back
@@ -49,8 +72,8 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
        select risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
      ) ds on true
      left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-     where u.jurisdiction_id = any($1::uuid[])`,
-    [jurisdictionIds]
+     where u.assigned_counsellor_id = $1`,
+    [req.auth.officialId]
   );
 
   const counts = { total: 0, low: 0, moderate: 0, high: 0, critical: 0 };
@@ -70,14 +93,14 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   const pageSize = 20;
   const offset = (Number(page) - 1) * pageSize;
 
-  const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
-  if (jurisdictionIds.length === 0) return ok(res, { cases: [], total: 0 });
-
+  // assigned_counsellor_id, not jurisdiction - same fix as /dashboard and
+  // /my-users above (see /my-users' comment for the full rationale).
+  //
   // Each user's CURRENT risk tier is their most recent distress_scores row - not
   // modeled as a denormalized column on `users`, so this is resolved via the
   // latest score per user rather than trusting any cached field. Sorting by
-  // priority means the whole jurisdiction's cases have to be fetched and sorted
-  // in application code before paginating - a DB-level `.range()` would only
+  // priority means the whole queue has to be fetched and sorted in
+  // application code before paginating - a DB-level `.range()` would only
   // sort within one already-arbitrary page, not across the whole queue.
   //
   // Raw pg, not Supabase REST - the Case Queue is a screen a Counsellor
@@ -90,8 +113,8 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
        select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
      ) ds on true
      left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-     where u.jurisdiction_id = any($1::uuid[])`,
-    [jurisdictionIds]
+     where u.assigned_counsellor_id = $1`,
+    [req.auth.officialId]
   );
 
   const BACKSTORY_EXCERPT_LENGTH = 140; // Section 2.2: a truncated excerpt on the list, full text on Case Detail
@@ -121,23 +144,36 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
 });
 
 router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
-  if (jurisdictionIds.length === 0) return ok(res, { cases: [], total: 0 });
-
   const { riskLevel, page = 1 } = req.query;
   const pageSize = 20;
   const offset = (Math.max(1, parseInt(page, 10)) - 1) * pageSize;
 
-  const { rows } = await pool.query(
-    `select u.user_id, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name
-     from users u
-     left join lateral (
-       select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
-     ) ds on true
-     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-     where u.assigned_counsellor_id = $1 and u.jurisdiction_id = any($2::uuid[])`,
-    [req.auth.officialId, jurisdictionIds]
-  );
+  // assigned_counsellor_id is the sole source of truth for "is this my
+  // patient" - it's already set explicitly, whether by the normal
+  // same-jurisdiction match or by selectLeastLoadedCounsellor's system-wide
+  // fallback when a user's own district has no counsellor at all
+  // (stressResponse.js). Requiring the user's CURRENT jurisdiction to also
+  // match one of the counsellor's own jurisdiction roles silently hid every
+  // user assigned via that fallback path - confirmed live (a user in
+  // Porbandar assigned to a Central Delhi counsellor never showed up here).
+  const [{ rows }, { rows: unreadRows }] = await Promise.all([
+    pool.query(
+      `select u.user_id, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name
+       from users u
+       left join lateral (
+         select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
+       ) ds on true
+       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where u.assigned_counsellor_id = $1`,
+      [req.auth.officialId]
+    ),
+    pool.query(
+      `select distinct user_id from messages where official_id = $1 and sender_type = 'user' and read_at is null`,
+      [req.auth.officialId]
+    ),
+  ]);
+
+  const unreadUserIds = new Set(unreadRows.map((r) => r.user_id));
 
   const BACKSTORY_EXCERPT_LENGTH = 140;
 
@@ -149,6 +185,7 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
     caseBackground: u.case_background
       ? (u.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${u.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : u.case_background)
       : null,
+    hasUnreadMessage: unreadUserIds.has(u.user_id),
   }));
 
   if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
@@ -171,9 +208,9 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   // (error was never checked), which is why Case Detail's Call/WhatsApp
   // buttons never showed: userRow always came back undefined. Fixed to
   // pull the real contact number from user_identity instead.
-  const [{ rows: userRows }, { rows: scoreRows }] = await Promise.all([
+  const [{ rows: userRows }, { rows: scoreRows }, { rows: unreadRows }] = await Promise.all([
     pool.query(
-      `select u.case_background, ui.contact_number as phone
+      `select u.case_background, u.opted_for_manual_counsellor, ui.contact_number as phone
        from users u
        left join user_identity ui on ui.user_id = u.user_id
        where u.user_id = $1`,
@@ -190,8 +227,15 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
        limit 3`,
       [userId]
     ),
+    // Red-dot indicator for the "Chat with User" button - unread from the
+    // user's side, scoped to this counsellor specifically.
+    pool.query(
+      `select 1 from messages where user_id = $1 and official_id = $2 and sender_type = 'user' and read_at is null limit 1`,
+      [userId, req.auth.officialId]
+    ),
   ]);
   const userRow = userRows[0];
+  const hasUnreadMessage = unreadRows.length > 0;
 
   if (scoreRows.length === 0) return fail(res, 'No check-ins recorded for this case yet', 404);
 
@@ -228,6 +272,8 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   return ok(res, {
     caseBackground: userRow?.case_background || null,
     phone: userRow?.phone || null,
+    optedForManualCounsellor: userRow?.opted_for_manual_counsellor || false,
+    hasUnreadMessage,
     score: Number(latest.score_value),
     previousScore: previous ? Number(previous.score_value) : null,
     trend,
@@ -348,17 +394,23 @@ router.post('/cases/:userId/notes', requireRole(['Counsellor']), generalApiLimit
 // through by the user, so a fixed recent-N cap is what Section 9's "don't
 // load thousands of rows at once" actually calls for here.
 //
-// Feature Catalog Section 2.2/2.4 "SOS alert" - a row here now backs EITHER
-// a distress-score alert OR an SOS event (alert_notifications.source),
-// never both (see schema.sql's XOR check constraint) - the response always
-// includes `source` so the frontend can render the distinct SOS badge.
+// A row here backs EITHER a distress-score alert OR an urgent-help request
+// (alert_notifications.source = 'sos' in the DB, predating the "Get Help
+// Now" rename - not worth a migration for a label), never both (schema.sql's
+// XOR check constraint). Urgent-help rows skip the jurisdiction re-check
+// below: that counsellor can be assigned nationwide (selectLeastLoadedCounsellor
+// no longer scopes by district), so `official_id = me` alone is already
+// sufficient proof this is legitimately mine - re-requiring a jurisdiction
+// match would incorrectly hide exactly the cross-jurisdiction assignments
+// this feature exists to allow (same bug class fixed earlier for
+// /my-users and case-detail's requireJurisdiction).
 router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
   const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
   if (jurisdictionIds.length === 0) return ok(res, { alerts: [] });
 
   const { data, error } = await supabase
     .from('alert_notifications')
-    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, user_id, triggered_at, alert_statuses(name), users(jurisdiction_id)), sos_events(sos_event_id, user_id, triggered_at, resolved_at, users(jurisdiction_id))')
+    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, user_id, triggered_at, alert_statuses(name), users(jurisdiction_id)), sos_events(sos_event_id, user_id, triggered_at, resolved_at)')
     .eq('official_id', req.auth.officialId)
     .order('notified_at', { ascending: false })
     .limit(100); // Increased limit slightly to account for filtered items
@@ -366,44 +418,25 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
 
   const alerts = [];
   for (const n of data || []) {
-    const isSos = n.source === 'sos';
-    const jId = isSos ? n.sos_events?.users?.jurisdiction_id : n.alerts?.users?.jurisdiction_id;
-    if (!jurisdictionIds.includes(jId)) continue;
+    const isUrgentHelp = n.source === 'sos';
+    if (!isUrgentHelp) {
+      const jId = n.alerts?.users?.jurisdiction_id;
+      if (!jurisdictionIds.includes(jId)) continue;
+    }
 
     alerts.push({
-      alertId: isSos ? n.sos_events.sos_event_id : n.alerts.alert_id,
+      alertId: isUrgentHelp ? n.sos_events.sos_event_id : n.alerts.alert_id,
       source: n.source,
       priority: n.priority,
       autoAssigned: n.auto_assigned,
-      userId: isSos ? n.sos_events.user_id : n.alerts.user_id,
-      triggeredAt: isSos ? n.sos_events.triggered_at : n.alerts.triggered_at,
-      status: isSos ? (n.sos_events.resolved_at ? 'Resolved' : 'Open') : n.alerts.alert_statuses.name,
+      userId: isUrgentHelp ? n.sos_events.user_id : n.alerts.user_id,
+      triggeredAt: isUrgentHelp ? n.sos_events.triggered_at : n.alerts.triggered_at,
+      status: isUrgentHelp ? (n.sos_events.resolved_at ? 'Resolved' : 'Open') : n.alerts.alert_statuses.name,
       notifiedAt: n.notified_at,
     });
   }
 
   return ok(res, { alerts: alerts.slice(0, 50) });
-});
-
-// Marks an SOS event resolved - the sos_events equivalent of acknowledging/
-// resolving a normal alert (which uses alert_statuses instead, since SOS
-// deliberately doesn't create an alerts row - see schema.sql).
-router.patch('/sos/:sosEventId/resolve', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  const { sosEventId } = req.params;
-
-  const { data, error } = await supabase
-    .from('sos_events')
-    .update({ resolved_at: new Date().toISOString(), resolved_by: req.auth.officialId })
-    .eq('sos_event_id', sosEventId)
-    .is('resolved_at', null)
-    .select('sos_event_id, user_id')
-    .maybeSingle();
-  if (error) return fail(res, 'Could not resolve SOS event', 500);
-  if (!data) return fail(res, 'SOS event not found or already resolved', 404);
-
-  await writeAuditLog({ officialId: req.auth.officialId, userId: data.user_id, action: 'update', entityType: 'sos_event', entityId: sosEventId });
-
-  return ok(res, null, 'SOS event resolved');
 });
 
 // Feature Catalog Section 2.2 "Scheduled counsellings".
@@ -453,21 +486,73 @@ async function requireOptedInUser(req, res) {
   return true;
 }
 
+// A ping older than this is treated as "stopped typing" - see the matching
+// constant/comment in user/routes/user.routes.js.
+const TYPING_ACTIVE_MS = 4000;
+
+// Voice messages - see the matching constants/helpers in
+// user/routes/user.routes.js for the full rationale (private signed-URL
+// bucket, WhatsApp-style record/upload/play-with-duration).
+const VOICE_MESSAGE_URL_TTL_SECONDS = 3600;
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('audio/')) return cb(new Error('File must be audio'));
+    cb(null, true);
+  },
+});
+
+function audioExtensionFromMime(mimetype) {
+  if (mimetype.includes('webm')) return 'webm';
+  if (mimetype.includes('mp4') || mimetype.includes('m4a') || mimetype.includes('aac')) return 'm4a';
+  if (mimetype.includes('ogg')) return 'ogg';
+  if (mimetype.includes('wav')) return 'wav';
+  return 'audio';
+}
+
+async function getVoiceMessageUrl(audioPath) {
+  if (!audioPath) return null;
+  const { data, error } = await supabase.storage.from('voice-messages').createSignedUrl(audioPath, VOICE_MESSAGE_URL_TTL_SECONDS);
+  return error ? null : data.signedUrl;
+}
+
 router.get('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
   if (!(await requireOptedInUser(req, res))) return;
   const { userId } = req.params;
 
   const { data, error } = await supabase
     .from('messages')
-    .select('message_id, sender_type, body, sent_at')
+    .select('message_id, sender_type, body, sent_at, message_type, audio_path, duration_seconds')
     .eq('user_id', userId)
     .eq('official_id', req.auth.officialId)
     .order('sent_at', { ascending: true });
   if (error) return fail(res, 'Could not load messages', 500);
 
-  return ok(res, {
-    messages: (data || []).map((m) => ({ messageId: m.message_id, senderType: m.sender_type, body: m.body, sentAt: m.sent_at })),
-  });
+  // Opening/polling this thread is what marks the user's messages read -
+  // matches ordinary chat-app semantics, no separate "mark read" call needed.
+  await pool.query(
+    `update messages set read_at = now() where user_id = $1 and official_id = $2 and sender_type = 'user' and read_at is null`,
+    [userId, req.auth.officialId]
+  );
+
+  const { rows: typingRows } = await pool.query(
+    `select updated_at from typing_status where user_id = $1 and official_id = $2 and sender_type = 'user'`,
+    [userId, req.auth.officialId]
+  );
+  const otherPartyTyping = !!typingRows[0] && (Date.now() - new Date(typingRows[0].updated_at).getTime()) < TYPING_ACTIVE_MS;
+
+  const messages = await Promise.all((data || []).map(async (m) => ({
+    messageId: m.message_id,
+    senderType: m.sender_type,
+    messageType: m.message_type,
+    body: m.body,
+    audioUrl: m.message_type === 'voice' ? await getVoiceMessageUrl(m.audio_path) : null,
+    durationSeconds: m.duration_seconds,
+    sentAt: m.sent_at,
+  })));
+
+  return ok(res, { messages, otherPartyTyping });
 });
 
 router.post('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
@@ -478,12 +563,56 @@ router.post('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLi
 
   const { data, error } = await supabase
     .from('messages')
-    .insert({ user_id: userId, official_id: req.auth.officialId, sender_type: 'official', body: body.trim() })
+    .insert({ user_id: userId, official_id: req.auth.officialId, sender_type: 'official', message_type: 'text', body: body.trim() })
     .select('message_id, sent_at')
     .single();
   if (error) return fail(res, `Could not send message: ${error.message}`, 500);
 
+  // Sending implies typing has stopped - clears the indicator on the user's
+  // side immediately rather than waiting out TYPING_ACTIVE_MS.
+  await supabase.from('typing_status').delete().eq('user_id', userId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
+
   return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
+});
+
+router.post('/cases/:userId/messages/voice', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), audioUpload.single('audio'), async (req, res) => {
+  if (!(await requireOptedInUser(req, res))) return;
+  const { userId } = req.params;
+  if (!req.file) return fail(res, 'audio file is required', 400);
+
+  const durationSeconds = Math.max(0, Math.round(Number(req.body.duration) || 0));
+  const audioPath = `${userId}/${crypto.randomUUID()}.${audioExtensionFromMime(req.file.mimetype)}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('voice-messages')
+    .upload(audioPath, req.file.buffer, { contentType: req.file.mimetype });
+  if (uploadError) return fail(res, `Could not upload voice message: ${uploadError.message}`, 500);
+
+  const { data, error } = await supabase
+    .from('messages')
+    .insert({ user_id: userId, official_id: req.auth.officialId, sender_type: 'official', message_type: 'voice', audio_path: audioPath, duration_seconds: durationSeconds })
+    .select('message_id, sent_at')
+    .single();
+  if (error) return fail(res, `Could not send voice message: ${error.message}`, 500);
+
+  await supabase.from('typing_status').delete().eq('user_id', userId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
+
+  return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
+});
+
+// Fire-and-forget ping while the counsellor is actively composing a reply -
+// upserted (not inserted) since only the most recent "still typing" moment
+// matters, not a history of keystrokes.
+router.post('/cases/:userId/messages/typing', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
+  if (!(await requireOptedInUser(req, res))) return;
+  const { userId } = req.params;
+
+  const { error } = await supabase
+    .from('typing_status')
+    .upsert({ user_id: userId, official_id: req.auth.officialId, sender_type: 'official', updated_at: new Date().toISOString() }, { onConflict: 'user_id,official_id,sender_type' });
+  if (error) return fail(res, `Could not update typing status: ${error.message}`, 500);
+
+  return ok(res, null);
 });
 
 module.exports = router;

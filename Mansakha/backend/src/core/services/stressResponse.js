@@ -3,13 +3,18 @@ const { enqueueAlertDispatch } = require('./dispatchWorker');
 const { CASE_STAGE_SCORES } = require('../../user/services/userProvisioning');
 
 // Shared by applyStressResponse's Critical branch below, user/routes/user.routes.js's
-// /sos, and /counsellor-preference (opting in assigns immediately, so a
-// WhatsApp/call redirect has someone to point to right away). Automated
-// counsellor-assignment algorithm, per explicit request:
+// /urgent-help, and /counsellor-preference (opting in assigns immediately, so a
+// chat/call redirect has someone to point to right away). Automated
+// counsellor-assignment algorithm, per explicit request - ANY counsellor
+// nationwide is eligible (not scoped to the user's own district first):
+// a user in Shimla, Himachal Pradesh can land on a counsellor anywhere in
+// India, purely based on who's least loaded right now. `jurisdictionId` is
+// no longer used to scope eligibility (kept as a parameter for call-site
+// compatibility) - every active Counsellor in the system is a candidate.
 //
-//   1. Primary: whichever eligible Counsellor in the jurisdiction currently
-//      has the fewest ACTIVE assigned cases (case_stage != 'Case Closed').
-//      A closed case no longer counts toward caseload.
+//   1. Primary: whichever eligible Counsellor currently has the fewest
+//      ACTIVE assigned cases (case_stage != 'Case Closed'). A closed case no
+//      longer counts toward caseload.
 //   2. Tie-break (two+ counsellors with the same active count): whichever
 //      has the HIGHER sum of case-stage scores (Investigation=1, Trial=2,
 //      Rehabilitation=3, Compensation=4, Case Closed=0) across every user
@@ -19,26 +24,14 @@ const { CASE_STAGE_SCORES } = require('../../user/services/userProvisioning');
 //   3. Still tied after that: first by official_id, for a deterministic pick
 //      rather than depending on query row order.
 //
-// Returns null if the jurisdiction has no Counsellor at all.
+// Returns null if there is no Counsellor anywhere in the system.
+// eslint-disable-next-line no-unused-vars
 async function selectLeastLoadedCounsellor(jurisdictionId) {
-  let counsellorIds = [];
-  if (jurisdictionId) {
-    const { data: allRoles } = await supabase
-      .from('official_roles')
-      .select('official_id, roles(role_name)')
-      .eq('jurisdiction_id', jurisdictionId)
-      .is('revoked_at', null);
-    counsellorIds = (allRoles || []).filter((r) => r.roles?.role_name === 'Counsellor').map((r) => r.official_id);
-  }
-
-  // Fallback: if no counsellor is assigned to that specific district, find any active counsellor in the system
-  if (counsellorIds.length === 0) {
-    const { data: globalRoles } = await supabase
-      .from('official_roles')
-      .select('official_id, roles(role_name)')
-      .is('revoked_at', null);
-    counsellorIds = (globalRoles || []).filter((r) => r.roles?.role_name === 'Counsellor').map((r) => r.official_id);
-  }
+  const { data: globalRoles } = await supabase
+    .from('official_roles')
+    .select('official_id, roles(role_name)')
+    .is('revoked_at', null);
+  const counsellorIds = (globalRoles || []).filter((r) => r.roles?.role_name === 'Counsellor').map((r) => r.official_id);
 
   if (counsellorIds.length === 0) return null;
   if (counsellorIds.length === 1) return counsellorIds[0];

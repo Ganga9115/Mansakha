@@ -66,11 +66,15 @@ router.get('/', verifyToken, async (req, res) => {
 // Real notification bell for every staff role (Ministry's was a plain
 // decorative button; Counsellor's top bar had its own one-off open-alert
 // count instead of this). alert_notifications (schema.sql) is written for
-// whichever officials actually need to know about an alert/SOS - the
-// assigned Counsellor and every District Administration official in that
-// user's jurisdiction (see the table's own comment) - so State/National
-// Admin, Ministry, and Data Operator legitimately just see an empty list
-// today, not a bug, since nothing currently targets them.
+// whichever officials actually need to know about an alert or urgent-help
+// request - the assigned Counsellor, every District Administration official
+// in that user's jurisdiction, and (for urgent-help specifically) every
+// State Administration official over that district's parent state - so
+// National Admin, Ministry, and Data Operator legitimately just see an
+// empty list today, not a bug, since nothing currently targets them.
+// source = 'sos' in the DB is the urgent-help request kind (table/column
+// names predate the rename to "Get Help Now" - not worth a migration for a
+// label).
 router.get('/notifications', verifyToken, async (req, res) => {
   if (req.auth.type !== 'official') return fail(res, 'Staff account required', 403);
 
@@ -95,7 +99,7 @@ router.get('/notifications', verifyToken, async (req, res) => {
       notifiedAt: n.notified_at,
       priority: n.priority,
       message: n.source === 'sos'
-        ? `SOS from ${n.user_name || 'a user'}`
+        ? `Urgent help requested by ${n.user_name || 'a user'}`
         : `${n.risk_level || 'New'} alert - ${n.user_name || 'a user'}`,
     }));
 
