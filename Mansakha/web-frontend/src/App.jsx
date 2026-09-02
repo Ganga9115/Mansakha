@@ -50,10 +50,10 @@ import ReportsInbox from './ministry/pages/ReportsInbox';
 import EmergencyBroadcast from './ministry/pages/EmergencyBroadcast';
 import MinistrySettings from './ministry/pages/Settings';
 
-import DataIntakeDashboard from './dataoperator/pages/Dashboard';
-import DataIntakeFetchCase from './dataoperator/pages/FetchCase';
-import DataIntakeUsers from './dataoperator/pages/Users';
-import DataIntakeSettings from './dataoperator/pages/Settings';
+import DataOperatorDashboard from './dataoperator/pages/Dashboard';
+import DataOperatorFetchCase from './dataoperator/pages/FetchCase';
+import DataOperatorUsers from './dataoperator/pages/Users';
+import DataOperatorSettings from './dataoperator/pages/Settings';
 
 export default function App() {
   return (
@@ -127,10 +127,10 @@ export default function App() {
         {/* Data Operator - signs in via the shared Staff Login (/login)
             alongside Counsellor/Administration, not a separate login page
             (that treatment is Ministry/Super Admin's alone). */}
-        <Route path="/dataintake" element={<RequireAuth><DataIntakeDashboard /></RequireAuth>} />
-        <Route path="/dataintake/fetch-case" element={<RequireAuth><DataIntakeFetchCase /></RequireAuth>} />
-        <Route path="/dataintake/users" element={<RequireAuth><DataIntakeUsers /></RequireAuth>} />
-        <Route path="/dataintake/profile" element={<RequireAuth><DataIntakeSettings /></RequireAuth>} />
+        <Route path="/dataoperator" element={<RequireAuth><DataOperatorDashboard /></RequireAuth>} />
+        <Route path="/dataoperator/fetch-case" element={<RequireAuth><DataOperatorFetchCase /></RequireAuth>} />
+        <Route path="/dataoperator/users" element={<RequireAuth><DataOperatorUsers /></RequireAuth>} />
+        <Route path="/dataoperator/profile" element={<RequireAuth><DataOperatorSettings /></RequireAuth>} />
       </Routes>
       </ToastProvider>
     </Router>

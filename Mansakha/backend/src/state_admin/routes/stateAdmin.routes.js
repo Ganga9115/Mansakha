@@ -417,7 +417,7 @@ router.get(
       // real crash, not hypothetical, since SOS is explicitly routed here.
       const { data, error } = await supabase
         .from('alert_notifications')
-        .select('notified_at, source, alerts(alert_id, user_id, triggered_at, alert_statuses(name)), sos_events(sos_event_id, user_id, triggered_at, acknowledged_at, resolved_at)')
+        .select('notified_at, source, priority, alerts(alert_id, user_id, triggered_at, alert_statuses(name)), sos_events(sos_event_id, user_id, triggered_at, acknowledged_at, resolved_at)')
         .eq('official_id', req.auth.officialId)
         .in('source', ['distress_score', 'sos'])
         .order('notified_at', { ascending: false })
@@ -433,6 +433,13 @@ router.get(
           status: isUrgentHelp
             ? (n.sos_events.resolved_at ? 'Resolved' : n.sos_events.acknowledged_at ? 'Acknowledged' : 'Open')
             : n.alerts.alert_statuses.name,
+          // AdminAlerts.jsx keys its SOS badge/red-urgent-border off these two
+          // fields - the crash-fix above stopped the TypeError but never
+          // actually forwarded them, so every alert rendered identically
+          // regardless of real severity. counsellor.routes.js's own /alerts
+          // already does this; this was the one adaptation that dropped it.
+          source: n.source,
+          priority: n.priority,
         };
       });
     } else {
@@ -472,17 +479,25 @@ router.get(
       ]);
 
       formattedAlerts = [
+        // source lets AdminAlerts.jsx tell these apart the same way the
+        // district branch above does - this branch bypasses
+        // alert_notifications entirely (see comment above), so there's no
+        // `priority` column to forward here; the frontend's priority check is
+        // just inert (undefined) for these rows, which is correct since no
+        // real priority value exists for a direct alerts/sos_events read.
         ...alertRows.map((a) => ({
           alertId: a.alert_id,
           userId: a.user_id,
           triggeredAt: a.triggered_at,
           status: a.status_name,
+          source: 'distress_score',
         })),
         ...sosRows.map((s) => ({
           alertId: s.sos_event_id,
           userId: s.user_id,
           triggeredAt: s.triggered_at,
           status: s.resolved_at ? 'Resolved' : s.acknowledged_at ? 'Acknowledged' : 'Open',
+          source: 'sos',
         })),
       ]
         .sort((a, b) => new Date(b.triggeredAt).getTime() - new Date(a.triggeredAt).getTime())
@@ -795,7 +810,7 @@ router.patch(
     const { caseStage, address, contactNumber } = req.body;
     try {
       // canCloseCase omitted (defaults false) - District Admin cannot mark a
-      // case 'Case Closed', only Data Operator can (routes/dataIntake.js).
+      // case 'Case Closed', only Data Operator can (dataoperator/routes/dataoperator.routes.js).
       await updateUser(userId, { caseStage, address, contactNumber });
       await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'update', entityType: 'user', entityId: userId });
       return ok(res, null, 'User record updated');

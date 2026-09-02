@@ -219,6 +219,12 @@ function makeConfigResource(resourcePath, listKey) {
 export const caseTypesResource = makeConfigResource('case-types', 'caseTypes');
 export const interventionTypesResource = makeConfigResource('intervention-types', 'interventionTypes');
 export const languagesResource = makeConfigResource('languages', 'languages');
+// Backend has a complete GET/POST/PATCH/DELETE /api/ministry/channels
+// (ministry.routes.js), soft-deleted and audit-logged exactly like the three
+// above - it just had no frontend resource/tab to reach it at all, despite
+// Ministry's own Login page copy explicitly advertising "interaction
+// channels" configuration.
+export const channelsResource = makeConfigResource('channels', 'channels');
 
 // --- Ministry: Oversight ---
 

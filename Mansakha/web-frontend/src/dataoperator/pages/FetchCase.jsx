@@ -1,13 +1,19 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { Search, AlertTriangle } from 'lucide-react';
+import { Search, AlertTriangle, ArrowRight } from 'lucide-react';
 import { useFetchCaseDetails } from '../services/hooks';
 
 // The NHAA/Integrated Portal lookup is explicitly simulated on the backend
 // today (no real government API integration exists yet) - the "Simulated
 // data" banner below is load-bearing, not decorative: this result must
-// never be mistaken for a live API response.
+// never be mistaken for a live API response. Per explicit request, the
+// fixture now returns every field Register User needs (name, contact, case
+// type, stage, state/district, background) so a fetched result can be
+// reviewed and carried straight into that form via "Use These Details",
+// rather than just showing two fields with nowhere to go.
 export default function FetchCase() {
+  const navigate = useNavigate();
   const [docketNumber, setDocketNumber] = useState('');
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -28,7 +34,7 @@ export default function FetchCase() {
 
   return (
     <StaffLayout title="Fetch Case Details">
-      <div className="max-w-xl space-y-4">
+      <div className="space-y-4">
         <form onSubmit={handleSearch} className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm flex gap-2">
           <input
             type="text"
@@ -57,9 +63,23 @@ export default function FetchCase() {
             </div>
             <div className="p-6 space-y-3 text-sm">
               <div className="flex justify-between"><span className="text-gray-500">Docket Number</span><span className="font-semibold text-gray-800">{result.docketNumber}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Full Name</span><span className="font-semibold text-gray-800">{result.fullName}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Case Type</span><span className="font-semibold text-gray-800">{result.caseType}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Jurisdiction</span><span className="font-semibold text-gray-800">{result.jurisdictionName}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Full Name</span><span className="font-semibold text-gray-800">{result.suggestedFullName}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Mobile Number</span><span className="font-semibold text-gray-800">{result.suggestedContactNumber}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Case Type</span><span className="font-semibold text-gray-800">{result.suggestedCaseType}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Case Stage</span><span className="font-semibold text-gray-800">{result.suggestedCaseStage}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Jurisdiction</span><span className="font-semibold text-gray-800">{result.suggestedDistrictName}, {result.suggestedStateName}</span></div>
+              <div>
+                <span className="text-gray-500 block mb-1">Case Background</span>
+                <p className="text-gray-700 bg-gray-50 rounded-lg p-3 text-xs">{result.suggestedCaseBackground}</p>
+              </div>
+              {result.note && <p className="text-xs text-gray-400 pt-1 border-t border-gray-100">{result.note}</p>}
+
+              <button
+                onClick={() => navigate('/dataoperator', { state: { prefill: result } })}
+                className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition"
+              >
+                Use These Details <ArrowRight size={16} />
+              </button>
             </div>
           </div>
         )}

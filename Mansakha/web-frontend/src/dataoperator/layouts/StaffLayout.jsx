@@ -8,10 +8,10 @@ import NotificationBell from '../components/NotificationBell';
 // Data Operator's own dedicated shell - own copy of what used to be the
 // shared StaffLayout, trimmed to just Data Operator's nav.
 const NAV_ITEMS = [
-  { name: 'Register User', icon: UserPlus, path: '/dataintake' },
-  { name: 'Users', icon: Users, path: '/dataintake/users' },
-  { name: 'Fetch Case Details', icon: FileSearch, path: '/dataintake/fetch-case' },
-  { name: 'Profile', icon: User, path: '/dataintake/profile' },
+  { name: 'Register User', icon: UserPlus, path: '/dataoperator' },
+  { name: 'Users', icon: Users, path: '/dataoperator/users' },
+  { name: 'Fetch Case Details', icon: FileSearch, path: '/dataoperator/fetch-case' },
+  { name: 'Profile', icon: User, path: '/dataoperator/profile' },
 ];
 
 export default function StaffLayout({ children, title = 'Dashboard' }) {
@@ -20,7 +20,7 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
   const { data: me } = useMe();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const profilePath = '/dataintake/profile';
+  const profilePath = '/dataoperator/profile';
   const activeNavItem = NAV_ITEMS
     .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];

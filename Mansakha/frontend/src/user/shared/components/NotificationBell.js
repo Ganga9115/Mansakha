@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
 import { shadow } from '../theme/shadow';
 import { useMyNotifications } from '../services/hooks';
+
+// One user per device is the normal case for this app (unlike the staff web
+// console, which scopes this key per-official to survive multiple accounts
+// on one shared browser) - a single key is enough here.
+const LAST_SEEN_KEY = 'mansakha_notifications_last_seen';
 
 // message -> the in-app chat with the counsellor; session -> Home, which is
 // the only screen that actually shows upcoming sessions today (no dedicated
@@ -45,10 +51,29 @@ const ICON_BY_TYPE = { message: 'message-circle', session: 'calendar' };
 // (a dropdown near the bell) without needing a measurement/portal library.
 export default function NotificationBell({ size = 18, color = colors.primaryDark }) {
   const [open, setOpen] = useState(false);
+  const [lastSeen, setLastSeen] = useState(0);
   const navigation = useNavigation();
   const { data, isLoading } = useMyNotifications();
   const notifications = data?.notifications || [];
-  const hasNotifications = notifications.length > 0;
+
+  useEffect(() => {
+    AsyncStorage.getItem(LAST_SEEN_KEY)
+      .then((stored) => setLastSeen(stored ? Number(stored) : 0))
+      .catch(() => {});
+  }, []);
+
+  // Previously just `notifications.length > 0` - the dot showed for ANY
+  // notification that had ever arrived and never went away, even after
+  // opening the panel, since nothing tracked what had already been seen
+  // (unlike every web-frontend copy of this bell, which does).
+  const unreadCount = notifications.filter((n) => new Date(n.notifiedAt).getTime() > lastSeen).length;
+
+  const handleOpen = () => {
+    setOpen(true);
+    const now = Date.now();
+    setLastSeen(now);
+    AsyncStorage.setItem(LAST_SEEN_KEY, String(now)).catch(() => {});
+  };
 
   const handleNotificationPress = (n) => {
     setOpen(false);
@@ -58,9 +83,9 @@ export default function NotificationBell({ size = 18, color = colors.primaryDark
 
   return (
     <>
-      <Pressable style={styles.iconCircleBtn} onPress={() => setOpen(true)} accessibilityLabel="Notifications">
+      <Pressable style={styles.iconCircleBtn} onPress={handleOpen} accessibilityLabel="Notifications">
         <Feather name="bell" size={size} color={color} />
-        {hasNotifications && <View style={styles.bellDot} />}
+        {unreadCount > 0 && <View style={styles.bellDot} />}
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>

@@ -71,7 +71,7 @@ export default function Settings() {
 
   return (
     <MinistryLayout title="Profile">
-      <div className="space-y-6 max-w-5xl">
+      <div className="space-y-6">
 
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-gray-800">Ministry Profile Matrix</h3>

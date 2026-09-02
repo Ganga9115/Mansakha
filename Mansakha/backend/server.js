@@ -63,7 +63,7 @@ app.use('/api/auth/ministry', require('./src/ministry/routes/auth.ministry.route
 app.use('/api/ministry', require('./src/ministry/routes/ministry.routes'));
 
 // Data Operator
-app.use('/api/data-intake', require('./src/dataoperator/routes/dataoperator.routes'));
+app.use('/api/dataoperator', require('./src/dataoperator/routes/dataoperator.routes'));
 
 app.use((req, res) => {
   res.status(404).json({ success: false, data: null, message: 'Not found' });

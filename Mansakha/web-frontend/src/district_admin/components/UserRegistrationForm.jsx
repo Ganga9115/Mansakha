@@ -16,6 +16,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
   const [contactNumber, setContactNumber] = useState('');
   const [password, setPassword] = useState('');
   const [caseTypeId, setCaseTypeId] = useState('');
+  const [caseBackground, setCaseBackground] = useState('');
   const [stateId, setStateId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [error, setError] = useState(null);
@@ -43,6 +44,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
         password: password.trim() || undefined,
         jurisdictionId,
         caseTypeId,
+        ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
@@ -53,6 +55,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
       setContactNumber('');
       setPassword('');
       setCaseTypeId('');
+      setCaseBackground('');
       setStateId('');
       setDistrictId('');
     } catch (err) {
@@ -161,6 +164,17 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
           <option value="">Select...</option>
           {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
         </select>
+      </div>
+
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Background (optional)</label>
+        <textarea
+          value={caseBackground}
+          onChange={(e) => setCaseBackground(e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="Brief context for the assigned counsellor - shown on Case Detail"
+        />
       </div>
 
       {error && <p className="text-xs text-rose-600">{error}</p>}

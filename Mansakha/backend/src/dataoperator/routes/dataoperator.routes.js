@@ -1,5 +1,6 @@
 const express = require('express');
 const { supabase } = require('../../core/db/supabaseClient');
+const { pool } = require('../../core/db/pgPool');
 const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
@@ -21,7 +22,7 @@ router.post('/register-user', async (req, res) => {
   try {
     const { userId, temporaryPassword } = await createUser({
       docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password,
-      provisionedVia: 'data_intake_admin',
+      provisionedVia: 'data_operator',
     });
     await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });
     return ok(res, { userId, docketNumber, temporaryPassword }, 'User record created', 201);
@@ -36,6 +37,15 @@ router.post('/register-user', async (req, res) => {
 // must never read as a working government API connection, in code or in any
 // response shown to a user, so every result carries a clear "Simulated data"
 // label the frontend is required to render, not just a comment here.
+// Explicit request: a fetched "case" should carry every field Register User
+// actually needs (name, contact, case type, case stage, state/district,
+// background), not just case type/stage - so the fetched result can be
+// reviewed and used to pre-fill that form directly (see the frontend's "Use
+// These Details" button), matching what a real NHAA/Integrated Portal record
+// would plausibly hand over once/if that integration ever exists.
+const FIRST_NAMES = ['Aarav', 'Vivaan', 'Aditya', 'Vihaan', 'Arjun', 'Ishaan', 'Kabir', 'Rohan', 'Diya', 'Riya', 'Saanvi', 'Anaya', 'Priya', 'Meera', 'Kavya', 'Ananya'];
+const LAST_NAMES = ['Sharma', 'Verma', 'Patel', 'Singh', 'Reddy', 'Das', 'Nair', 'Gupta', 'Iyer', 'Chauhan', 'Mehta', 'Joshi'];
+
 router.post('/fetch-case', async (req, res) => {
   const { docketNumber } = req.body;
   if (!docketNumber) return fail(res, 'docketNumber is required', 400);
@@ -45,21 +55,46 @@ router.post('/fetch-case', async (req, res) => {
   // a demo, without pretending to hit a real backing system.
   const seed = String(docketNumber).split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const stages = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
-  const caseTypes = ['Rape / Gang Rape', 'Murder / Grievous Hurt / Arson', 'Witness Facing Intimidation or Threats', 'Family Affected by Caste-Based Violence'];
+
+  const [{ data: caseTypes }, { rows: districts }] = await Promise.all([
+    supabase.from('case_types').select('case_type_id, name').is('deleted_at', null).order('name'),
+    pool.query(
+      `select d.jurisdiction_id as district_id, d.name as district_name, s.jurisdiction_id as state_id, s.name as state_name
+       from jurisdictions d
+       join jurisdictions s on s.jurisdiction_id = d.parent_id
+       where d.level = 'district'
+       order by d.name`
+    ),
+  ]);
+
+  const caseType = caseTypes && caseTypes.length ? caseTypes[seed % caseTypes.length] : null;
+  const district = districts.length ? districts[seed % districts.length] : null;
+  const fullName = `${FIRST_NAMES[seed % FIRST_NAMES.length]} ${LAST_NAMES[(seed * 7) % LAST_NAMES.length]}`;
+  // 10-digit Indian mobile format (starts 6-9) - deterministic per seed, not
+  // a real number.
+  const contactNumber = String(6000000000 + (seed * 9999991) % 4000000000).slice(0, 10);
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'simulated_case_fetch' });
 
   return ok(res, {
     simulated: true,
     docketNumber,
-    suggestedCaseType: caseTypes[seed % caseTypes.length],
+    suggestedFullName: fullName,
+    suggestedContactNumber: contactNumber,
+    suggestedCaseTypeId: caseType?.case_type_id || null,
+    suggestedCaseType: caseType?.name || null,
     suggestedCaseStage: stages[seed % stages.length],
+    suggestedStateId: district?.state_id || null,
+    suggestedStateName: district?.state_name || null,
+    suggestedDistrictId: district?.district_id || null,
+    suggestedDistrictName: district?.district_name || null,
+    suggestedCaseBackground: `Referred via NHAA helpline (simulated) - caller reported an incident consistent with ${caseType?.name || 'the suggested case type'} and requested follow-up support.`,
     note: 'Simulated data - placeholder for a real NHAA/Integrated Portal API integration that does not exist yet. Not a live government record.',
   });
 });
 
 // "Users" sidebar feature - every user created via this Data
-// Operator flow (auth_method = 'data_intake_admin'), not scoped to the specific
+// Operator flow (auth_method = 'data_operator'), not scoped to the specific
 // official who created it - Data Operator isn't jurisdiction- or
 // creator-scoped anywhere else either (Section 7), so this stays consistent
 // with that. Full detail (identity + case + jurisdiction), not just the
@@ -73,7 +108,7 @@ router.get('/users', async (req, res) => {
       jurisdictions(name),
       user_identity(full_name, contact_number, address)
     `)
-    .eq('auth_method', 'data_intake_admin')
+    .eq('auth_method', 'data_operator')
     .order('enrolled_at', { ascending: false });
   if (error) return fail(res, `Could not load users: ${error.message}`, 500);
 

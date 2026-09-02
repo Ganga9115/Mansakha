@@ -93,7 +93,7 @@ export default function StaffLogin() {
       }
 
       if (uiRole === 'Data Operator') {
-        navigate('/dataintake');
+        navigate('/dataoperator');
         return;
       }
 
@@ -131,8 +131,12 @@ export default function StaffLogin() {
       if (newPassword.length < 8) {
         throw new Error('Password must be at least 8 characters');
       }
-      await apiClient.post('/api/auth/staff/change-password', { newPassword }, tempToken);
-      await completeLogin(tempToken);
+      // The backend now invalidates every token issued before this password
+      // change, including tempToken itself (that's the whole point of the
+      // fix) - it returns a fresh token in the response, which is what has
+      // to be used from here on, not the now-invalid tempToken.
+      const { token } = await apiClient.post('/api/auth/staff/change-password', { newPassword }, tempToken);
+      await completeLogin(token);
     } catch (err) {
       toast.error(err.message);
       setLoading(false);

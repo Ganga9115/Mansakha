@@ -28,6 +28,7 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
   const { data: me } = useMe();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const profilePath = '/ministry/profile';
   const activeNavItem = NAV_ITEMS.find(
     (item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)
   );
@@ -100,7 +101,10 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
 
             <NotificationBell />
 
-            <div className="flex items-center gap-3 sm:border-l border-[#D6E8F5] sm:pl-4">
+            <button
+              onClick={() => navigate(profilePath)}
+              className="flex items-center gap-3 sm:border-l border-[#D6E8F5] sm:pl-4 text-left focus:outline-none"
+            >
               <div className="w-9 h-9 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
                 <User size={18} className="text-[#3D5A80]" />
               </div>
@@ -108,7 +112,7 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
                 <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
                 <p className="text-[#3D5A80]/70">Ministry Console</p>
               </div>
-            </div>
+            </button>
 
             {/* Log Out - relocated here from the sidebar bottom per product
                 request: top-right, icon-only, red/destructive, and gated

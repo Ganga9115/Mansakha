@@ -53,13 +53,13 @@ export function useMyNotifications() {
 
 // --- Data Operator ---
 
-export function useCreateUserDataIntake() {
+export function useCreateUserDataOperator() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
   const mutate = async (payload) => {
     setLoading(true);
     try {
-      return await apiClient.post('/api/data-intake/register-user', payload, token);
+      return await apiClient.post('/api/dataoperator/register-user', payload, token);
     } finally {
       setLoading(false);
     }
@@ -67,18 +67,18 @@ export function useCreateUserDataIntake() {
   return { mutate, loading };
 }
 
-export function useDataIntakeUsers() {
+export function useDataOperatorUsers() {
   const token = getToken();
-  return useQuery(() => apiClient.get('/api/data-intake/users', token), [token]);
+  return useQuery(() => apiClient.get('/api/dataoperator/users', token), [token]);
 }
 
-export function useUpdateDataIntakeUser() {
+export function useUpdateDataOperatorUser() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
   const mutate = async (userId, payload) => {
     setLoading(true);
     try {
-      return await apiClient.patch(`/api/data-intake/users/${userId}`, payload, token);
+      return await apiClient.patch(`/api/dataoperator/users/${userId}`, payload, token);
     } finally {
       setLoading(false);
     }
@@ -86,13 +86,13 @@ export function useUpdateDataIntakeUser() {
   return { mutate, loading };
 }
 
-export function useDeleteDataIntakeUser() {
+export function useDeleteDataOperatorUser() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
   const mutate = async (userId) => {
     setLoading(true);
     try {
-      return await apiClient.delete(`/api/data-intake/users/${userId}`, token);
+      return await apiClient.delete(`/api/dataoperator/users/${userId}`, token);
     } finally {
       setLoading(false);
     }
@@ -106,7 +106,7 @@ export function useFetchCaseDetails() {
   const mutate = async (docketNumber) => {
     setLoading(true);
     try {
-      return await apiClient.post('/api/data-intake/fetch-case', { docketNumber }, token);
+      return await apiClient.post('/api/dataoperator/fetch-case', { docketNumber }, token);
     } finally {
       setLoading(false);
     }
