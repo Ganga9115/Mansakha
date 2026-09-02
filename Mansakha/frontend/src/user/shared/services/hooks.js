@@ -36,7 +36,7 @@ export function useLanguageOptions() {
 
 // Docket-based login (Feature Catalog: Docket ID + Full Name + Contact
 // Number + Password, no OTP/Google) - credentials are provisioned for the
-// user by a District Admin / Data Intake Admin, not self-registered.
+// user by a District Admin / Data Operator, not self-registered.
 // Password is fixed to 'User123' at creation; the backend's
 // mustChangePassword flag (checked by the caller) forces a real one on
 // first login.
@@ -148,6 +148,30 @@ export function useUpdateUserLanguage() {
 export function useDistressHistory() {
   const token = useToken();
   return useQuery({ queryKey: ['user', 'distress-history'], queryFn: () => apiClient.get('/api/user/distress-history', token), enabled: !!token });
+}
+
+// Recent AI-authored case-note excerpts, used by CheckinScreen.js to give the
+// on-device question generator some continuity with past sessions.
+// CheckinScreen.js previously read this via a raw fetch() using an env var
+// (EXPO_PUBLIC_API_URL) and an AsyncStorage key (user_jwt) neither of which
+// this app actually sets anywhere - the real names are
+// EXPO_PUBLIC_API_BASE_URL/EXPO_PUBLIC_API_LAN_URL (apiClient.js) and the
+// mansakha_session blob (AuthContext.js) - so both calls always silently
+// fell back to a hardcoded localhost URL with no token attached, working
+// only by accident on a dev machine colocated with the backend.
+export function useUserHistory() {
+  const token = useToken();
+  return useQuery({ queryKey: ['user', 'history'], queryFn: () => apiClient.get('/api/user/history', token), enabled: !!token });
+}
+
+// Fire-and-forget async save of one in-progress check-in exchange - see this
+// route's own backend comment (user.routes.js) for why it's a no-op today
+// beyond acknowledging the write.
+export function useAppendInteraction() {
+  const token = useToken();
+  return useMutation({
+    mutationFn: (text) => apiClient.post('/api/user/interaction/append', { text }, token),
+  });
 }
 
 // --- AI Chat (Feature Catalog: Check-in & Interaction > AI Chat) ---

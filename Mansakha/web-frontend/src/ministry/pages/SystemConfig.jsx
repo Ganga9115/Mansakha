@@ -5,18 +5,24 @@ import {
   caseTypesResource,
   interventionTypesResource,
   languagesResource,
+  channelsResource,
 } from '../services/hooks';
 
 const TABS = [
   { key: 'caseTypes', label: 'Case Types', resource: caseTypesResource },
   { key: 'interventionTypes', label: 'Intervention Types', resource: interventionTypesResource },
   { key: 'languages', label: 'Languages', resource: languagesResource },
+  // Channels' GET returns channel_name (raw column name, unlike the other
+  // three which happen to use the bare column `name`) while its POST/PATCH
+  // body field is channelName - nameKey/writeKey let this one tab plug into
+  // the same generic panel without forcing the other three's shape to change.
+  { key: 'channels', label: 'Channels', resource: channelsResource, nameKey: 'channel_name', writeKey: 'channelName' },
 ];
 
 // Internal tooling, not a public page - plain list + inline add/edit/delete
 // per section, matching the density of the rest of the Ministry console
 // rather than reaching for anything more polished than it needs to be.
-function ConfigPanel({ resource, listKey }) {
+function ConfigPanel({ resource, listKey, nameKey = 'name', writeKey = 'name' }) {
   const { data, loading, error, refetch } = resource.useList();
   const create = resource.useCreate();
   const update = resource.useUpdate();
@@ -34,7 +40,7 @@ function ConfigPanel({ resource, listKey }) {
     setFormError(null);
     if (!newName.trim()) return;
     try {
-      await create.mutate({ name: newName.trim() });
+      await create.mutate({ [writeKey]: newName.trim() });
       setNewName('');
       refetch();
     } catch (err) {
@@ -44,12 +50,12 @@ function ConfigPanel({ resource, listKey }) {
 
   const startEdit = (item) => {
     setEditingId(item.id || item[Object.keys(item)[0]]);
-    setEditingName(item.name);
+    setEditingName(item[nameKey]);
   };
 
   const handleSaveEdit = async (id) => {
     try {
-      await update.mutate(id, { name: editingName.trim() });
+      await update.mutate(id, { [writeKey]: editingName.trim() });
       setEditingId(null);
       refetch();
     } catch (err) {
@@ -104,7 +110,7 @@ function ConfigPanel({ resource, listKey }) {
                   autoFocus
                 />
               ) : (
-                <span className="text-gray-800 font-medium">{item.name}</span>
+                <span className="text-gray-800 font-medium">{item[nameKey]}</span>
               )}
               <div className="flex items-center gap-2">
                 {isEditing ? (
@@ -146,9 +152,15 @@ export default function SystemConfig() {
             </button>
           ))}
         </div>
-        {/* key forces a remount per tab, rather than relying on all three
+        {/* key forces a remount per tab, rather than relying on all four
             resources' hooks happening to be shaped identically call-for-call. */}
-        <ConfigPanel key={activeTab} resource={activeMeta.resource} listKey={activeMeta.resource.listKey} />
+        <ConfigPanel
+          key={activeTab}
+          resource={activeMeta.resource}
+          listKey={activeMeta.resource.listKey}
+          nameKey={activeMeta.nameKey}
+          writeKey={activeMeta.writeKey}
+        />
       </div>
     </MinistryLayout>
   );

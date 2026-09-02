@@ -218,7 +218,17 @@ router.post('/checkin', async (req, res) => {
     return fail(res, `Check-in recorded, but analysis failed: ${err.message}`, 502);
   }
 
-  const { scoreId } = await recordAiDistressScore(userId, interactionId, analysis);
+  // analyzeInteractionFromClientAi (ai/ai.js) never calls Gemini - it's pure
+  // local math over an already-on-device-Ollama-computed aiAnalysis - but
+  // recordAiDistressScore defaults model_version to 'gemini-phase1-v1' when
+  // no version is passed, so every real check-in (this is the live path
+  // CheckinScreen.js actually calls) was mislabeled as Gemini-sourced. The
+  // counsellor-facing "Check-in" label was unaffected (describeScoreSource
+  // falls back to the channel name), but the raw model_version column itself
+  // was factually wrong for every check-in ever recorded through this route.
+  // (The /chat route below genuinely does call Gemini via analyzeChatMessage,
+  // so its own recordAiDistressScore call correctly keeps the default.)
+  const { scoreId } = await recordAiDistressScore(userId, interactionId, analysis, 'ollama-checkin-client-v1');
 
   // Feature Catalog Section 1.5 - replaces the old "if High/Critical, create
   // one alert and notify the jurisdiction" logic with the full tiered

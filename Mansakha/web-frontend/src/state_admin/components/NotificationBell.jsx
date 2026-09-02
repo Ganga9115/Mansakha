@@ -4,9 +4,11 @@ import { useMe, useMyNotifications } from '../services/hooks';
 
 // State Admin's own copy of the notification bell - real GET
 // /api/me/notifications data, same as every other role's copy. State Admin
-// genuinely has nothing routed to it today (alert_notifications targets the
-// assigned Counsellor + District Administration only), so an empty list
-// here is correct, not a bug.
+// DOES receive real alerts: every SOS/urgent-help request is routed to every
+// State Administration official over that district's parent state, alongside
+// the assigned Counsellor and District Administration (user.routes.js's
+// /urgent-help). An empty list here just means no notifications have arrived
+// yet, not that nothing is ever routed to this role.
 export default function NotificationBell() {
   const { data: me } = useMe();
   const { data, loading, refetch } = useMyNotifications();

@@ -118,7 +118,7 @@ router.get('/staff', async (req, res) => {
 // Ministry-wide user list for Super Admin visibility (Feature Catalog
 // Section 3/8's oversight remit) - every user regardless of who
 // provisioned them (District Admin or Data Operator), unlike Data Operator's
-// own /api/data-intake/users which only shows its own auth_method. Read-only
+// own /api/dataoperator/users which only shows its own auth_method. Read-only
 // here; editing/deleting a user record stays on the Data Operator screen
 // that already owns that flow.
 router.get('/users', async (req, res) => {
@@ -257,6 +257,11 @@ router.patch('/staff/:officialId', async (req, res) => {
   if (newPassword) {
     patch.password_hash = await bcrypt.hash(newPassword, 12);
     patch.must_change_password = true;
+    // Without this, a session token issued before this reset stayed fully
+    // valid indefinitely afterward - tokens carry no `exp` and verifyToken
+    // had no way to know the password (the whole point of this "reset a
+    // compromised password" action) had changed underneath it.
+    patch.password_changed_at = new Date().toISOString();
   }
 
   const { error } = await supabase.from('officials').update(patch).eq('official_id', officialId);
@@ -374,16 +379,32 @@ router.get('/audit-log', async (req, res) => {
   const pageSize = 50;
   const offset = (page - 1) * pageSize;
 
+  // AuditLog.jsx reads auditId/createdAt/officialName/entityType/entityId -
+  // this route used to pass the raw snake_case row straight through with no
+  // officials join, so every field it actually reads was undefined (only
+  // `action` coincidentally matched): timestamps rendered "Invalid Date",
+  // official always fell back to "System", and Entity was always blank.
   const { rows } = await pool.query(
-    `select log_id, official_id, user_id, action, entity_type, entity_id, occurred_at, count(*) over() as total_count
-     from audit_log
-     order by occurred_at desc
+    `select al.log_id, al.official_id, o.full_name as official_name, al.user_id, al.action,
+            al.entity_type, al.entity_id, al.occurred_at, count(*) over() as total_count
+     from audit_log al
+     left join officials o on o.official_id = al.official_id
+     order by al.occurred_at desc
      limit $1 offset $2`,
     [pageSize, offset]
   );
 
   return ok(res, {
-    entries: rows.map(({ total_count, ...entry }) => entry),
+    entries: rows.map((r) => ({
+      auditId: r.log_id,
+      officialId: r.official_id,
+      officialName: r.official_name || null,
+      userId: r.user_id,
+      action: r.action,
+      entityType: r.entity_type,
+      entityId: r.entity_id,
+      createdAt: r.occurred_at,
+    })),
     total: rows.length > 0 ? Number(rows[0].total_count) : 0,
   });
 });

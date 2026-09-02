@@ -45,7 +45,7 @@ async function verifyToken(req, res, next) {
 
   if (payload.type === 'official') {
     const { rows } = await pool.query(
-      `select o.official_id, o.must_change_password, o.last_active_at, orr.jurisdiction_id, r.role_name, j.level as jurisdiction_level
+      `select o.official_id, o.must_change_password, o.last_active_at, o.password_changed_at, orr.jurisdiction_id, r.role_name, j.level as jurisdiction_level
        from officials o
        left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
        left join roles r on r.role_id = orr.role_id
@@ -56,6 +56,27 @@ async function verifyToken(req, res, next) {
 
     if (rows.length === 0) {
       return fail(res, 'Account not found', 401);
+    }
+
+    // Tokens carry no `exp`, so without this a password reset/change
+    // (Ministry's "reset a compromised password" action, or self-service
+    // /change-password) never actually invalidated a session already issued -
+    // a hijacked token stayed fully valid indefinitely, undermining the one
+    // thing that action is meant to do. `iat` (seconds) is added to every
+    // token automatically by jsonwebtoken; a null password_changed_at means
+    // "never changed since this column existed," treated as not-a-reason-to-
+    // reject, same null-safe pattern as last_active_at below.
+    // 1000ms grace: `iat` is second-precision (jsonwebtoken truncates via
+    // Math.floor) while password_changed_at is sub-second, and the
+    // freshly-reissued token from /change-password is signed a few ms AFTER
+    // that timestamp is captured - without this buffer, truncation could put
+    // the new token's own `iat` a fraction of a second "before" its own
+    // password_changed_at and reject the very token meant to replace the old
+    // one. A 1s window makes no practical difference against an actually-old
+    // stolen token.
+    const passwordChangedAt = rows[0].password_changed_at;
+    if (passwordChangedAt && payload.iat && payload.iat * 1000 < new Date(passwordChangedAt).getTime() - 1000) {
+      return fail(res, 'Your password was changed. Please log in again.', 401);
     }
 
     // Sliding inactivity window (staff/admin/ministry only - see the

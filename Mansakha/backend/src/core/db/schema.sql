@@ -116,6 +116,14 @@ create table officials (
                                -- accounts log out after 8h of no activity;
                                -- victim/user accounts have no such column
                                -- or check at all (never auto-logout)
+  password_changed_at   timestamptz, -- set whenever password_hash changes
+                               -- (self-service /change-password and
+                               -- Ministry's PATCH /staff/:officialId reset) -
+                               -- verifyToken.js rejects any token issued
+                               -- (its `iat`) before this timestamp, so a
+                               -- password reset actually invalidates a
+                               -- session already in someone else's hands
+                               -- instead of leaving it valid indefinitely
   created_at            timestamptz not null default now()
 );
 
@@ -150,7 +158,7 @@ create table users (
   -- contact number + password, a staff-provisioned credential set, not an
   -- OTP-verified signup). The handful of legacy OTP/Google rows predating
   -- this change were removed and this constraint tightened to match.
-  auth_method        text not null check (auth_method in ('district_admin', 'data_intake_admin')),
+  auth_method        text not null check (auth_method in ('district_admin', 'data_operator')),
   password_hash      text, -- REACTIVATED: a 4th required login credential alongside
                             -- Docket ID + Full Name + Contact Number, per explicit
                             -- request - every user a District/Data Intake Admin

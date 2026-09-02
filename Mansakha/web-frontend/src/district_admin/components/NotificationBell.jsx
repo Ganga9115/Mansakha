@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Bell } from 'lucide-react';
 import { useMe, useMyNotifications } from '../services/hooks';
 
-// District Admin's own copy of the notification bell - District Admin
-// legitimately has nothing routed to it today (alert_notifications targets
-// the assigned Counsellor + District Administration officials specifically,
-// so this one DOES receive real alerts), same real GET /api/me/notifications
-// data every role's copy uses.
+// District Admin's own copy of the notification bell - real GET
+// /api/me/notifications data, same as every other role's copy.
+// alert_notifications targets the assigned Counsellor + every District
+// Administration official in the user's jurisdiction for a distress-score
+// alert, and District Administration for SOS too - so this role DOES receive
+// real alerts.
 export default function NotificationBell() {
   const { data: me } = useMe();
   const { data, loading, refetch } = useMyNotifications();

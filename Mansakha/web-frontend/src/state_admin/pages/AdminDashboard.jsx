@@ -2,13 +2,22 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import { FileDown } from 'lucide-react';
-import { useAdminDashboard, useExportReportCsv } from '../services/hooks';
+import { useAdminDashboard, useExportReportCsv, useAdminAlerts, useReportsAnalytics } from '../services/hooks';
 
 const RISK_BADGE = {
   Critical: 'bg-purple-100 text-purple-700',
   High: 'bg-rose-100 text-rose-700',
   Moderate: 'bg-amber-100 text-amber-700',
   Low: 'bg-emerald-100 text-emerald-700',
+};
+
+// Matches AdminAlerts.jsx's own STATUS_STYLE - alerts carry a status
+// (Open/Acknowledged/Resolved), not a risk level, so the badge here keys off
+// the same field the full Alerts Feed page already uses.
+const STATUS_BADGE = {
+  Open: 'bg-rose-100 text-rose-700',
+  Acknowledged: 'bg-amber-100 text-amber-700',
+  Resolved: 'bg-emerald-100 text-emerald-700',
 };
 
 function StatCard({ title, value, tone }) {
@@ -30,6 +39,17 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { jurisdictionId } = useParams();
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
+  // The dashboard's own /dashboard/:jurisdictionId response never carries
+  // alerts/trend (district branch returns trends: null and no alerts key at
+  // all) - these two panels were dead on arrival. AdminAlerts.jsx and
+  // Reports.jsx already fetch the real thing correctly, so reuse those same
+  // hooks/endpoints here instead of inventing a third data source.
+  const { data: alertsData } = useAdminAlerts(jurisdictionId);
+  const { data: analyticsData } = useReportsAnalytics(jurisdictionId, '30d');
+  const openAlerts = (alertsData?.alerts || []).filter((a) => a.status !== 'Resolved').slice(0, 5);
+  const trend = (analyticsData?.trend || [])
+    .filter((t) => t.avgScore !== null && t.avgScore !== undefined)
+    .map((t) => ({ period: t.label, avgScore: t.avgScore }));
   const exportReport = useExportReportCsv();
   const [reportStatus, setReportStatus] = useState(null);
 
@@ -126,14 +146,14 @@ export default function AdminDashboard() {
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
               <h3 className="font-bold text-sm text-gray-800 mb-4">Alerts</h3>
-              {(data?.alerts || []).length === 0 ? (
+              {openAlerts.length === 0 ? (
                 <p className="text-xs text-gray-400">No open alerts.</p>
               ) : (
                 <div className="space-y-3 text-xs">
-                  {data.alerts.map((a) => (
+                  {openAlerts.map((a) => (
                     <div key={a.alertId} className="flex items-center justify-between border-b border-gray-50 pb-2">
                       <span className="text-gray-600 font-medium">Case {String(a.userId).slice(0, 8)}</span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${RISK_BADGE[a.riskLevel] || 'bg-gray-100 text-gray-600'}`}>{a.status}</span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${STATUS_BADGE[a.status] || 'bg-gray-100 text-gray-600'}`}>{a.status}</span>
                     </div>
                   ))}
                 </div>
@@ -142,11 +162,11 @@ export default function AdminDashboard() {
 
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
               <h3 className="font-bold text-sm text-gray-800 mb-4">Distress Trend</h3>
-              {(data?.trend || []).length === 0 ? (
+              {trend.length === 0 ? (
                 <p className="text-xs text-gray-400">Not enough data yet.</p>
               ) : (
                 <div className="space-y-2">
-                  {data.trend.map((t) => (
+                  {trend.map((t) => (
                     <div key={t.period} className="flex items-center gap-3 text-xs">
                       <span className="w-16 text-gray-500 shrink-0">{t.period}</span>
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">

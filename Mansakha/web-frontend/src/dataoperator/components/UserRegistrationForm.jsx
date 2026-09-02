@@ -8,18 +8,22 @@ const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compens
 // open dropdowns, unlike District Admin's own copy of this form), and DOES
 // collect Case Stage at intake (District Admin's copy never shows it - that
 // stage is set later there via the Users list's editable dropdown instead).
-export default function UserRegistrationForm({ onCreate, creating }) {
+// `initialValues` - optional, from FetchCase.jsx's "Use These Details" -
+// pre-fills every field from a simulated fetch result so it can be
+// reviewed/edited before submitting, rather than retyped from scratch.
+export default function UserRegistrationForm({ onCreate, creating, initialValues }) {
   const caseTypesQuery = useCaseTypeOptions();
   const stateQuery = useJurisdictionOptions('state');
 
-  const [docketNumber, setDocketNumber] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [contactNumber, setContactNumber] = useState('');
+  const [docketNumber, setDocketNumber] = useState(initialValues?.docketNumber || '');
+  const [fullName, setFullName] = useState(initialValues?.suggestedFullName || '');
+  const [contactNumber, setContactNumber] = useState(initialValues?.suggestedContactNumber || '');
   const [password, setPassword] = useState('');
-  const [caseTypeId, setCaseTypeId] = useState('');
-  const [caseStage, setCaseStage] = useState('');
-  const [stateId, setStateId] = useState('');
-  const [districtId, setDistrictId] = useState('');
+  const [caseTypeId, setCaseTypeId] = useState(initialValues?.suggestedCaseTypeId || '');
+  const [caseStage, setCaseStage] = useState(initialValues?.suggestedCaseStage || '');
+  const [caseBackground, setCaseBackground] = useState(initialValues?.suggestedCaseBackground || '');
+  const [stateId, setStateId] = useState(initialValues?.suggestedStateId || '');
+  const [districtId, setDistrictId] = useState(initialValues?.suggestedDistrictId || '');
   const [error, setError] = useState(null);
   const [created, setCreated] = useState(null);
 
@@ -45,6 +49,7 @@ export default function UserRegistrationForm({ onCreate, creating }) {
         jurisdictionId: districtId,
         caseTypeId,
         ...(caseStage ? { caseStage } : {}),
+        ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
@@ -56,6 +61,7 @@ export default function UserRegistrationForm({ onCreate, creating }) {
       setPassword('');
       setCaseTypeId('');
       setCaseStage('');
+      setCaseBackground('');
       setStateId('');
       setDistrictId('');
     } catch (err) {
@@ -71,18 +77,17 @@ export default function UserRegistrationForm({ onCreate, creating }) {
     <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
       <h3 className="font-bold text-sm text-gray-800">Create User Credentials</h3>
 
-      <div>
-        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Docket Number</label>
-        <input
-          type="text"
-          value={docketNumber}
-          onChange={(e) => setDocketNumber(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-          placeholder="e.g. DKT-2026-00123"
-        />
-      </div>
-
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Docket Number</label>
+          <input
+            type="text"
+            value={docketNumber}
+            onChange={(e) => setDocketNumber(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            placeholder="e.g. DKT-2026-00123"
+          />
+        </div>
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Full Name</label>
           <input
@@ -92,6 +97,9 @@ export default function UserRegistrationForm({ onCreate, creating }) {
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
           />
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Mobile Number</label>
           <input
@@ -103,17 +111,16 @@ export default function UserRegistrationForm({ onCreate, creating }) {
             placeholder="e.g. 9876543210"
           />
         </div>
-      </div>
-
-      <div>
-        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Password</label>
-        <input
-          type="text"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
-          placeholder="e.g. User123 (leave blank for default)"
-        />
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Password</label>
+          <input
+            type="text"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            placeholder="e.g. User123 (leave blank for default)"
+          />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -146,20 +153,32 @@ export default function UserRegistrationForm({ onCreate, creating }) {
         </div>
       </div>
 
-      <div>
-        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Type</label>
-        <select value={caseTypeId} onChange={(e) => setCaseTypeId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-          <option value="">Select...</option>
-          {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
-        </select>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Type</label>
+          <select value={caseTypeId} onChange={(e) => setCaseTypeId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Select...</option>
+            {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Stage</label>
+          <select value={caseStage} onChange={(e) => setCaseStage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Investigation (default)</option>
+            {CASE_STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
       </div>
 
       <div>
-        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Stage</label>
-        <select value={caseStage} onChange={(e) => setCaseStage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-          <option value="">Investigation (default)</option>
-          {CASE_STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Background (optional)</label>
+        <textarea
+          value={caseBackground}
+          onChange={(e) => setCaseBackground(e.target.value)}
+          rows={3}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="Brief context for the assigned counsellor - shown on Case Detail"
+        />
       </div>
 
       {error && <p className="text-xs text-rose-600">{error}</p>}

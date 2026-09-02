@@ -31,8 +31,13 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.screen}>
       <QueryBoundary query={query}>
         {(data) => {
-          const score = data.currentDistressLevel?.score ?? 34;
-          const riskLevel = data.currentDistressLevel?.riskLevel ?? 'Moderate';
+          // Was defaulting to a fake "34/100, Moderate" whenever no real
+          // score existed yet - a brand-new user who had never checked in
+          // would see a specific, invented distress reading as if it were
+          // real. hasScore now drives a genuine empty state instead.
+          const hasScore = data.currentDistressLevel?.score != null;
+          const score = data.currentDistressLevel?.score ?? null;
+          const riskLevel = data.currentDistressLevel?.riskLevel ?? null;
 
           return (
             <>
@@ -83,18 +88,24 @@ export default function HomeScreen({ navigation }) {
                   <View style={styles.distressTopRow}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.distressLabel}>Distress Score</Text>
-                      <View style={styles.scoreBadgeRow}>
-                        <Text style={styles.scoreNumber}>{score}/100</Text>
-                        <View style={styles.riskBadgeWrapper}>
-                          <RiskBadge riskLevel={riskLevel} />
+                      {hasScore ? (
+                        <View style={styles.scoreBadgeRow}>
+                          <Text style={styles.scoreNumber}>{score}/100</Text>
+                          <View style={styles.riskBadgeWrapper}>
+                            <RiskBadge riskLevel={riskLevel} />
+                          </View>
                         </View>
-                      </View>
+                      ) : (
+                        <Text style={styles.noScoreText}>Complete your first check-in to see your score here.</Text>
+                      )}
                     </View>
 
                     {/* Circular Percentage Badge */}
-                    <View style={styles.percentageCircle}>
-                      <Text style={styles.percentageText}>{score}%</Text>
-                    </View>
+                    {hasScore && (
+                      <View style={styles.percentageCircle}>
+                        <Text style={styles.percentageText}>{score}%</Text>
+                      </View>
+                    )}
                   </View>
 
                   {/* Action Button */}
@@ -341,6 +352,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   distressLabel: { ...typography.bodyStrong, color: colors.textSecondary, fontSize: 14 },
+  noScoreText: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.xs, lineHeight: 18 },
   scoreBadgeRow: { flexDirection: 'row', alignItems: 'center', marginVertical: spacing.xs },
   scoreNumber: { ...typography.display, color: colors.textPrimary, fontSize: 28, fontWeight: '800' },
   riskBadgeWrapper: { marginLeft: spacing.sm },

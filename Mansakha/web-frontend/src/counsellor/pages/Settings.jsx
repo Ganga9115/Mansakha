@@ -70,7 +70,7 @@ export default function Settings() {
 
   return (
     <StaffLayout title="Profile">
-      <div className="space-y-6 max-w-5xl">
+      <div className="space-y-6">
 
         {/* COUNSELLOR PROFILE MATRIX */}
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">

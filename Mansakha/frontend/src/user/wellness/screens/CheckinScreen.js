@@ -9,8 +9,7 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { useToast } from '../../shared/context/ToastContext';
-import { useCheckin, useUserDashboard } from '../../shared/services/hooks';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCheckin, useUserDashboard, useUserHistory, useAppendInteraction } from '../../shared/services/hooks';
 import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING } from '../../shared/services/ollamaClient';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
@@ -23,6 +22,8 @@ export default function CheckinScreen({ navigation }) {
   const { tier, isDesktop } = useResponsive();
 
   const submitMutation = useCheckin();
+  const historyQuery = useUserHistory();
+  const appendInteraction = useAppendInteraction();
 
   const [responses, setResponses] = useState([]); // Array of { q, a }
   const [currentQuestion, setCurrentQuestion] = useState({
@@ -38,23 +39,10 @@ export default function CheckinScreen({ navigation }) {
   const [pastContext, setPastContext] = useState('');
 
   useEffect(() => {
-    async function fetchHistory() {
-      try {
-        const token = await AsyncStorage.getItem('user_jwt');
-        if (!token) return;
-        const res = await fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/user/history`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (res.ok && data.data?.history) {
-          setPastContext(data.data.history);
-        }
-      } catch (e) {
-        console.warn('Failed to load history', e);
-      }
+    if (historyQuery.data?.history) {
+      setPastContext(historyQuery.data.history);
     }
-    fetchHistory();
-  }, []);
+  }, [historyQuery.data]);
 
 const FALLBACK_QUESTIONS = [
   "Take your time. Can you tell me a little more about how you're feeling?",
@@ -108,17 +96,10 @@ const FALLBACK_QUESTIONS = [
     const newHistory = [...responses, { q: currentQuestion.text, a: combinedAnswer }];
     setResponses(newHistory);
     
-    // Async save
-    try {
-      const token = await AsyncStorage.getItem('user_jwt');
-      if (token) {
-        fetch(`${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000'}/api/user/interaction/append`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ text: `Mansakha: ${currentQuestion.text}\nPerson: ${combinedAnswer}` })
-        }).catch(() => {});
-      }
-    } catch(e) {}
+    // Async save - fire-and-forget, errors intentionally swallowed (see
+    // useAppendInteraction's own backend route comment on why this is a
+    // best-effort no-op today).
+    appendInteraction.mutate(`Mansakha: ${currentQuestion.text}\nPerson: ${combinedAnswer}`, { onError: () => {} });
     
     if (newHistory.length >= TOTAL_QUESTIONS) {
       setIsFinished(true);

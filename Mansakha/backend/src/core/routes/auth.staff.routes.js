@@ -62,13 +62,23 @@ router.post('/change-password', verifyToken, async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
+  // password_changed_at lets verifyToken.js reject any token issued before
+  // this change - the self-service equivalent of Ministry's reset fix. That
+  // includes the very token used to make THIS request, so a fresh one is
+  // issued below and returned - without it, the frontend's own post-change
+  // flow (Login.jsx reuses this route's token to continue into the app)
+  // would immediately hit "password changed, please log in again," the same
+  // self-deadlock shape as the earlier inactivity-timeout bug.
   const { error } = await supabase
     .from('officials')
-    .update({ password_hash: passwordHash, must_change_password: false })
+    .update({ password_hash: passwordHash, must_change_password: false, password_changed_at: new Date().toISOString() })
     .eq('official_id', req.auth.officialId);
 
   if (error) return fail(res, 'Could not update password', 500);
-  return ok(res, null, 'Password updated');
+
+  const selectedRole = req.auth.roles.length === 1 ? req.auth.roles[0].roleName : undefined;
+  const token = signToken({ type: 'official', officialId: req.auth.officialId, selectedRole });
+  return ok(res, { token }, 'Password updated');
 });
 
 module.exports = router;

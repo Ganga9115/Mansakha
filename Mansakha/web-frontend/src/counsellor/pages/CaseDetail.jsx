@@ -179,6 +179,10 @@ export default function CaseDetail() {
               <span className="text-base font-bold text-gray-800">{userId.slice(0, 8)}</span>
             </div>
             <div>
+              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case Stage</span>
+              <span className="text-xs font-bold text-gray-700">{data.caseStage || '-'}</span>
+            </div>
+            <div>
               <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Risk Level</span>
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${RISK_BADGE[data.riskLevel] || 'bg-gray-100 text-gray-600'}`}>
                 {data.riskLevel}
@@ -220,7 +224,13 @@ export default function CaseDetail() {
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
               <h3 className="font-bold text-sm text-gray-800 mb-4">Contributing Signals</h3>
               {(data.riskFactors || []).length === 0 ? (
-                <p className="text-xs text-gray-400">No signals recorded for this check-in.</p>
+                // Not an error state - AI Chat, IVRS, and Weekly Review scores
+                // (all Ollama-based) produce one holistic score + summary, not
+                // the 4 separate sentiment/voice-stress/emotion/engagement
+                // sub-scores only a Gemini-analyzed reading breaks out. The
+                // previous "No signals recorded" wording read like something
+                // had gone wrong, when this is simply how that channel scores.
+                <p className="text-xs text-gray-400">Detailed signal breakdown isn't available for this channel.</p>
               ) : (
                 <div className="space-y-2 text-xs">
                   {data.riskFactors.map((f) => (

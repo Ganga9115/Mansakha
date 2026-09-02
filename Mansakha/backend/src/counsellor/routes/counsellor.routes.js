@@ -103,23 +103,34 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
       // even though the counsellor-assignment algorithm (stressResponse.js)
       // already treats a closed case as zero active load. Same filter now
       // applied consistently here, in /my-users, and in /cases below.
+      // status = 'active' - an inactive case contributes zero to
+      // selectLeastLoadedCounsellor's own load count (stressResponse.js), but
+      // this display query had no matching exclusion, so a deactivated case
+      // stayed visible/actionable here forever while silently not counting
+      // toward assignment load. Same filter now applied consistently here,
+      // in /my-users, and in /cases below.
       `select u.user_id, rl.name as risk_level_name
        from users u
        left join lateral (
          select risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed'`,
+       where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed' and u.status = 'active'`,
       [req.auth.officialId]
     ),
     // Feeds predictEscalationRiskBatch below - the forward-looking sibling of
     // the reactive counts above (PS: "predict escalation... before a crisis
     // situation emerges", not just tally cases that are already Critical).
+    // case_stage/status filters match the `rows` query above - without them,
+    // a just-closed or deactivated case with a recent rising trend still
+    // inflated predictedEscalations even though it's excluded from `total`
+    // and every risk-tier bucket, making the two dashboard numbers disagree.
     pool.query(
       `select ds.user_id, ds.score_value, ds.computed_at
        from distress_scores ds
        join users u on u.user_id = ds.user_id
        where u.assigned_counsellor_id = $1
+         and u.case_stage != 'Case Closed' and u.status = 'active'
          and ds.computed_at > now() - ($2 || ' days')::interval`,
       [req.auth.officialId, PREDICTION_LOOKBACK_DAYS]
     ),
@@ -236,24 +247,29 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   // measured REST-vs-pg latency gap this is closing.
   const [{ rows }, { rows: recentScoreRows }] = await Promise.all([
     pool.query(
+      // case_stage != 'Case Closed' and status = 'active' - see /dashboard above for why.
       `select u.user_id, u.case_stage, u.case_background, u.assigned_counsellor_id, ds.score_value, rl.name as risk_level_name
        from users u
        left join lateral (
          select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       where u.jurisdiction_id = any($1::uuid[])`,
+       where u.jurisdiction_id = any($1::uuid[]) and u.case_stage != 'Case Closed' and u.status = 'active'`,
       [jurisdictionIds]
     ),
     // One batched fetch of recent history for every user in the jurisdiction,
     // not one query per case - feeds predictEscalationRiskBatch below so the
     // queue can flag cases trending toward a higher tier, not just ones
-    // already there.
+    // already there. Same case_stage/status filters as the `rows` query -
+    // harmless to omit here today only because `cases` below is built by
+    // iterating the already-filtered `rows`, but kept consistent so this
+    // query can't silently drift into being relied on unfiltered elsewhere.
     pool.query(
       `select ds.user_id, ds.score_value, ds.computed_at
        from distress_scores ds
        join users u on u.user_id = ds.user_id
        where u.jurisdiction_id = any($1::uuid[])
+         and u.case_stage != 'Case Closed' and u.status = 'active'
          and ds.computed_at > now() - ($2 || ' days')::interval`,
       [jurisdictionIds, PREDICTION_LOOKBACK_DAYS]
     ),
@@ -318,13 +334,14 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
   // Porbandar assigned to a Central Delhi counsellor never showed up here).
   const [{ rows }, { rows: unreadRows }] = await Promise.all([
     pool.query(
+      // case_stage != 'Case Closed' and status = 'active' - see /dashboard above for why.
       `select u.user_id, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name
        from users u
        left join lateral (
          select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       where u.assigned_counsellor_id = $1`,
+       where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed' and u.status = 'active'`,
       [req.auth.officialId]
     ),
     pool.query(
@@ -370,7 +387,7 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   // pull the real contact number from user_identity instead.
   const [{ rows: userRows }, { rows: scoreRows }, { rows: unreadRows }] = await Promise.all([
     pool.query(
-      `select u.case_background, u.opted_for_manual_counsellor, ui.contact_number as phone
+      `select u.case_stage, u.case_background, u.opted_for_manual_counsellor, ui.contact_number as phone
        from users u
        left join user_identity ui on ui.user_id = u.user_id
        where u.user_id = $1`,
@@ -445,6 +462,7 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
     : 'insufficient_data';
 
   return ok(res, {
+    caseStage: userRow?.case_stage || null,
     caseBackground: userRow?.case_background || null,
     phone: userRow?.phone || null,
     optedForManualCounsellor: userRow?.opted_for_manual_counsellor || false,
@@ -476,8 +494,17 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
     // crisis situation emerges") - a linear projection of this same score
     // history that flags whether the case is on track to cross into a higher
     // risk tier soon, not just whether it already has.
+    // Bounded to the same PREDICTION_LOOKBACK_DAYS window /dashboard and
+    // /cases already apply before calling predictEscalationRiskBatch -
+    // without this, a case whose last activity was months ago could still
+    // regress over up to 12 stale historical points and report "N days to
+    // next tier" from a trend that stopped being current long ago.
+    // scoreHistory above intentionally stays unbounded (it's the full chart).
     predictedRisk: predictEscalationRisk(
-      [...scoreRows].reverse().map((s) => ({ score: Number(s.score_value), computedAt: s.computed_at }))
+      [...scoreRows]
+        .reverse()
+        .filter((s) => Date.now() - new Date(s.computed_at).getTime() <= PREDICTION_LOOKBACK_DAYS * 24 * 60 * 60 * 1000)
+        .map((s) => ({ score: Number(s.score_value), computedAt: s.computed_at }))
     ),
   });
 });
