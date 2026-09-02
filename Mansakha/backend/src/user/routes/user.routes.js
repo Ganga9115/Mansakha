@@ -9,7 +9,7 @@ const { verifyToken } = require('../../core/middleware/verifyToken');
 const { generalApiLimiter, userChatLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { recordInteraction, recordAiDistressScore, recordOllamaDistressScore, PipelineError } = require('../../core/services/interactionPipeline');
-const { applyStressResponse, selectLeastLoadedCounsellor } = require('../../core/services/stressResponse');
+const { applyStressResponse, selectLeastLoadedCounsellor, notifyWeeklyReview } = require('../../core/services/stressResponse');
 const { enqueueAlertDispatch } = require('../../core/services/dispatchWorker');
 const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = require('../../ai/ollama');
 
@@ -567,11 +567,18 @@ router.patch('/counsellor-preference', async (req, res) => {
 // scheduled for. Upcoming only - a completed/cancelled session isn't
 // something the user still needs to "prepare for."
 router.get('/counselling-sessions', async (req, res) => {
+  // `status = 'upcoming'` alone isn't enough - nothing ever flips a session's
+  // status once its scheduled time passes, so a session stays "upcoming"
+  // forever unless it's also time-filtered here (confirmed live: a session
+  // scheduled for a time already in the past was still showing on the Home
+  // screen's "Upcoming Session" card). `scheduled_at > now()` is the same
+  // check getUserNotifications (routes/me.js) already applies for the
+  // notification-bell version of this same data.
   const { rows } = await pool.query(
     `select cs.session_id, cs.scheduled_at, cs.status, o.full_name
      from counselling_sessions cs
      left join officials o on o.official_id = cs.counsellor_id
-     where cs.user_id = $1 and cs.status = 'upcoming'
+     where cs.user_id = $1 and cs.status = 'upcoming' and cs.scheduled_at > now()
      order by cs.scheduled_at asc`,
     [req.auth.userId]
   );
@@ -1082,34 +1089,22 @@ router.post('/questionnaire/submit', async (req, res) => {
 
     if (qError) throw qError;
 
-    // Convert distress score 0-100 to risk level
-    let riskLevel = 'Low';
-    if (score >= 80) riskLevel = 'Critical';
-    else if (score >= 55) riskLevel = 'High';
-    else if (score >= 30) riskLevel = 'Moderate';
-
     // Record interaction and distress score
     const text = allResponses.map(r => `Q: ${r.q}\nA: ${r.a}`).join('\n\n');
     const { interactionId } = await recordInteraction({ userId, channelName: 'App', transcriptText: text });
 
-    // recordAiDistressScore reads analysis.sentimentRaw/emotion/engagementDelta
-    // for the interaction_signals rows it inserts alongside the score itself
-    // (interactionPipeline.js) - the questionnaire flow doesn't produce those
-    // three signals independently (Ollama returns one overall score+summary,
-    // not per-signal sentiment/emotion/engagement), so they're recorded as
-    // neutral/zero rather than left undefined - passing an undefined field
-    // name here previously (`sentiment` instead of `sentimentRaw`) meant that
-    // insert silently failed on interaction_signals.value's NOT NULL
-    // constraint every time, though it never affected scoreValue itself
-    // (distress_scores.score_value comes from analysis.scoreValue directly).
-    const { scoreId } = await recordAiDistressScore(userId, interactionId, {
-      scoreValue: score,
-      riskLevel,
-      sentimentRaw: 0,
-      emotion: 0,
-      engagementDelta: 0,
-      summary
-    });
+    // This score comes from predictDistressScore (Ollama) above, not Gemini -
+    // recordOllamaDistressScore is the correct recorder for that (same as the
+    // chat-milestone/weekly/IVRS paths right below). This used to go through
+    // recordAiDistressScore instead (the Gemini-shaped recorder), which meant
+    // every ordinary check-in's score was mislabeled model_version
+    // 'gemini-phase1-v1' (the default applied when none is passed), its real
+    // AI explanation was silently dropped (that function reads
+    // analysis.reason, not analysis.summary - explanation was always null
+    // even though a real summary existed), and it wrote 4 fabricated-zero
+    // interaction_signals rows indistinguishable from a genuine Gemini
+    // reading - for the single most common scoring event in the app.
+    const { scoreId, riskLevel } = await recordOllamaDistressScore(userId, interactionId, { score, summary }, 'ollama-checkin-v1');
 
     const { alertId } = await applyStressResponse(userId, scoreId, riskLevel);
 
@@ -1151,6 +1146,11 @@ router.post('/questionnaire/submit', async (req, res) => {
             userId, weeklyInteractionId, weekly, 'ollama-checkin-weekly-v1'
           );
           await applyStressResponse(userId, weeklyScoreId, weeklyRiskLevel);
+          // Distinct from applyStressResponse above - fires regardless of
+          // risk level, so a Moderate weekly review (which applyStressResponse
+          // alone would leave completely silent) still reaches the assigned
+          // counsellor and district admins as its own notification.
+          await notifyWeeklyReview(userId);
           weeklyScored = true;
         }
         await pool.query(`update users set questionnaire_answer_count = 0 where user_id = $1`, [userId]);

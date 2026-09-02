@@ -18,6 +18,7 @@ import CheckinScreen from '../wellness/screens/CheckinScreen';
 import CheckinConfirmationScreen from '../wellness/screens/CheckinConfirmationScreen';
 import DistressHistoryScreen from '../wellness/screens/DistressHistoryScreen';
 import SupportScreen from '../support/screens/SupportScreen';
+import AtrocitiesActScreen from '../support/screens/AtrocitiesActScreen';
 import SettingsScreen from '../support/screens/SettingsScreen';
 import ChatScreen from '../chat/screens/ChatScreen';
 import WellnessScreen from '../wellness/screens/WellnessScreen';
@@ -142,6 +143,12 @@ function DesktopNavigator() {
       <Drawer.Screen name="Wellbeing" component={WellnessScreen} />
       <Drawer.Screen name="Journal" component={JournalScreen} />
       <Drawer.Screen name="CounsellorChat" component={CounsellorChatScreen} />
+      {/* Every page - including any added later - keeps the permanent
+          sidebar/top bar on desktop, so it's registered here as a Drawer.Screen,
+          not left to fall through to ShellStack's outer RootStack (which has
+          no sidebar at all, being a sibling of this whole Drawer). */}
+      <Drawer.Screen name="support" component={SupportScreen} />
+      <Drawer.Screen name="AtrocitiesAct" component={AtrocitiesActScreen} />
     </Drawer.Navigator>
   );
 }
@@ -182,6 +189,7 @@ function ShellStack({ tabs, includeExtras = true }) {
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       <RootStack.Screen name="MainTabs" component={tabs} />
       <RootStack.Screen name="support" component={SupportScreen} />
+      <RootStack.Screen name="AtrocitiesAct" component={AtrocitiesActScreen} />
       {includeExtras && (
         <>
           <RootStack.Screen name="Chatbot" component={ChatScreen} />

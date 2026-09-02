@@ -4,7 +4,6 @@ if (!process.env.JWT_SECRET) {
   throw new Error('JWT_SECRET must be set in .env');
 }
 
-const EXPIRES_IN = '8h';
 const PENDING_REGISTRATION_EXPIRES_IN = '15m';
 
 // payload: for a user, { type: 'user', userId }.
@@ -16,8 +15,18 @@ const PENDING_REGISTRATION_EXPIRES_IN = '15m';
 // { type: 'user_pending', email? , phone? } - short-lived, only usable to
 // complete registration for the exact contact that was just verified (see
 // user/routes/auth.user.routes.js's /register).
-function signToken(payload, { expiresIn = EXPIRES_IN } = {}) {
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn });
+//
+// No default expiry (explicit request: victim/admin/counsellor/ministry
+// sessions must never expire on their own - only an explicit Logout tap
+// should end one). Every real login call site (auth.user, auth.staff,
+// auth.ministry) calls this with no `expiresIn` override, so omitting the
+// default here means none of those tokens carry an `exp` claim at all.
+// signPendingRegistrationToken below is the one deliberate exception - that
+// token isn't a login session, it's a short window to finish signing up
+// right after OTP verification, so it still passes its own expiresIn explicitly.
+function signToken(payload, { expiresIn } = {}) {
+  const options = expiresIn ? { expiresIn } : {};
+  return jwt.sign(payload, process.env.JWT_SECRET, options);
 }
 
 function signPendingRegistrationToken(payload) {

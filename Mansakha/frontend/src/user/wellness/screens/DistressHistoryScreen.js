@@ -88,10 +88,6 @@ export default function DistressHistoryScreen() {
   const query = useDistressHistory();
   const dashboardQuery = useUserDashboard();
   const { tier, isDesktop } = useResponsive();
-  const today = new Date();
-  const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
-  const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
-  const yearStr = `Year - ${today.getFullYear()}`;
 
   const keyExtractor = (item, index) => `${item.computedAt}-${index}`;
   const renderItem = ({ item }) => (
@@ -106,14 +102,6 @@ export default function DistressHistoryScreen() {
         </View>
       </View>
       <RiskBadge riskLevel={item.riskLevel} />
-    </View>
-  );
-
-  const dateTicker = (
-    <View style={styles.dateTicker}>
-      <Text style={styles.tickerText}>{dayStr}</Text>
-      <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
-      <Text style={styles.tickerText}>{yearStr}</Text>
     </View>
   );
 
@@ -150,41 +138,28 @@ export default function DistressHistoryScreen() {
       {/* Main Content Body */}
       <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
         <QueryBoundary query={query} empty={(data) => !data?.scores?.length}>
-          {(data) =>
-            isDesktop ? (
-              <View style={styles.desktopRow}>
-                <View style={styles.desktopChartCol}>
-                  {dateTicker}
-                  <TrendChart scores={data.scores} />
-                </View>
-                <View style={styles.desktopListCol}>
-                  <Text style={styles.sectionHeaderTitle}>PAST ASSESSMENTS</Text>
-                  <FlatList
-                    data={data.scores}
-                    keyExtractor={keyExtractor}
-                    contentContainerStyle={styles.list}
-                    showsVerticalScrollIndicator={false}
-                    renderItem={renderItem}
-                  />
-                </View>
-              </View>
-            ) : (
+          {(data) => {
+            // TrendChart plots left-to-right chronologically, so it needs
+            // scores oldest-first (the order the API already returns) - but
+            // the list below reads newest-first, so it gets its own reversed
+            // copy rather than changing the order the chart relies on.
+            const latestFirst = [...data.scores].reverse();
+            return (
               <FlatList
-                data={data.scores}
+                data={latestFirst}
                 keyExtractor={keyExtractor}
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
                 ListHeaderComponent={
                   <View>
-                    {dateTicker}
                     <TrendChart scores={data.scores} />
                     <Text style={styles.sectionHeaderTitle}>PAST ASSESSMENTS</Text>
                   </View>
                 }
                 renderItem={renderItem}
               />
-            )
-          }
+            );
+          }}
         </QueryBoundary>
       </View>
     </View>
@@ -249,18 +224,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
   },
-  dateTicker: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.sm,
-  },
-  tickerText: { ...typography.bodyStrong, color: colors.primary },
-  tickerTextActive: { color: colors.error },
   list: { paddingBottom: spacing.xxxl },
-  desktopRow: { flex: 1, flexDirection: 'row', gap: spacing.xl },
-  desktopChartCol: { width: 380 },
-  desktopListCol: { flex: 1 },
   sectionHeaderTitle: {
     ...typography.label,
     color: colors.primaryDark,

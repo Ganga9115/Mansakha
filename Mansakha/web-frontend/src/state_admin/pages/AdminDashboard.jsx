@@ -47,11 +47,12 @@ export default function AdminDashboard() {
     <StaffLayout title="District Dashboard">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
             <StatCard title="Total Cases" value={data?.totalCases ?? '-'} />
             <StatCard title="Vulnerable (Moderate)" value={data?.vulnerableUsers ?? '-'} tone="text-emerald-600" />
             <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? '-'} tone="text-rose-600" />
             <StatCard title="Critical (SOS)" value={data?.criticalCases ?? '-'} tone="text-purple-700" />
+            <StatCard title="Predicted Escalations" value={data?.predictedEscalations ?? '-'} tone="text-orange-600" />
           </div>
         </div>
 

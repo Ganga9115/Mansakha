@@ -133,11 +133,17 @@ router.get('/notifications', verifyToken, async (req, res) => {
 
   try {
     const { rows } = await pool.query(
+      // coalesce(al.user_id, se.user_id, an.user_id) - the third arm was
+      // missing (confirmed live: every 'disengagement' notification, and now
+      // 'weekly_review' too, uses alert_notifications.user_id directly with
+      // no alert_id/sos_event_id at all, so user_id/user_name/user_phone
+      // all silently resolved to null and the message fell back to the
+      // generic "New alert - a user" template for both sources).
       `select an.alert_notification_id, an.notified_at, an.source, an.priority, an.auto_assigned,
               an.alert_id, an.sos_event_id,
-              coalesce(al.user_id, se.user_id) as user_id,
-              coalesce(al.triggered_at, se.triggered_at) as triggered_at,
-              ast.name as alert_status, se.resolved_at,
+              coalesce(al.user_id, se.user_id, an.user_id) as user_id,
+              coalesce(al.triggered_at, se.triggered_at, an.notified_at) as triggered_at,
+              ast.name as alert_status, se.acknowledged_at, se.resolved_at,
               ui.full_name as user_name, ui.contact_number as user_phone,
               ds.score_value, rl.name as risk_level
        from alert_notifications an
@@ -146,7 +152,7 @@ router.get('/notifications', verifyToken, async (req, res) => {
        left join sos_events se on se.sos_event_id = an.sos_event_id
        left join distress_scores ds on ds.score_id = al.distress_score_id
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       left join user_identity ui on ui.user_id = coalesce(al.user_id, se.user_id)
+       left join user_identity ui on ui.user_id = coalesce(al.user_id, se.user_id, an.user_id)
        where an.official_id = $1
        order by an.notified_at desc
        limit 20`,
@@ -170,9 +176,21 @@ router.get('/notifications', verifyToken, async (req, res) => {
       userPhone: n.user_phone || null,
       riskLevel: n.risk_level || null,
       scoreValue: n.score_value !== null ? Number(n.score_value) : null,
-      status: n.source === 'sos' ? (n.resolved_at ? 'Resolved' : 'Open') : (n.alert_status || 'Open'),
+      // Was missing the "Acknowledged" state entirely (acknowledged_at
+      // wasn't even selected above) - an SOS a counsellor had already
+      // acknowledged still showed "Open" in this bell while correctly
+      // showing "Acknowledged" in the Counsellor Alerts Feed
+      // (counsellor.routes.js), the exact same event reading two different
+      // statuses depending on which screen you looked at it from.
+      status: n.source === 'sos'
+        ? (n.resolved_at ? 'Resolved' : n.acknowledged_at ? 'Acknowledged' : 'Open')
+        : (n.alert_status || 'Open'),
       message: n.source === 'sos'
         ? `Urgent help requested by ${n.user_name || 'a user'}`
+        : n.source === 'disengagement'
+        ? `${n.user_name || 'A user'} has gone quiet - no check-ins recently`
+        : n.source === 'weekly_review'
+        ? `${n.user_name || 'A user'} completed their weekly review`
         : `${n.risk_level || 'New'} alert - ${n.user_name || 'a user'}`,
     }));
 

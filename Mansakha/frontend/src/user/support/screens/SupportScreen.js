@@ -42,11 +42,6 @@ export default function SupportScreen({ navigation }) {
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
   const counsellor = assignedCounsellorQuery.data?.counsellor;
 
-  const today = new Date();
-  const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
-  const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
-  const yearStr = `Year - ${today.getFullYear()}`;
-
   const openLink = async (url) => {
     try {
       await Linking.openURL(url);
@@ -104,13 +99,6 @@ export default function SupportScreen({ navigation }) {
 
       {/* Main Content Area */}
       <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-        {/* Date Ticker */}
-        <View style={styles.dateTicker}>
-          <Text style={styles.tickerText}>{dayStr}</Text>
-          <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
-          <Text style={styles.tickerText}>{yearStr}</Text>
-        </View>
-
         <Text style={styles.sectionHeaderTitle}>REACH OUT DIRECTLY</Text>
 
         <QueryBoundary query={query}>
@@ -259,14 +247,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
   },
-  dateTicker: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.sm,
-  },
-  tickerText: { ...typography.bodyStrong, color: colors.primary },
-  tickerTextActive: { color: colors.error },
   sectionHeaderTitle: {
     ...typography.label,
     color: colors.primaryDark,

@@ -39,6 +39,16 @@ router.post('/login', staffLoginLimiter, async (req, res) => {
 
   const selectedRole = match.matchingRole.roles.role_name;
 
+  // Resets the 8-hour inactivity clock (verifyToken.js) at the moment of
+  // login - without this, an account that was last active more than 8h ago
+  // logs in successfully, gets a valid token, and then its very first
+  // subsequent request (even /change-password, right below) is immediately
+  // rejected as "expired due to inactivity" - and stays that way forever,
+  // since the only other place that refreshes this timestamp is gated
+  // behind that same check. Confirmed live as a real, guaranteed-daily
+  // lockout (anyone away >8h, i.e. overnight) before this fix.
+  await supabase.from('officials').update({ last_active_at: new Date().toISOString() }).eq('official_id', match.official.official_id);
+
   const token = signToken({ type: 'official', officialId: match.official.official_id, selectedRole });
   return ok(res, { token, mustChangePassword: match.official.must_change_password, selectedRole });
 });

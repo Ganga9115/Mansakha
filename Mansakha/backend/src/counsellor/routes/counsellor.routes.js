@@ -9,10 +9,40 @@ const { requireRole } = require('../../core/middleware/requireRole');
 const { requireJurisdiction } = require('../../core/middleware/requireJurisdiction');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
-const { isEscalatingTrend } = require('../../ai/scoring');
+const { isEscalatingTrend, predictEscalationRisk, predictEscalationRiskBatch } = require('../../ai/scoring');
+
+// How far back to look when predicting escalation risk in bulk (Case Queue,
+// Dashboard) - predictEscalationRisk itself further caps each user's history
+// to their most recent 8 readings, this just bounds how much the SQL fetch
+// pulls across a whole jurisdiction's users in one query.
+const PREDICTION_LOOKBACK_DAYS = 30;
 const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
 
 const RISK_SORT_ORDER = { Critical: 4, High: 3, Moderate: 2, Low: 1 };
+
+// A score's source channel, for the counsellor's benefit (per explicit
+// request: "counsellor should know user got the score from check-in, chat,
+// or IVRS call"). The 3 Ollama-based paths (weekly review, chat-milestone,
+// IVRS webhook) already tag model_version distinctly, so those take
+// priority over the generic channel name; every other score (the routine
+// per-check-in/per-chat-turn Gemini scoring, which all share the same
+// generic 'gemini-phase1-v1' model_version) falls back to channels.channel_name.
+const MODEL_VERSION_LABELS = {
+  'ollama-checkin-weekly-v1': 'Weekly Review',
+  'ollama-chat-v1': 'AI Chat (5000-word review)',
+  'ollama-ivrs-v1': 'IVRS Call',
+};
+const CHANNEL_LABELS = {
+  'Mobile App': 'Check-in',
+  Chatbot: 'AI Chat',
+  IVRS: 'IVRS Call',
+};
+
+function describeScoreSource(modelVersion, channelName) {
+  if (MODEL_VERSION_LABELS[modelVersion]) return MODEL_VERSION_LABELS[modelVersion];
+  if (channelName) return CHANNEL_LABELS[channelName] || channelName;
+  return 'Unknown';
+}
 
 const router = express.Router();
 
@@ -66,18 +96,36 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
   // trip alone costs ~1-2s here regardless of how little data comes back
   // (confirmed live elsewhere this session), while a warmed pg connection
   // is a few hundred ms at most.
-  const { rows } = await pool.query(
-    `select u.user_id, rl.name as risk_level_name
-     from users u
-     left join lateral (
-       select risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
-     ) ds on true
-     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-     where u.assigned_counsellor_id = $1`,
-    [req.auth.officialId]
-  );
+  const [{ rows }, { rows: recentScoreRows }] = await Promise.all([
+    pool.query(
+      // case_stage != 'Case Closed' - a closed case previously stayed in
+      // this count forever (Dashboard's "Total Cases" only ever went up),
+      // even though the counsellor-assignment algorithm (stressResponse.js)
+      // already treats a closed case as zero active load. Same filter now
+      // applied consistently here, in /my-users, and in /cases below.
+      `select u.user_id, rl.name as risk_level_name
+       from users u
+       left join lateral (
+         select risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
+       ) ds on true
+       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed'`,
+      [req.auth.officialId]
+    ),
+    // Feeds predictEscalationRiskBatch below - the forward-looking sibling of
+    // the reactive counts above (PS: "predict escalation... before a crisis
+    // situation emerges", not just tally cases that are already Critical).
+    pool.query(
+      `select ds.user_id, ds.score_value, ds.computed_at
+       from distress_scores ds
+       join users u on u.user_id = ds.user_id
+       where u.assigned_counsellor_id = $1
+         and ds.computed_at > now() - ($2 || ' days')::interval`,
+      [req.auth.officialId, PREDICTION_LOOKBACK_DAYS]
+    ),
+  ]);
 
-  const counts = { total: 0, low: 0, moderate: 0, high: 0, critical: 0 };
+  const counts = { total: 0, low: 0, moderate: 0, high: 0, critical: 0, predictedEscalations: 0 };
   for (const u of rows) {
     counts.total += 1;
     const riskLevel = u.risk_level_name;
@@ -85,6 +133,13 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
     if (riskLevel === 'Moderate') counts.moderate += 1;
     if (riskLevel === 'High') counts.high += 1;
     if (riskLevel === 'Critical') counts.critical += 1;
+  }
+
+  const predictions = predictEscalationRiskBatch(
+    recentScoreRows.map((r) => ({ userId: r.user_id, score: Number(r.score_value), computedAt: r.computed_at }))
+  );
+  for (const prediction of predictions.values()) {
+    if (prediction.daysToNextTier != null) counts.predictedEscalations += 1;
   }
   return ok(res, counts);
 });
@@ -157,9 +212,18 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   const pageSize = 20;
   const offset = (Number(page) - 1) * pageSize;
 
-  // assigned_counsellor_id, not jurisdiction - same fix as /dashboard and
-  // /my-users above (see /my-users' comment for the full rationale).
-  //
+  // Case Queue is jurisdiction-wide (every case in the counsellor's own
+  // district, assigned to them or not) - distinct from /my-users below,
+  // which is strictly assigned_counsellor_id. FR-4.2 (SRS_Document.pdf)
+  // calls for exactly this split: My Users is the counsellor's personal
+  // caseload, Case Queue is the district-wide worklist a counsellor
+  // triages/picks up from (e.g. an unassigned Critical case, or a
+  // colleague's case needing coverage). These were briefly collapsed into
+  // one identical scope by an earlier fix in this codebase's history that
+  // was meant for /my-users only and got applied here too by mistake.
+  const jurisdictionIds = req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean);
+  if (jurisdictionIds.length === 0) return ok(res, { cases: [], total: 0 });
+
   // Each user's CURRENT risk tier is their most recent distress_scores row - not
   // modeled as a denormalized column on `users`, so this is resolved via the
   // latest score per user rather than trusting any cached field. Sorting by
@@ -170,28 +234,60 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   // Raw pg, not Supabase REST - the Case Queue is a screen a Counsellor
   // reloads constantly through a shift; see /dashboard above for the
   // measured REST-vs-pg latency gap this is closing.
-  const { rows } = await pool.query(
-    `select u.user_id, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name
-     from users u
-     left join lateral (
-       select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
-     ) ds on true
-     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-     where u.assigned_counsellor_id = $1`,
-    [req.auth.officialId]
+  const [{ rows }, { rows: recentScoreRows }] = await Promise.all([
+    pool.query(
+      `select u.user_id, u.case_stage, u.case_background, u.assigned_counsellor_id, ds.score_value, rl.name as risk_level_name
+       from users u
+       left join lateral (
+         select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
+       ) ds on true
+       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where u.jurisdiction_id = any($1::uuid[])`,
+      [jurisdictionIds]
+    ),
+    // One batched fetch of recent history for every user in the jurisdiction,
+    // not one query per case - feeds predictEscalationRiskBatch below so the
+    // queue can flag cases trending toward a higher tier, not just ones
+    // already there.
+    pool.query(
+      `select ds.user_id, ds.score_value, ds.computed_at
+       from distress_scores ds
+       join users u on u.user_id = ds.user_id
+       where u.jurisdiction_id = any($1::uuid[])
+         and ds.computed_at > now() - ($2 || ' days')::interval`,
+      [jurisdictionIds, PREDICTION_LOOKBACK_DAYS]
+    ),
+  ]);
+
+  const predictions = predictEscalationRiskBatch(
+    recentScoreRows.map((r) => ({ userId: r.user_id, score: Number(r.score_value), computedAt: r.computed_at }))
   );
 
   const BACKSTORY_EXCERPT_LENGTH = 140; // Section 2.2: a truncated excerpt on the list, full text on Case Detail
 
-  let cases = rows.map((u) => ({
-    userId: u.user_id,
-    caseStage: u.case_stage,
-    score: u.score_value !== null ? Number(u.score_value) : null,
-    riskLevel: u.risk_level_name,
-    caseBackground: u.case_background
-      ? (u.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${u.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : u.case_background)
-      : null,
-  }));
+  let cases = rows.map((u) => {
+    const prediction = predictions.get(u.user_id);
+    return {
+      userId: u.user_id,
+      caseStage: u.case_stage,
+      score: u.score_value !== null ? Number(u.score_value) : null,
+      riskLevel: u.risk_level_name,
+      caseBackground: u.case_background
+        ? (u.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${u.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : u.case_background)
+        : null,
+      // Jurisdiction-wide queue mixes the counsellor's own patients with
+      // everyone else's/unassigned ones - the UI needs this to tell them apart
+      // (e.g. badge an unassigned Critical case as something to pick up).
+      isAssignedToMe: u.assigned_counsellor_id === req.auth.officialId,
+      isUnassigned: u.assigned_counsellor_id === null,
+      // Predicted (forward-looking), not just the case's current tier -
+      // surfaces a case worth pre-emptive triage before it actually reaches
+      // Critical, per the PS's "predict escalation before a crisis emerges".
+      predictedEscalation: prediction?.daysToNextTier != null
+        ? { nextTier: prediction.nextTier, daysToNextTier: prediction.daysToNextTier }
+        : null,
+    };
+  });
 
   if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
 
@@ -280,15 +376,27 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
        where u.user_id = $1`,
       [userId]
     ),
+    // 12, not 3 - the extra rows feed the per-case longitudinal trend chart
+    // below (Section 2.2/FR-3.3's "weekly distress score to help counsellors
+    // analyse trends": the computation already existed via the weekly
+    // check-in threshold, but nothing surfaced the history to a counsellor -
+    // Reports only ever charted jurisdiction-wide averages, never one case's
+    // own readings over time). `latest`/`previous` and the 3-point escalation
+    // check below still only look at the newest 3, unaffected by the wider fetch.
+    // channel_name (via interactions) + model_version together tell a
+    // counsellor WHICH of check-in/chat/IVRS actually produced this score -
+    // previously invisible here entirely, per explicit request.
     pool.query(
       `select ds.score_id, ds.score_value, ds.computed_at, ds.interaction_id, ds.explanation, ds.suggested_intervention_type_id,
-              it.name as intervention_type_name, rl.name as risk_level_name
+              ds.model_version, it.name as intervention_type_name, rl.name as risk_level_name, c.channel_name
        from distress_scores ds
        left join intervention_types it on it.intervention_type_id = ds.suggested_intervention_type_id
+       left join interactions i on i.interaction_id = ds.interaction_id
+       left join channels c on c.channel_id = i.channel_id
        join risk_levels rl on rl.risk_level_id = ds.risk_level_id
        where ds.user_id = $1
        order by ds.computed_at desc
-       limit 3`,
+       limit 12`,
       [userId]
     ),
     // Red-dot indicator for the "Chat with User" button - unread from the
@@ -304,8 +412,11 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   if (scoreRows.length === 0) return fail(res, 'No check-ins recorded for this case yet', 404);
 
   const [latest, previous] = scoreRows;
-  // isEscalatingTrend wants oldest-first; `scoreRows` came back newest-first.
-  const escalating = scoreRows.length >= 3 && isEscalatingTrend([...scoreRows].reverse().map((s) => Number(s.score_value)));
+  // isEscalatingTrend wants oldest-first and only ever looks at its first 3
+  // entries - explicitly take the newest 3 (not the wider scoreRows fetch
+  // above) before reversing, so a case with a long history still gets
+  // evaluated on its most recent readings, not its oldest ones.
+  const escalating = scoreRows.length >= 3 && isEscalatingTrend([...scoreRows.slice(0, 3)].reverse().map((s) => Number(s.score_value)));
 
   // Explainability + intervention status are independent of each other, so
   // they run concurrently too - both only need ids already known above.
@@ -342,6 +453,7 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
     previousScore: previous ? Number(previous.score_value) : null,
     trend,
     riskLevel: latest.risk_level_name,
+    scoreSource: describeScoreSource(latest.model_version, latest.channel_name),
     riskFactors: signals.map((s) => ({ signal: s.signal_type_name, value: Number(s.value) })),
     explanation: latest.explanation || null,
     suggestedInterventionType: latest.suggested_intervention_type_id
@@ -349,6 +461,24 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
       : null,
     interventionStatus: openIntervention ? (openIntervention.completed_at ? 'completed' : 'pending') : 'none',
     interventionId: openIntervention ? openIntervention.intervention_id : null,
+    // Chronological (oldest first), for the per-case trend chart - separate
+    // from `score`/`previousScore`/`trend` above, which describe only the
+    // single most-recent reading.
+    scoreHistory: [...scoreRows].reverse().map((s) => ({
+      scoreId: s.score_id,
+      score: Number(s.score_value),
+      riskLevel: s.risk_level_name,
+      computedAt: s.computed_at,
+      source: describeScoreSource(s.model_version, s.channel_name),
+    })),
+    // `trend` above is retrospective ("has this case already been rising?");
+    // `predictedRisk` is forward-looking (PS: "predict escalation... before a
+    // crisis situation emerges") - a linear projection of this same score
+    // history that flags whether the case is on track to cross into a higher
+    // risk tier soon, not just whether it already has.
+    predictedRisk: predictEscalationRisk(
+      [...scoreRows].reverse().map((s) => ({ score: Number(s.score_value), computedAt: s.computed_at }))
+    ),
   });
 });
 
@@ -472,10 +602,21 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
   const jurisdictionIds = req.auth.roles.filter((r) => r.roleName === 'Counsellor').map((r) => r.jurisdictionId).filter(Boolean);
   if (jurisdictionIds.length === 0) return ok(res, { alerts: [] });
 
+  // Alerts Feed is for actionable items only (an open Critical alert or an
+  // SOS, each with a real open/acknowledged/resolved state) - 'disengagement'
+  // and 'weekly_review' are informational notices with no alerts/sos_events
+  // row and no such state at all (they stay bell-only, via /api/me/notifications).
+  // Filtering at the query level (not after fetching) means every row that
+  // comes back is guaranteed to have a real `alerts` or `sos_events` object -
+  // this used to filter disengagement/weekly_review out only as a side
+  // effect of the jurisdiction lookup below silently no-op'ing on a null
+  // `n.alerts`, which was fragile (and outright crashed the equivalent
+  // Admin-tier query - see districtAdmin.routes.js).
   const { data, error } = await supabase
     .from('alert_notifications')
     .select('notified_at, source, priority, auto_assigned, alerts(alert_id, user_id, triggered_at, alert_statuses(name), users(jurisdiction_id)), sos_events(sos_event_id, user_id, triggered_at, acknowledged_at, resolved_at)')
     .eq('official_id', req.auth.officialId)
+    .in('source', ['distress_score', 'sos'])
     .order('notified_at', { ascending: false })
     .limit(100); // Increased limit slightly to account for filtered items
   if (error) return fail(res, 'Could not load alerts', 500);

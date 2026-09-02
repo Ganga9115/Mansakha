@@ -35,13 +35,19 @@ export default function CounsellorDashboard() {
         )}
 
         {/* METRIC CARDS ROW */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
           <MetricCard label="TOTAL CASES" count={countsLoading ? '...' : counts?.total ?? 0} dotColor="bg-slate-600" />
           <MetricCard label="LOW RISK" count={countsLoading ? '...' : counts?.low ?? 0} dotColor="bg-emerald-500" />
           <MetricCard label="MODERATE RISK" count={countsLoading ? '...' : counts?.moderate ?? 0} dotColor="bg-amber-500" />
           <MetricCard label="HIGH RISK" count={countsLoading ? '...' : counts?.high ?? 0} dotColor="bg-rose-500" />
           <MetricCard label="CRITICAL" count={countsLoading ? '...' : counts?.critical ?? 0} dotColor="bg-purple-600" />
           <MetricCard label="OPEN ALERTS" count={alertsLoading ? '...' : openAlertCount} dotColor="bg-[#519BCE]" />
+          <MetricCard
+            label="PREDICTED ESCALATIONS"
+            count={countsLoading ? '...' : counts?.predictedEscalations ?? 0}
+            dotColor="bg-orange-500"
+            hint="Trending toward a higher risk tier within 14 days"
+          />
         </div>
 
         {/* RECENT ALERTS */}
@@ -102,9 +108,9 @@ export default function CounsellorDashboard() {
   );
 }
 
-function MetricCard({ label, count, dotColor }) {
+function MetricCard({ label, count, dotColor, hint }) {
   return (
-    <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex flex-col justify-between">
+    <div className="bg-white p-4 rounded-lg border border-gray-100 shadow-sm flex flex-col justify-between" title={hint}>
       <div className="flex items-center gap-2">
         <span className={`h-2 w-2 rounded-full ${dotColor}`}></span>
         <span className="text-[10px] font-bold text-gray-500 tracking-wider">{label}</span>

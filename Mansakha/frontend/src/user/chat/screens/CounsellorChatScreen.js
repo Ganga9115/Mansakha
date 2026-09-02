@@ -195,17 +195,19 @@ export default function CounsellorChatScreen({ navigation }) {
           <Feather name="user" size={18} color={colors.primary} />
         </View>
         <View style={styles.nameBlock}>
-          <View style={styles.nameRow}>
-            <Text style={styles.statusTitle}>{counsellor?.fullName || 'My Counsellor'}</Text>
-            {!!counsellor && (
-              <Pressable onPress={handleCall} style={styles.callBtn} hitSlop={8} accessibilityLabel="Call counsellor">
-                <Feather name="phone" size={16} color={colors.primary} />
-              </Pressable>
-            )}
-          </View>
+          <Text style={styles.statusTitle}>{counsellor?.fullName || 'My Counsellor'}</Text>
           <Text style={styles.subtext}>Private, opted-in support</Text>
         </View>
         <View style={{ flex: 1 }} />
+        {/* Green outline circle - the universal "make a call" convention
+            (vs. red for emergency/decline), which tells this apart from the
+            header's red Get Help Now button on color semantics alone,
+            stronger than the blue-vs-red the two used to rely on. */}
+        {!!counsellor && (
+          <Pressable onPress={handleCall} style={styles.callIconBtn} hitSlop={8} accessibilityLabel="Call counsellor">
+            <Feather name="phone" size={18} color={colors.success} />
+          </Pressable>
+        )}
         <TopRightActions />
       </View>
 
@@ -341,12 +343,18 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginRight: spacing.md,
   },
   nameBlock: { flexShrink: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
   statusTitle: { ...typography.h3, color: colors.primaryDark },
   subtext: { ...typography.caption, color: colors.textSecondary },
-  callBtn: {
-    width: 30, height: 30, borderRadius: radius.pill, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center',
+  callIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
   },
   body: { flex: 1, width: '100%' },
   content: { flex: 1, padding: spacing.xl },

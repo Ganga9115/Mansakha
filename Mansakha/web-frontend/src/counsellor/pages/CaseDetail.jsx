@@ -24,6 +24,54 @@ const TREND_META = {
   insufficient_data: { icon: Minus, color: 'text-gray-400', label: 'Insufficient data' },
 };
 
+const RISK_DOT_COLOR = {
+  Critical: '#7e22ce',
+  High: '#dc2626',
+  Moderate: '#d97706',
+  Low: '#059669',
+};
+
+// This case's own score readings over time (Section 2.2/FR-3.3 "weekly
+// distress score to help counsellors analyse trends") - distinct from the
+// Reports page's trend chart, which only ever averages scores across the
+// whole jurisdiction and can't show one case's history. Small hand-rolled
+// SVG line (matching Reports.jsx's TrendChart pattern) rather than a
+// charting library, since this is the only chart this page needs.
+function CaseTrendChart({ history }) {
+  if (history.length < 2) {
+    return <p className="text-xs text-gray-400">Not enough check-ins yet to chart a trend - one more reading will unlock this.</p>;
+  }
+
+  const points = history.map((h, i) => ({
+    x: (i / (history.length - 1)) * 500,
+    y: 90 - (Math.max(0, Math.min(100, h.score)) / 100) * 80,
+    riskLevel: h.riskLevel,
+    source: h.source,
+    label: new Date(h.computedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+  }));
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+
+  return (
+    <div className="pt-1">
+      <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
+        <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
+        <path d={path} fill="none" stroke="#519BCE" strokeWidth="2.5" />
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y} r="4" fill={RISK_DOT_COLOR[p.riskLevel] || '#9CA3AF'}>
+            <title>{`${p.label} · ${p.source || 'Unknown source'}`}</title>
+          </circle>
+        ))}
+      </svg>
+      <div
+        className="grid text-[9px] font-semibold text-gray-400 px-1 pt-2 mt-2 border-t border-gray-100"
+        style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
+      >
+        {points.map((p, i) => <span key={i} className="text-center whitespace-nowrap">{p.label}</span>)}
+      </div>
+    </div>
+  );
+}
+
 // Counsellor's own copy - the full read/write Case File view (note-composing,
 // intervention-logging, scheduling, in-app chat). Administration's copies of
 // this page are separate, read-only files, per the PS's explicit
@@ -87,8 +135,40 @@ export default function CaseDetail() {
   const trend = TREND_META[data.trend] || TREND_META.insufficient_data;
   const TrendIcon = trend.icon;
 
+  // Forward-looking, distinct from `trend` above: `trend` says whether this
+  // case has ALREADY been rising; this is a projection of where it's headed
+  // (PS: "predict escalation... before a crisis situation emerges").
+  const predicted = data.predictedRisk;
+  const predictedLabel = !predicted || predicted.predictedTrend === 'insufficient_data'
+    ? { text: 'Not enough data', color: 'text-gray-400', Icon: Minus }
+    : predicted.daysToNextTier != null
+      ? { text: `${predicted.nextTier} in ~${predicted.daysToNextTier}d`, color: 'text-orange-600', Icon: ArrowUpRight }
+      : predicted.predictedTrend === 'rising'
+        ? { text: 'Rising (no crossing soon)', color: 'text-amber-600', Icon: ArrowUpRight }
+        : predicted.predictedTrend === 'falling'
+          ? { text: 'Improving', color: 'text-emerald-600', Icon: ArrowDownRight }
+          : { text: 'Stable', color: 'text-gray-500', Icon: Minus };
+
+  // Moved into the header (StaffLayout's headerAction) rather than sitting
+  // alone in its own row inside the page content, where it left a lot of
+  // empty space next to it - the header is where a page's primary action
+  // belongs, same as profile/notifications/logout already do.
+  const chatWithUserButton = data.optedForManualCounsellor ? (
+    <div className="relative inline-block">
+      <button
+        onClick={() => navigate(`/counsellor/case-detail/${userId}/chat`)}
+        className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-blue-50 transition flex items-center gap-2"
+      >
+        <MessageCircle size={14} /> Chat with User
+      </button>
+      {data.hasUnreadMessage && (
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+      )}
+    </div>
+  ) : null;
+
   return (
-    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
+    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`} headerAction={chatWithUserButton}>
       <div className="space-y-6">
 
         {/* TOP SUMMARY HEADER */}
@@ -109,31 +189,25 @@ export default function CaseDetail() {
               <span className="font-bold text-xs text-gray-800">{data.score}/100 {data.previousScore != null && <span className="text-gray-400 font-normal">(was {data.previousScore})</span>}</span>
             </div>
             <div>
+              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block" title="Which channel produced the latest score - hover a dot on the trend chart below for older readings.">Source</span>
+              <span className="text-xs font-bold text-gray-700">{data.scoreSource || 'Unknown'}</span>
+            </div>
+            <div>
               <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Trend</span>
               <span className={`flex items-center gap-1 text-xs font-bold mt-0.5 ${trend.color}`}>
                 <TrendIcon size={14} /> {trend.label}
               </span>
             </div>
             <div>
+              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block" title="Forward-looking projection from this case's score history - distinct from Trend, which only looks backward.">Predicted Risk</span>
+              <span className={`flex items-center gap-1 text-xs font-bold mt-0.5 ${predictedLabel.color}`}>
+                <predictedLabel.Icon size={14} /> {predictedLabel.text}
+              </span>
+            </div>
+            <div>
               <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Intervention</span>
               <span className="text-xs font-bold text-gray-700">{data.interventionStatus}</span>
             </div>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap justify-end">
-            {data.optedForManualCounsellor && (
-              <div className="relative inline-block">
-                <button
-                  onClick={() => navigate(`/counsellor/case-detail/${userId}/chat`)}
-                  className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-blue-50 transition flex items-center gap-2"
-                >
-                  <MessageCircle size={14} /> Chat with User
-                </button>
-                {data.hasUnreadMessage && (
-                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
-                )}
-              </div>
-            )}
           </div>
         </div>
 
@@ -168,6 +242,13 @@ export default function CaseDetail() {
                   <span className="font-bold text-[#3D5A80]">AI-suggested intervention:</span> {data.suggestedInterventionType.name} - review before acting.
                 </div>
               )}
+            </div>
+
+            {/* Distress score trend - see CaseTrendChart above for why this
+                exists separately from the jurisdiction-wide Reports chart. */}
+            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
+              <h3 className="font-bold text-sm text-gray-800 mb-4">Distress Score Trend</h3>
+              <CaseTrendChart history={data.scoreHistory || []} />
             </div>
 
             {/* Log Intervention - the only thing that (a) ever populates the
@@ -221,18 +302,6 @@ export default function CaseDetail() {
               )}
             </div>
 
-            {/* Case notes - own page (CaseNotes.jsx), not expanded inline
-                here: a case can accumulate a long thread (every AI-drafted
-                note per check-in included), which used to push the rest of
-                the case file below the fold. */}
-            <button
-              onClick={() => navigate(`/counsellor/case-detail/${userId}/notes`)}
-              className="w-full bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between hover:bg-gray-50 transition text-left"
-            >
-              <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
-              <ChevronRight size={18} className="text-gray-400" />
-            </button>
-
           </div>
 
           {/* RIGHT COLUMN */}
@@ -259,6 +328,20 @@ export default function CaseDetail() {
                 {scheduleSession.loading ? 'Scheduling...' : 'Schedule'}
               </button>
             </div>
+
+            {/* Case Notes - own page (CaseNotes.jsx), not expanded inline
+                here: a case can accumulate a long thread (every AI-drafted
+                note per check-in included), which used to push the rest of
+                the case file below the fold. Moved here under Schedule a
+                Session per explicit request, rather than duplicating it in
+                the left column too. */}
+            <button
+              onClick={() => navigate(`/counsellor/case-detail/${userId}/notes`)}
+              className="w-full bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between hover:bg-gray-50 transition text-left"
+            >
+              <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
+              <ChevronRight size={18} className="text-gray-400" />
+            </button>
 
           </div>
 

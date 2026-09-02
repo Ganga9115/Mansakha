@@ -110,6 +110,12 @@ create table officials (
                                -- manual counselling and picks "WhatsApp" gets
                                -- redirected here, not necessarily the same
                                -- number as the official contact line
+  last_active_at        timestamptz, -- sliding 8-hour inactivity window,
+                               -- updated on every authenticated request
+                               -- (verifyToken.js) - staff/admin/ministry
+                               -- accounts log out after 8h of no activity;
+                               -- victim/user accounts have no such column
+                               -- or check at all (never auto-logout)
   created_at            timestamptz not null default now()
 );
 
@@ -298,7 +304,7 @@ create table alert_notifications (
   -- distinguish a user-initiated SOS from a normal threshold-triggered alert,
   -- plus a disengagement notice (7+ days inactive - see dispatchWorker.js's
   -- scanCheckinsDue).
-  source                       text not null default 'distress_score' check (source in ('distress_score', 'sos', 'disengagement')),
+  source                       text not null default 'distress_score' check (source in ('distress_score', 'sos', 'disengagement', 'weekly_review')),
   -- Section 1.5: a Critical case already opted for manual counsellor
   -- selection (or any SOS) gets an 'urgent'-priority notification, distinct
   -- from a normal High/Critical alert.

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, Modal, ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -8,14 +9,27 @@ import { typography } from '../theme/typography';
 import { shadow } from '../theme/shadow';
 import { useMyNotifications } from '../services/hooks';
 
+// message -> the in-app chat with the counsellor; session -> Home, which is
+// the only screen that actually shows upcoming sessions today (no dedicated
+// sessions screen exists to deep-link into instead).
+const ROUTE_BY_TYPE = { message: 'mycounsellor', session: 'home' };
+
+// Notifications mix two kinds of timestamps: a message's `sent_at` (always
+// in the past) and an upcoming session's `scheduled_at` (usually in the
+// future) - a plain "time ago" calc gets a negative diff for the latter,
+// and since any negative number is < 1, it always fell into the "just now"
+// branch no matter how far out the session actually was. Handling the
+// future case explicitly (`in Xd` instead of `Xd ago`) fixes that.
 function timeAgo(iso) {
   const diffMs = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  const isFuture = diffMs < 0;
+  const mins = Math.floor(Math.abs(diffMs) / 60000);
+  if (mins < 1) return isFuture ? 'starting soon' : 'just now';
+  if (mins < 60) return isFuture ? `in ${mins}m` : `${mins}m ago`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  if (hours < 24) return isFuture ? `in ${hours}h` : `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return isFuture ? `in ${days}d` : `${days}d ago`;
 }
 
 const ICON_BY_TYPE = { message: 'message-circle', session: 'calendar' };
@@ -31,9 +45,16 @@ const ICON_BY_TYPE = { message: 'message-circle', session: 'calendar' };
 // (a dropdown near the bell) without needing a measurement/portal library.
 export default function NotificationBell({ size = 18, color = colors.primaryDark }) {
   const [open, setOpen] = useState(false);
+  const navigation = useNavigation();
   const { data, isLoading } = useMyNotifications();
   const notifications = data?.notifications || [];
   const hasNotifications = notifications.length > 0;
+
+  const handleNotificationPress = (n) => {
+    setOpen(false);
+    const routeName = ROUTE_BY_TYPE[n.type];
+    if (routeName) navigation.navigate(routeName);
+  };
 
   return (
     <>
@@ -54,7 +75,12 @@ export default function NotificationBell({ size = 18, color = colors.primaryDark
                 <Text style={styles.emptyText}>No notifications yet.</Text>
               ) : (
                 notifications.map((n) => (
-                  <View key={n.notificationId} style={styles.row}>
+                  <Pressable
+                    key={n.notificationId}
+                    style={styles.row}
+                    onPress={() => handleNotificationPress(n)}
+                    disabled={!ROUTE_BY_TYPE[n.type]}
+                  >
                     <View style={styles.iconTile}>
                       <Feather name={ICON_BY_TYPE[n.type] || 'bell'} size={14} color={colors.primary} />
                     </View>
@@ -62,7 +88,8 @@ export default function NotificationBell({ size = 18, color = colors.primaryDark
                       <Text style={styles.message}>{n.message}</Text>
                       <Text style={styles.timestamp}>{timeAgo(n.notifiedAt)}</Text>
                     </View>
-                  </View>
+                    {!!ROUTE_BY_TYPE[n.type] && <Feather name="chevron-right" size={16} color={colors.textSecondary} />}
+                  </Pressable>
                 ))
               )}
             </ScrollView>
@@ -110,7 +137,13 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   panelTitle: { ...typography.h3, color: colors.textPrimary, marginBottom: spacing.sm },
-  list: { maxHeight: 340 },
+  // `flex: 1` + `minHeight: 0` (not `maxHeight`) is what actually makes this
+  // scroll on web - a flex child defaults to `min-height: auto`, which stops
+  // it from ever shrinking below its own content size, so the overflow this
+  // ScrollView is supposed to handle never kicks in without the explicit
+  // override. `panel`'s own `maxHeight: 420` is what gives this a bounded
+  // height to be `flex: 1` within once the panel's content exceeds it.
+  list: { flex: 1, minHeight: 0 },
   emptyText: { ...typography.caption, color: colors.textSecondary, textAlign: 'center', paddingVertical: spacing.xl },
   row: {
     flexDirection: 'row',

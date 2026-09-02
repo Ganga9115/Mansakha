@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -23,6 +24,8 @@ import NotificationBell from './NotificationBell';
 // TopRightActions, so both tiers behave identically; `onBellPress`/
 // `alertCount` are no longer read.
 export default function DesktopHeaderActions({ fullName, roleLabel = '', showNotifications = false }) {
+  const navigation = useNavigation();
+
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 24 }}>
@@ -30,7 +33,7 @@ export default function DesktopHeaderActions({ fullName, roleLabel = '', showNot
         <GetHelpButton asHeaderIcon />
       </View>
 
-      <View style={styles.profileChip}>
+      <Pressable style={styles.profileChip} onPress={() => navigation.navigate('settings')}>
         <View style={styles.avatarCircle}>
           <Feather name="user" size={18} color={colors.primary} />
         </View>
@@ -38,7 +41,7 @@ export default function DesktopHeaderActions({ fullName, roleLabel = '', showNot
           <Text style={styles.profileName} numberOfLines={1}>{fullName || 'Loading...'}</Text>
           {!!roleLabel && <Text style={styles.profileRole} numberOfLines={1}>{roleLabel}</Text>}
         </View>
-      </View>
+      </Pressable>
     </View>
   );
 }
