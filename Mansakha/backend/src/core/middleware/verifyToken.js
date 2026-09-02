@@ -2,6 +2,13 @@ const { verifyJwt } = require('../utils/jwt');
 const { pool } = require('../db/pgPool');
 const { fail } = require('../services/responseEnvelope');
 
+// Staff/admin/ministry only (explicit request) - 8 hours of no activity, not
+// 8 hours from login. The JWT itself carries no `exp` claim any more (see
+// utils/jwt.js), so this sliding window - a DB timestamp checked and
+// refreshed on every request - is what actually enforces it. Victim/user
+// accounts skip this entirely (never auto-logout, regardless of inactivity).
+const OFFICIAL_INACTIVITY_TIMEOUT_MS = 8 * 60 * 60 * 1000;
+
 // Checks the JWT, then RE-READS the caller's current state from the database on
 // every request rather than trusting only what's embedded in the token - Build
 // Prompt Section 0b. This is what makes suspending/reassigning a Counsellor or
@@ -38,7 +45,7 @@ async function verifyToken(req, res, next) {
 
   if (payload.type === 'official') {
     const { rows } = await pool.query(
-      `select o.official_id, o.must_change_password, orr.jurisdiction_id, r.role_name, j.level as jurisdiction_level
+      `select o.official_id, o.must_change_password, o.last_active_at, orr.jurisdiction_id, r.role_name, j.level as jurisdiction_level
        from officials o
        left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
        left join roles r on r.role_id = orr.role_id
@@ -50,6 +57,21 @@ async function verifyToken(req, res, next) {
     if (rows.length === 0) {
       return fail(res, 'Account not found', 401);
     }
+
+    // Sliding inactivity window (staff/admin/ministry only - see the
+    // OFFICIAL_INACTIVITY_TIMEOUT_MS comment above). `last_active_at` is
+    // null on an official's very first authenticated request after login,
+    // which is deliberately treated as "not expired" rather than failing
+    // closed - it gets set below either way, so every request after that
+    // one is correctly checked against a real timestamp.
+    const lastActiveAt = rows[0].last_active_at;
+    if (lastActiveAt && Date.now() - new Date(lastActiveAt).getTime() > OFFICIAL_INACTIVITY_TIMEOUT_MS) {
+      return fail(res, 'Session expired due to inactivity. Please log in again.', 401);
+    }
+    // Fire-and-forget - refreshing the sliding window must not add this
+    // query's latency to every single authenticated request in the app.
+    pool.query('update officials set last_active_at = now() where official_id = $1', [payload.officialId])
+      .catch((err) => console.error('verifyToken: could not refresh last_active_at', err.message));
 
     // A LEFT JOIN with zero matching official_roles still returns one row
     // (every joined column null) rather than zero rows - that's the "exists

@@ -53,14 +53,15 @@ export default function CaseQueue() {
                   <th className="py-3.5 px-4">Case Stage</th>
                   <th className="py-3.5 px-4">Distress Score</th>
                   <th className="py-3.5 px-4">Risk Level</th>
+                  <th className="py-3.5 px-4">Assigned To</th>
                   <th className="py-3.5 px-6 text-right">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
                 {loading ? (
-                  <tr><td colSpan={5} className="py-8 text-center text-gray-400">Loading...</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-gray-400">Loading...</td></tr>
                 ) : cases.length === 0 ? (
-                  <tr><td colSpan={5} className="py-8 text-center text-gray-400">No cases in this queue yet.</td></tr>
+                  <tr><td colSpan={6} className="py-8 text-center text-gray-400">No cases in your jurisdiction yet.</td></tr>
                 ) : cases.map((item) => (
                   <tr key={item.userId} className="hover:bg-gray-50/70 transition">
                     <td className="py-4 px-6">
@@ -89,6 +90,23 @@ export default function CaseQueue() {
                           {item.riskLevel}
                         </span>
                       ) : <span className="text-gray-400">-</span>}
+                      {item.predictedEscalation && (
+                        <span
+                          className="ml-1.5 px-2 py-1 rounded text-[10px] font-bold bg-orange-100 text-orange-700"
+                          title={`Trending toward ${item.predictedEscalation.nextTier} in ~${item.predictedEscalation.daysToNextTier}d if this continues`}
+                        >
+                          ↑ {item.predictedEscalation.daysToNextTier}d to {item.predictedEscalation.nextTier}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-4 px-4">
+                      {item.isAssignedToMe ? (
+                        <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-sky-100 text-sky-700">You</span>
+                      ) : item.isUnassigned ? (
+                        <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-600">Unassigned</span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded text-[10px] font-bold bg-gray-100 text-gray-500">Other Counsellor</span>
+                      )}
                     </td>
                     <td className="py-4 px-6 text-right">
                       <button

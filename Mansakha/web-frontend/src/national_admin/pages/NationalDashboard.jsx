@@ -40,10 +40,11 @@ export default function NationalDashboard() {
     <StaffLayout title="National Dashboard">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 flex-1 mr-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1 mr-6">
             <StatCard title="Total Cases (National)" value={data?.totalCases ?? data?.total ?? '-'} />
             <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? data?.highRisk ?? '-'} tone="text-rose-600" />
             <StatCard title="Critical Cases" value={data?.criticalCases ?? data?.critical ?? '-'} tone="text-purple-700" />
+            <StatCard title="Predicted Escalations" value={data?.predictedEscalations ?? '-'} tone="text-orange-600" />
           </div>
           <div className="text-right">
             <button

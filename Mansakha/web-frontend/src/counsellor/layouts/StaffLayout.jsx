@@ -17,7 +17,12 @@ const NAV_ITEMS = [
   { name: 'Profile', icon: User, path: '/counsellor/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Dashboard' }) {
+// `headerAction` - an optional element rendered in the header itself, next
+// to the page title (e.g. Case Detail's "Chat with User" button, which used
+// to sit alone in its own row inside the page content with a lot of empty
+// space next to it - the header is where a page's primary action belongs,
+// same place profile/notifications/logout already live).
+export default function StaffLayout({ children, title = 'Dashboard', headerAction = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -115,6 +120,7 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
             </button>
             {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80] shrink-0 hidden sm:block" />}
             <h2 className="text-lg sm:text-xl font-bold text-[#3D5A80] truncate">{title}</h2>
+            {headerAction && <div className="ml-2 shrink-0">{headerAction}</div>}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">

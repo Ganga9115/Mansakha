@@ -10,7 +10,13 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { createUser, updateUser, ProvisioningError } = require('../../user/services/userProvisioning');
 const { generateJurisdictionAnalytics } = require('../../ai/gemini');
+const { predictEscalationRiskBatch } = require('../../ai/scoring');
 const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
+
+// How far back to look when predicting escalation risk across a whole
+// jurisdiction subtree - predictEscalationRisk itself further caps each
+// user's own history to their most recent 8 readings.
+const PREDICTION_LOOKBACK_DAYS = 30;
 
 const router = express.Router();
 
@@ -175,6 +181,38 @@ async function countUsersByRisk(jurisdictionIds) {
   return { counts, caseRows };
 }
 
+// Forward-looking sibling of countUsersByRisk: that function tallies cases by
+// their CURRENT risk tier (reactive - what has already happened);  this one
+// counts how many are projected to cross into a higher tier soon (PS:
+// "predict escalation... before a crisis situation emerges"). One batched
+// fetch of recent score history for every user in the jurisdiction subtree,
+// not a query per user, then predictEscalationRiskBatch does the regression.
+async function countPredictedEscalations(jurisdictionIds) {
+  // Raw pg (not Supabase REST/selectInChunks), matching computeAverageScore
+  // and countUsersByRisk above - `= any($1::uuid[])` passes the id list as a
+  // single bound parameter, so it isn't subject to the URL-length limit
+  // selectInChunks exists to work around, and avoids PostgREST's ~1-2s
+  // per-call overhead on what can be a large jurisdiction subtree.
+  const { rows } = await pool.query(
+    `select ds.user_id, ds.score_value, ds.computed_at
+     from distress_scores ds
+     join users u on u.user_id = ds.user_id
+     where u.jurisdiction_id = any($1::uuid[])
+       and ds.computed_at > now() - ($2 || ' days')::interval`,
+    [jurisdictionIds, PREDICTION_LOOKBACK_DAYS]
+  );
+
+  const predictions = predictEscalationRiskBatch(
+    rows.map((r) => ({ userId: r.user_id, score: Number(r.score_value), computedAt: r.computed_at }))
+  );
+
+  let count = 0;
+  for (const prediction of predictions.values()) {
+    if (prediction.daysToNextTier != null) count += 1;
+  }
+  return count;
+}
+
 // Reports page's 3 charts (trend line, severity-distribution stacked bars,
 // intervention-phase donut) - previously all hardcoded/static markup in
 // Reports.jsx regardless of tier, with a time-range filter that only
@@ -282,10 +320,13 @@ router.get(
         // Section 4.5. `counts` stay computed over the full district (not just
         // the current page) - only the case list itself is paginated, so a
         // district with thousands of cases doesn't load them all at once.
-        const { counts, caseRows } = await countUsersByRisk([jurisdictionId]);
+        const [{ counts, caseRows }, predictedEscalations] = await Promise.all([
+          countUsersByRisk([jurisdictionId]),
+          countPredictedEscalations([jurisdictionId]),
+        ]);
         const total = caseRows.length;
         const cases = caseRows.slice(offset, offset + pageSize);
-        return ok(res, { tier: 'district', ...counts, trends: null, cases, total });
+        return ok(res, { tier: 'district', ...counts, predictedEscalations, trends: null, cases, total });
       }
 
       // State/National: aggregate-with-drill-down is the default, not case-level -
@@ -293,6 +334,10 @@ router.get(
       // its child states side by side.
       const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
       const children = await getChildJurisdictions(jurisdictionId);
+      // One rollup for the whole subtree, not broken down per child - shown as
+      // a single headline stat ("N cases predicted to escalate soon") rather
+      // than adding a column to every child's row.
+      const predictedEscalations = await countPredictedEscalations(allDescendantIds);
 
       // One grouped query gets every child's counts at once (see
       // countUsersByRiskGroupedByChild's comment) instead of one query per
@@ -335,7 +380,7 @@ router.get(
         };
       }));
 
-      return ok(res, { tier: jurisdiction.level, ...counts, trends: breakdown });
+      return ok(res, { tier: jurisdiction.level, ...counts, predictedEscalations, trends: breakdown });
     } catch (err) {
       return fail(res, `Could not load dashboard: ${err.message}`, 500);
     }
@@ -360,20 +405,37 @@ router.get(
 
     let formattedAlerts = [];
     if (jurisdiction.level === 'district') {
+      // Alerts Feed is for actionable items only (a Critical alert or an
+      // SOS, each with a real open/acknowledged/resolved state) -
+      // 'disengagement'/'weekly_review' are informational notices with no
+      // alerts/sos_events row and stay bell-only. Filtering by source at the
+      // query level - and embedding BOTH alerts() and sos_events() - means
+      // every row is guaranteed a real linked object; the previous version
+      // only ever selected alerts() and read `n.alerts.user_id`
+      // unconditionally, which threw (TypeError: Cannot read properties of
+      // null) the moment this official had received even one 'sos' (or
+      // disengagement/weekly_review) notification - confirmed live as a
+      // real crash, not hypothetical, since SOS is explicitly routed here.
       const { data, error } = await supabase
         .from('alert_notifications')
-        .select('alert_id, notified_at, alerts(user_id, triggered_at, alert_statuses(name))')
+        .select('notified_at, source, alerts(alert_id, user_id, triggered_at, alert_statuses(name)), sos_events(sos_event_id, user_id, triggered_at, acknowledged_at, resolved_at)')
         .eq('official_id', req.auth.officialId)
+        .in('source', ['distress_score', 'sos'])
         .order('notified_at', { ascending: false })
         .limit(50);
       if (error) return fail(res, 'Could not load alerts', 500);
 
-      formattedAlerts = (data || []).map((n) => ({
-        alertId: n.alert_id,
-        userId: n.alerts.user_id,
-        triggeredAt: n.alerts.triggered_at,
-        status: n.alerts.alert_statuses.name,
-      }));
+      formattedAlerts = (data || []).map((n) => {
+        const isUrgentHelp = n.source === 'sos';
+        return {
+          alertId: isUrgentHelp ? n.sos_events.sos_event_id : n.alerts.alert_id,
+          userId: isUrgentHelp ? n.sos_events.user_id : n.alerts.user_id,
+          triggeredAt: isUrgentHelp ? n.sos_events.triggered_at : n.alerts.triggered_at,
+          status: isUrgentHelp
+            ? (n.sos_events.resolved_at ? 'Resolved' : n.sos_events.acknowledged_at ? 'Acknowledged' : 'Open')
+            : n.alerts.alert_statuses.name,
+        };
+      });
     } else {
       const descendants = await getDescendantJurisdictionIds(jurisdictionId);
       // Raw pg, not Supabase REST - a State/National-tier call can have
@@ -382,23 +444,50 @@ router.get(
       // exceeds its request-size limit and 500s ("Bad Request") once the
       // jurisdiction has more than roughly a hundred descendants. A
       // parameterized array bound over the wire has no such limit.
-      const { rows } = await pool.query(
-        `select a.alert_id, a.user_id, a.triggered_at, ast.name as status_name
-         from alerts a
-         join users u on u.user_id = a.user_id
-         join alert_statuses ast on ast.alert_status_id = a.alert_status_id
-         where u.jurisdiction_id = any($1::uuid[])
-         order by a.triggered_at desc
-         limit 50`,
-        [descendants]
-      );
+      //
+      // Both queries run against the whole subtree directly (not through
+      // alert_notifications/this official's own inbox, since a State/National
+      // admin isn't necessarily a personal recipient of every case in their
+      // tree) - alerts and sos_events are UNIONed here so an SOS in this
+      // subtree shows up alongside Critical alerts, not just in the bell.
+      const [{ rows: alertRows }, { rows: sosRows }] = await Promise.all([
+        pool.query(
+          `select a.alert_id, a.user_id, a.triggered_at, ast.name as status_name
+           from alerts a
+           join users u on u.user_id = a.user_id
+           join alert_statuses ast on ast.alert_status_id = a.alert_status_id
+           where u.jurisdiction_id = any($1::uuid[])
+           order by a.triggered_at desc
+           limit 50`,
+          [descendants]
+        ),
+        pool.query(
+          `select se.sos_event_id, se.user_id, se.triggered_at, se.acknowledged_at, se.resolved_at
+           from sos_events se
+           join users u on u.user_id = se.user_id
+           where u.jurisdiction_id = any($1::uuid[])
+           order by se.triggered_at desc
+           limit 50`,
+          [descendants]
+        ),
+      ]);
 
-      formattedAlerts = rows.map((a) => ({
-        alertId: a.alert_id,
-        userId: a.user_id,
-        triggeredAt: a.triggered_at,
-        status: a.status_name,
-      }));
+      formattedAlerts = [
+        ...alertRows.map((a) => ({
+          alertId: a.alert_id,
+          userId: a.user_id,
+          triggeredAt: a.triggered_at,
+          status: a.status_name,
+        })),
+        ...sosRows.map((s) => ({
+          alertId: s.sos_event_id,
+          userId: s.user_id,
+          triggeredAt: s.triggered_at,
+          status: s.resolved_at ? 'Resolved' : s.acknowledged_at ? 'Acknowledged' : 'Open',
+        })),
+      ]
+        .sort((a, b) => new Date(b.triggeredAt).getTime() - new Date(a.triggeredAt).getTime())
+        .slice(0, 50);
     }
 
     return ok(res, { alerts: formattedAlerts });

@@ -157,4 +157,48 @@ async function applyStressResponse(userId, scoreId, riskLevel) {
   return { alertId: alert.alert_id };
 }
 
-module.exports = { applyStressResponse, selectLeastLoadedCounsellor };
+// Fires alongside applyStressResponse (not instead of it) whenever a weekly
+// (105-question) aggregate score is recorded - applyStressResponse's
+// response is purely risk-level-driven (a no-op for Low, a queued dispatch
+// for Moderate/High, an alert only for Critical), so a Moderate weekly
+// review would otherwise leave no distinct trace anywhere a counsellor or
+// admin could see it. This is unconditional (any risk level) and tagged
+// with its own source ('weekly_review') precisely so it reads as "this user
+// just completed their periodic review," not routine per-check-in noise.
+async function notifyWeeklyReview(userId) {
+  const { data: user, error: userError } = await supabase
+    .from('users')
+    .select('jurisdiction_id, assigned_counsellor_id')
+    .eq('user_id', userId)
+    .single();
+  if (userError || !user) {
+    console.error('notifyWeeklyReview: could not load user', userError?.message);
+    return;
+  }
+
+  const recipientIds = new Set();
+  if (user.assigned_counsellor_id) recipientIds.add(user.assigned_counsellor_id);
+
+  const { data: allRoles } = await supabase
+    .from('official_roles')
+    .select('official_id, roles(role_name)')
+    .eq('jurisdiction_id', user.jurisdiction_id)
+    .is('revoked_at', null);
+  for (const r of allRoles || []) {
+    if (r.roles?.role_name === 'Administration') recipientIds.add(r.official_id);
+  }
+
+  if (recipientIds.size === 0) return;
+
+  const rows = [...recipientIds].map((officialId) => ({
+    user_id: userId,
+    official_id: officialId,
+    source: 'weekly_review',
+    priority: 'normal',
+    auto_assigned: false,
+  }));
+  const { error } = await supabase.from('alert_notifications').insert(rows);
+  if (error) console.error('notifyWeeklyReview: could not write alert_notifications', error.message);
+}
+
+module.exports = { applyStressResponse, selectLeastLoadedCounsellor, notifyWeeklyReview };

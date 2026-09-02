@@ -1,53 +1,46 @@
-import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
-import ToastContainer from '../components/ToastContainer';
+import React, { createContext, useContext } from 'react';
+import { Toaster, toast as sonnerToast } from 'sonner';
+import { CheckCircle, AlertCircle, Info } from 'lucide-react';
 
-// Replaces "every failed action shows the raw thrown Error.message in a
-// plain <div>" as the only feedback mechanism - a real success/error/info
-// toast any page can fire via useToast(), conceptually mirroring
-// frontend/src/context/ToastContext.js (the Expo app) but implemented as
-// plain React + Tailwind since this is a CRA web app, not React Native.
+// Toasts now render through sonner (the same library FarmConnect uses) so we
+// get its built-in slide/fade transitions, stacking, and swipe-to-dismiss for
+// free - the previous hand-rolled ToastContainer had none of that (toasts
+// just popped in/out with no animation). useToast()'s show/success/error/info
+// API is unchanged, so none of this app's callers needed to change.
 const ToastContext = createContext(null);
 
-let nextId = 1;
-const AUTO_DISMISS_MS = 4000;
+function show(message, type = 'info') {
+  // Passing the message text as sonner's `id` makes a repeated identical
+  // message update the existing toast in place instead of stacking a
+  // duplicate - matches the old ToastContext's dedup behavior exactly.
+  const options = { id: message, duration: 5000 };
+  if (type === 'success') return sonnerToast.success(message, options);
+  if (type === 'error') return sonnerToast.error(message, options);
+  return sonnerToast.info(message, options);
+}
+
+const toast = {
+  show,
+  success: (message) => show(message, 'success'),
+  error: (message) => show(message, 'error'),
+  info: (message) => show(message, 'info'),
+};
 
 export function ToastProvider({ children }) {
-  const [toasts, setToasts] = useState([]);
-  const timers = useRef({});
-
-  const dismiss = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-    clearTimeout(timers.current[id]);
-    delete timers.current[id];
-  }, []);
-
-  // A repeated failure (e.g. a slow endpoint the user keeps retrying) used to
-  // stack a fresh toast on top of every earlier one with the identical
-  // message, growing into a wall of duplicate "Failed to fetch" banners.
-  // Same message showing again now replaces the old one instead of piling
-  // up alongside it.
-  const show = useCallback((message, type = 'info') => {
-    const id = nextId++;
-    setToasts((prev) => {
-      const dup = prev.find((t) => t.message === message);
-      if (dup) clearTimeout(timers.current[dup.id]);
-      return [...prev.filter((t) => t.message !== message), { id, message, type }];
-    });
-    timers.current[id] = setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
-    return id;
-  }, [dismiss]);
-
-  const toast = {
-    show,
-    success: (message) => show(message, 'success'),
-    error: (message) => show(message, 'error'),
-    info: (message) => show(message, 'info'),
-  };
-
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <ToastContainer toasts={toasts} onDismiss={dismiss} />
+      <Toaster
+        position="top-right"
+        richColors
+        closeButton
+        icons={{
+          success: <CheckCircle size={18} />,
+          error: <AlertCircle size={18} />,
+          info: <Info size={18} />,
+        }}
+        toastOptions={{ classNames: { toast: 'rounded-lg shadow-md text-sm' } }}
+      />
     </ToastContext.Provider>
   );
 }

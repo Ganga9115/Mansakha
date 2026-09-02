@@ -134,11 +134,6 @@ export default function SettingsScreen({ navigation }) {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const confirmPasswordInputRef = useRef(null);
 
-  const today = new Date();
-  const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
-  const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
-  const yearStr = `Year - ${today.getFullYear()}`;
-
   const currentDisplayLanguageId = displayLanguageId ?? dashboardQuery.data?.preferredLanguageId ?? 'en';
   const currentSpeakingLanguageId = speakingLanguageId ?? 'en';
 
@@ -213,13 +208,6 @@ export default function SettingsScreen({ navigation }) {
 
       {/* Main Rounded Body Area */}
       <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-        {/* Date Ticker Bar */}
-        <View style={styles.dateTicker}>
-          <Text style={styles.tickerText}>{dayStr}</Text>
-          <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
-          <Text style={styles.tickerText}>{yearStr}</Text>
-        </View>
-
         {/* Account Details Card */}
         <Text style={styles.sectionHeaderTitle}>ACCOUNT OVERVIEW</Text>
         <Card style={styles.customCard}>
@@ -535,14 +523,6 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
   },
-  dateTicker: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-    paddingHorizontal: spacing.sm,
-  },
-  tickerText: { ...typography.bodyStrong, color: colors.primary },
-  tickerTextActive: { color: colors.error },
   sectionHeaderTitle: {
     ...typography.label,
     color: colors.primaryDark,

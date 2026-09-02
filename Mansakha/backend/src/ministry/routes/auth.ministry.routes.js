@@ -3,6 +3,7 @@ const { findOfficialForLogin, verifyPassword } = require('../../core/services/st
 const { signToken } = require('../../core/utils/jwt');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { staffLoginLimiter } = require('../../core/middleware/rateLimiter');
+const { supabase } = require('../../core/db/supabaseClient');
 
 const router = express.Router();
 
@@ -18,6 +19,12 @@ router.post('/login', staffLoginLimiter, async (req, res) => {
 
   const passwordOk = await verifyPassword(password, match.official.password_hash);
   if (!passwordOk) return fail(res, 'Invalid credentials', 401);
+
+  // Resets the 8-hour inactivity clock (verifyToken.js) at login - see
+  // auth.staff.routes.js's identical fix for why this can't be skipped:
+  // without it, an account inactive >8h logs in fine but its very next
+  // request is rejected as "expired," with no way to self-recover.
+  await supabase.from('officials').update({ last_active_at: new Date().toISOString() }).eq('official_id', match.official.official_id);
 
   const token = signToken({ type: 'official', officialId: match.official.official_id });
   return ok(res, { token, mustChangePassword: match.official.must_change_password });

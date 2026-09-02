@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, Image } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
@@ -8,22 +8,24 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import StatusBadge from '../../shared/components/StatusBadge';
+import GetHelpButton from '../../shared/components/GetHelpButton';
 
-export default function CheckinConfirmationScreen({ navigation, route }) {
+// The only screen in the app with no header bar at all (a full-screen,
+// centered "success" card), which meant it was also the only screen without
+// the Get Help Now emergency button every other screen carries via
+// TopRightActions/DesktopHeaderActions - confirmed missing here specifically
+// (grep found it on all 10 other user screens). Floated top-right rather
+// than building a header bar just for this one screen, so the existing
+// celebratory layout stays intact.
+export default function CheckinConfirmationScreen({ route }) {
   const { tier } = useResponsive();
   const { riskLevel, summary, alertTriggered } = route?.params || {};
 
-  const handleGoHome = () => {
-    // 1. Pop all screens off the current stack back to the root CheckinScreen
-    if (navigation.canGoBack()) {
-      navigation.popToTop();
-    }
-    // 2. Switch to the Home screen tab
-    navigation.navigate('home');
-  };
-
   return (
     <View style={styles.container}>
+      <View style={styles.helpButtonWrapper}>
+        <GetHelpButton asHeaderIcon />
+      </View>
       <View style={{ maxWidth: formContentWidth[tier], width: '100%', alignItems: 'center' }}>
         {/* Illustration Asset */}
         <View style={styles.illustrationWrapper}>
@@ -62,11 +64,6 @@ export default function CheckinConfirmationScreen({ navigation, route }) {
             )}
           </View>
         )}
-
-        {/* Primary Action Button to Homescreen */}
-        <Pressable style={styles.primaryBtn} onPress={handleGoHome}>
-          <Text style={styles.primaryBtnText}>Go to Homescreen</Text>
-        </Pressable>
       </View>
     </View>
   );
@@ -79,6 +76,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
+  },
+  helpButtonWrapper: {
+    position: 'absolute',
+    top: spacing.xxl,
+    right: spacing.xl,
+    zIndex: 10,
   },
   illustrationWrapper: {
     width: 260,
@@ -131,20 +134,5 @@ const styles = StyleSheet.create({
     color: colors.danger,
     marginTop: spacing.md,
     lineHeight: 16,
-  },
-  primaryBtn: {
-    width: '100%',
-    backgroundColor: '#8BCBF9',
-    borderRadius: radius.xl,
-    paddingVertical: spacing.md + 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadow.card,
-  },
-  primaryBtnText: {
-    ...typography.bodyStrong,
-    color: colors.white,
-    fontSize: 18,
-    fontWeight: '700',
   },
 });

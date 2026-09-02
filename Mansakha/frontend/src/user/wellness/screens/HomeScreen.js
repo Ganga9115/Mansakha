@@ -28,7 +28,7 @@ export default function HomeScreen({ navigation }) {
   const yearStr = `Year - ${today.getFullYear()}`;
 
   return (
-    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
+    <View style={styles.screen}>
       <QueryBoundary query={query}>
         {(data) => {
           const score = data.currentDistressLevel?.score ?? 34;
@@ -36,7 +36,9 @@ export default function HomeScreen({ navigation }) {
 
           return (
             <>
-              {/* Top Profile Header */}
+              {/* Top Profile Header - a sibling of the ScrollView below, not
+                  a child of it, so it stays pinned in place while the body
+                  scrolls underneath instead of scrolling away with it. */}
               <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
                 <View style={styles.headerLeft}>
                   {isDesktop ? (
@@ -66,6 +68,7 @@ export default function HomeScreen({ navigation }) {
                 </View>
               </View>
 
+              <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
               {/* Main Rounded Body Area */}
               <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
                 {/* Date Ticker */}
@@ -110,38 +113,47 @@ export default function HomeScreen({ navigation }) {
                       help. Driven by whichever channel (AI chat, IVRS call,
                       or the 15-question check-in) most recently produced a
                       distress_scores row. */}
+                  {/* Heart + short "Recommendation" label on the left, a
+                      short action button on the right - no more full
+                      sentence-per-tier copy (felt like too much text). */}
                   {data.recommendation && (
                     <View style={styles.recommendationInline}>
-                      <View style={styles.row}>
+                      <View style={styles.recommendationRow}>
                         <Feather name="heart" size={16} color={colors.primaryDark} style={{ marginRight: spacing.sm }} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.recommendationInlineTitle}>{data.recommendation.message}</Text>
-                          <Text style={styles.recommendationInlineDetail}>{data.recommendation.detail}</Text>
-                        </View>
+                        <Text style={styles.recommendationLabel}>Recommendation</Text>
+                        {data.recommendation.actionType === 'wellness' && (
+                          <Pressable style={styles.recommendationPill} onPress={() => navigation?.navigate('Wellbeing')}>
+                            <Text style={styles.recommendationPillText}>My Well-being</Text>
+                          </Pressable>
+                        )}
+                        {data.recommendation.actionType === 'counsellor_chat' && (
+                          <Pressable style={styles.recommendationPill} onPress={() => navigation?.navigate('mycounsellor')}>
+                            <Text style={styles.recommendationPillText}>Chat with Counsellor</Text>
+                          </Pressable>
+                        )}
+                        {data.recommendation.actionType === 'opt_in_counsellor' && (
+                          <Pressable style={styles.recommendationPill} onPress={() => navigation?.navigate('settings')}>
+                            <Text style={styles.recommendationPillText}>Opt In for Support</Text>
+                          </Pressable>
+                        )}
+                        {data.recommendation.actionType === 'medical' && (
+                          <Pressable style={styles.recommendationPill} onPress={() => navigation?.navigate('support')}>
+                            <Text style={styles.recommendationPillText}>Helpline Numbers</Text>
+                          </Pressable>
+                        )}
                       </View>
-                      {data.recommendation.actionType === 'wellness' && (
-                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('Wellbeing')}>
-                          <Text style={styles.recommendationBtnText}>Explore Well-being Activities</Text>
-                        </Pressable>
-                      )}
-                      {data.recommendation.actionType === 'counsellor_chat' && (
-                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('mycounsellor')}>
-                          <Text style={styles.recommendationBtnText}>Chat with Your Counsellor</Text>
-                        </Pressable>
-                      )}
-                      {data.recommendation.actionType === 'opt_in_counsellor' && (
-                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('settings')}>
-                          <Text style={styles.recommendationBtnText}>Opt In for Counselling Support</Text>
-                        </Pressable>
-                      )}
-                      {data.recommendation.actionType === 'medical' && (
-                        <Pressable style={styles.recommendationBtn} onPress={() => navigation?.navigate('support')}>
-                          <Text style={styles.recommendationBtnText}>View Helpline Numbers</Text>
-                        </Pressable>
-                      )}
                     </View>
                   )}
                 </View>
+
+                {/* Same background/border/shadow as the Distress Score tile
+                    above, per explicit request - a second tile of that same
+                    color, not a differently-styled quick-action card. */}
+                <Pressable style={styles.actInfoCard} onPress={() => navigation?.navigate('AtrocitiesAct')}>
+                  <Feather name="shield" size={18} color={colors.primaryDark} style={{ marginRight: spacing.sm }} />
+                  <Text style={styles.actInfoText}>Prevention of Atrocities Act, 1989</Text>
+                  <Feather name="chevron-right" size={18} color={colors.primaryDark} />
+                </Pressable>
 
                 {/* Quick Actions Header */}
                 <Text style={styles.sectionHeaderTitle}>Quick Actions</Text>
@@ -157,17 +169,6 @@ export default function HomeScreen({ navigation }) {
                     </View>
                     <Text style={styles.gridTitle}>My Well-being</Text>
                     <Text style={styles.gridSub}>Check your history</Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
-                    onPress={() => navigation?.navigate('support')}
-                  >
-                    <View style={styles.gridIconCircle}>
-                      <Feather name="phone-call" size={20} color={colors.primary} />
-                    </View>
-                    <Text style={styles.gridTitle}>Support Helpline</Text>
-                    <Text style={styles.gridSub}>Connect with experts</Text>
                   </Pressable>
 
                   <Pressable
@@ -233,15 +234,17 @@ export default function HomeScreen({ navigation }) {
                   </Card>
                 )}
               </View>
+              </ScrollView>
             </>
           );
         }}
       </QueryBoundary>
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.primaryLight },
   container: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
@@ -362,7 +365,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   distressBtnText: { ...typography.bodyStrong, color: colors.white, fontSize: 16 },
-  row: { flexDirection: 'row', alignItems: 'flex-start' },
+  actInfoCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    marginBottom: spacing.xl,
+    ...shadow.card,
+  },
+  actInfoText: { ...typography.bodyStrong, color: colors.textPrimary, flex: 1 },
   // Inline within distressCard (same tile as the score/Start Check-in
   // button), not a separate card - a top border to visually separate it
   // from the button above, but still one continuous tile.
@@ -372,16 +386,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(0,0,0,0.08)',
   },
-  recommendationInlineTitle: { ...typography.bodyStrong, color: colors.textPrimary },
-  recommendationInlineDetail: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
-  recommendationBtn: {
-    marginTop: spacing.md,
-    backgroundColor: colors.primaryDark,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.sm,
+  // Heart + "Recommendation" label on the left, the action pill on the
+  // right - one row, not stacked.
+  recommendationRow: { flexDirection: 'row', alignItems: 'center' },
+  recommendationLabel: { ...typography.bodyStrong, color: colors.textPrimary, flex: 1 },
+  // Small pill button, self-sized to its label - no separate message/detail
+  // paragraph (felt like too much reading for this tile).
+  recommendationPill: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xl,
   },
-  recommendationBtnText: { ...typography.bodyStrong, color: colors.white },
+  recommendationPillText: { ...typography.caption, color: colors.white, fontWeight: '700' },
   sectionHeaderTitle: {
     ...typography.h3,
     color: colors.textPrimary,
