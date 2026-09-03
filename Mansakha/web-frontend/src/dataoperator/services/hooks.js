@@ -113,3 +113,50 @@ export function useFetchCaseDetails() {
   };
   return { mutate, loading };
 }
+
+// --- Multi-Case-Per-Person Support ---
+
+// Not a useQuery-on-mount hook (like the others above) - search only fires
+// when the operator actually types something, not on every render, so this
+// is a plain mutate-style function the caller invokes explicitly.
+export function useSearchPerson() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (q) => {
+    setLoading(true);
+    try {
+      return await apiClient.get(`/api/dataoperator/search-person?q=${encodeURIComponent(q)}`, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useRegisterLinkedCase() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/dataoperator/register-linked-case', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useLinkExistingCase() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId, linkToUserId) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/dataoperator/users/${userId}/link`, { linkToUserId }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}

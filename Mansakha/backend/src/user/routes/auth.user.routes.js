@@ -37,7 +37,7 @@ router.post('/login', userLoginLimiter, async (req, res) => {
   console.log('User login attempt for docket:', docketNumber);
   const { data: user, error: userError } = await supabase
     .from('users')
-    .select('user_id, password_hash, must_change_password')
+    .select('user_id, password_hash, must_change_password, status, linked_to_user_id')
     .ilike('docket_number', escapeLikePattern(docketNumber.trim()))
     .maybeSingle();
 
@@ -47,15 +47,58 @@ router.post('/login', userLoginLimiter, async (req, res) => {
     return genericFailure();
   }
 
-  const passwordOk = user.password_hash && await bcrypt.compare(password, user.password_hash);
+  // Multi-case support: this docket's row may be a "dependent" case pointing
+  // at another row (the "anchor") via linked_to_user_id - a person with
+  // several cases still has exactly one identity/session/counsellor, resolved
+  // through the anchor. must_change_password is checked on THIS row (a
+  // freshly-linked case starts with its own temp password, same as any new
+  // case) but once this docket's own temp password has been changed, the
+  // password and account-status checks both move to the anchor's row - see
+  // POST /change-password below, which writes the new password to every row
+  // in the family so it becomes "the" password for every docket the person
+  // has, not just the one they changed it through.
+  const anchorUserId = user.linked_to_user_id || user.user_id;
+  let anchorPasswordHash = user.password_hash;
+  let anchorStatus = user.status;
+  if (user.linked_to_user_id) {
+    const { data: anchor, error: anchorError } = await supabase
+      .from('users')
+      .select('password_hash, status')
+      .eq('user_id', anchorUserId)
+      .maybeSingle();
+    if (anchorError || !anchor) {
+      console.error('User login: could not load anchor for linked case', anchorError?.message);
+      return genericFailure();
+    }
+    anchorPasswordHash = anchor.password_hash;
+    anchorStatus = anchor.status;
+  }
+
+  const hashToCheck = user.must_change_password ? user.password_hash : anchorPasswordHash;
+  const passwordOk = hashToCheck && await bcrypt.compare(password, hashToCheck);
   if (!passwordOk) {
     console.log('Password mismatch for user:', user.user_id);
     return genericFailure();
   }
 
-  console.log('User login successful for:', user.user_id);
+  // Login never checked `status` - an inactive user (e.g. a case a Data
+  // Operator marked inactive) could log in fine and receive a real token,
+  // then have every single subsequent request rejected by verifyToken.js's
+  // own status check (it does check this, on every request) - a confusing
+  // "login succeeds, then immediately logged back out" loop, first hit on
+  // whatever the app's first authenticated call after login happens to be.
+  // Checked only after password verification succeeds, so this doesn't leak
+  // account existence to a docket-guessing attacker (they'd need the correct
+  // password already to ever see this branch). Checked on the ANCHOR's
+  // status, since that's the identity the token actually carries.
+  if (anchorStatus !== 'active') {
+    console.log('Login blocked - inactive account:', anchorUserId);
+    return fail(res, 'This account has been deactivated. Please contact your assigned counsellor or administrator.', 403);
+  }
 
-  const token = signToken({ type: 'user', userId: user.user_id });
+  console.log('User login successful for:', anchorUserId, user.linked_to_user_id ? `(via linked docket ${user.user_id})` : '');
+
+  const token = signToken({ type: 'user', userId: anchorUserId });
   return ok(res, { token, mustChangePassword: user.must_change_password });
 });
 
@@ -71,10 +114,15 @@ router.post('/change-password', verifyToken, async (req, res) => {
   }
 
   const passwordHash = await bcrypt.hash(newPassword, 12);
+  // req.auth.userId is always the anchor (see POST /login above) - updating
+  // by `user_id = anchor OR linked_to_user_id = anchor` in one statement
+  // propagates the new password to every docket in the case family at once,
+  // so it becomes "the" password for every case the person has, not just
+  // whichever docket they happened to change it through.
   const { error } = await supabase
     .from('users')
     .update({ password_hash: passwordHash, must_change_password: false })
-    .eq('user_id', req.auth.userId);
+    .or(`user_id.eq.${req.auth.userId},linked_to_user_id.eq.${req.auth.userId}`);
 
   if (error) return fail(res, 'Could not update password', 500);
   return ok(res, null, 'Password updated');

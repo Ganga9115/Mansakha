@@ -219,13 +219,15 @@ export default function StaffManagement() {
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Email</label>
               <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" />
             </div>
-            {/* Phone only means anything for Counsellor - it's their 4th
-                login credential (core/routes/auth.staff.routes.js); Administration and
-                Data Operator accounts never use it for anything. */}
+            {/* Phone only means anything for Counsellor - needed for the
+                Call Counsellor/WhatsApp redirect a user can trigger
+                (user/routes/user.routes.js), not a login credential; staff
+                login is email + password only (core/routes/auth.staff.routes.js).
+                Administration and Data Operator accounts never use it. */}
             {roleName === 'Counsellor' && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
-                  Phone (required - also their login credential)
+                  Phone (required - used for Call/WhatsApp contact)
                 </label>
                 <input
                   type="tel"
@@ -347,7 +349,7 @@ export default function StaffManagement() {
                             </div>
                             {s.roleName === 'Counsellor' && (
                               <div>
-                                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Phone (login credential)</label>
+                                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Phone (Call/WhatsApp contact)</label>
                                 <input type="tel" value={editPhone} onChange={(e) => setEditPhone(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white" />
                               </div>
                             )}

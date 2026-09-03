@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import { ArrowLeft, Phone, Mic, Send, Play, Pause } from 'lucide-react';
-import { useCaseDetail, useCaseMessages, useSendCaseMessage, useSendCaseVoiceMessage, useSendTypingPing } from '../services/hooks';
+import { useCaseMessages, useSendCaseMessage, useSendCaseVoiceMessage, useSendTypingPing } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
 // Wrapped in StaffLayout (top bar + sidebar stay visible, per the user's
@@ -40,7 +40,6 @@ export default function CaseChat() {
   const { id: userId } = useParams();
   const navigate = useNavigate();
   const toast = useToast();
-  const { data: caseData } = useCaseDetail(userId);
   const { data, loading, refetch } = useCaseMessages(userId);
   const sendMessage = useSendCaseMessage(userId);
   const sendVoiceMessage = useSendCaseVoiceMessage(userId);
@@ -213,9 +212,9 @@ export default function CaseChat() {
           >
             <ArrowLeft size={20} />
           </button>
-          {caseData?.phone && (
+          {data?.phone && (
             <a
-              href={`tel:${caseData.phone}`}
+              href={`tel:${data.phone}`}
               className="p-2 rounded-full border border-emerald-500 text-emerald-600 hover:bg-emerald-50 transition shrink-0"
               title="Call User"
               aria-label="Call User"

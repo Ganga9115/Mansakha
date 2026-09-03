@@ -24,7 +24,11 @@ export default function CounsellorDashboard() {
   const { data: counts, loading: countsLoading, error: countsError } = useCounsellorDashboard();
   const { data: alertsData, loading: alertsLoading } = useCounsellorAlerts();
   const { data: scheduledData, loading: scheduledLoading } = useScheduledSessions();
-  const openAlertCount = (alertsData?.alerts || []).filter((a) => a.status === 'Open').length;
+  // openCount is a real backend COUNT, not derived from the Alerts Feed's
+  // own list below - that list is deliberately capped to the 50 most recent
+  // notifications, so filtering it client-side for status==='Open' could
+  // undercount once more than 50 notifications have accumulated.
+  const openAlertCount = alertsData?.openCount ?? (alertsData?.alerts || []).filter((a) => a.status === 'Open').length;
 
   return (
     <StaffLayout title="Counsellor Dashboard">
@@ -36,7 +40,12 @@ export default function CounsellorDashboard() {
 
         {/* METRIC CARDS ROW */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
-          <MetricCard label="TOTAL CASES" count={countsLoading ? '...' : counts?.total ?? 0} dotColor="bg-slate-600" />
+          <MetricCard
+            label="TOTAL CASES"
+            count={countsLoading ? '...' : counts?.total ?? 0}
+            dotColor="bg-slate-600"
+            hint="All active cases assigned to you, including any with no check-in yet - the four risk counts to the right only cover cases that already have a score, so they may not add up to this number"
+          />
           <MetricCard label="LOW RISK" count={countsLoading ? '...' : counts?.low ?? 0} dotColor="bg-emerald-500" />
           <MetricCard label="MODERATE RISK" count={countsLoading ? '...' : counts?.moderate ?? 0} dotColor="bg-amber-500" />
           <MetricCard label="HIGH RISK" count={countsLoading ? '...' : counts?.high ?? 0} dotColor="bg-rose-500" />

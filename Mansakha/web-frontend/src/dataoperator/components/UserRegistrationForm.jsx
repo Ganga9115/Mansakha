@@ -22,6 +22,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
   const [caseTypeId, setCaseTypeId] = useState(initialValues?.suggestedCaseTypeId || '');
   const [caseStage, setCaseStage] = useState(initialValues?.suggestedCaseStage || '');
   const [caseBackground, setCaseBackground] = useState(initialValues?.suggestedCaseBackground || '');
+  const [aadhaarNumber, setAadhaarNumber] = useState(initialValues?.suggestedAadhaarNumber || '');
   const [stateId, setStateId] = useState(initialValues?.suggestedStateId || '');
   const [districtId, setDistrictId] = useState(initialValues?.suggestedDistrictId || '');
   const [error, setError] = useState(null);
@@ -50,6 +51,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
         caseTypeId,
         ...(caseStage ? { caseStage } : {}),
         ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
+        ...(aadhaarNumber.trim() ? { aadhaarNumber: aadhaarNumber.trim() } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
@@ -62,6 +64,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
       setCaseTypeId('');
       setCaseStage('');
       setCaseBackground('');
+      setAadhaarNumber('');
       setStateId('');
       setDistrictId('');
     } catch (err) {
@@ -121,6 +124,22 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
             placeholder="e.g. User123 (leave blank for default)"
           />
         </div>
+      </div>
+
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Aadhaar Number (optional)</label>
+        <input
+          type="text"
+          value={aadhaarNumber}
+          onChange={(e) => setAadhaarNumber(e.target.value.replace(/[^0-9]/g, ''))}
+          maxLength={12}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="12-digit Aadhaar number"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          Used to recognize if this person already has another case - if it matches an existing case, use Link Cases
+          instead of registering a new one here.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

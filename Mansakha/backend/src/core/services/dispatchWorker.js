@@ -73,9 +73,16 @@ async function scanCheckinsDue() {
   const cutoff = new Date(Date.now() - CHECKIN_DUE_DAYS * 86400000).toISOString();
 
   const { rows: dueUsers } = await pool.query(
+    // linked_to_user_id is null - a dependent case's own interactions row
+    // never accumulates (all real activity is written under its anchor's
+    // user_id - see auth.user.routes.js's login), so without this exclusion
+    // a dependent case would always look inactive and get flagged "gone
+    // quiet" here regardless of how recently the person actually checked in
+    // under their other docket.
     `select u.user_id
      from users u
      where u.status = 'active'
+       and u.linked_to_user_id is null
        and not exists (select 1 from interactions i where i.user_id = u.user_id and i.occurred_at > $1)
        and not exists (
          select 1 from dispatch_queue dq
@@ -123,9 +130,14 @@ async function notifyDisengagement(userId, jurisdictionId) {
     // stressResponse.js a half-initialized module during server startup.
     // eslint-disable-next-line global-require
     const { selectLeastLoadedCounsellor } = require('./stressResponse');
+    // eslint-disable-next-line global-require
+    const { propagateCounsellorAssignment } = require('../../user/services/userProvisioning');
     counsellorId = await selectLeastLoadedCounsellor(jurisdictionId);
     if (!counsellorId) return { notified: false, reason: 'no counsellor available' };
-    await pool.query(`update users set assigned_counsellor_id = $2 where user_id = $1`, [userId, counsellorId]);
+    // userId here is always an anchor (scanDisengagedUsers excludes
+    // dependent rows) - propagates to every other case this person has,
+    // same as every other counsellor-assignment site.
+    await propagateCounsellorAssignment(userId, { counsellorId });
     autoAssigned = true;
   }
 
@@ -152,9 +164,16 @@ async function scanDisengagedUsers() {
   const cutoff = new Date(Date.now() - DISENGAGEMENT_THRESHOLD_DAYS * 86400000).toISOString();
 
   const { rows: disengagedUsers } = await pool.query(
+    // linked_to_user_id is null - same reason as scanCheckinsDue above: a
+    // dependent case's own interactions row never accumulates (all real
+    // activity is written under its anchor), so without this it would
+    // always look disengaged and get a false "gone quiet" notice/counsellor
+    // auto-assignment even while being actively monitored under its other
+    // docket.
     `select u.user_id, u.jurisdiction_id
      from users u
      where u.status = 'active'
+       and u.linked_to_user_id is null
        and not exists (select 1 from interactions i where i.user_id = u.user_id and i.occurred_at > $1)
        and not exists (
          select 1 from alert_notifications an
@@ -270,12 +289,28 @@ async function drainDispatchQueue() {
 
     const attemptPatch = { attempt_count: item.attempt_count + 1, last_attempt_at: new Date().toISOString() };
     try {
+      // Multi-Case-Per-Person Support: Admin's Emergency Broadcast route
+      // (POST /broadcast in the 3 admin route files) enqueues dispatch rows
+      // by scanning `users` directly within a jurisdiction, so item.user_id
+      // can land on a DEPENDENT case's own literal id - but expo_push_token
+      // and user_identity's phone number only ever exist on the ANCHOR's row
+      // (a dependent case has neither). Resolved once here, before any
+      // kind-specific dispatch, so admin_broadcast_sms/admin_broadcast_push
+      // actually reach the person's real device/phone. Every other kind
+      // (checkin_due, wellness_push, ai_proactive_contact, and the
+      // provider-gap kinds below) is already always enqueued against the
+      // anchor's own id by the code that creates it, so this is a safe
+      // no-op there - same for 'alert', which targets officials by
+      // official_id and never touches resolvedUserId at all.
+      const { data: linkedRow } = await supabase.from('users').select('linked_to_user_id').eq('user_id', item.user_id).maybeSingle();
+      const resolvedUserId = linkedRow?.linked_to_user_id || item.user_id;
+
       if (item.kind === 'ivrs_call') {
-        await placeIvrsCall({ user_id: item.user_id });
+        await placeIvrsCall({ user_id: resolvedUserId });
       } else if (item.kind === 'sms_checkin_prompt') {
-        await sendSmsCheckinPrompt({ user_id: item.user_id });
+        await sendSmsCheckinPrompt({ user_id: resolvedUserId });
       } else if (item.kind === 'admin_broadcast_sms') {
-        await sendAdminBroadcastSms({ user_id: item.user_id }, item.message || 'This is an emergency broadcast from Mansakha.');
+        await sendAdminBroadcastSms({ user_id: resolvedUserId }, item.message || 'This is an emergency broadcast from Mansakha.');
       } else {
         // checkin_due / alert / wellness_push / ai_proactive_contact /
         // admin_broadcast_push all deliver via Expo push to a user or
@@ -283,7 +318,7 @@ async function drainDispatchQueue() {
         const isAlert = item.kind === 'alert';
         const targetTable = isAlert ? 'officials' : 'users';
         const idColumn = isAlert ? 'official_id' : 'user_id';
-        const targetId = isAlert ? item.official_id : item.user_id;
+        const targetId = isAlert ? item.official_id : resolvedUserId;
         const { data: target } = await supabase.from(targetTable).select('expo_push_token').eq(idColumn, targetId).maybeSingle();
         if (!target?.expo_push_token) throw new Error('No push token registered for this recipient');
 
@@ -293,7 +328,7 @@ async function drainDispatchQueue() {
           title = 'New distress alert';
           body = 'A case in your jurisdiction needs review.';
         } else if (item.kind === 'wellness_push') {
-          const category = await pickWellnessCategory(item.user_id);
+          const category = await pickWellnessCategory(resolvedUserId);
           title = 'A moment for yourself';
           body = category === 'meditation' ? 'Try a short breathing exercise in the Wellness section.' : 'A quick activity might help - check the Wellness section.';
         } else if (item.kind === 'ai_proactive_contact') {

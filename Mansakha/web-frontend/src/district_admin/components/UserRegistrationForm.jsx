@@ -17,6 +17,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
   const [password, setPassword] = useState('');
   const [caseTypeId, setCaseTypeId] = useState('');
   const [caseBackground, setCaseBackground] = useState('');
+  const [aadhaarNumber, setAadhaarNumber] = useState('');
   const [stateId, setStateId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [error, setError] = useState(null);
@@ -45,6 +46,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
         jurisdictionId,
         caseTypeId,
         ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
+        ...(aadhaarNumber.trim() ? { aadhaarNumber: aadhaarNumber.trim() } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
@@ -56,6 +58,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
       setPassword('');
       setCaseTypeId('');
       setCaseBackground('');
+      setAadhaarNumber('');
       setStateId('');
       setDistrictId('');
     } catch (err) {
@@ -157,6 +160,19 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
           </div>
         </div>
       )}
+
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Aadhaar Number (optional)</label>
+        <input
+          type="text"
+          value={aadhaarNumber}
+          onChange={(e) => setAadhaarNumber(e.target.value.replace(/[^0-9]/g, ''))}
+          maxLength={12}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="12-digit Aadhaar number"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">Used to recognize if this person already has another case elsewhere.</p>
+      </div>
 
       <div>
         <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Type</label>

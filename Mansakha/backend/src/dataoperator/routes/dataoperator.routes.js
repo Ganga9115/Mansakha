@@ -5,7 +5,7 @@ const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
-const { createUser, updateUser, deleteUser, ProvisioningError } = require('../../user/services/userProvisioning');
+const { createUser, updateUser, deleteUser, linkExistingCase, createLinkedCase, ProvisioningError } = require('../../user/services/userProvisioning');
 const { writeAuditLog } = require('../../core/services/auditLog');
 
 const router = express.Router();
@@ -18,10 +18,10 @@ router.use(verifyToken, requireRole(['Data Operator']), generalApiLimiter);
 // intake role that can register a user into any district, not a
 // district-operational one - so no requireJurisdiction here.
 router.post('/register-user', async (req, res) => {
-  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password } = req.body;
+  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber } = req.body;
   try {
     const { userId, temporaryPassword } = await createUser({
-      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password,
+      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber,
       provisionedVia: 'data_operator',
     });
     await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });
@@ -73,6 +73,25 @@ router.post('/fetch-case', async (req, res) => {
   // 10-digit Indian mobile format (starts 6-9) - deterministic per seed, not
   // a real number.
   const contactNumber = String(6000000000 + (seed * 9999991) % 4000000000).slice(0, 10);
+  // 12-digit Aadhaar-like format, same deterministic-per-seed approach as
+  // name/contact above - Multi-Case-Per-Person Support's primary matching
+  // key (see userProvisioning.js/migration_022): a real NHAA record would
+  // plausibly carry this, and it's what lets Data Operator recognize two
+  // different docket numbers as the same person.
+  const aadhaarNumber = String(100000000000 + (seed * 8951) % 899999999999).slice(0, 12);
+
+  // Proactive match check - if this Aadhaar already belongs to a DIFFERENT
+  // existing case, surface it immediately so the operator can link on the
+  // spot instead of discovering the conflict only after submitting Register
+  // User (which would 409 on the same constraint - see createUser()).
+  const { data: existingIdentity } = await supabase
+    .from('user_identity')
+    .select('user_id, full_name, users(docket_number)')
+    .eq('aadhaar_number', aadhaarNumber)
+    .maybeSingle();
+  const existingMatch = (existingIdentity && existingIdentity.users?.docket_number !== String(docketNumber).trim())
+    ? { userId: existingIdentity.user_id, docketNumber: existingIdentity.users?.docket_number || null, fullName: existingIdentity.full_name }
+    : null;
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'simulated_case_fetch' });
 
@@ -89,6 +108,8 @@ router.post('/fetch-case', async (req, res) => {
     suggestedDistrictId: district?.district_id || null,
     suggestedDistrictName: district?.district_name || null,
     suggestedCaseBackground: `Referred via NHAA helpline (simulated) - caller reported an incident consistent with ${caseType?.name || 'the suggested case type'} and requested follow-up support.`,
+    suggestedAadhaarNumber: aadhaarNumber,
+    existingMatch,
     note: 'Simulated data - placeholder for a real NHAA/Integrated Portal API integration that does not exist yet. Not a live government record.',
   });
 });
@@ -103,29 +124,43 @@ router.get('/users', async (req, res) => {
   const { data, error } = await supabase
     .from('users')
     .select(`
-      user_id, docket_number, case_stage, status, case_background, enrolled_at,
+      user_id, docket_number, case_stage, status, case_background, enrolled_at, linked_to_user_id,
       case_types(name),
-      jurisdictions(name),
-      user_identity(full_name, contact_number, address)
+      jurisdictions(name)
     `)
     .eq('auth_method', 'data_operator')
     .order('enrolled_at', { ascending: false });
   if (error) return fail(res, `Could not load users: ${error.message}`, 500);
 
+  // Multi-Case-Per-Person Support - a dependent case has no user_identity row
+  // of its own (it inherits the anchor's - see createLinkedCase in
+  // userProvisioning.js), so a direct user_identity(...) embed on this row
+  // would always come back null even though the real person's name/contact
+  // are known via their anchor. Resolved via each row's own anchor instead.
+  const anchorIds = [...new Set((data || []).map((u) => u.linked_to_user_id || u.user_id))];
+  const { data: identities } = await supabase
+    .from('user_identity')
+    .select('user_id, full_name, contact_number, address')
+    .in('user_id', anchorIds);
+  const identityByAnchor = new Map((identities || []).map((i) => [i.user_id, i]));
+
   return ok(res, {
-    users: (data || []).map((u) => ({
-      userId: u.user_id,
-      docketNumber: u.docket_number,
-      fullName: u.user_identity?.full_name || null,
-      contactNumber: u.user_identity?.contact_number || null,
-      address: u.user_identity?.address || null,
-      caseType: u.case_types?.name || null,
-      jurisdictionName: u.jurisdictions?.name || null,
-      caseStage: u.case_stage,
-      status: u.status,
-      caseBackground: u.case_background,
-      enrolledAt: u.enrolled_at,
-    })),
+    users: (data || []).map((u) => {
+      const identity = identityByAnchor.get(u.linked_to_user_id || u.user_id);
+      return {
+        userId: u.user_id,
+        docketNumber: u.docket_number,
+        fullName: identity?.full_name || null,
+        contactNumber: identity?.contact_number || null,
+        address: identity?.address || null,
+        caseType: u.case_types?.name || null,
+        jurisdictionName: u.jurisdictions?.name || null,
+        caseStage: u.case_stage,
+        status: u.status,
+        caseBackground: u.case_background,
+        enrolledAt: u.enrolled_at,
+      };
+    }),
   });
 });
 
@@ -151,6 +186,116 @@ router.delete('/users/:userId', async (req, res) => {
     await deleteUser(userId);
     await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'delete', entityType: 'user', entityId: userId });
     return ok(res, null, 'User record deleted');
+  } catch (err) {
+    if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
+    throw err;
+  }
+});
+
+// Multi-Case-Per-Person Support - the search behind "Link Cases": finds an
+// existing PERSON (not just a case row) by name/docket/contact/Aadhaar, so a
+// new or already-registered case can be linked to them. Deliberately
+// unfiltered by auth_method (unlike GET /users above) - a person's other
+// case may have been registered by District Admin, not Data Operator, and
+// this still needs to find them. Results are grouped by resolved anchor so a
+// person with several cases appears once, with every one of their cases
+// listed, not once per matching row.
+router.get('/search-person', async (req, res) => {
+  const q = (req.query.q || '').trim();
+  if (q.length < 2) return ok(res, { people: [] });
+  const escaped = q.replace(/[%_\\]/g, '\\$&');
+
+  // Two independent match paths: docket_number lives on `users` (and a match
+  // there might land on a DEPENDENT case, which has no user_identity row of
+  // its own - resolved to its anchor below); name/contact/aadhaar live on
+  // `user_identity`, which only an anchor row ever has.
+  const [{ data: docketMatches }, { data: identityMatches }] = await Promise.all([
+    supabase.from('users').select('user_id, linked_to_user_id').ilike('docket_number', `%${escaped}%`).limit(25),
+    supabase
+      .from('user_identity')
+      .select('user_id')
+      .or(`full_name.ilike.%${escaped}%,contact_number.ilike.%${escaped}%,aadhaar_number.ilike.%${escaped}%`)
+      .limit(25),
+  ]);
+
+  const anchorIds = new Set();
+  for (const m of docketMatches || []) anchorIds.add(m.linked_to_user_id || m.user_id);
+  for (const m of identityMatches || []) anchorIds.add(m.user_id); // user_identity.user_id is always an anchor already
+  if (anchorIds.size === 0) return ok(res, { people: [] });
+
+  const orFilter = [...anchorIds].map((id) => `user_id.eq.${id},linked_to_user_id.eq.${id}`).join(',');
+  const [{ data: familyRows, error: familyError }, { data: identities }] = await Promise.all([
+    supabase
+      .from('users')
+      .select('user_id, linked_to_user_id, docket_number, case_stage, case_types(name), jurisdictions(name)')
+      .or(orFilter),
+    supabase.from('user_identity').select('user_id, full_name, contact_number, aadhaar_number').in('user_id', [...anchorIds]),
+  ]);
+  if (familyError) return fail(res, `Could not search: ${familyError.message}`, 500);
+
+  const identityByAnchor = new Map((identities || []).map((i) => [i.user_id, i]));
+  const casesByAnchor = new Map();
+  for (const row of familyRows || []) {
+    const anchorId = row.linked_to_user_id || row.user_id;
+    if (!casesByAnchor.has(anchorId)) casesByAnchor.set(anchorId, []);
+    casesByAnchor.get(anchorId).push({
+      userId: row.user_id,
+      docketNumber: row.docket_number,
+      caseStage: row.case_stage,
+      caseType: row.case_types?.name || null,
+      jurisdictionName: row.jurisdictions?.name || null,
+    });
+  }
+
+  const people = [...anchorIds]
+    .map((anchorId) => {
+      const identity = identityByAnchor.get(anchorId);
+      return {
+        anchorUserId: anchorId,
+        fullName: identity?.full_name || null,
+        contactNumber: identity?.contact_number || null,
+        aadhaarNumber: identity?.aadhaar_number || null,
+        cases: casesByAnchor.get(anchorId) || [],
+      };
+    })
+    .filter((p) => p.cases.length > 0);
+
+  return ok(res, { people });
+});
+
+// Registers a brand-new case that's already known to belong to an existing
+// person (found via /search-person, or a Fetch Case Aadhaar match) - a
+// trimmed version of /register-user with no name/contact/password fields,
+// since a dependent case inherits the anchor's identity and gets its own
+// default temp password (see createLinkedCase in userProvisioning.js).
+router.post('/register-linked-case', async (req, res) => {
+  const { docketNumber, caseTypeId, jurisdictionId, caseStage, caseBackground, linkToUserId } = req.body;
+  try {
+    const { userId, docketNumber: dn, temporaryPassword, anchorUserId } = await createLinkedCase({
+      docketNumber, caseTypeId, jurisdictionId, caseStage, caseBackground, linkToUserId,
+      provisionedVia: 'data_operator',
+    });
+    await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });
+    return ok(res, { userId, docketNumber: dn, temporaryPassword, anchorUserId }, 'Linked case created', 201);
+  } catch (err) {
+    if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
+    throw err;
+  }
+});
+
+// Links two already-independently-registered cases together after the fact
+// (the "these two docket numbers turned out to be the same person" cleanup
+// case) - see linkExistingCase's own rejection conditions (self-link,
+// already-linked, already-an-anchor-with-dependents, already has its own
+// activity) in userProvisioning.js for why this can fail with a 409.
+router.post('/users/:userId/link', async (req, res) => {
+  const { userId } = req.params;
+  const { linkToUserId } = req.body;
+  if (!linkToUserId) return fail(res, 'linkToUserId is required', 400);
+  try {
+    const { anchorUserId } = await linkExistingCase(userId, linkToUserId);
+    await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'update', entityType: 'user_link', entityId: userId });
+    return ok(res, { anchorUserId }, 'Case linked');
   } catch (err) {
     if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
     throw err;

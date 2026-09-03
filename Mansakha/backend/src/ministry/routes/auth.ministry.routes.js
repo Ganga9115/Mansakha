@@ -24,7 +24,18 @@ router.post('/login', staffLoginLimiter, async (req, res) => {
   // auth.staff.routes.js's identical fix for why this can't be skipped:
   // without it, an account inactive >8h logs in fine but its very next
   // request is rejected as "expired," with no way to self-recover.
-  await supabase.from('officials').update({ last_active_at: new Date().toISOString() }).eq('official_id', match.official.official_id);
+  const { error: lastActiveError } = await supabase
+    .from('officials')
+    .update({ last_active_at: new Date().toISOString() })
+    .eq('official_id', match.official.official_id);
+  // Required write, not best-effort - see auth.staff.routes.js's identical
+  // check for why a silent failure here would reintroduce the inactivity-
+  // lockout deadlock. Fail the login rather than hand out a dead-on-arrival
+  // session; don't leak the DB error itself.
+  if (lastActiveError) {
+    console.error('POST /auth/ministry/login: could not reset last_active_at', lastActiveError.message);
+    return fail(res, 'Could not complete login. Please try again.', 500);
+  }
 
   const token = signToken({ type: 'official', officialId: match.official.official_id });
   return ok(res, { token, mustChangePassword: match.official.must_change_password });
