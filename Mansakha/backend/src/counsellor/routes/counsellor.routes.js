@@ -70,6 +70,22 @@ async function resolveUserJurisdiction(req) {
   return data.jurisdiction_id;
 }
 
+// Multi-Case-Per-Person Support - a mobile session always reads/writes
+// distress_scores/interactions/messages/typing_status under the ANCHOR's
+// user_id (see auth.user.routes.js's login), but a counsellor/admin route
+// takes a literal :userId straight from the URL (whichever specific case was
+// clicked into). Without this, a dependent case's own user_id would never
+// have accumulated any of its own rows in those four tables, so its Case
+// Detail would 404 forever, its Messages would always be empty, and its
+// dashboard/queue risk tiers would show as unscored - even though the person
+// is actively being monitored under their other docket. Deliberately NOT
+// applied to case_notes/interventions/counselling_sessions - those track
+// THIS case's own legal-proceeding progress and correctly stay per-case.
+async function resolveActivityUserId(userId) {
+  const { data } = await supabase.from('users').select('linked_to_user_id').eq('user_id', userId).maybeSingle();
+  return data?.linked_to_user_id || userId;
+}
+
 router.use(verifyToken);
 
 // The Log Intervention screen needs real intervention_type_id values to submit a
@@ -112,7 +128,7 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
       `select u.user_id, rl.name as risk_level_name
        from users u
        left join lateral (
-         select risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
+         select risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
        where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed' and u.status = 'active'`,
@@ -128,7 +144,7 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
     pool.query(
       `select ds.user_id, ds.score_value, ds.computed_at
        from distress_scores ds
-       join users u on u.user_id = ds.user_id
+       join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
        where u.assigned_counsellor_id = $1
          and u.case_stage != 'Case Closed' and u.status = 'active'
          and ds.computed_at > now() - ($2 || ' days')::interval`,
@@ -136,6 +152,12 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
     ),
   ]);
 
+  // By design, low+moderate+high+critical will not always sum to `total`:
+  // `total` is every active, non-closed case assigned to this counsellor,
+  // while each risk bucket only counts a case that already has a distress
+  // score to derive a tier from. A newly assigned case with zero check-ins
+  // yet is real and counted in `total`, just not yet in any risk bucket -
+  // not a miscount, just an unscored case.
   const counts = { total: 0, low: 0, moderate: 0, high: 0, critical: 0, predictedEscalations: 0 };
   for (const u of rows) {
     counts.total += 1;
@@ -146,6 +168,14 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
     if (riskLevel === 'Critical') counts.critical += 1;
   }
 
+  // r.user_id here is distress_scores' own user_id, which - unlike u.user_id
+  // in the loop above - is always the anchor's id (see coalesce() in the
+  // recentScoreRows query above), so predictEscalationRiskBatch's Map
+  // naturally dedupes a linked person's single real trend to one entry
+  // instead of one per case, the same way avgDistressPointDrop in the admin
+  // routes' /counsellors/performance avoids double-counting one improvement
+  // as two - unlike total/low/moderate/high/critical above, a computed trend
+  // shouldn't be counted twice just because the person has two linked cases.
   const predictions = predictEscalationRiskBatch(
     recentScoreRows.map((r) => ({ userId: r.user_id, score: Number(r.score_value), computedAt: r.computed_at }))
   );
@@ -164,10 +194,18 @@ router.get('/reports-analytics', requireRole(['Counsellor']), generalApiLimiter,
   const { since, until, buckets } = resolveDateWindow(req.query);
 
   const [{ rows: scoreRows }, { rows: interventionRows }] = await Promise.all([
+    // DISTINCT, not a plain select - a person with 2 cases linked to this
+    // same counsellor would otherwise join each of their real score rows
+    // twice (once per case), inflating this chart's averages/bucket counts
+    // by double-counting one real reading as two. Unlike the per-case risk
+    // buckets on /dashboard (legitimately one entry per case, matching
+    // "total cases"), this is an aggregate over historical readings, where
+    // duplication actually distorts the numbers - same reasoning as
+    // avgDistressPointDrop in the admin routes' /counsellors/performance.
     pool.query(
-      `select ds.computed_at, ds.score_value, rl.name as risk_level_name
+      `select distinct ds.score_id, ds.computed_at, ds.score_value, rl.name as risk_level_name
        from distress_scores ds
-       join users u on u.user_id = ds.user_id
+       join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
        join risk_levels rl on rl.risk_level_id = ds.risk_level_id
        where u.assigned_counsellor_id = $1 and ds.computed_at >= $2 and ds.computed_at <= $3`,
       [req.auth.officialId, since.toISOString(), until.toISOString()]
@@ -248,10 +286,14 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   const [{ rows }, { rows: recentScoreRows }] = await Promise.all([
     pool.query(
       // case_stage != 'Case Closed' and status = 'active' - see /dashboard above for why.
-      `select u.user_id, u.case_stage, u.case_background, u.assigned_counsellor_id, ds.score_value, rl.name as risk_level_name
+      // linked_to_user_id selected so the map below can look up this case's
+      // shared prediction/score via its anchor, not its own (possibly
+      // dependent, possibly score-less) id - see the coalesce() in both
+      // queries and the predictions.get() call below.
+      `select u.user_id, u.linked_to_user_id, u.case_stage, u.case_background, u.assigned_counsellor_id, ds.score_value, rl.name as risk_level_name
        from users u
        left join lateral (
-         select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
+         select score_value, risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
        where u.jurisdiction_id = any($1::uuid[]) and u.case_stage != 'Case Closed' and u.status = 'active'`,
@@ -265,9 +307,9 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
     // iterating the already-filtered `rows`, but kept consistent so this
     // query can't silently drift into being relied on unfiltered elsewhere.
     pool.query(
-      `select ds.user_id, ds.score_value, ds.computed_at
+      `select distinct ds.score_id, ds.user_id, ds.score_value, ds.computed_at
        from distress_scores ds
-       join users u on u.user_id = ds.user_id
+       join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
        where u.jurisdiction_id = any($1::uuid[])
          and u.case_stage != 'Case Closed' and u.status = 'active'
          and ds.computed_at > now() - ($2 || ' days')::interval`,
@@ -275,6 +317,10 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
     ),
   ]);
 
+  // ds.user_id (from the query above) is always the anchor's id - the Map is
+  // naturally keyed and deduped by anchor, so each of a linked person's cases
+  // below looks it up via ITS OWN anchor (u.linked_to_user_id || u.user_id),
+  // not its own literal id, which would never match for a dependent case.
   const predictions = predictEscalationRiskBatch(
     recentScoreRows.map((r) => ({ userId: r.user_id, score: Number(r.score_value), computedAt: r.computed_at }))
   );
@@ -282,7 +328,7 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
   const BACKSTORY_EXCERPT_LENGTH = 140; // Section 2.2: a truncated excerpt on the list, full text on Case Detail
 
   let cases = rows.map((u) => {
-    const prediction = predictions.get(u.user_id);
+    const prediction = predictions.get(u.linked_to_user_id || u.user_id);
     return {
       userId: u.user_id,
       caseStage: u.case_stage,
@@ -335,10 +381,15 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
   const [{ rows }, { rows: unreadRows }] = await Promise.all([
     pool.query(
       // case_stage != 'Case Closed' and status = 'active' - see /dashboard above for why.
-      `select u.user_id, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name
+      // linked_to_user_id selected so hasUnreadMessage below can check the
+      // shared messages thread via this case's anchor - messages are only
+      // ever written under the anchor's user_id (see auth.user.routes.js's
+      // login), so a dependent case's own literal user_id would never appear
+      // in `messages` even when the person has real unread messages.
+      `select u.user_id, u.linked_to_user_id, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name
        from users u
        left join lateral (
-         select score_value, risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
+         select score_value, risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
        where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed' and u.status = 'active'`,
@@ -362,7 +413,7 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
     caseBackground: u.case_background
       ? (u.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${u.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : u.case_background)
       : null,
-    hasUnreadMessage: unreadUserIds.has(u.user_id),
+    hasUnreadMessage: unreadUserIds.has(u.linked_to_user_id || u.user_id),
   }));
 
   if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
@@ -379,20 +430,30 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
 router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
   const { userId } = req.params;
 
-  // Raw pg (not Supabase REST) with the two truly-independent lookups run
-  // concurrently, same fix as elsewhere this session. users.phone doesn't
-  // exist - the previous query silently failed on that bad column reference
-  // (error was never checked), which is why Case Detail's Call/WhatsApp
-  // buttons never showed: userRow always came back undefined. Fixed to
-  // pull the real contact number from user_identity instead.
-  const [{ rows: userRows }, { rows: scoreRows }, { rows: unreadRows }] = await Promise.all([
-    pool.query(
-      `select u.case_stage, u.case_background, u.opted_for_manual_counsellor, ui.contact_number as phone
-       from users u
-       left join user_identity ui on ui.user_id = u.user_id
-       where u.user_id = $1`,
-      [userId]
-    ),
+  // Raw pg (not Supabase REST), same fix as elsewhere this session.
+  // users.phone doesn't exist - the previous query silently failed on that
+  // bad column reference (error was never checked), which is why Case
+  // Detail's Call/WhatsApp buttons never showed: userRow always came back
+  // undefined. linked_to_user_id is fetched first (not run concurrently with
+  // the three queries below) because those need its resolved value: a
+  // dependent case's own literal user_id never has its own distress_scores,
+  // messages, or user_identity row at all (all three only ever exist under
+  // the anchor - see auth.user.routes.js's login and createLinkedCase in
+  // userProvisioning.js), so querying any of them by the literal :userId
+  // would come back empty/404 for a dependent case, even one being actively
+  // monitored under its other docket. Phone is fetched via activityUserId
+  // below (NOT joined here on the literal :userId) for the same reason - a
+  // left join against user_identity here would always come back null phone
+  // for a dependent case despite the anchor having a real one on file.
+  const { rows: userRows } = await pool.query(
+    `select case_stage, case_background, opted_for_manual_counsellor, linked_to_user_id from users where user_id = $1`,
+    [userId]
+  );
+  const userRow = userRows[0];
+  if (!userRow) return fail(res, 'Case not found', 404);
+  const activityUserId = userRow.linked_to_user_id || userId;
+
+  const [{ rows: scoreRows }, { rows: unreadRows }, { data: identity }] = await Promise.all([
     // 12, not 3 - the extra rows feed the per-case longitudinal trend chart
     // below (Section 2.2/FR-3.3's "weekly distress score to help counsellors
     // analyse trends": the computation already existed via the weekly
@@ -414,16 +475,16 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
        where ds.user_id = $1
        order by ds.computed_at desc
        limit 12`,
-      [userId]
+      [activityUserId]
     ),
     // Red-dot indicator for the "Chat with User" button - unread from the
     // user's side, scoped to this counsellor specifically.
     pool.query(
       `select 1 from messages where user_id = $1 and official_id = $2 and sender_type = 'user' and read_at is null limit 1`,
-      [userId, req.auth.officialId]
+      [activityUserId, req.auth.officialId]
     ),
+    supabase.from('user_identity').select('contact_number').eq('user_id', activityUserId).maybeSingle(),
   ]);
-  const userRow = userRows[0];
   const hasUnreadMessage = unreadRows.length > 0;
 
   if (scoreRows.length === 0) return fail(res, 'No check-ins recorded for this case yet', 404);
@@ -464,7 +525,7 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   return ok(res, {
     caseStage: userRow?.case_stage || null,
     caseBackground: userRow?.case_background || null,
-    phone: userRow?.phone || null,
+    phone: identity?.contact_number || null,
     optedForManualCounsellor: userRow?.opted_for_manual_counsellor || false,
     hasUnreadMessage,
     score: Number(latest.score_value),
@@ -509,15 +570,48 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   });
 });
 
+// Multi-Case-Per-Person Support - lets a counsellor navigate from one of a
+// person's cases to another. Resolves the anchor first so this works
+// identically whether the case just opened is itself the anchor or a
+// dependent - the underlying data-correctness fix (this page actually
+// showing real activity for a dependent case) is already in place above;
+// this route is purely additive navigation.
+router.get('/cases/:userId/linked-cases', requireRole(['Counsellor', 'Administration']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
+  const { userId } = req.params;
+  const anchorUserId = await resolveActivityUserId(userId);
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('user_id, docket_number, case_stage, case_types(name), jurisdictions(name)')
+    .or(`user_id.eq.${anchorUserId},linked_to_user_id.eq.${anchorUserId}`);
+  if (error) return fail(res, 'Could not load linked cases', 500);
+
+  return ok(res, {
+    cases: (data || []).map((c) => ({
+      userId: c.user_id,
+      docketNumber: c.docket_number,
+      caseStage: c.case_stage,
+      caseType: c.case_types?.name || null,
+      jurisdictionName: c.jurisdictions?.name || null,
+      isCurrent: c.user_id === userId,
+    })),
+  });
+});
+
 router.post('/cases/:userId/intervention', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
   const { userId } = req.params;
   const { interventionTypeId, notes } = req.body;
   if (!interventionTypeId) return fail(res, 'interventionTypeId is required', 400);
 
+  // An alert's user_id is always the anchor's (alerts are generated from
+  // distress_scores under applyStressResponse, which always runs against the
+  // anchor) - looking this up by the literal :userId would never find a
+  // dependent case's real open alert, silently failing to link/acknowledge it.
+  const activityUserId = await resolveActivityUserId(userId);
   const { data: openAlert } = await supabase
     .from('alerts')
     .select('alert_id, alert_status_id, alert_statuses(name)')
-    .eq('user_id', userId)
+    .eq('user_id', activityUserId)
     .order('triggered_at', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -670,7 +764,31 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
     });
   }
 
-  return ok(res, { alerts: alerts.slice(0, 50) });
+  // The Alerts Feed list is deliberately capped to the 50 most recent
+  // notifications (below) - fine for a scrollable feed, but the Dashboard's
+  // "OPEN ALERTS" tile used to derive its count by filtering that same
+  // capped array, so a counsellor with more than 50 accumulated
+  // notifications could have a genuinely-open older alert fall outside the
+  // window and silently not be counted. This is a real, separate COUNT
+  // query (not limited to 100/50) so the tile reflects the true total
+  // without fetching every notification's full row just to count them.
+  const { rows: openCountRows } = await pool.query(
+    `select count(*)::int as open_count
+     from alert_notifications an
+     left join alerts al on al.alert_id = an.alert_id
+     left join alert_statuses ast on ast.alert_status_id = al.alert_status_id
+     left join users u on u.user_id = al.user_id
+     left join sos_events se on se.sos_event_id = an.sos_event_id
+     where an.official_id = $1
+       and an.source in ('distress_score', 'sos')
+       and (
+         (an.source = 'sos' and se.acknowledged_at is null and se.resolved_at is null)
+         or (an.source = 'distress_score' and ast.name = 'Open' and u.jurisdiction_id = any($2::uuid[]))
+       )`,
+    [req.auth.officialId, jurisdictionIds]
+  );
+
+  return ok(res, { alerts: alerts.slice(0, 50), openCount: openCountRows[0].open_count });
 });
 
 // schema.sql's sos_events comment documents "resolved_at/resolved_by are
@@ -873,11 +991,18 @@ async function getVoiceMessageUrl(audioPath) {
 router.get('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
   if (!(await requireOptedInUser(req, res))) return;
   const { userId } = req.params;
+  // Messages/typing_status/user_identity all only ever exist under the
+  // ANCHOR's user_id (see auth.user.routes.js's login and createLinkedCase in
+  // userProvisioning.js - a dependent case has no user_identity row of its
+  // own at all) - opening a dependent case's chat by its literal :userId
+  // would show an empty thread and a blank phone number even though the real,
+  // ongoing conversation is happening under its anchor.
+  const activityUserId = await resolveActivityUserId(userId);
 
   const { data, error } = await supabase
     .from('messages')
     .select('message_id, sender_type, body, sent_at, message_type, audio_path, duration_seconds')
-    .eq('user_id', userId)
+    .eq('user_id', activityUserId)
     .eq('official_id', req.auth.officialId)
     .order('sent_at', { ascending: true });
   if (error) return fail(res, 'Could not load messages', 500);
@@ -886,12 +1011,12 @@ router.get('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLim
   // matches ordinary chat-app semantics, no separate "mark read" call needed.
   await pool.query(
     `update messages set read_at = now() where user_id = $1 and official_id = $2 and sender_type = 'user' and read_at is null`,
-    [userId, req.auth.officialId]
+    [activityUserId, req.auth.officialId]
   );
 
   const { rows: typingRows } = await pool.query(
     `select updated_at from typing_status where user_id = $1 and official_id = $2 and sender_type = 'user'`,
-    [userId, req.auth.officialId]
+    [activityUserId, req.auth.officialId]
   );
   const otherPartyTyping = !!typingRows[0] && (Date.now() - new Date(typingRows[0].updated_at).getTime()) < TYPING_ACTIVE_MS;
 
@@ -905,7 +1030,16 @@ router.get('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLim
     sentAt: m.sent_at,
   })));
 
-  return ok(res, { messages, otherPartyTyping });
+  // CaseChat.jsx (this endpoint's only caller, polled every 3s while the
+  // page is open) used to call useCaseDetail(userId) purely to read
+  // .phone for its Call button - a full case-detail fetch (scores, signals,
+  // trend, predicted risk, etc.) just for one field. This is already a
+  // per-user lookup on an already-polled endpoint, so a single-row
+  // user_identity read here is effectively free and removes the need for
+  // that second, much heavier request entirely.
+  const { data: identity } = await supabase.from('user_identity').select('contact_number').eq('user_id', activityUserId).maybeSingle();
+
+  return ok(res, { messages, otherPartyTyping, phone: identity?.contact_number || null });
 });
 
 router.post('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
@@ -913,17 +1047,22 @@ router.post('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLi
   const { userId } = req.params;
   const { body } = req.body;
   if (!body || !body.trim()) return fail(res, 'body is required', 400);
+  // Writing under the anchor (not the literal case clicked into) keeps this
+  // one shared thread regardless of which of the person's dockets the
+  // counsellor happens to have open - matches the mobile app, which always
+  // reads/writes messages under req.auth.userId (always the anchor).
+  const activityUserId = await resolveActivityUserId(userId);
 
   const { data, error } = await supabase
     .from('messages')
-    .insert({ user_id: userId, official_id: req.auth.officialId, sender_type: 'official', message_type: 'text', body: body.trim() })
+    .insert({ user_id: activityUserId, official_id: req.auth.officialId, sender_type: 'official', message_type: 'text', body: body.trim() })
     .select('message_id, sent_at')
     .single();
   if (error) return fail(res, `Could not send message: ${error.message}`, 500);
 
   // Sending implies typing has stopped - clears the indicator on the user's
   // side immediately rather than waiting out TYPING_ACTIVE_MS.
-  await supabase.from('typing_status').delete().eq('user_id', userId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
+  await supabase.from('typing_status').delete().eq('user_id', activityUserId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
 
   return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
 });
@@ -932,9 +1071,10 @@ router.post('/cases/:userId/messages/voice', requireRole(['Counsellor']), genera
   if (!(await requireOptedInUser(req, res))) return;
   const { userId } = req.params;
   if (!req.file) return fail(res, 'audio file is required', 400);
+  const activityUserId = await resolveActivityUserId(userId);
 
   const durationSeconds = Math.max(0, Math.round(Number(req.body.duration) || 0));
-  const audioPath = `${userId}/${crypto.randomUUID()}.${audioExtensionFromMime(req.file.mimetype)}`;
+  const audioPath = `${activityUserId}/${crypto.randomUUID()}.${audioExtensionFromMime(req.file.mimetype)}`;
 
   const { error: uploadError } = await supabase.storage
     .from('voice-messages')
@@ -943,12 +1083,12 @@ router.post('/cases/:userId/messages/voice', requireRole(['Counsellor']), genera
 
   const { data, error } = await supabase
     .from('messages')
-    .insert({ user_id: userId, official_id: req.auth.officialId, sender_type: 'official', message_type: 'voice', audio_path: audioPath, duration_seconds: durationSeconds })
+    .insert({ user_id: activityUserId, official_id: req.auth.officialId, sender_type: 'official', message_type: 'voice', audio_path: audioPath, duration_seconds: durationSeconds })
     .select('message_id, sent_at')
     .single();
   if (error) return fail(res, `Could not send voice message: ${error.message}`, 500);
 
-  await supabase.from('typing_status').delete().eq('user_id', userId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
+  await supabase.from('typing_status').delete().eq('user_id', activityUserId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
 
   return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
 });
@@ -959,10 +1099,11 @@ router.post('/cases/:userId/messages/voice', requireRole(['Counsellor']), genera
 router.post('/cases/:userId/messages/typing', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
   if (!(await requireOptedInUser(req, res))) return;
   const { userId } = req.params;
+  const activityUserId = await resolveActivityUserId(userId);
 
   const { error } = await supabase
     .from('typing_status')
-    .upsert({ user_id: userId, official_id: req.auth.officialId, sender_type: 'official', updated_at: new Date().toISOString() }, { onConflict: 'user_id,official_id,sender_type' });
+    .upsert({ user_id: activityUserId, official_id: req.auth.officialId, sender_type: 'official', updated_at: new Date().toISOString() }, { onConflict: 'user_id,official_id,sender_type' });
   if (error) return fail(res, `Could not update typing status: ${error.message}`, 500);
 
   return ok(res, null);

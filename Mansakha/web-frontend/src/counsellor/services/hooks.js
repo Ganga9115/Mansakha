@@ -96,6 +96,14 @@ export function useCaseNotes(userId) {
   return useQuery(() => apiClient.get(`/api/counsellor/cases/${userId}/notes`, token), [token, userId]);
 }
 
+// Multi-Case-Per-Person Support - every other case belonging to the same
+// person as this one (see backend counsellor.routes.js's comment on this
+// route), so Case Detail can offer navigation to a person's other dockets.
+export function useLinkedCases(userId) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/counsellor/cases/${userId}/linked-cases`, token), [token, userId]);
+}
+
 export function useInterventionTypes() {
   const token = getToken();
   return useQuery(() => apiClient.get('/api/counsellor/intervention-types', token), [token]);

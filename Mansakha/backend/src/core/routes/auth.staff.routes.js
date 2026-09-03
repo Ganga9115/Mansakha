@@ -47,7 +47,19 @@ router.post('/login', staffLoginLimiter, async (req, res) => {
   // since the only other place that refreshes this timestamp is gated
   // behind that same check. Confirmed live as a real, guaranteed-daily
   // lockout (anyone away >8h, i.e. overnight) before this fix.
-  await supabase.from('officials').update({ last_active_at: new Date().toISOString() }).eq('official_id', match.official.official_id);
+  const { error: lastActiveError } = await supabase
+    .from('officials')
+    .update({ last_active_at: new Date().toISOString() })
+    .eq('official_id', match.official.official_id);
+  // This write is required, not best-effort - a silently-failed reset here
+  // reintroduces the exact inactivity-lockout deadlock the comment above
+  // describes (issue a token now, reject it on the very next request because
+  // last_active_at never actually got refreshed). Fail the login rather than
+  // hand out a session that's dead on arrival; don't leak the DB error itself.
+  if (lastActiveError) {
+    console.error('POST /auth/staff/login: could not reset last_active_at', lastActiveError.message);
+    return fail(res, 'Could not complete login. Please try again.', 500);
+  }
 
   const token = signToken({ type: 'official', officialId: match.official.official_id, selectedRole });
   return ok(res, { token, mustChangePassword: match.official.must_change_password, selectedRole });

@@ -9,8 +9,9 @@ const { verifyToken } = require('../../core/middleware/verifyToken');
 const { generalApiLimiter, userChatLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { recordInteraction, recordAiDistressScore, recordOllamaDistressScore, PipelineError } = require('../../core/services/interactionPipeline');
-const { applyStressResponse, selectLeastLoadedCounsellor, notifyWeeklyReview } = require('../../core/services/stressResponse');
+const { applyStressResponse, selectLeastLoadedCounsellor, notifyWeeklyReview, getJurisdictionIdsForCaseFamily } = require('../../core/services/stressResponse');
 const { enqueueAlertDispatch } = require('../../core/services/dispatchWorker');
+const { propagateCounsellorAssignment } = require('../services/userProvisioning');
 const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = require('../../ai/ollama');
 
 // Fixed national Police Control Room number - the mobile app dials this
@@ -109,6 +110,7 @@ router.get('/dashboard', async (req, res) => {
     { data: latestScore },
     { data: openAlerts },
     { data: lastInteraction },
+    { data: caseFamily },
   ] = await Promise.all([
     supabase
       .from('users')
@@ -135,8 +137,23 @@ router.get('/dashboard', async (req, res) => {
       .order('occurred_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    // Multi-case support: userId here is always the anchor (see
+    // auth.user.routes.js's login), so every row sharing it - including the
+    // anchor's own case - is this person's full set of cases.
+    supabase
+      .from('users')
+      .select('user_id, docket_number, case_stage, case_types(name), jurisdictions(name)')
+      .or(`user_id.eq.${userId},linked_to_user_id.eq.${userId}`),
   ]);
   if (userError || !user) return fail(res, 'User record not found', 404);
+
+  const linkedCases = (caseFamily || []).map((c) => ({
+    userId: c.user_id,
+    docketNumber: c.docket_number,
+    caseStage: c.case_stage,
+    caseType: c.case_types?.name || null,
+    jurisdictionName: c.jurisdictions?.name || null,
+  }));
 
   // Red-dot indicator for the "Chat with counsellor" Home tile - a separate
   // follow-up query (not part of the Promise.all above) since it needs
@@ -177,6 +194,7 @@ router.get('/dashboard', async (req, res) => {
     nextCheckIn,
     alerts: (openAlerts || []).map((a) => ({ alertId: a.alert_id, triggeredAt: a.triggered_at, status: a.alert_statuses.name })),
     supportLinks: SUPPORT_LINKS,
+    linkedCases,
   });
 });
 
@@ -447,39 +465,46 @@ router.post('/urgent-help', async (req, res) => {
   if (!counsellorId) {
     counsellorId = await selectLeastLoadedCounsellor(user.jurisdiction_id);
     if (counsellorId) {
-      await supabase.from('users').update({ assigned_counsellor_id: counsellorId }).eq('user_id', userId);
+      // userId is always the anchor (see auth.user.routes.js's login) -
+      // propagating (not a single-row update) keeps every other case this
+      // person has in sync with the counsellor an SOS just triggered.
+      await propagateCounsellorAssignment(userId, { counsellorId });
     }
   }
 
-  // Walk the jurisdiction tree up from the user's own district to find its
-  // parent state - State Administration is scoped to that state row, not
-  // the district itself, so this can't be a simple eq() on the user's own
-  // jurisdiction_id the way District Administration's lookup below is.
-  let stateJurisdictionId = null;
-  const { data: districtRow } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', user.jurisdiction_id).maybeSingle();
-  if (districtRow?.parent_id) {
-    const { data: parentRow } = await supabase.from('jurisdictions').select('jurisdiction_id, level').eq('jurisdiction_id', districtRow.parent_id).maybeSingle();
-    if (parentRow?.level === 'state') stateJurisdictionId = parentRow.jurisdiction_id;
-  }
+  // Multi-case support: an SOS is relevant to Administration in every
+  // jurisdiction this person has an open case in, not just the case that
+  // happened to trigger it (same reasoning/decision as applyStressResponse's
+  // Critical-alert routing in stressResponse.js). userId is always the
+  // anchor already (see auth.user.routes.js's login).
+  const jurisdictionIds = await getJurisdictionIdsForCaseFamily(userId);
+  const adminIdSet = new Set();
+  for (const jid of jurisdictionIds) {
+    // Walk the jurisdiction tree up from this district to find its parent
+    // state - State Administration is scoped to that state row, not the
+    // district itself, so this can't be a simple eq() on jid alone.
+    // eslint-disable-next-line no-await-in-loop
+    const { data: districtRow } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', jid).maybeSingle();
+    let stateJurisdictionId = null;
+    if (districtRow?.parent_id) {
+      // eslint-disable-next-line no-await-in-loop
+      const { data: parentRow } = await supabase.from('jurisdictions').select('jurisdiction_id, level').eq('jurisdiction_id', districtRow.parent_id).maybeSingle();
+      if (parentRow?.level === 'state') stateJurisdictionId = parentRow.jurisdiction_id;
+    }
 
-  const { data: districtAdminRoles } = await supabase
-    .from('official_roles')
-    .select('official_id, roles(role_name)')
-    .eq('jurisdiction_id', user.jurisdiction_id)
-    .is('revoked_at', null);
-  const districtAdminIds = (districtAdminRoles || []).filter((r) => r.roles?.role_name === 'Administration').map((r) => r.official_id);
-
-  let stateAdminIds = [];
-  if (stateJurisdictionId) {
-    const { data: stateAdminRoles } = await supabase
+    const idsToCheck = stateJurisdictionId ? [jid, stateJurisdictionId] : [jid];
+    // eslint-disable-next-line no-await-in-loop
+    const { data: adminRoles } = await supabase
       .from('official_roles')
       .select('official_id, roles(role_name)')
-      .eq('jurisdiction_id', stateJurisdictionId)
+      .in('jurisdiction_id', idsToCheck)
       .is('revoked_at', null);
-    stateAdminIds = (stateAdminRoles || []).filter((r) => r.roles?.role_name === 'Administration').map((r) => r.official_id);
+    for (const r of adminRoles || []) {
+      if (r.roles?.role_name === 'Administration') adminIdSet.add(r.official_id);
+    }
   }
 
-  const recipientIds = [...new Set([counsellorId, ...districtAdminIds, ...stateAdminIds].filter(Boolean))];
+  const recipientIds = [...new Set([counsellorId, ...adminIdSet].filter(Boolean))];
 
   if (recipientIds.length > 0) {
     const { error: notifyError } = await supabase
@@ -533,38 +558,44 @@ router.patch('/counsellor-preference', async (req, res) => {
   const { optedIn } = req.body;
   if (typeof optedIn !== 'boolean') return fail(res, 'optedIn (boolean) is required', 400);
 
-  const { error } = await supabase.from('users').update({ opted_for_manual_counsellor: optedIn }).eq('user_id', req.auth.userId);
-  if (error) return fail(res, `Could not update counsellor preference: ${error.message}`, 500);
-
-  let assignedCounsellor = null;
+  // counsellorId stays undefined (not touched) when opting out, matching the
+  // original behavior of never clearing an existing assignment on opt-out -
+  // only computed when opting in with no counsellor yet.
+  let counsellorId;
   if (optedIn) {
     const { data: user } = await supabase
       .from('users')
       .select('jurisdiction_id, assigned_counsellor_id')
       .eq('user_id', req.auth.userId)
       .maybeSingle();
+    if (!user) return fail(res, 'User record not found', 404);
+    counsellorId = user.assigned_counsellor_id || await selectLeastLoadedCounsellor(user.jurisdiction_id);
+  }
 
-    let counsellorId = user?.assigned_counsellor_id;
-    if (user && !counsellorId) {
-      counsellorId = await selectLeastLoadedCounsellor(user.jurisdiction_id);
-      if (counsellorId) {
-        await supabase.from('users').update({ assigned_counsellor_id: counsellorId }).eq('user_id', req.auth.userId);
-      }
-    }
+  // req.auth.userId is always the anchor - this propagates the opt-in flag
+  // (and, if one was just picked, the counsellor) to every case in the
+  // family in one call, on EVERY toggle, not just when a fresh assignment
+  // happens to coincide with it (see userProvisioning.js's
+  // propagateCounsellorAssignment for why both fields travel together).
+  try {
+    await propagateCounsellorAssignment(req.auth.userId, { counsellorId, optedForManual: optedIn });
+  } catch (err) {
+    return fail(res, `Could not update counsellor preference: ${err.message}`, 500);
+  }
 
-    if (counsellorId) {
-      const { data: official } = await supabase
-        .from('officials')
-        .select('full_name, phone, whatsapp_number')
-        .eq('official_id', counsellorId)
-        .maybeSingle();
-      if (official) {
-        assignedCounsellor = {
-          fullName: official.full_name,
-          phone: official.phone,
-          whatsappNumber: official.whatsapp_number,
-        };
-      }
+  let assignedCounsellor = null;
+  if (optedIn && counsellorId) {
+    const { data: official } = await supabase
+      .from('officials')
+      .select('full_name, phone, whatsapp_number')
+      .eq('official_id', counsellorId)
+      .maybeSingle();
+    if (official) {
+      assignedCounsellor = {
+        fullName: official.full_name,
+        phone: official.phone,
+        whatsappNumber: official.whatsapp_number,
+      };
     }
   }
 
@@ -630,7 +661,9 @@ router.get('/assigned-counsellor', async (req, res) => {
   if (!user.assigned_counsellor_id || !counsellorName) {
     const chosenCounsellorId = await selectLeastLoadedCounsellor(user.jurisdiction_id);
     if (chosenCounsellorId) {
-      await supabase.from('users').update({ assigned_counsellor_id: chosenCounsellorId }).eq('user_id', req.auth.userId);
+      // req.auth.userId is always the anchor - propagates to every case in
+      // the family, not just this one.
+      await propagateCounsellorAssignment(req.auth.userId, { counsellorId: chosenCounsellorId });
       const { data: official } = await supabase
         .from('officials')
         .select('full_name, phone, whatsapp_number')

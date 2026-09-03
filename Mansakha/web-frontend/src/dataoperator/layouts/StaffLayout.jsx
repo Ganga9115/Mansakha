@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { UserPlus, Users, FileSearch, User, LogOut, Menu, X } from 'lucide-react';
+import { UserPlus, Users, FileSearch, Link2, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { name: 'Register User', icon: UserPlus, path: '/dataoperator' },
   { name: 'Users', icon: Users, path: '/dataoperator/users' },
   { name: 'Fetch Case Details', icon: FileSearch, path: '/dataoperator/fetch-case' },
+  { name: 'Link Cases', icon: Link2, path: '/dataoperator/link-cases' },
   { name: 'Profile', icon: User, path: '/dataoperator/profile' },
 ];
 

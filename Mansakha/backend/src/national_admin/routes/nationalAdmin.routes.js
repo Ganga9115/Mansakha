@@ -121,6 +121,15 @@ router.get('/root-jurisdiction', verifyToken, generalApiLimiter, async (req, res
 // the user's own jurisdiction_id directly); National's children are
 // states (group by that district's parent_id) - the hierarchy is exactly
 // national -> state -> district, never deeper, so one extra join covers it.
+//
+// Multi-Case-Per-Person Support: distress_scores rows only ever exist under
+// a person's ANCHOR user_id (see counsellor.routes.js's resolveActivityUserId
+// and auth.user.routes.js's login), so the lateral join resolves through
+// coalesce(u.linked_to_user_id, u.user_id) - otherwise a dependent case
+// would always look unscored even though its anchor has a real risk tier.
+// This is a per-case tally (like Case Queue), not an average, so a person
+// with 2 linked cases in this jurisdiction correctly contributes 2 - no
+// dedup needed here, unlike the reports-analytics chart below.
 async function countUsersByRiskGroupedByChild(jurisdictionIds, { groupByParent }) {
   const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
   const { rows } = await pool.query(
@@ -132,7 +141,7 @@ async function countUsersByRiskGroupedByChild(jurisdictionIds, { groupByParent }
      from users u
      join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
      left join lateral (
-       select risk_level_id from distress_scores where user_id = u.user_id order by computed_at desc limit 1
+       select risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
      ) ds on true
      left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
      where u.jurisdiction_id = any($1::uuid[])
@@ -152,6 +161,8 @@ async function countUsersByRiskGroupedByChild(jurisdictionIds, { groupByParent }
   return byGroupId;
 }
 
+// Same Multi-Case-Per-Person coalesce as countUsersByRiskGroupedByChild
+// above - distress_scores only ever exist under the anchor's user_id.
 async function countUsersByRisk(jurisdictionIds) {
   const { rows } = await pool.query(
     `select u.user_id, u.case_stage, ds.score_value, rl.name as risk_level_name
@@ -159,7 +170,7 @@ async function countUsersByRisk(jurisdictionIds) {
      left join lateral (
        select score_value, risk_level_id
        from distress_scores
-       where user_id = u.user_id
+       where user_id = coalesce(u.linked_to_user_id, u.user_id)
        order by computed_at desc
        limit 1
      ) ds on true
@@ -193,10 +204,14 @@ async function countPredictedEscalations(jurisdictionIds) {
   // single bound parameter, so it isn't subject to the URL-length limit
   // selectInChunks exists to work around, and avoids PostgREST's ~1-2s
   // per-call overhead on what can be a large jurisdiction subtree.
+  // Multi-Case-Per-Person Support: same coalesce as countUsersByRisk above -
+  // ds.user_id here is always the anchor's id once joined this way, so a
+  // linked person's single real trend is naturally deduped to one Map entry
+  // by predictEscalationRiskBatch below, not counted once per linked case.
   const { rows } = await pool.query(
     `select ds.user_id, ds.score_value, ds.computed_at
      from distress_scores ds
-     join users u on u.user_id = ds.user_id
+     join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
      where u.jurisdiction_id = any($1::uuid[])
        and ds.computed_at > now() - ($2 || ' days')::interval`,
     [jurisdictionIds, PREDICTION_LOOKBACK_DAYS]
@@ -231,10 +246,18 @@ router.get(
     const jurisdictionIds = await getDescendantJurisdictionIds(jurisdictionId);
 
     const [{ rows: scoreRows }, { rows: interventionRows }] = await Promise.all([
+      // DISTINCT, not a plain select - a person with 2 cases linked in this
+      // subtree would otherwise join each of their real score rows twice
+      // (once per case), inflating this chart's averages/bucket counts by
+      // double-counting one real reading as two. Unlike the per-case risk
+      // counts above (legitimately one entry per case), this is an aggregate
+      // over historical readings, where duplication actually distorts the
+      // numbers - same reasoning as avgDistressPointDrop in
+      // /counsellors/performance below.
       pool.query(
-        `select ds.computed_at, ds.score_value, rl.name as risk_level_name
+        `select distinct ds.score_id, ds.computed_at, ds.score_value, rl.name as risk_level_name
          from distress_scores ds
-         join users u on u.user_id = ds.user_id
+         join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
          join risk_levels rl on rl.risk_level_id = ds.risk_level_id
          where u.jurisdiction_id = any($1::uuid[]) and ds.computed_at >= $2 and ds.computed_at <= $3`,
         [jurisdictionIds, since.toISOString(), until.toISOString()]
@@ -726,7 +749,7 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
 
   const { data: user } = await supabase
     .from('users')
-    .select('user_id, docket_number, case_type_id, jurisdiction_id, case_stage, status')
+    .select('user_id, docket_number, case_type_id, jurisdiction_id, case_stage, status, linked_to_user_id')
     .ilike('docket_number', String(docketNumber).trim().replace(/[%_\\]/g, '\\$&'))
     .maybeSingle();
   if (!user) return ok(res, { user: null });
@@ -748,7 +771,12 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
     if (!allowed) return fail(res, 'Outside your assigned jurisdiction', 403);
   }
 
-  const { data: identity } = await supabase.from('user_identity').select('full_name, contact_number, address').eq('user_id', user.user_id).maybeSingle();
+  // A dependent case has no user_identity row of its own (it inherits the
+  // anchor's - see createLinkedCase in userProvisioning.js), so this docket
+  // search would otherwise show blank name/contact/address for one - even
+  // though an admin searching by that exact docket clearly expects to find
+  // the person, not an empty identity.
+  const { data: identity } = await supabase.from('user_identity').select('full_name, contact_number, address').eq('user_id', user.linked_to_user_id || user.user_id).maybeSingle();
 
   return ok(res, {
     user: {
@@ -777,10 +805,10 @@ router.post(
   generalApiLimiter,
   requireJurisdiction((req) => req.body.jurisdictionId),
   async (req, res) => {
-    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password } = req.body;
+    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber } = req.body;
     try {
       const { userId, temporaryPassword } = await createUser({
-        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password,
+        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber,
         provisionedVia: 'district_admin',
       });
       await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });
@@ -1090,7 +1118,7 @@ router.get(
       // eslint-disable-next-line no-await-in-loop
       const { data: users } = await supabase
         .from('users')
-        .select('status, distress_scores(score_value, computed_at)')
+        .select('status, linked_to_user_id, distress_scores(score_value, computed_at)')
         .eq('assigned_counsellor_id', officialId);
 
       const activeCaseCount = (users || []).filter((u) => u.status === 'active').length;
@@ -1114,6 +1142,12 @@ router.get(
       let dropSum = 0;
       let consideredCount = 0;
       for (const u of users || []) {
+        // A dependent case's distress_scores embed shows the exact same
+        // trend as its anchor (real scores only ever live under the
+        // anchor - see countUsersByRisk above), so it's skipped here rather
+        // than counting one person's real improvement a second time on top
+        // of the anchor's own row.
+        if (u.linked_to_user_id) continue;
         const scores = (u.distress_scores || []).slice().sort((a, b) => new Date(a.computed_at) - new Date(b.computed_at));
         if (scores.length < 2) continue;
         dropSum += scores[0].score_value - scores[scores.length - 1].score_value;

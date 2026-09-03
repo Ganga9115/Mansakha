@@ -127,6 +127,12 @@ router.get('/users', async (req, res) => {
   const offset = (page - 1) * pageSize;
 
   const { rows } = await pool.query(
+    // ui joined via coalesce(u.linked_to_user_id, u.user_id) - a dependent
+    // case (Multi-Case-Per-Person Support) has no user_identity row of its
+    // own (it inherits the anchor's - see createLinkedCase in
+    // userProvisioning.js), so joining on u.user_id directly would show a
+    // blank name/contact/address for one even though the real person's
+    // identity is known via their other case.
     `select u.user_id, u.docket_number, u.case_stage, u.status, u.auth_method, u.enrolled_at,
             ct.name as case_type_name, j.name as jurisdiction_name,
             ui.full_name, ui.contact_number, ui.address,
@@ -134,7 +140,7 @@ router.get('/users', async (req, res) => {
      from users u
      left join case_types ct on ct.case_type_id = u.case_type_id
      left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
-     left join user_identity ui on ui.user_id = u.user_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
      order by u.enrolled_at desc
      limit $1 offset $2`,
     [pageSize, offset]
@@ -174,11 +180,12 @@ router.post('/staff', async (req, res) => {
   if (roleName === 'Administration' && !jurisdictionId) {
     return fail(res, 'jurisdictionId is required for Administration accounts', 400);
   }
-  // phone doubles as this account's 4th login credential for Counsellor
-  // specifically (core/routes/auth.staff.routes.js) - without it the account could never
-  // log in at all, so Ministry can't create one without setting it.
+  // Required for Counsellor accounts specifically because the Call
+  // Counsellor/WhatsApp redirect a user can trigger (user/routes/user.routes.js)
+  // needs a real number to send them to - NOT a login credential; staff
+  // login is email + password only (core/routes/auth.staff.routes.js).
   if (roleName === 'Counsellor' && !phone) {
-    return fail(res, 'phone is required for Counsellor accounts (also used as their login credential)', 400);
+    return fail(res, 'phone is required for Counsellor accounts (used for the Call/WhatsApp contact feature)', 400);
   }
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
@@ -236,9 +243,11 @@ router.patch('/staff/:officialId', async (req, res) => {
   }
   if (newPassword && newPassword.length < 8) return fail(res, 'newPassword must be at least 8 characters', 400);
 
-  // Clearing phone on an active Counsellor would lock them out of login
-  // entirely (their 4th credential, core/routes/auth.staff.routes.js) - block it rather
-  // than let an edit silently strand the account.
+  // Clearing phone on an active Counsellor would break the Call
+  // Counsellor/WhatsApp redirect a user can trigger (user/routes/user.routes.js)
+  // - block it rather than let an edit silently strand that feature. Not a
+  // login credential; staff login is email + password only
+  // (core/routes/auth.staff.routes.js).
   if (phone === '' || phone === null) {
     const { data: roleRows } = await supabase
       .from('official_roles')
@@ -246,7 +255,7 @@ router.patch('/staff/:officialId', async (req, res) => {
       .eq('official_id', officialId)
       .is('revoked_at', null);
     const isCounsellor = (roleRows || []).some((r) => r.roles.role_name === 'Counsellor');
-    if (isCounsellor) return fail(res, 'phone cannot be cleared for a Counsellor account - it is required for login', 400);
+    if (isCounsellor) return fail(res, 'phone cannot be cleared for a Counsellor account - it is required for the Call/WhatsApp contact feature', 400);
   }
 
   const patch = {};

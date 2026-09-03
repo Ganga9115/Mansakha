@@ -3,6 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, X, ExternalLink, Phone, AlertTriangle } from 'lucide-react';
 import { useMe, useMyNotifications } from '../services/hooks';
 
+// GET /api/me/notifications (unlike /api/counsellor/alerts) returns all four
+// alert_notifications.source values, not just distress_score/sos - the modal
+// title used to be a plain source==='sos' ternary, so a disengagement or
+// weekly_review notification (both real, both routed here) always showed
+// "Risk Alert" even though neither is a distress-score alert.
+const SOURCE_LABELS = {
+  sos: 'Urgent Help Request',
+  distress_score: 'Risk Alert',
+  disengagement: 'Disengagement Alert',
+  weekly_review: 'Weekly Review',
+};
+
 // Counsellor's own copy of the notification bell (real GET /api/me/notifications
 // data, not decorative) - every role gets its own copy per the no-shared-
 // imports rule, even though the implementation is identical across roles.
@@ -130,7 +142,7 @@ export default function NotificationBell() {
               <div className="flex items-center gap-2">
                 {selected.priority === 'urgent' && <AlertTriangle size={18} className="text-rose-600 shrink-0" />}
                 <h3 className="text-lg font-bold text-gray-800">
-                  {selected.source === 'sos' ? 'Urgent Help Request' : 'Risk Alert'}
+                  {SOURCE_LABELS[selected.source] || 'Risk Alert'}
                 </h3>
               </div>
               <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 shrink-0" aria-label="Close">

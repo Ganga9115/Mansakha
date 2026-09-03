@@ -62,9 +62,39 @@ export default function FetchCase() {
               Simulated data - not a live government API response
             </div>
             <div className="p-6 space-y-3 text-sm">
+              {result.existingMatch && (
+                // Multi-Case-Per-Person Support - the Aadhaar this fetch
+                // generated already belongs to a different, existing case.
+                // Surfaced immediately, before the operator ever reaches
+                // Register User (which would otherwise 409 on the same
+                // constraint only after they'd filled in the whole form).
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 flex items-center justify-between gap-3">
+                  <p className="text-xs text-blue-800">
+                    This Aadhaar matches an existing case - <span className="font-bold">Docket {result.existingMatch.docketNumber}</span>,{' '}
+                    <span className="font-bold">{result.existingMatch.fullName}</span>. This may be the same person filing
+                    another case.
+                  </p>
+                  <button
+                    onClick={() => navigate('/dataoperator/link-cases', {
+                      state: {
+                        matchedPerson: {
+                          anchorUserId: result.existingMatch.userId,
+                          fullName: result.existingMatch.fullName,
+                          cases: [{ docketNumber: result.existingMatch.docketNumber }],
+                        },
+                      },
+                    })}
+                    className="shrink-0 px-3 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition"
+                  >
+                    Link instead
+                  </button>
+                </div>
+              )}
+
               <div className="flex justify-between"><span className="text-gray-500">Docket Number</span><span className="font-semibold text-gray-800">{result.docketNumber}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Full Name</span><span className="font-semibold text-gray-800">{result.suggestedFullName}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Mobile Number</span><span className="font-semibold text-gray-800">{result.suggestedContactNumber}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Aadhaar Number</span><span className="font-semibold text-gray-800">{result.suggestedAadhaarNumber}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Case Type</span><span className="font-semibold text-gray-800">{result.suggestedCaseType}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Case Stage</span><span className="font-semibold text-gray-800">{result.suggestedCaseStage}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Jurisdiction</span><span className="font-semibold text-gray-800">{result.suggestedDistrictName}, {result.suggestedStateName}</span></div>

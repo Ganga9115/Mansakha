@@ -8,6 +8,7 @@ import {
   useInterventionTypes,
   useLogIntervention,
   useCompleteIntervention,
+  useLinkedCases,
 } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
@@ -80,6 +81,7 @@ export default function CaseDetail() {
   const { id: userId } = useParams();
   const navigate = useNavigate();
   const { data, loading, error, refetch } = useCaseDetail(userId);
+  const linkedCasesQuery = useLinkedCases(userId);
   const scheduleSession = useScheduleSession(userId);
   const [scheduleDate, setScheduleDate] = useState('');
   const toast = useToast();
@@ -148,6 +150,12 @@ export default function CaseDetail() {
         : predicted.predictedTrend === 'falling'
           ? { text: 'Improving', color: 'text-emerald-600', Icon: ArrowDownRight }
           : { text: 'Stable', color: 'text-gray-500', Icon: Minus };
+
+  // Multi-Case-Per-Person Support - only worth showing once this person is
+  // confirmed to have more than one case; a single-case person (the common
+  // case) would otherwise see a section listing nothing but noise.
+  const allLinkedCases = linkedCasesQuery.data?.cases || [];
+  const otherLinkedCases = allLinkedCases.filter((c) => !c.isCurrent);
 
   // Moved into the header (StaffLayout's headerAction) rather than sitting
   // alone in its own row inside the page content, where it left a lot of
@@ -352,6 +360,33 @@ export default function CaseDetail() {
               <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
               <ChevronRight size={18} className="text-gray-400" />
             </button>
+
+            {/* Linked Cases - Multi-Case-Per-Person Support: this person has
+                more than one docket, so this panel offers a jump-off point to
+                their other case(s). Hidden entirely for the (common)
+                single-case person - see allLinkedCases above. */}
+            {allLinkedCases.length > 1 && (
+              <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+                <h3 className="font-bold text-sm text-gray-800">Linked Cases</h3>
+                <div className="space-y-2">
+                  {otherLinkedCases.map((c) => (
+                    <button
+                      key={c.userId}
+                      onClick={() => navigate(`/counsellor/case-detail/${c.userId}`)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-gray-800 truncate">{c.docketNumber || 'No docket number'}</p>
+                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                          {c.caseType || 'Unknown type'} · {c.caseStage || '-'} · {c.jurisdictionName || '-'}
+                        </p>
+                      </div>
+                      <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
           </div>
 

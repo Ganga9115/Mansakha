@@ -225,16 +225,30 @@ export default function SettingsScreen({ navigation }) {
 
           <View style={styles.divider} />
 
-          <InfoTileRow
-            icon="briefcase"
-            label="Case Status"
-            loading={dashboardQuery.isLoading}
-            value={
-              dashboardQuery.data
-                ? `${dashboardQuery.data.caseStatus.status} • ${dashboardQuery.data.caseStatus.caseStage}`
-                : '-'
-            }
-          />
+          {dashboardQuery.data?.linkedCases?.length > 1 ? (
+            // Multi-Case-Per-Person Support: this person has more than one
+            // docket - show one row per case instead of the single generic
+            // status row below, which only ever described one case.
+            dashboardQuery.data.linkedCases.map((c, index) => (
+              <InfoTileRow
+                key={c.userId}
+                icon="briefcase"
+                label={`Case ${index + 1}`}
+                value={`Docket ${c.docketNumber || '-'} • ${c.caseStage || '-'}`}
+              />
+            ))
+          ) : (
+            <InfoTileRow
+              icon="briefcase"
+              label="Case Status"
+              loading={dashboardQuery.isLoading}
+              value={
+                dashboardQuery.data
+                  ? `${dashboardQuery.data.caseStatus.status} • ${dashboardQuery.data.caseStatus.caseStage}`
+                  : '-'
+              }
+            />
+          )}
           <InfoTileRow
             icon="shield-check"
             label="Mobile Consent"

@@ -296,15 +296,17 @@ create table sos_events (
 
 -- Per Build Prompt Section 4.4: written for the assigned Counsellor AND every
 -- District Administration official in the user's jurisdiction (for a
--- distress-score alert), not just one row. For an SOS event, exactly one row
--- (source: 'sos') targeting the assigned/auto-selected counsellor - see
--- routes/user.js's /sos and the check constraint below.
+-- distress-score alert), not just one row. An SOS event fans out the same
+-- way, plus every State Administration official over that district's parent
+-- state - one row per recipient (source: 'sos') - see
+-- user/routes/user.routes.js's /urgent-help and the check constraint below.
 create table alert_notifications (
   alert_notification_id  uuid primary key default gen_random_uuid(),
   alert_id                 uuid references alerts(alert_id),
   sos_event_id              uuid references sos_events(sos_event_id),
-  -- Set only for source = 'disengagement' - a 7+-day-inactive notice has no
-  -- alerts/sos_events row to hang off of, just the user directly.
+  -- Set for source = 'disengagement' or 'weekly_review' - neither has an
+  -- alerts/sos_events row to hang off of (a 7+-day-inactive notice, or a
+  -- periodic-review completion notice), just the user directly.
   user_id                    uuid references users(user_id),
   official_id                uuid not null references officials(official_id),
   notified_at                  timestamptz not null default now(),

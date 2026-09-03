@@ -1,6 +1,19 @@
 const { supabase } = require('../db/supabaseClient');
 const { enqueueAlertDispatch } = require('./dispatchWorker');
-const { CASE_STAGE_SCORES } = require('../../user/services/userProvisioning');
+const { CASE_STAGE_SCORES, propagateCounsellorAssignment } = require('../../user/services/userProvisioning');
+
+// Multi-Case-Per-Person Support - every jurisdiction the person has an open
+// case in, not just the one on the row a Critical alert/SOS happened to fire
+// from. anchorUserId is expected to already be resolved (every caller here
+// has it from req.auth.userId, always the anchor per auth.user.routes.js's
+// login).
+async function getJurisdictionIdsForCaseFamily(anchorUserId) {
+  const { data: rows } = await supabase
+    .from('users')
+    .select('jurisdiction_id')
+    .or(`user_id.eq.${anchorUserId},linked_to_user_id.eq.${anchorUserId}`);
+  return [...new Set((rows || []).map((r) => r.jurisdiction_id).filter(Boolean))];
+}
 
 // Shared by applyStressResponse's Critical branch below, user/routes/user.routes.js's
 // /urgent-help, and /counsellor-preference (opting in assigns immediately, so a
@@ -125,18 +138,24 @@ async function applyStressResponse(userId, scoreId, riskLevel) {
   } else {
     const chosenCounsellorId = await selectLeastLoadedCounsellor(user.jurisdiction_id);
     if (chosenCounsellorId) {
-      await supabase.from('users').update({ assigned_counsellor_id: chosenCounsellorId }).eq('user_id', userId);
+      // userId is always the anchor (see auth.user.routes.js's login) -
+      // propagates to every other case this person has, not just this one.
+      await propagateCounsellorAssignment(userId, { counsellorId: chosenCounsellorId });
       recipients.push({ alert_id: alert.alert_id, official_id: chosenCounsellorId, source: 'distress_score', priority: 'urgent', auto_assigned: true });
     }
   }
 
   // District Administration still gets visibility into a Critical case
   // regardless of the counsellor-routing branch above - same reasoning as
-  // the pre-existing routing every High/Critical alert already had.
+  // the pre-existing routing every High/Critical alert already had. Fanned
+  // out across every jurisdiction the person has a case in (per the Decisions
+  // section of the multi-case plan: a crisis is relevant everywhere they have
+  // an open case, not just the case that happened to trigger it).
+  const jurisdictionIds = await getJurisdictionIdsForCaseFamily(userId);
   const { data: allRoles } = await supabase
     .from('official_roles')
     .select('official_id, roles(role_name)')
-    .eq('jurisdiction_id', user.jurisdiction_id)
+    .in('jurisdiction_id', jurisdictionIds)
     .is('revoked_at', null);
   const adminIds = (allRoles || []).filter((r) => r.roles.role_name === 'Administration').map((r) => r.official_id);
   for (const officialId of adminIds) {
@@ -188,7 +207,16 @@ async function notifyWeeklyReview(userId) {
     if (r.roles?.role_name === 'Administration') recipientIds.add(r.official_id);
   }
 
-  if (recipientIds.size === 0) return;
+  // Not an error condition on its own (a user with no assigned counsellor
+  // and no Administration officials in their jurisdiction legitimately has
+  // no one to notify) - logged anyway, at info/warn rather than error like
+  // applyStressResponse's zero-recipient case above, purely so a "why didn't
+  // this weekly review notification show up anywhere" question is
+  // diagnosable instead of silent.
+  if (recipientIds.size === 0) {
+    console.warn('notifyWeeklyReview: no recipients found (no assigned counsellor or Administration officials)', { userId });
+    return;
+  }
 
   const rows = [...recipientIds].map((officialId) => ({
     user_id: userId,
@@ -201,4 +229,4 @@ async function notifyWeeklyReview(userId) {
   if (error) console.error('notifyWeeklyReview: could not write alert_notifications', error.message);
 }
 
-module.exports = { applyStressResponse, selectLeastLoadedCounsellor, notifyWeeklyReview };
+module.exports = { applyStressResponse, selectLeastLoadedCounsellor, notifyWeeklyReview, getJurisdictionIdsForCaseFamily };
