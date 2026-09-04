@@ -439,11 +439,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
-    paddingTop: spacing.xxl,
+    paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   backBtn: { marginRight: spacing.sm, padding: spacing.xs },
   headerIconTile: {
@@ -451,7 +453,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginRight: spacing.md,
   },
   nameBlock: { flexShrink: 1 },
-  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  statusTitle: {
+    ...typography.h1,
+    color: colors.primaryDark,
+    fontSize: 20,
+    fontWeight: '700',
+  },
   subtext: { ...typography.caption, color: colors.textSecondary },
   callIconBtn: {
     width: 38,
@@ -535,7 +542,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.background,
   },
-  // Updated input container to be rectangular with rounded corners instead of oval/pill
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -582,7 +588,6 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sendBtnDisabled: { opacity: 0.5 },
-  // Emoji Picker Container & Styles
   emojiPickerContainer: {
     maxHeight: 200,
     backgroundColor: colors.surface,

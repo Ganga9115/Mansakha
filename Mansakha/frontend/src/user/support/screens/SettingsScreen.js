@@ -16,7 +16,6 @@ import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
 import { typography } from '../../shared/theme/typography';
 import { shadow } from '../../shared/theme/shadow';
-import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import Card from '../../shared/components/Card';
 import Dropdown from '../../shared/components/Dropdown';
@@ -24,7 +23,6 @@ import IconInput from '../../shared/components/IconInput';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
 import LogoutButton from '../../shared/components/LogoutButton';
-import { Skeleton } from '../../shared/components/Skeleton';
 
 const INDIAN_LANGUAGES = [
   { value: 'en', label: 'English' },
@@ -40,7 +38,7 @@ const INDIAN_LANGUAGES = [
   { value: 'mai', label: 'Maithili (मैथिली)' },
   { value: 'ml', label: 'Malayalam (മലയാളം)' },
   { value: 'mni', label: 'Manipuri (মৈতৈলোন্)' },
-  { value: 'mr', label: 'Marathi (মરાઠી)' },
+  { value: 'mr', label: 'Marathi (मરાઠી)' },
   { value: 'ne', label: 'Nepali (नेपाली)' },
   { value: 'or', label: 'Odia (ଓଡ଼ିଆ)' },
   { value: 'pa', label: 'Punjabi (ਪੰਜਾਬੀ)' },
@@ -72,8 +70,6 @@ export default function SettingsScreen({ navigation }) {
     }
   }, [dashboardQuery.data]);
 
-  const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
-
   const handleToggleCounsellorPreference = async (value) => {
     setLocalOptedForCounsellor(value);
     try {
@@ -96,6 +92,8 @@ export default function SettingsScreen({ navigation }) {
 
   const currentDisplayLanguageId = displayLanguageId ?? dashboardQuery.data?.preferredLanguageId ?? 'en';
   const currentSpeakingLanguageId = speakingLanguageId ?? 'en';
+
+  const userName = dashboardQuery.data?.fullName || session?.user?.name || 'Ganga';
 
   const handleConfirmPasswordSubmit = () => {
     if (newPassword.trim() && confirmPassword.trim()) {
@@ -140,10 +138,10 @@ export default function SettingsScreen({ navigation }) {
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
-            <Feather name="user" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
+            <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop}/>
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather name="user" size={28} color={colors.primary} />
+              <Feather color={colors.primary} name="user" size={28}/>
             </View>
           )}
 
@@ -154,24 +152,20 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={styles.headerRight}>
           {isDesktop ? (
-            <DesktopHeaderActions
-              fullName={dashboardQuery.data?.fullName}
-              alertCount={0}
-              onBellPress={() => {}}
-            />
+            <DesktopHeaderActions alertCount={0} fullName={userName} onBellPress={() => {}}/>
           ) : (
-            <TopRightActions />
+            <TopRightActions/>
           )}
         </View>
       </View>
 
-      <ScrollView style={styles.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
-        <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+      <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={styles.scrollContent}>
+        <View style={styles.contentBody}>
           
           {/* ACCOUNT OVERVIEW */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>ACCOUNT OVERVIEW</Text>
-            <View style={styles.blueBar} />
+            <View style={styles.blueBar}/>
           </View>
 
           <Card style={styles.customCard}>
@@ -179,20 +173,18 @@ export default function SettingsScreen({ navigation }) {
             <View style={styles.heroBox}>
               <View style={styles.userProfileLeft}>
                 <View style={styles.heroAvatar}>
-                  <Feather name="user" size={26} color="#1F497D" />
+                  <Feather color={colors.primary} name="user" size={24}/>
                 </View>
                 <View>
-                  <Text style={styles.heroTitle}>
-                    {session?.accountType === 'user' ? 'User Profile' : session?.accountType || 'User'}
-                  </Text>
+                  <Text style={styles.heroTitle}>{userName}</Text>
                   <Text style={styles.heroSubtitle}>Registered User Profile</Text>
                 </View>
               </View>
 
               <View style={styles.shieldBadgeContainer}>
-                <Feather name="shield" size={32} color="#1F497D" />
+                <Feather color={colors.primaryLight} name="shield" size={40}/>
                 <View style={styles.shieldCheckMark}>
-                  <Feather name="check" size={10} color="#FFFFFF" />
+                  <Feather color={colors.onPrimary} name="check" size={10}/>
                 </View>
               </View>
             </View>
@@ -207,13 +199,8 @@ export default function SettingsScreen({ navigation }) {
 
                 return (
                   <View key={c.userId || c.caseNumber || index} style={styles.caseRowContainer}>
-                    <View style={styles.caseLeftCol}>
-                      <View style={styles.caseIconBox}>
-                        <Feather name="briefcase" size={18} color="#1F497D" />
-                      </View>
-                      <View style={styles.casePill}>
-                        <Text style={styles.casePillText}>{`CASE ${index + 1}`}</Text>
-                      </View>
+                    <View style={styles.caseIconBox}>
+                      <Feather color={colors.primary} name="briefcase" size={18}/>
                     </View>
 
                     <View style={styles.caseDataGrid}>
@@ -222,7 +209,7 @@ export default function SettingsScreen({ navigation }) {
                         <Text style={styles.fieldValueBold}>{docketId}</Text>
                       </View>
 
-                      <View style={[styles.caseGridItem, { flex: 1.5 }]}>
+                      <View style={[styles.caseGridItem, styles.caseTypeWideItem]}>
                         <Text style={styles.fieldLabel}>Case Type</Text>
                         <Text style={styles.fieldValueBold}>{caseType}</Text>
                       </View>
@@ -230,11 +217,7 @@ export default function SettingsScreen({ navigation }) {
                       <View style={styles.caseGridItem}>
                         <Text style={styles.fieldLabel}>Case Stage</Text>
                         <View style={[styles.stageBadge, isRehab ? styles.stageRehab : styles.stageTrial]}>
-                          <Feather 
-                            name={isRehab ? "users" : "scale"} 
-                            size={12} 
-                            color={isRehab ? "#6B21A8" : "#15803D"} 
-                          />
+                          <Feather color={isRehab ? '#6B21A8' : '#15803D'} name={isRehab ? 'users' : 'scale'} size={12}/>
                           <Text style={[styles.stageBadgeText, isRehab ? styles.stageRehabText : styles.stageTrialText]}>
                             {caseStage}
                           </Text>
@@ -254,14 +237,14 @@ export default function SettingsScreen({ navigation }) {
           {/* PREFERENCES */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>PREFERENCES</Text>
-            <View style={styles.blueBar} />
+            <View style={styles.blueBar}/>
           </View>
 
           <Card style={styles.customCard}>
             <View style={styles.preferenceRow}>
               <View style={styles.prefLeft}>
                 <View style={styles.prefIconBox}>
-                  <Feather name="globe" size={18} color="#1F497D" />
+                  <Feather color={colors.primary} name="globe" size={18}/>
                 </View>
                 <View>
                   <Text style={styles.prefTitle}>Display Language</Text>
@@ -271,8 +254,6 @@ export default function SettingsScreen({ navigation }) {
 
               <View style={styles.dropdownContainer}>
                 <Dropdown
-                  options={INDIAN_LANGUAGES}
-                  value={currentDisplayLanguageId}
                   onChange={async (value) => {
                     setDisplayLanguageId(value);
                     try {
@@ -282,18 +263,20 @@ export default function SettingsScreen({ navigation }) {
                       toast.error(err.message || 'Could not update language');
                     }
                   }}
+                  options={INDIAN_LANGUAGES}
+                  value={currentDisplayLanguageId}
                   placeholder="Select interface language"
                   disabled={updateLanguage.isPending}
                 />
               </View>
             </View>
 
-            <View style={styles.rowDivider} />
+            <View style={styles.rowDivider}/>
 
             <View style={styles.preferenceRow}>
               <View style={styles.prefLeft}>
                 <View style={styles.prefIconBox}>
-                  <Feather name="mic" size={18} color="#1F497D" />
+                  <Feather color={colors.primary} name="mic" size={18}/>
                 </View>
                 <View>
                   <Text style={styles.prefTitle}>Speaking Language</Text>
@@ -303,12 +286,12 @@ export default function SettingsScreen({ navigation }) {
 
               <View style={styles.dropdownContainer}>
                 <Dropdown
-                  options={INDIAN_LANGUAGES}
-                  value={currentSpeakingLanguageId}
                   onChange={(value) => {
                     setSpeakingLanguageId(value);
                     toast.success('Speaking language updated.');
                   }}
+                  options={INDIAN_LANGUAGES}
+                  value={currentSpeakingLanguageId}
                   placeholder="Select voice language"
                 />
               </View>
@@ -318,7 +301,7 @@ export default function SettingsScreen({ navigation }) {
           {/* COMMUNICATION PREFERENCES */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>COMMUNICATION PREFERENCES</Text>
-            <View style={styles.blueBar} />
+            <View style={styles.blueBar}/>
           </View>
 
           <Card style={styles.customCard}>
@@ -328,11 +311,11 @@ export default function SettingsScreen({ navigation }) {
                 <Text style={styles.prefSubtitle}>Get matched with a counsellor for chat & calls</Text>
               </View>
               <Switch
-                value={localOptedForCounsellor}
-                onValueChange={handleToggleCounsellorPreference}
                 disabled={updateCounsellorPreference.isPending}
-                trackColor={{ false: '#E2E8F0', true: '#1F497D' }}
-                thumbColor="#FFFFFF"
+                onValueChange={handleToggleCounsellorPreference}
+                thumbColor={colors.white}
+                trackColor={{ false: colors.border, true: colors.primary }}
+                value={localOptedForCounsellor}
               />
             </View>
           </Card>
@@ -340,26 +323,26 @@ export default function SettingsScreen({ navigation }) {
           {/* SYSTEM */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>
-            <View style={styles.blueBar} />
+            <View style={styles.blueBar}/>
           </View>
 
           <Card style={styles.customCard}>
             <View style={styles.systemRow}>
               <View style={styles.prefLeft}>
                 <View style={styles.prefIconBox}>
-                  <Feather name="bell" size={18} color="#1F497D" />
+                  <Feather color={colors.primary} name="bell" size={18}/>
                 </View>
                 <Text style={styles.prefTitle}>Push Notifications</Text>
               </View>
               <Text style={styles.systemValueText}>Enabled</Text>
             </View>
 
-            <View style={styles.rowDivider} />
+            <View style={styles.rowDivider}/>
 
             <View style={styles.systemRow}>
               <View style={styles.prefLeft}>
                 <View style={styles.prefIconBox}>
-                  <Feather name="info" size={18} color="#64748B" />
+                  <Feather color={colors.textSecondary} name="info" size={18}/>
                 </View>
                 <Text style={styles.prefTitle}>App Version</Text>
               </View>
@@ -370,14 +353,14 @@ export default function SettingsScreen({ navigation }) {
           {/* SECURITY */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>SECURITY</Text>
-            <View style={styles.blueBar} />
+            <View style={styles.blueBar}/>
           </View>
 
           <Card style={styles.customCard}>
             <View style={styles.preferenceRow}>
               <View style={styles.prefLeft}>
                 <View style={styles.prefIconBox}>
-                  <Feather name="lock" size={18} color="#1F497D" />
+                  <Feather color={colors.primary} name="lock" size={18}/>
                 </View>
                 <View>
                   <Text style={styles.prefTitle}>Password</Text>
@@ -385,10 +368,7 @@ export default function SettingsScreen({ navigation }) {
                 </View>
               </View>
 
-              <Pressable
-                onPress={() => setShowPasswordForm((v) => !v)}
-                style={styles.outlineBtn}
-              >
+              <Pressable onPress={() => setShowPasswordForm((v) => !v)} style={styles.outlineBtn}>
                 <Text style={styles.outlineBtnText}>{showPasswordForm ? 'Cancel' : 'Reset Password'}</Text>
               </Pressable>
             </View>
@@ -396,32 +376,28 @@ export default function SettingsScreen({ navigation }) {
             {showPasswordForm && (
               <View style={{ marginTop: spacing.md }}>
                 <IconInput
-                  icon="lock"
-                  placeholder="New password (min 8 characters)"
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  secureTextEntry
-                  returnKeyType="next"
                   blurOnSubmit={false}
+                  icon="lock"
+                  onChangeText={setNewPassword}
                   onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
+                  placeholder="New password (min 8 characters)"
+                  returnKeyType="next"
+                  secureTextEntry
+                  value={newPassword}
                 />
                 <IconInput
-                  ref={confirmPasswordInputRef}
                   icon="lock"
-                  placeholder="Confirm new password"
-                  value={confirmPassword}
                   onChangeText={setConfirmPassword}
-                  secureTextEntry
-                  returnKeyType="done"
                   onSubmitEditing={handleConfirmPasswordSubmit}
+                  placeholder="Confirm new password"
+                  ref={confirmPasswordInputRef}
+                  returnKeyType="done"
+                  secureTextEntry
+                  value={confirmPassword}
                 />
                 {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
                 {passwordSuccess && <Text style={styles.successText}>Password updated.</Text>}
-                <Pressable
-                  style={styles.primaryBtnFilled}
-                  onPress={handleChangePassword}
-                  disabled={passwordLoading}
-                >
+                <Pressable disabled={passwordLoading} onPress={handleChangePassword} style={styles.primaryBtnFilled}>
                   <Text style={styles.primaryBtnFilledText}>
                     {passwordLoading ? 'Updating...' : 'Confirm New Password'}
                   </Text>
@@ -432,9 +408,9 @@ export default function SettingsScreen({ navigation }) {
 
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>ACCOUNT</Text>
-            <View style={styles.blueBar} />
+            <View style={styles.blueBar}/>
           </View>
-          <LogoutButton variant="row" style={{ marginBottom: spacing.lg }} />
+          <LogoutButton style={{ marginBottom: spacing.lg }} variant="row"/>
         </View>
       </ScrollView>
     </View>
@@ -442,13 +418,18 @@ export default function SettingsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { flex: 1 },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
+  scrollContent: { 
+    flex: 1 
+  },
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
     paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.md, // Reduced side gap
+    paddingHorizontal: 36, // Exactly 1 cm horizontal gap on both sides (approx 36px)
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -460,8 +441,14 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     alignItems: 'center',
   },
-  headerIconDesktop: { marginRight: spacing.sm },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  headerIconDesktop: { 
+    marginRight: spacing.sm 
+  },
+  headerLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    flex: 1 
+  },
   avatarContainer: {
     width: 48,
     height: 48,
@@ -471,14 +458,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
-  headerInfo: { flex: 1 },
-  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
-  headerRight: { marginLeft: spacing.sm },
+  headerInfo: { 
+    flex: 1 
+  },
+  pageTitle: { 
+    ...typography.h1, 
+    color: colors.primaryDark 
+  },
+  headerRight: { 
+    marginLeft: spacing.sm 
+  },
   contentBody: {
-    backgroundColor: '#F8FAFC',
-    paddingHorizontal: spacing.md, // Reduced side gap
+    backgroundColor: colors.background,
+    paddingHorizontal: 36, // Exactly 1 cm horizontal gap on both left and right sides
     paddingTop: spacing.md,
     paddingBottom: spacing.xxxl,
+    width: '100%',
   },
   contentBodyDesktop: {
     marginTop: 0,
@@ -491,79 +486,71 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   sectionHeaderTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1F497D',
-    letterSpacing: 0.8,
+    ...typography.label,
+    color: colors.primaryDark,
   },
   blueBar: {
     height: 3,
-    backgroundColor: '#1F497D',
-    width: 28,
+    backgroundColor: colors.primary,
+    width: 24,
     marginTop: 4,
     borderRadius: 2,
   },
 
   /* Custom Clean Card */
   customCard: {
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    padding: spacing.md, // Reduced card padding from 24 to 16
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: colors.border,
+    ...shadow.sm,
   },
 
   /* Profile Hero Banner */
   heroBox: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 12,
-    padding: 14, // Tighter inner padding
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: spacing.md,
   },
   userProfileLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   heroAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: '#DBEAFE',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
   heroTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#0F172A',
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
   },
   heroSubtitle: {
-    fontSize: 12,
-    color: '#64748B',
+    ...typography.caption,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   shieldBadgeContainer: {
     position: 'relative',
-    opacity: 0.9,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shieldCheckMark: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#1F497D',
-    borderRadius: 8,
-    width: 14,
-    height: 14,
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    width: 16,
+    height: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -572,54 +559,39 @@ const styles = StyleSheet.create({
   caseRowContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: spacing.sm,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-  },
-  caseLeftCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 110, // Slightly reduced to fit tighter layouts
+    borderTopColor: colors.border,
   },
   caseIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
-  },
-  casePill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  casePillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1F497D',
+    marginRight: spacing.md,
   },
   caseDataGrid: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: 6,
   },
   caseGridItem: {
     flex: 1,
   },
+  caseTypeWideItem: {
+    flex: 2,
+  },
   fieldLabel: {
-    fontSize: 11,
-    color: '#64748B',
+    ...typography.caption,
+    color: colors.textSecondary,
     marginBottom: 2,
   },
   fieldValueBold: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0F172A',
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
   },
 
   /* Stage Badges */
@@ -628,25 +600,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: radius.pill,
     alignSelf: 'flex-start',
     gap: 4,
   },
   stageTrial: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.successLight,
   },
   stageTrialText: {
-    color: '#15803D',
+    ...typography.caption,
+    color: colors.success,
     fontWeight: '600',
-    fontSize: 11,
   },
   stageRehab: {
-    backgroundColor: '#F3E8FF',
+    backgroundColor: colors.infoLight,
   },
   stageRehabText: {
-    color: '#6B21A8',
+    ...typography.caption,
+    color: colors.primaryDark,
     fontWeight: '600',
-    fontSize: 11,
   },
 
   /* Preference Rows Layout */
@@ -654,40 +626,39 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 2,
+    paddingVertical: spacing.xs,
   },
   prefLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    marginRight: 8,
+    marginRight: spacing.xs,
   },
   prefIconBox: {
-    width: 34,
-    height: 34,
-    borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginRight: spacing.sm,
   },
   prefTitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#0F172A',
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
   },
   prefSubtitle: {
-    fontSize: 11,
-    color: '#64748B',
+    ...typography.caption,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   dropdownContainer: {
-    width: 180, // Tighter dropdown width
+    width: 180,
   },
   rowDivider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
-    marginVertical: 12,
+    backgroundColor: colors.border,
+    marginVertical: spacing.sm,
   },
 
   /* System Cards */
@@ -697,9 +668,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   systemValueText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#334155',
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
   },
 
   /* Toggle Row */
@@ -712,24 +682,37 @@ const styles = StyleSheet.create({
   /* Buttons */
   outlineBtn: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   outlineBtnText: {
-    fontSize: 12,
+    ...typography.caption,
+    color: colors.textPrimary,
     fontWeight: '600',
-    color: '#334155',
   },
   primaryBtnFilled: {
-    backgroundColor: '#1F497D',
+    backgroundColor: colors.primary,
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
     marginTop: spacing.sm,
   },
-  primaryBtnFilledText: { ...typography.bodyStrong, color: colors.white },
-  errorText: { ...typography.caption, color: colors.error, marginTop: spacing.sm, textAlign: 'center' },
-  successText: { ...typography.caption, color: colors.success, marginTop: spacing.sm, textAlign: 'center' },
+  primaryBtnFilledText: { 
+    ...typography.bodyStrong, 
+    color: colors.onPrimary 
+  },
+  errorText: { 
+    ...typography.caption, 
+    color: colors.danger, 
+    marginTop: spacing.sm, 
+    textAlign: 'center' 
+  },
+  successText: { 
+    ...typography.caption, 
+    color: colors.success, 
+    marginTop: spacing.sm, 
+    textAlign: 'center' 
+  },
 });

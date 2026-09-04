@@ -10,7 +10,7 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useJournalEntries, useDeleteJournalEntry } from '../../shared/services/hooks';
+import { useJournalEntries, useDeleteJournalEntry, useUpdateJournalEntry } from '../../shared/services/hooks';
 import TopRightActions from '../../shared/components/TopRightActions';
 
 export default function MyEntry({ navigation }) {
@@ -18,10 +18,14 @@ export default function MyEntry({ navigation }) {
   const toast = useToast();
   const entriesQuery = useJournalEntries();
   const deleteEntry = useDeleteJournalEntry();
+  const updateEntry = useUpdateJournalEntry();
 
   const [search, setSearch] = useState('');
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [entryToDelete, setEntryToDelete] = useState(null);
+  const [entryToEdit, setEntryToEdit] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
 
   const runDelete = async (entryId) => {
     try {
@@ -42,6 +46,27 @@ export default function MyEntry({ navigation }) {
     await runDelete(entryId);
   };
 
+  const handleOpenEdit = (entry) => {
+    setEntryToEdit(entry);
+    setEditTitle(entry.title || '');
+    setEditContent(entry.content || '');
+  };
+
+  const handleSaveEdit = async () => {
+    if (!entryToEdit) return;
+    try {
+      await updateEntry.mutateAsync({
+        entryId: entryToEdit.entryId,
+        title: editTitle,
+        content: editContent,
+      });
+      toast.success('Journal entry updated.');
+      setEntryToEdit(null);
+    } catch (err) {
+      toast.error(err.message || 'Could not update this entry.');
+    }
+  };
+
   const filterEntries = (entries) => {
     const q = search.trim().toLowerCase();
     if (!q) return entries;
@@ -52,17 +77,13 @@ export default function MyEntry({ navigation }) {
     <View style={styles.container}>
       {/* Navigation Header */}
       <View style={styles.topHeader}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
-          <Feather name="arrow-left" size={20} color={colors.primaryDark} />
-        </Pressable>
         <View style={styles.headerIconTile}>
-          <Feather name="grid" size={18} color={colors.primary} />
+          <Feather name="layout" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.statusTitle}>My Entries</Text>
-          <Text style={styles.subtext}>Browse all your saved journal thoughts</Text>
         </View>
-        <TopRightActions showNotifications />
+        <TopRightActions />
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
@@ -115,15 +136,27 @@ export default function MyEntry({ navigation }) {
                         <View style={styles.boxIconTile}>
                           <Feather name="book-open" size={16} color={colors.primary} />
                         </View>
-                        <Pressable
-                          onPress={(e) => {
-                            e.stopPropagation();
-                            handleDeleteEntry(entry);
-                          }}
-                          hitSlop={8}
-                        >
-                          <Feather name="trash-2" size={15} color={colors.danger} />
-                        </Pressable>
+                        <View style={styles.boxActionsRow}>
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleOpenEdit(entry);
+                            }}
+                            hitSlop={8}
+                            style={styles.actionIconBtn}
+                          >
+                            <Feather name="edit-2" size={14} color={colors.primary} />
+                          </Pressable>
+                          <Pressable
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDeleteEntry(entry);
+                            }}
+                            hitSlop={8}
+                          >
+                            <Feather name="trash-2" size={15} color={colors.danger} />
+                          </Pressable>
+                        </View>
                       </View>
 
                       <Text style={styles.boxTitle} numberOfLines={2}>
@@ -146,9 +179,7 @@ export default function MyEntry({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Entry Details - a real Modal (portals above the sidebar/header too),
-          same as the delete confirmation below, so the blur covers the
-          full screen rather than just this screen's own content area. */}
+      {/* Entry Details Modal */}
       <Modal
         visible={!!selectedEntry}
         transparent
@@ -183,7 +214,60 @@ export default function MyEntry({ navigation }) {
         </View>
       </Modal>
 
-      {/* Delete Confirmation - same glassmorphism style as GetHelpButton's confirm modal */}
+      {/* Edit Entry Modal */}
+      <Modal
+        visible={!!entryToEdit}
+        transparent
+        animationType="none"
+        onRequestClose={() => setEntryToEdit(null)}
+      >
+        <View style={styles.inlineOverlay}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setEntryToEdit(null)} />
+          <View style={styles.dialogBox}>
+            <View style={styles.dialogHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dialogTitle}>Edit Journal Entry</Text>
+              </View>
+              <Pressable onPress={() => setEntryToEdit(null)} hitSlop={8} style={styles.closeBtn}>
+                <Feather name="x" size={20} color={colors.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView style={styles.dialogBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.editLabel}>Title</Text>
+              <TextInput
+                style={styles.editTitleInput}
+                value={editTitle}
+                onChangeText={setEditTitle}
+                placeholder="Entry Title"
+                placeholderTextColor={colors.textSecondary}
+              />
+
+              <Text style={styles.editLabel}>Content</Text>
+              <TextInput
+                style={styles.editContentInput}
+                value={editContent}
+                onChangeText={setEditContent}
+                placeholder="Write your thoughts here..."
+                placeholderTextColor={colors.textSecondary}
+                multiline
+                numberOfLines={6}
+              />
+            </ScrollView>
+
+            <View style={styles.dialogFooterEdit}>
+              <Pressable style={styles.cancelEditBtn} onPress={() => setEntryToEdit(null)} disabled={updateEntry.isPending}>
+                <Text style={styles.cancelEditBtnText}>Cancel</Text>
+              </Pressable>
+              <Pressable style={styles.saveEditBtn} onPress={handleSaveEdit} disabled={updateEntry.isPending}>
+                <Text style={styles.saveEditBtnText}>{updateEntry.isPending ? 'Saving...' : 'Save Changes'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Confirmation Modal */}
       <Modal
         visible={!!entryToDelete}
         transparent
@@ -222,19 +306,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  backBtn: { padding: spacing.xs },
   headerIconTile: {
-    width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center',
+    marginRight: spacing.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  statusTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700' },
-  subtext: { ...typography.caption, color: colors.textSecondary },
+  statusTitle: {
+    ...typography.h1,
+    color: colors.primaryDark,
+    fontSize: 24,
+    fontWeight: '700',
+  },
   body: { padding: spacing.xl },
 
   searchWrap: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill,
-    paddingHorizontal: spacing.md, marginBottom: spacing.xl, height: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.xl,
+    height: 42,
   },
   searchIcon: { marginRight: spacing.sm },
   searchInput: { flex: 1, ...typography.body, color: colors.textPrimary, paddingVertical: 0 },
@@ -287,6 +381,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
+  boxActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  actionIconBtn: {
+    padding: 2,
+  },
   boxIconTile: {
     width: 30,
     height: 30,
@@ -299,9 +401,6 @@ const styles = StyleSheet.create({
   boxDate: { ...typography.caption, color: colors.textSecondary, fontSize: 11 },
 
   /* Dialog Box / Pop-up Styles */
-  // Same glassmorphism recipe as the delete-confirm modal below, so both
-  // popups on this screen (and every other popup in the app) read as one
-  // consistent style rather than one glass and one flat.
   inlineOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
@@ -338,9 +437,6 @@ const styles = StyleSheet.create({
   dialogTitle: { ...typography.h3, color: colors.textPrimary, fontWeight: '700' },
   dialogDate: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   closeBtn: { padding: spacing.xs },
-  // showsVerticalScrollIndicator={false} on the ScrollView already hides
-  // this on native; react-native-web needs the CSS properties spelled out
-  // too, since the browser's own scrollbar isn't governed by that prop.
   dialogBody: {
     marginVertical: spacing.md,
     ...Platform.select({
@@ -353,7 +449,53 @@ const styles = StyleSheet.create({
   closeDialogBtn: { backgroundColor: colors.primaryDark, borderRadius: radius.pill, paddingVertical: spacing.xs + 2, paddingHorizontal: spacing.xl },
   closeDialogBtnText: { ...typography.bodyStrong, color: colors.white, fontSize: 13 },
 
-  /* Delete confirmation - glassmorphism, matching GetHelpButton's confirm modal */
+  /* Edit Modal specifics */
+  editLabel: { ...typography.caption, color: colors.textSecondary, fontWeight: '600', marginBottom: spacing.xs },
+  editTitleInput: {
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  editContentInput: {
+    ...typography.body,
+    color: colors.textPrimary,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    padding: spacing.sm,
+    minHeight: 120,
+    textAlignVertical: 'top',
+    marginBottom: spacing.md,
+  },
+  dialogFooterEdit: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  cancelEditBtn: {
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+  },
+  cancelEditBtnText: { ...typography.bodyStrong, color: colors.textSecondary },
+  saveEditBtn: {
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.xs + 2,
+    paddingHorizontal: spacing.xl,
+  },
+  saveEditBtnText: { ...typography.bodyStrong, color: colors.white, fontSize: 13 },
+
+  /* Delete confirmation */
   confirmBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
