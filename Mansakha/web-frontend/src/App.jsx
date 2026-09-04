@@ -6,7 +6,6 @@ import { ToastProvider } from './shared/context/ToastContext';
 import StaffLoginPage from './shared/pages/Login';
 
 import CounsellorDashboard from './counsellor/pages/CounsellorDashboard';
-import CaseQueue from './counsellor/pages/CaseQueue';
 import MyUsers from './counsellor/pages/MyUsers';
 import CounsellorCaseDetail from './counsellor/pages/CaseDetail';
 import CounsellorCaseNotes from './counsellor/pages/CaseNotes';
@@ -72,7 +71,6 @@ export default function App() {
 
         {/* Counsellor */}
         <Route path="/counsellor" element={<RequireAuth><CounsellorDashboard /></RequireAuth>} />
-        <Route path="/counsellor/queue" element={<RequireAuth><CaseQueue /></RequireAuth>} />
         <Route path="/counsellor/my-users" element={<RequireAuth><MyUsers /></RequireAuth>} />
         <Route path="/counsellor/case-detail/:id" element={<RequireAuth><CounsellorCaseDetail /></RequireAuth>} />
         <Route path="/counsellor/case-detail/:id/notes" element={<RequireAuth><CounsellorCaseNotes /></RequireAuth>} />

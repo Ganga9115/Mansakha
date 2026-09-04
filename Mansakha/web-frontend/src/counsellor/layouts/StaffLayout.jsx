@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Inbox, Users, Bell, BarChart3, User, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Bell, BarChart3, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -10,7 +10,6 @@ import NotificationBell from '../components/NotificationBell';
 // section-switching logic needed since this file only ever serves one role).
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/counsellor' },
-  { name: 'Case Queue', icon: Inbox, path: '/counsellor/queue' },
   { name: 'My Users', icon: Users, path: '/counsellor/my-users' },
   { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
   { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
@@ -38,11 +37,11 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
   // Case Detail (and its /notes, /chat children) are siblings of every item
   // above, not nested under one, so they never match by prefix at all -
   // confirmed live as the sidebar showing nothing highlighted while viewing
-  // a case, even though it was clearly reached from Case Queue or My Users.
+  // a case, even though it was clearly reached from My Users.
   // Whichever list it was opened from passes that via location.state.fromNav
-  // (see MyUsers.jsx/CaseQueue.jsx's "View Case" and CaseDetail.jsx's own
-  // sub-navigation); this defaults to My Users when that's missing (e.g. a
-  // direct link/refresh, or reached from Alerts/the notification bell).
+  // (see MyUsers.jsx's "View Case" and CaseDetail.jsx's own sub-navigation);
+  // this defaults to My Users when that's missing (e.g. a direct
+  // link/refresh, or reached from Alerts/the notification bell).
   const isCaseDetailRoute = /^\/counsellor\/case-detail\//.test(location.pathname);
   const activeNavItem = isCaseDetailRoute
     ? NAV_ITEMS.find((item) => item.name === (location.state?.fromNav || 'My Users'))

@@ -11,10 +11,10 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { isEscalatingTrend, predictEscalationRisk, predictEscalationRiskBatch } = require('../../ai/scoring');
 
-// How far back to look when predicting escalation risk in bulk (Case Queue,
-// Dashboard) - predictEscalationRisk itself further caps each user's history
-// to their most recent 8 readings, this just bounds how much the SQL fetch
-// pulls across a whole jurisdiction's users in one query.
+// How far back to look when predicting escalation risk in bulk (Dashboard) -
+// predictEscalationRisk itself further caps each user's history to their
+// most recent 8 readings, this just bounds how much the SQL fetch pulls
+// across a whole jurisdiction's users in one query.
 const PREDICTION_LOOKBACK_DAYS = 30;
 const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
 
@@ -256,115 +256,6 @@ router.get('/reports-analytics', requireRole(['Counsellor']), generalApiLimiter,
   return ok(res, { trend, severityDistribution, interventionPhases });
 });
 
-router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  const { riskLevel, page = 1 } = req.query;
-  const pageSize = 20;
-  const offset = (Number(page) - 1) * pageSize;
-
-  // Case Queue is jurisdiction-wide (every case in the counsellor's own
-  // district, assigned to them or not) - distinct from /my-users below,
-  // which is strictly assigned_counsellor_id. FR-4.2 (SRS_Document.pdf)
-  // calls for exactly this split: My Users is the counsellor's personal
-  // caseload, Case Queue is the district-wide worklist a counsellor
-  // triages/picks up from (e.g. an unassigned Critical case, or a
-  // colleague's case needing coverage). These were briefly collapsed into
-  // one identical scope by an earlier fix in this codebase's history that
-  // was meant for /my-users only and got applied here too by mistake.
-  const jurisdictionIds = req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean);
-  if (jurisdictionIds.length === 0) return ok(res, { cases: [], total: 0 });
-
-  // Each user's CURRENT risk tier is their most recent distress_scores row - not
-  // modeled as a denormalized column on `users`, so this is resolved via the
-  // latest score per user rather than trusting any cached field. Sorting by
-  // priority means the whole queue has to be fetched and sorted in
-  // application code before paginating - a DB-level `.range()` would only
-  // sort within one already-arbitrary page, not across the whole queue.
-  //
-  // Raw pg, not Supabase REST - the Case Queue is a screen a Counsellor
-  // reloads constantly through a shift; see /dashboard above for the
-  // measured REST-vs-pg latency gap this is closing.
-  const [{ rows }, { rows: recentScoreRows }] = await Promise.all([
-    pool.query(
-      // case_stage != 'Case Closed' and status = 'active' - see /dashboard above for why.
-      // linked_to_user_id selected so the map below can look up this case's
-      // shared prediction/score via its anchor, not its own (possibly
-      // dependent, possibly score-less) id - see the coalesce() in both
-      // queries and the predictions.get() call below.
-      `select u.user_id, u.linked_to_user_id, u.case_stage, u.case_background, u.assigned_counsellor_id, ds.score_value, rl.name as risk_level_name
-       from users u
-       left join lateral (
-         select score_value, risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
-       ) ds on true
-       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       where u.jurisdiction_id = any($1::uuid[]) and u.case_stage != 'Case Closed' and u.status = 'active'`,
-      [jurisdictionIds]
-    ),
-    // One batched fetch of recent history for every user in the jurisdiction,
-    // not one query per case - feeds predictEscalationRiskBatch below so the
-    // queue can flag cases trending toward a higher tier, not just ones
-    // already there. Same case_stage/status filters as the `rows` query -
-    // harmless to omit here today only because `cases` below is built by
-    // iterating the already-filtered `rows`, but kept consistent so this
-    // query can't silently drift into being relied on unfiltered elsewhere.
-    pool.query(
-      `select distinct ds.score_id, ds.user_id, ds.score_value, ds.computed_at
-       from distress_scores ds
-       join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
-       where u.jurisdiction_id = any($1::uuid[])
-         and u.case_stage != 'Case Closed' and u.status = 'active'
-         and ds.computed_at > now() - ($2 || ' days')::interval`,
-      [jurisdictionIds, PREDICTION_LOOKBACK_DAYS]
-    ),
-  ]);
-
-  // ds.user_id (from the query above) is always the anchor's id - the Map is
-  // naturally keyed and deduped by anchor, so each of a linked person's cases
-  // below looks it up via ITS OWN anchor (u.linked_to_user_id || u.user_id),
-  // not its own literal id, which would never match for a dependent case.
-  const predictions = predictEscalationRiskBatch(
-    recentScoreRows.map((r) => ({ userId: r.user_id, score: Number(r.score_value), computedAt: r.computed_at }))
-  );
-
-  const BACKSTORY_EXCERPT_LENGTH = 140; // Section 2.2: a truncated excerpt on the list, full text on Case Detail
-
-  let cases = rows.map((u) => {
-    const prediction = predictions.get(u.linked_to_user_id || u.user_id);
-    return {
-      userId: u.user_id,
-      caseStage: u.case_stage,
-      score: u.score_value !== null ? Number(u.score_value) : null,
-      riskLevel: u.risk_level_name,
-      caseBackground: u.case_background
-        ? (u.case_background.length > BACKSTORY_EXCERPT_LENGTH ? `${u.case_background.slice(0, BACKSTORY_EXCERPT_LENGTH)}…` : u.case_background)
-        : null,
-      // Jurisdiction-wide queue mixes the counsellor's own patients with
-      // everyone else's/unassigned ones - the UI needs this to tell them apart
-      // (e.g. badge an unassigned Critical case as something to pick up).
-      isAssignedToMe: u.assigned_counsellor_id === req.auth.officialId,
-      isUnassigned: u.assigned_counsellor_id === null,
-      // Predicted (forward-looking), not just the case's current tier -
-      // surfaces a case worth pre-emptive triage before it actually reaches
-      // Critical, per the PS's "predict escalation before a crisis emerges".
-      predictedEscalation: prediction?.daysToNextTier != null
-        ? { nextTier: prediction.nextTier, daysToNextTier: prediction.daysToNextTier }
-        : null,
-    };
-  });
-
-  if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
-
-  // Sorted by priority (highest risk first), not by recency - a case queue's
-  // whole point is surfacing the most urgent cases first.
-  cases.sort((a, b) => (RISK_SORT_ORDER[b.riskLevel] || 0) - (RISK_SORT_ORDER[a.riskLevel] || 0));
-
-  const total = cases.length;
-  cases = cases.slice(offset, offset + pageSize);
-
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'case_list' });
-
-  return ok(res, { cases, total });
-});
-
 router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
   const { riskLevel, q, page = 1 } = req.query;
   const pageSize = 20;
@@ -575,9 +466,9 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
     // crisis situation emerges") - a linear projection of this same score
     // history that flags whether the case is on track to cross into a higher
     // risk tier soon, not just whether it already has.
-    // Bounded to the same PREDICTION_LOOKBACK_DAYS window /dashboard and
-    // /cases already apply before calling predictEscalationRiskBatch -
-    // without this, a case whose last activity was months ago could still
+    // Bounded to the same PREDICTION_LOOKBACK_DAYS window /dashboard already
+    // applies before calling predictEscalationRiskBatch - without this, a
+    // case whose last activity was months ago could still
     // regress over up to 12 stale historical points and report "N days to
     // next tier" from a trend that stopped being current long ago.
     // scoreHistory above intentionally stays unbounded (it's the full chart).

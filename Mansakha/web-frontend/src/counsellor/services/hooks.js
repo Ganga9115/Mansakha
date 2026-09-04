@@ -62,27 +62,14 @@ export function useReportsAnalytics(range, start, end) {
   }, [token, range, start, end]);
 }
 
-export function useCounsellorCases(riskLevel, page = 1) {
-  const token = getToken();
-  return useQuery(
-    () => {
-      const q = new URLSearchParams({ page });
-      // Backend reads req.query.riskLevel (counsellor.routes.js's /cases) -
-      // this was previously sent as `risk`, which that route never read, so
-      // the Risk Level dropdown silently filtered nothing.
-      if (riskLevel) q.set('riskLevel', riskLevel);
-      return apiClient.get(`/api/counsellor/cases?${q.toString()}`, token);
-    },
-    [token, riskLevel, page]
-  );
-}
-
 export function useMyUsers(riskLevel, page = 1, search) {
   const token = getToken();
   return useQuery(
     () => {
       const q = new URLSearchParams({ page });
-      // See useCounsellorCases above - same riskLevel/risk param-name fix.
+      // Backend reads req.query.riskLevel (counsellor.routes.js's /my-users) -
+      // this was previously sent as `risk`, which that route never read, so
+      // the Risk Level dropdown silently filtered nothing.
       if (riskLevel) q.set('riskLevel', riskLevel);
       if (search) q.set('q', search);
       return apiClient.get(`/api/counsellor/my-users?${q.toString()}`, token);
