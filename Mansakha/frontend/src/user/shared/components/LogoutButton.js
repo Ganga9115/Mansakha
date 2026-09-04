@@ -64,7 +64,7 @@ export default function LogoutButton({ style, iconColor = colors.danger, backgro
         </Pressable>
       )}
 
-      <Modal visible={confirmOpen} transparent animationType="fade" onRequestClose={() => setConfirmOpen(false)}>
+      <Modal visible={confirmOpen} transparent animationType="none" onRequestClose={() => setConfirmOpen(false)}>
         <View style={styles.backdrop}>
           <View style={styles.card}>
             <View style={styles.iconTile}>

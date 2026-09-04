@@ -29,7 +29,7 @@ export default function Dropdown({ options, value, onChange, placeholder = 'Sele
       </Pressable>
       {!!error && <Text style={styles.errorText}>{error}</Text>}
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
         <Pressable 
           style={[
             styles.backdrop, 
