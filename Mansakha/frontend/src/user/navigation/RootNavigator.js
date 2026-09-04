@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, ActivityIndicator, Platform, Linking as RNLinking } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../shared/context/AuthContext';
@@ -17,21 +16,30 @@ const isWeb = Platform.OS === 'web';
 // Web-only: the `screens` map below only maps the 3 top-level routes, so the
 // URL never changes as a user navigates deeper into UserShell (Home, History,
 // Support, the Act page, etc.) - a browser reload always re-mounts at '/' and
-// loses whatever screen was open. Persisting the full navigation state to
-// AsyncStorage (localStorage on web) and restoring it as `initialState` is
-// React Navigation's own documented fix for this ("state persistence"),
-// without hand-mapping every nested Tab/Drawer/Stack screen to its own URL.
+// loses whatever screen was open. Persisting the full navigation state and
+// restoring it as `initialState` is React Navigation's own documented fix for
+// this ("state persistence"), without hand-mapping every nested Tab/Drawer/
+// Stack screen to its own URL.
 //
-// The catch: NavigationContainer resolves state from `linking`'s URL first
-// and only falls back to `initialState` when that resolution comes up empty -
-// since our URL is always just '/', it would otherwise always win and the
-// restored state would never actually apply. `getInitialURL` below is the
-// documented escape hatch: returning undefined tells NavigationContainer
-// "there's no URL to derive state from," which is what lets `initialState`
-// take over. Native is untouched - a killed-and-relaunched native app is
-// expected to start fresh at Home, not resume mid-flow, and reload isn't a
-// native gesture anyway.
+// Deliberately window.sessionStorage, NOT AsyncStorage (localStorage on web):
+// localStorage is shared across every tab of the same origin, so with two
+// Mansakha tabs open, tab B's own navigation silently overwrites tab A's
+// saved screen in that shared store - reloading tab A then restores tab B's
+// screen instead of its own (confirmed live: this is why a reload could land
+// on a totally unrelated screen, like AI Chat, that was only ever open in a
+// *different* tab). sessionStorage is isolated per tab even for the same
+// origin, which is exactly the "this tab, this reload" scope actually wanted
+// here - and it's still just as synchronous/reload-durable as localStorage
+// within that one tab. Native is untouched - a killed-and-relaunched native
+// app is expected to start fresh at Home, not resume mid-flow, and reload
+// isn't a native gesture anyway.
 const NAV_STATE_STORAGE_KEY = 'mansakha_nav_state';
+
+const navStateStorage = {
+  getItem: async (key) => (isWeb ? window.sessionStorage.getItem(key) : null),
+  setItem: async (key, value) => { if (isWeb) window.sessionStorage.setItem(key, value); },
+  removeItem: async (key) => { if (isWeb) window.sessionStorage.removeItem(key); },
+};
 
 const linking = {
   prefixes: [],
@@ -44,7 +52,7 @@ const linking = {
   },
   getInitialURL: async () => {
     if (isWeb) {
-      const saved = await AsyncStorage.getItem(NAV_STATE_STORAGE_KEY);
+      const saved = await navStateStorage.getItem(NAV_STATE_STORAGE_KEY);
       if (saved) return undefined; // let `initialState` (restored below) win instead
     }
     return RNLinking.getInitialURL();
@@ -68,7 +76,7 @@ export default function RootNavigator() {
     if (isLoading) return;
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem(NAV_STATE_STORAGE_KEY);
+        const saved = await navStateStorage.getItem(NAV_STATE_STORAGE_KEY);
         const state = saved ? JSON.parse(saved) : null;
         // Only trust a saved state that matches the current session (e.g. not
         // a state saved while logged in, being restored after a logout+
@@ -95,7 +103,7 @@ export default function RootNavigator() {
     <NavigationContainer
       linking={linking}
       initialState={isWeb ? initialNavState : undefined}
-      onStateChange={isWeb ? (state) => AsyncStorage.setItem(NAV_STATE_STORAGE_KEY, JSON.stringify(state)) : undefined}
+      onStateChange={isWeb ? (state) => navStateStorage.setItem(NAV_STATE_STORAGE_KEY, JSON.stringify(state)) : undefined}
     >
       <Stack.Navigator initialRouteName={session ? 'UserShell' : (isWeb ? 'UserLogin' : 'Onboarding')} screenOptions={{ headerShown: false }}>
         {!session && (

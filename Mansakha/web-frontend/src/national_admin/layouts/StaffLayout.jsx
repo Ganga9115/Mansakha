@@ -43,10 +43,8 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
         } lg:translate-x-0`}
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 shrink-0">
-          <div>
-            <h1 className="text-xl font-bold tracking-wide leading-tight">Mansakha</h1>
-            <p className="text-[11px] text-blue-200 italic leading-tight">Mind matters. We're listening.</p>
-          </div>
+          <img src="/logo-3.png" alt="Mansakha" className="h-auto w-[185px]" />
+
           <button
             onClick={() => setSidebarOpen(false)}
             className="lg:hidden text-blue-100 hover:text-white"
