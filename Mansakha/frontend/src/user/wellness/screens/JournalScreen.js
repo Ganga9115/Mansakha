@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
 import { colors } from '../../shared/theme/colors';
@@ -10,46 +10,28 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { useSpeechToText, SPEECH_TO_TEXT_SUPPORTED } from '../../shared/hooks/useSpeechToText';
-import Card from '../../shared/components/Card';
-import IconInput from '../../shared/components/IconInput';
-import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useJournalEntries, useAddJournalEntry, useUpdateJournalEntry, useDeleteJournalEntry } from '../../shared/services/hooks';
+import { useAddJournalEntry } from '../../shared/services/hooks';
 import TopRightActions from '../../shared/components/TopRightActions';
+import JournalIllustration from '../../shared/components/JournalIllustration';
 
 export default function JournalScreen({ navigation }) {
   const { tier } = useResponsive();
   const toast = useToast();
-  const entriesQuery = useJournalEntries();
   const addEntry = useAddJournalEntry();
-  const updateEntry = useUpdateJournalEntry();
-  const deleteEntry = useDeleteJournalEntry();
 
-  // null = composing a fresh entry; an entryId = editing that saved entry.
-  const [editingEntryId, setEditingEntryId] = useState(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [search, setSearch] = useState('');
 
-  const isEditing = editingEntryId !== null;
-  const saving = addEntry.isPending || updateEntry.isPending;
+  const saving = addEntry.isPending;
 
-  // Appends each completed utterance to whatever's already typed, rather
-  // than replacing it - so voice and typing can be mixed freely.
   const handleVoiceResult = useCallback((text) => {
     setContent((prev) => (prev.trim() ? `${prev.trim()} ${text}` : text));
   }, []);
   const speech = useSpeechToText(handleVoiceResult);
 
   const resetComposer = () => {
-    setEditingEntryId(null);
     setTitle('');
     setContent('');
-  };
-
-  const handleEditEntry = (entry) => {
-    setEditingEntryId(entry.entryId);
-    setTitle(entry.title || '');
-    setContent(entry.content || '');
   };
 
   const handleSave = async () => {
@@ -64,55 +46,17 @@ export default function JournalScreen({ navigation }) {
       return;
     }
     try {
-      if (isEditing) {
-        await updateEntry.mutateAsync({ entryId: editingEntryId, title: trimmedTitle, content: trimmedContent });
-        toast.success('Journal entry updated.');
-      } else {
-        await addEntry.mutateAsync({ title: trimmedTitle, content: trimmedContent });
-        toast.success('Journal entry saved.');
-      }
+      await addEntry.mutateAsync({ title: trimmedTitle, content: trimmedContent });
+      toast.success('Journal entry saved.');
       resetComposer();
     } catch (err) {
       toast.error(err.message || 'Could not save your entry.');
     }
   };
 
-  const runDelete = async (entry) => {
-    try {
-      await deleteEntry.mutateAsync(entry.entryId);
-      if (editingEntryId === entry.entryId) resetComposer();
-      toast.success('Journal entry deleted.');
-    } catch (err) {
-      toast.error(err.message || 'Could not delete this entry.');
-    }
-  };
-
-  const handleDeleteEntry = (entry) => {
-    // Alert.alert is the standard RN confirm pattern (no window.confirm on
-    // native) - but this app also runs via `expo start --web`, where
-    // react-native-web's Alert.alert is a documented no-op. window.confirm
-    // there is a real browser primitive, not a custom modal, so this stays a
-    // one-line Platform branch instead of building any UI of our own.
-    if (Platform.OS === 'web') {
-      if (typeof window !== 'undefined' && window.confirm('Delete this entry? This cannot be undone.')) {
-        runDelete(entry);
-      }
-      return;
-    }
-    Alert.alert('Delete entry?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => runDelete(entry) },
-    ]);
-  };
-
-  const filterEntries = (entries) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return entries;
-    return entries.filter((e) => (e.title || '').toLowerCase().includes(q));
-  };
-
   return (
-    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
+    <View style={styles.container}>
+      {/* Top Header */}
       <View style={styles.topHeader}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
           <Feather name="arrow-left" size={20} color={colors.primaryDark} />
@@ -124,156 +68,182 @@ export default function JournalScreen({ navigation }) {
           <Text style={styles.statusTitle}>My Journal</Text>
           <Text style={styles.subtext}>A private space for your thoughts</Text>
         </View>
-        <TopRightActions />
+
+        <TopRightActions showNotifications />
       </View>
 
-      <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-        <Card style={styles.composerCard}>
-          {isEditing && (
-            <View style={styles.editingBanner}>
-              <Feather name="edit-2" size={14} color={colors.primary} />
-              <Text style={styles.editingBannerText}>Editing a saved entry</Text>
-              <Pressable onPress={resetComposer} hitSlop={8}>
-                <Text style={styles.editingCancelText}>Cancel</Text>
-              </Pressable>
-            </View>
-          )}
-
-          <IconInput icon="edit-3" placeholder="Title" value={title} onChangeText={setTitle} />
-
-          <View style={styles.storyLabelRow}>
-            <Text style={styles.storyLabel}>Story</Text>
-            {SPEECH_TO_TEXT_SUPPORTED && (
-              <Pressable onPress={speech.toggle} style={[styles.micPill, speech.listening && styles.micPillActive]}>
-                <Feather name="mic" size={13} color={speech.listening ? colors.white : colors.primary} />
-                <Text style={[styles.micPillText, speech.listening && styles.micPillTextActive]}>
-                  {speech.listening ? 'Listening...' : 'Voice input'}
-                </Text>
-              </Pressable>
-            )}
+      <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
+        <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+          
+          {/* My Entries Button Row Below Header */}
+          <View style={styles.subHeaderRow}>
+            <Pressable
+              style={styles.myEntriesBtn}
+              onPress={() => navigation.navigate('MyEntry')}
+            >
+              <Feather name="grid" size={15} color={colors.white} />
+              <Text style={styles.myEntriesBtnText}>My Entries</Text>
+            </Pressable>
           </View>
 
-          <TextInput
-            style={styles.textArea}
-            placeholder="Write about how you're feeling today..."
-            placeholderTextColor={colors.textSecondary}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            numberOfLines={5}
-          />
-
-          <Pressable style={styles.saveBtn} onPress={handleSave} disabled={saving || !title.trim() || !content.trim()}>
-            <Text style={styles.saveBtnText}>{saving ? 'Saving...' : isEditing ? 'Save Changes' : 'Save Entry'}</Text>
-          </Pressable>
-        </Card>
-
-        <Text style={styles.sectionHeaderTitle}>PAST ENTRIES</Text>
-
-        <View style={styles.searchWrap}>
-          <Feather name="search" size={16} color={colors.textSecondary} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search entries by title..."
-            placeholderTextColor={colors.textSecondary}
-            value={search}
-            onChangeText={setSearch}
-          />
-          {!!search && (
-            <Pressable onPress={() => setSearch('')} hitSlop={8}>
-              <Feather name="x" size={16} color={colors.textSecondary} />
-            </Pressable>
-          )}
-        </View>
-
-        <QueryBoundary query={entriesQuery} empty={(d) => !d?.entries?.length}>
-          {(data) => {
-            const filtered = filterEntries(data.entries);
-            if (!filtered.length) {
-              return (
-                <View style={styles.noResults}>
-                  <Text style={styles.noResultsText}>No entries match "{search}".</Text>
-                </View>
-              );
-            }
-            return (
-              <View style={{ gap: spacing.md }}>
-                {filtered.map((entry) => (
-                  <Card key={entry.entryId} style={styles.entryCard}>
-                    <View style={styles.entryCardRow}>
-                      <Pressable style={{ flex: 1 }} onPress={() => handleEditEntry(entry)}>
-                        <Text style={styles.entryTitle} numberOfLines={1}>{entry.title || 'Untitled entry'}</Text>
-                        <Text style={styles.entryDate}>{new Date(entry.updatedAt).toLocaleString()}</Text>
-                        <Text style={styles.entryText} numberOfLines={3}>{entry.content}</Text>
-                      </Pressable>
-                      <Pressable onPress={() => handleDeleteEntry(entry)} hitSlop={8} style={styles.deleteBtn}>
-                        <Feather name="trash-2" size={18} color={colors.danger} />
-                      </Pressable>
-                    </View>
-                  </Card>
-                ))}
+          {/* Decorative Hero Banner */}
+          <View style={styles.heroBanner}>
+            <View style={styles.heroLeft}>
+              <View style={styles.featherIconBadge}>
+                <Feather name="feather" size={20} color={colors.primaryDark} />
               </View>
-            );
-          }}
-        </QueryBoundary>
-      </View>
-    </ScrollView>
+              <Text style={styles.heroTitle}>Write in your journal</Text>
+              <Text style={styles.heroSubtext}>Express yourself freely. Your thoughts matter.</Text>
+            </View>
+            <View style={styles.heroIllustrationContainer}>
+              <JournalIllustration width={140} height={95} />
+            </View>
+          </View>
+
+          {/* Composer Card */}
+          <View style={styles.composerCard}>
+            <View style={styles.titleInputRow}>
+              <Feather name="edit-3" size={18} color={colors.textSecondary} style={{ marginRight: spacing.xs }} />
+              <TextInput
+                style={styles.titleTextInput}
+                placeholder="Give your entry a title..."
+                placeholderTextColor={colors.textSecondary}
+                value={title}
+                onChangeText={setTitle}
+              />
+              {SPEECH_TO_TEXT_SUPPORTED && (
+                <Pressable
+                  onPress={speech.toggle}
+                  style={[styles.micPill, speech.listening && styles.micPillActive]}
+                >
+                  <Feather
+                    name={speech.listening ? "mic-off" : "mic"}
+                    size={13}
+                    color={speech.listening ? colors.white : colors.primary}
+                  />
+                  <Text style={[styles.micPillText, speech.listening && styles.micPillTextActive]}>
+                    {speech.listening ? 'Listening...' : 'Voice input'}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            <TextInput
+              style={styles.textArea}
+              placeholder="Write about how you're feeling today..."
+              placeholderTextColor={colors.textSecondary}
+              value={content}
+              onChangeText={setContent}
+              multiline
+              numberOfLines={8}
+            />
+
+            <View style={styles.composerBottomRow}>
+              <Pressable
+                style={[
+                  styles.saveBtn,
+                  (!title.trim() || !content.trim() || saving) && styles.saveBtnDisabled,
+                ]}
+                onPress={handleSave}
+                disabled={saving || !title.trim() || !content.trim()}
+              >
+                <Feather name="feather" size={16} color={colors.white} style={{ marginRight: spacing.xs }} />
+                <Text style={styles.saveBtnText}>
+                  {saving ? 'Saving...' : 'Save Entry'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  scrollView: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxl,
     paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.sm,
   },
-  backBtn: { marginRight: spacing.sm, padding: spacing.xs },
+  backBtn: { padding: spacing.xs },
   headerIconTile: {
     width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center', marginRight: spacing.md,
+    alignItems: 'center', justifyContent: 'center',
   },
-  statusTitle: { ...typography.h3, color: colors.primaryDark },
+  statusTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
-  body: { padding: spacing.lg },
-  composerCard: { borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xl, ...shadow.card },
-  editingBanner: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.primaryLight,
-    borderRadius: radius.md, paddingVertical: spacing.xs, paddingHorizontal: spacing.sm, marginBottom: spacing.md,
+  subHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: spacing.md,
   },
-  editingBannerText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700', marginLeft: spacing.xs, flex: 1 },
-  editingCancelText: { ...typography.caption, color: colors.primary, fontWeight: '700', textDecorationLine: 'underline' },
-  storyLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
-  storyLabel: { ...typography.label, color: colors.textSecondary, letterSpacing: 1 },
+  myEntriesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.pill,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.lg,
+  },
+  myEntriesBtnText: { ...typography.caption, color: colors.white, fontWeight: '700' },
+
+  body: { padding: spacing.xl },
+  heroBanner: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: colors.primaryLight + '60', borderRadius: radius.xxl,
+    paddingVertical: spacing.lg, paddingHorizontal: spacing.xl, marginBottom: spacing.xl,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  heroLeft: { flex: 1, paddingRight: spacing.md },
+  featherIconBadge: {
+    width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs,
+  },
+  heroTitle: { ...typography.h2, color: colors.primaryDark, fontSize: 20, fontWeight: '800' },
+  heroSubtext: { ...typography.caption, color: colors.textSecondary, marginTop: 2, fontSize: 13 },
+  heroIllustrationContainer: { justifyContent: 'center', alignItems: 'center' },
+
+  composerCard: {
+    backgroundColor: colors.surface, borderRadius: radius.xxl, padding: spacing.xl,
+    borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xxl, ...shadow.card,
+  },
+  titleInputRow: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginBottom: spacing.md, height: 46,
+  },
+  titleTextInput: { flex: 1, ...typography.body, color: colors.textPrimary, paddingVertical: 0 },
   micPill: {
-    flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.primary,
-    borderRadius: radius.pill, paddingVertical: 4, paddingHorizontal: spacing.sm,
+    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill,
+    paddingVertical: 4, paddingHorizontal: spacing.md, gap: 4,
   },
-  micPillActive: { backgroundColor: colors.primary },
-  micPillText: { ...typography.caption, color: colors.primary, fontWeight: '700', marginLeft: 4 },
+  micPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  micPillText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700', fontSize: 12 },
   micPillTextActive: { color: colors.white },
+
   textArea: {
-    ...typography.body, color: colors.textPrimary, minHeight: 110, textAlignVertical: 'top',
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md,
+    ...typography.body, color: colors.textPrimary, minHeight: 140, textAlignVertical: 'top',
+    backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border,
+    borderRadius: radius.xl, padding: spacing.md, marginBottom: spacing.lg, lineHeight: 20,
   },
-  saveBtn: { backgroundColor: colors.primaryDark, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' },
-  saveBtnText: { ...typography.bodyStrong, color: colors.white },
-  sectionHeaderTitle: { ...typography.label, color: colors.primaryDark, marginBottom: spacing.md, letterSpacing: 1 },
-  searchWrap: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
-    borderRadius: radius.lg, paddingHorizontal: spacing.md, marginBottom: spacing.lg,
+  composerBottomRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
   },
-  searchIcon: { marginRight: spacing.sm },
-  searchInput: { flex: 1, ...typography.body, color: colors.textPrimary, paddingVertical: spacing.sm },
-  noResults: { alignItems: 'center', paddingVertical: spacing.xl },
-  noResultsText: { ...typography.body, color: colors.textSecondary },
-  entryCard: { borderRadius: radius.xl, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, ...shadow.card },
-  entryCardRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  deleteBtn: { padding: spacing.xs, marginLeft: spacing.sm },
-  entryTitle: { ...typography.bodyStrong, color: colors.textPrimary },
-  entryDate: { ...typography.caption, color: colors.textSecondary, marginTop: 2, marginBottom: spacing.xs },
-  entryText: { ...typography.body, color: colors.textPrimary },
+
+  saveBtn: {
+    backgroundColor: colors.primaryDark, borderRadius: radius.pill,
+    paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.xl,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+  },
+  saveBtnDisabled: { opacity: 0.5 },
+  saveBtnText: { ...typography.bodyStrong, color: colors.white, fontWeight: '700', fontSize: 14 },
 });
