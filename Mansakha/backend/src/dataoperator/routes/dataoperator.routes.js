@@ -119,7 +119,7 @@ router.post('/fetch-case', async (req, res) => {
 // official who created it - Data Operator isn't jurisdiction- or
 // creator-scoped anywhere else either (Section 7), so this stays consistent
 // with that. Full detail (identity + case + jurisdiction), not just the
-// truncated fields Counsellor's case queue shows.
+// truncated fields Counsellor's My Users list shows.
 router.get('/users', async (req, res) => {
   // Raw pg (not Supabase REST) in one query - a PostgREST round trip costs
   // ~1-2s here (documented elsewhere in this codebase's raw-pg conversions),

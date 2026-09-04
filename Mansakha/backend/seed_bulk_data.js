@@ -46,13 +46,27 @@ function randomCaseStage() {
 }
 
 const CASE_BACKGROUND_TEMPLATES = {
-  'Rape / Gang Rape': [
+  // Split to match case_types now storing these as individually selectable
+  // types (schema.sql) rather than the PS's original combined labels - these
+  // keys previously still used the old combined names, so this whole lookup
+  // never matched a live case type name and silently fell through to the
+  // generic fallback below for every seeded case.
+  Rape: [
     'Survivor requires ongoing medical follow-up and trauma counselling; family has expressed concern over community pressure to withdraw the complaint.',
     'Case registered after victim was referred by a local NGO; investigation is examining witness statements from neighbours.',
   ],
-  'Murder / Grievous Hurt / Arson': [
+  'Gang Rape': [
+    'Survivor requires ongoing medical follow-up and trauma counselling; family has expressed concern over community pressure to withdraw the complaint.',
+    'Case registered after victim was referred by a local NGO; investigation is examining witness statements from neighbours involving multiple accused.',
+  ],
+  Murder: [
     'Family of the deceased is under threat from the accused party\'s relatives; police protection requested for two family members.',
+  ],
+  'Grievous Hurt': [
     'Victim survived a grievous assault and is recovering at a district hospital; case background includes a prior land dispute.',
+  ],
+  Arson: [
+    'Family home was set on fire following a caste-based dispute; the household is currently living with relatives while compensation for the damage is assessed.',
   ],
   'Witness Facing Intimidation or Threats': [
     'Key witness in an ongoing SC/ST Act case has reported repeated threatening phone calls; relocation is being evaluated.',

@@ -27,10 +27,18 @@ create table case_types (
   name          text not null unique,
   deleted_at    timestamptz -- soft-delete, matches languages' pattern
 );
--- Seed data (not sample/demo data - these are the PS's own named Priority Use Cases):
+-- Seed data (not sample/demo data - these are the PS's own named Priority Use
+-- Cases: Rape/Gang Rape, Murder/Grievous Hurt/Arson, Witness Facing
+-- Intimidation or Threats, Family Affected by Caste-Based Violence) - split
+-- into individually selectable types rather than kept as combined labels, so
+-- a case can be categorized precisely instead of forced into one of 4 broad
+-- buckets.
 insert into case_types (name) values
-  ('Rape / Gang Rape'),
-  ('Murder / Grievous Hurt / Arson'),
+  ('Rape'),
+  ('Gang Rape'),
+  ('Murder'),
+  ('Grievous Hurt'),
+  ('Arson'),
   ('Witness Facing Intimidation or Threats'),
   ('Family Affected by Caste-Based Violence');
 
