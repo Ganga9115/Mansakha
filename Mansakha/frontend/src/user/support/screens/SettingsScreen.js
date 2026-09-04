@@ -5,12 +5,10 @@ import { useAuth } from '../../shared/context/AuthContext';
 import { useToast } from '../../shared/context/ToastContext';
 import {
   useUserDashboard,
-  useConsentStatus,
   useLanguageOptions,
   useUpdateUserLanguage,
   useAssignedCounsellor,
   useUpdateCounsellorPreference,
-  useUpdateSmsPreference,
 } from '../../shared/services/hooks';
 import { apiClient } from '../../shared/services/apiClient';
 import { colors } from '../../shared/theme/colors';
@@ -21,9 +19,7 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import Card from '../../shared/components/Card';
-import AssignedCounsellorCard from '../../shared/components/AssignedCounsellorCard';
 import Dropdown from '../../shared/components/Dropdown';
-import SegmentedToggle from '../../shared/components/SegmentedToggle';
 import IconInput from '../../shared/components/IconInput';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
@@ -66,7 +62,7 @@ const INDIAN_LANGUAGES = [
   { value: 'ne', label: 'Nepali (नेपाली)' },
   { value: 'or', label: 'Odia (ଓଡ଼ିଆ)' },
   { value: 'pa', label: 'Punjabi (ਪੰਜਾਬੀ)' },
-  { value: 'sa', label: 'Sanskrit (संस्कृतम्)' },
+  { value: 'sa', label: 'Sanskrit (সংस्कृतम्)' },
   { value: 'sat', label: 'Santali (ᱥᱟᱱᱛᱟᱲᱤ)' },
   { value: 'sd', label: 'Sindhi (سنڌي)' },
   { value: 'ta', label: 'Tamil (தமிழ்)' },
@@ -75,33 +71,26 @@ const INDIAN_LANGUAGES = [
 ];
 
 export default function SettingsScreen({ navigation }) {
-  // `logout` itself is invoked inside LogoutButton (it owns the confirm
-  // dialog) - this screen only needs `session` directly.
   const { session } = useAuth();
   const toast = useToast();
   const dashboardQuery = useUserDashboard();
-  const consentQuery = useConsentStatus();
   const languagesQuery = useLanguageOptions();
   const updateLanguage = useUpdateUserLanguage();
   const assignedCounsellorQuery = useAssignedCounsellor();
   const updateCounsellorPreference = useUpdateCounsellorPreference();
-  const updateSmsPreference = useUpdateSmsPreference();
   const [displayLanguageId, setDisplayLanguageId] = useState(null);
   const [speakingLanguageId, setSpeakingLanguageId] = useState(null);
   const { tier, isDesktop } = useResponsive();
 
   const [localOptedForCounsellor, setLocalOptedForCounsellor] = useState(false);
-  const [localSmsCheckinEnabled, setLocalSmsCheckinEnabled] = useState(false);
 
   React.useEffect(() => {
     if (dashboardQuery.data) {
       setLocalOptedForCounsellor(dashboardQuery.data.optedForManualCounsellor ?? false);
-      setLocalSmsCheckinEnabled(dashboardQuery.data.smsCheckinEnabled ?? false);
     }
   }, [dashboardQuery.data]);
 
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
-  const counsellor = assignedCounsellorQuery.data?.counsellor;
 
   const handleToggleCounsellorPreference = async (value) => {
     setLocalOptedForCounsellor(value);
@@ -111,17 +100,6 @@ export default function SettingsScreen({ navigation }) {
       toast.success(value ? 'Assigned to a human counsellor.' : 'Counsellor preference updated.');
     } catch (err) {
       setLocalOptedForCounsellor(!value);
-      toast.error(err.message || 'Could not update this preference.');
-    }
-  };
-
-  const handleToggleSmsPreference = async (value) => {
-    setLocalSmsCheckinEnabled(value);
-    try {
-      await updateSmsPreference.mutateAsync(value);
-      toast.success(value ? 'SMS check-in prompts enabled.' : 'SMS check-in prompts disabled.');
-    } catch (err) {
-      setLocalSmsCheckinEnabled(!value);
       toast.error(err.message || 'Could not update this preference.');
     }
   };
@@ -137,10 +115,6 @@ export default function SettingsScreen({ navigation }) {
   const currentDisplayLanguageId = displayLanguageId ?? dashboardQuery.data?.preferredLanguageId ?? 'en';
   const currentSpeakingLanguageId = speakingLanguageId ?? 'en';
 
-  // Enter on the Confirm field submits, same as the "Confirm New Password"
-  // button - only once both fields have something typed, mirroring the
-  // Login screen's pattern; handleChangePassword's own length/match checks
-  // still run and surface errors as usual.
   const handleConfirmPasswordSubmit = () => {
     if (newPassword.trim() && confirmPassword.trim()) {
       handleChangePassword();
@@ -172,9 +146,15 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
+  const casesList = dashboardQuery.data?.linkedCases?.length
+    ? dashboardQuery.data.linkedCases
+    : dashboardQuery.data?.caseStatus
+    ? [dashboardQuery.data.caseStatus]
+    : [];
+
   return (
-    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
-      {/* Blue Header Section */}
+    <View style={styles.container}>
+      {/* Sticky Blue Header Section */}
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
@@ -192,9 +172,6 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={styles.headerRight}>
           {isDesktop ? (
-            // Desktop tier already has a working logout in the persistent
-            // sidebar (SidebarNav) alongside this screen, so it isn't
-            // repeated here.
             <DesktopHeaderActions
               fullName={dashboardQuery.data?.fullName}
               alertCount={0}
@@ -206,265 +183,226 @@ export default function SettingsScreen({ navigation }) {
         </View>
       </View>
 
-      {/* Main Rounded Body Area */}
-      <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-        {/* Account Details Card */}
-        <Text style={styles.sectionHeaderTitle}>ACCOUNT OVERVIEW</Text>
-        <Card style={styles.customCard}>
-          <View style={styles.cardHeader}>
-            <View style={styles.accountIconTile}>
-              <Feather name="user-check" size={22} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardHeaderTitle}>
-                {session?.accountType === 'user' ? 'User Profile' : session?.accountType || 'User'}
-              </Text>
-              <Text style={styles.cardHeaderSubtitle}>Registered User Profile</Text>
-            </View>
-          </View>
-
-          <View style={styles.divider} />
-
-          {dashboardQuery.data?.linkedCases?.length > 1 ? (
-            // Multi-Case-Per-Person Support: this person has more than one
-            // docket - show one row per case instead of the single generic
-            // status row below, which only ever described one case.
-            dashboardQuery.data.linkedCases.map((c, index) => (
-              <InfoTileRow
-                key={c.userId}
-                icon="briefcase"
-                label={`Case ${index + 1}`}
-                value={`Docket ${c.docketNumber || '-'} • ${c.caseStage || '-'}`}
-              />
-            ))
-          ) : (
-            <InfoTileRow
-              icon="briefcase"
-              label="Case Status"
-              loading={dashboardQuery.isLoading}
-              value={
-                dashboardQuery.data
-                  ? `${dashboardQuery.data.caseStatus.status} • ${dashboardQuery.data.caseStatus.caseStage}`
-                  : '-'
-              }
-            />
-          )}
-          <InfoTileRow
-            icon="shield-check"
-            label="Mobile Consent"
-            loading={consentQuery.isLoading}
-            value={consentQuery.data?.hasConsented ? 'Consent Granted' : 'Pending Consent'}
-            iconColor={consentQuery.data?.hasConsented ? colors.success : colors.warning}
-          />
-          <InfoTileRow
-            icon="lock"
-            label="Security Status"
-            value="Encrypted End-to-End"
-            iconColor={colors.info}
-            isLast
-          />
-        </Card>
-
-        {/* Preferences Section */}
-        <Text style={styles.sectionHeaderTitle}>PREFERENCES</Text>
-        <Card style={styles.customCard}>
-          <View style={styles.cardHeader}>
-            <View style={styles.accountIconTile}>
-              <Feather name="globe" size={20} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardHeaderTitle}>Display Language</Text>
-              <Text style={styles.cardHeaderSubtitle}>Select your preferred interface language</Text>
-            </View>
-          </View>
-          <View style={{ marginTop: spacing.md, marginBottom: spacing.xl }}>
-            <Dropdown
-              options={INDIAN_LANGUAGES}
-              value={currentDisplayLanguageId}
-              onChange={async (value) => {
-                setDisplayLanguageId(value);
-                try {
-                  await updateLanguage.mutateAsync(value);
-                  toast.success('Display language updated.');
-                } catch (err) {
-                  toast.error(err.message || 'Could not update language');
-                }
-              }}
-              placeholder="Select interface language"
-              disabled={updateLanguage.isPending}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={[styles.cardHeader, { marginTop: spacing.md }]}>
-            <View style={styles.accountIconTile}>
-              <Feather name="mic" size={20} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardHeaderTitle}>Speaking Language</Text>
-              <Text style={styles.cardHeaderSubtitle}>Language used for voice check-ins and AI calls</Text>
-            </View>
-          </View>
-          <View style={{ marginTop: spacing.md }}>
-            <Dropdown
-              options={INDIAN_LANGUAGES}
-              value={currentSpeakingLanguageId}
-              onChange={(value) => {
-                setSpeakingLanguageId(value);
-                toast.success('Speaking language updated.');
-              }}
-              placeholder="Select voice language"
-            />
-          </View>
-        </Card>
-
-        {/* Communication Preferences */}
-        <Text style={styles.sectionHeaderTitle}>COMMUNICATION PREFERENCES</Text>
-        <Card style={styles.customCard}>
-          <View style={styles.toggleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardHeaderTitle}>Prefer a human counsellor</Text>
-              <Text style={styles.cardHeaderSubtitle}>Get matched with a counsellor for chat & calls</Text>
-            </View>
-            <Switch
-              value={localOptedForCounsellor}
-              onValueChange={handleToggleCounsellorPreference}
-              disabled={updateCounsellorPreference.isPending}
-              trackColor={{ true: colors.primary }}
-            />
-          </View>
-          <View style={styles.divider} />
-          <View style={styles.toggleRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardHeaderTitle}>SMS check-in prompts</Text>
-              <Text style={styles.cardHeaderSubtitle}>Receive check-in reminders over SMS</Text>
-            </View>
-            <Switch
-              value={localSmsCheckinEnabled}
-              onValueChange={handleToggleSmsPreference}
-              disabled={updateSmsPreference.isPending}
-              trackColor={{ true: colors.primary }}
-            />
-          </View>
-        </Card>
-
-        {/* Not opted in - an explanatory invite instead of just... nothing,
-            so a user who's never touched this toggle understands what
-            turning it on would actually get them. */}
-        {!localOptedForCounsellor && (
-          <Card style={[styles.customCard, styles.counsellorInviteCard]}>
-            <Feather name="user-plus" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
-            <Text style={styles.cardHeaderTitle}>Want to talk to someone?</Text>
-            <Text style={styles.cardHeaderSubtitle}>
-              Turn on "Prefer a human counsellor" above to get matched with a real counsellor you can message or call directly.
-            </Text>
-          </Card>
-        )}
-
-        {/* Opted in, but the jurisdiction has no counsellor to assign yet -
-            distinct from "not opted in" so this doesn't read as if the
-            toggle silently did nothing. */}
-        {localOptedForCounsellor && !hasAssignedCounsellor && (
-          <Card style={[styles.customCard, styles.counsellorInviteCard]}>
-            <Feather name="clock" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
-            <Text style={styles.cardHeaderTitle}>Finding you a counsellor</Text>
-            <Text style={styles.cardHeaderSubtitle}>
-              You're opted in - we'll connect you with a counsellor as soon as one is available in your area.
-            </Text>
-          </Card>
-        )}
-
-
-
-        {/* Notifications & System Info Card */}
-        <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>
-        <Card style={styles.customCard}>
-          <InfoTileRow
-            icon="bell"
-            label="Push Notifications"
-            value="Enabled"
-            iconColor={colors.primary}
-          />
-          <InfoTileRow
-            icon="info"
-            label="App Version"
-            value="v2.4.0 (Mansakha Official)"
-            iconColor={colors.textSecondary}
-            isLast
-          />
-        </Card>
-
-        {/* Security Card - Reset Password */}
-        <Text style={styles.sectionHeaderTitle}>SECURITY</Text>
-        <Card style={styles.customCard}>
-          <View style={styles.cardHeader}>
-            <View style={styles.accountIconTile}>
-              <Feather name="lock" size={20} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.cardHeaderTitle}>Password</Text>
-              <Text style={styles.cardHeaderSubtitle}>Change the password used to sign in</Text>
-            </View>
-          </View>
-
-          <Pressable
-            onPress={() => setShowPasswordForm((v) => !v)}
-            style={[styles.outlineBtn, { marginTop: spacing.md }]}
-          >
-            <Text style={styles.outlineBtnText}>{showPasswordForm ? 'Cancel' : 'Reset Password'}</Text>
-          </Pressable>
-
-          {showPasswordForm && (
-            <View style={{ marginTop: spacing.md }}>
-              <IconInput
-                icon="lock"
-                placeholder="New password (min 8 characters)"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                secureTextEntry
-                returnKeyType="next"
-                blurOnSubmit={false}
-                onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
-              />
-              <IconInput
-                ref={confirmPasswordInputRef}
-                icon="lock"
-                placeholder="Confirm new password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                secureTextEntry
-                returnKeyType="done"
-                onSubmitEditing={handleConfirmPasswordSubmit}
-              />
-              {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
-              {passwordSuccess && <Text style={styles.successText}>Password updated.</Text>}
-              <Pressable
-                style={styles.primaryBtnFilled}
-                onPress={handleChangePassword}
-                disabled={passwordLoading}
-              >
-                <Text style={styles.primaryBtnFilledText}>
-                  {passwordLoading ? 'Updating...' : 'Confirm New Password'}
+      <ScrollView style={styles.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
+        {/* Main Rounded Body Area */}
+        <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+          {/* Account Details Card */}
+          <Text style={styles.sectionHeaderTitle}>ACCOUNT OVERVIEW</Text>
+          <Card style={styles.customCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.accountIconTile}>
+                <Feather name="user-check" size={22} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>
+                  {session?.accountType === 'user' ? 'User Profile' : session?.accountType || 'User'}
                 </Text>
-              </Pressable>
+                <Text style={styles.cardHeaderSubtitle}>Registered User Profile</Text>
+              </View>
             </View>
-          )}
-        </Card>
 
-        {/* Log Out - always in Profile at the bottom, not just the header
-            icon variants elsewhere (desktop's sidebar, phone/tablet's top
-            bar) - a Profile screen without a Log Out entry here reads as
-            incomplete regardless of what the header already offers. */}
-        <Text style={styles.sectionHeaderTitle}>ACCOUNT</Text>
-        <LogoutButton variant="row" style={{ marginBottom: spacing.lg }} />
-      </View>
-    </ScrollView>
+            <View style={styles.divider} />
+
+            {/* Renders all cases without the bracketed numbers */}
+            {casesList.length > 0 ? (
+              casesList.map((c, index) => (
+                <InfoTileRow
+                  key={c.userId || c.caseNumber || index}
+                  icon="briefcase"
+                  label={`Case ${index + 1}`}
+                  loading={dashboardQuery.isLoading}
+                  value={`Stage: ${c.caseStage || c.stage || 'Trial'}`}
+                  isLast={index === casesList.length - 1}
+                />
+              ))
+            ) : (
+              <InfoTileRow
+                icon="briefcase"
+                label="Case Status"
+                loading={dashboardQuery.isLoading}
+                value="No cases linked"
+                isLast
+              />
+            )}
+          </Card>
+
+          {/* Preferences Section */}
+          <Text style={styles.sectionHeaderTitle}>PREFERENCES</Text>
+          <Card style={styles.customCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.accountIconTile}>
+                <Feather name="globe" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Display Language</Text>
+                <Text style={styles.cardHeaderSubtitle}>Select your preferred interface language</Text>
+              </View>
+            </View>
+            <View style={{ marginTop: spacing.md, marginBottom: spacing.xl }}>
+              <Dropdown
+                options={INDIAN_LANGUAGES}
+                value={currentDisplayLanguageId}
+                onChange={async (value) => {
+                  setDisplayLanguageId(value);
+                  try {
+                    await updateLanguage.mutateAsync(value);
+                    toast.success('Display language updated.');
+                  } catch (err) {
+                    toast.error(err.message || 'Could not update language');
+                  }
+                }}
+                placeholder="Select interface language"
+                disabled={updateLanguage.isPending}
+              />
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={[styles.cardHeader, { marginTop: spacing.md }]}>
+              <View style={styles.accountIconTile}>
+                <Feather name="mic" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Speaking Language</Text>
+                <Text style={styles.cardHeaderSubtitle}>Language used for voice check-ins and AI calls</Text>
+              </View>
+            </View>
+            <View style={{ marginTop: spacing.md }}>
+              <Dropdown
+                options={INDIAN_LANGUAGES}
+                value={currentSpeakingLanguageId}
+                onChange={(value) => {
+                  setSpeakingLanguageId(value);
+                  toast.success('Speaking language updated.');
+                }}
+                placeholder="Select voice language"
+              />
+            </View>
+          </Card>
+
+          {/* Communication Preferences */}
+          <Text style={styles.sectionHeaderTitle}>COMMUNICATION PREFERENCES</Text>
+          <Card style={styles.customCard}>
+            <View style={styles.toggleRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Prefer a human counsellor</Text>
+                <Text style={styles.cardHeaderSubtitle}>Get matched with a counsellor for chat & calls</Text>
+              </View>
+              <Switch
+                value={localOptedForCounsellor}
+                onValueChange={handleToggleCounsellorPreference}
+                disabled={updateCounsellorPreference.isPending}
+                trackColor={{ true: colors.primary }}
+              />
+            </View>
+          </Card>
+
+          {!localOptedForCounsellor && (
+            <Card style={[styles.customCard, styles.counsellorInviteCard]}>
+              <Feather name="user-plus" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
+              <Text style={styles.cardHeaderTitle}>Want to talk to someone?</Text>
+              <Text style={styles.cardHeaderSubtitle}>
+                Turn on "Prefer a human counsellor" above to get matched with a real counsellor you can message or call directly.
+              </Text>
+            </Card>
+          )}
+
+          {localOptedForCounsellor && !hasAssignedCounsellor && (
+            <Card style={[styles.customCard, styles.counsellorInviteCard]}>
+              <Feather name="clock" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
+              <Text style={styles.cardHeaderTitle}>Finding you a counsellor</Text>
+              <Text style={styles.cardHeaderSubtitle}>
+                You're opted in - we'll connect you with a counsellor as soon as one is available in your area.
+              </Text>
+            </Card>
+          )}
+
+          {/* Notifications & System Info Card */}
+          <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>
+          <Card style={styles.customCard}>
+            <InfoTileRow
+              icon="bell"
+              label="Push Notifications"
+              value="Enabled"
+              iconColor={colors.primary}
+            />
+            <InfoTileRow
+              icon="info"
+              label="App Version"
+              value="v2.4.0 (Mansakha Official)"
+              iconColor={colors.textSecondary}
+              isLast
+            />
+          </Card>
+
+          {/* Security Card - Reset Password */}
+          <Text style={styles.sectionHeaderTitle}>SECURITY</Text>
+          <Card style={styles.customCard}>
+            <View style={styles.cardHeader}>
+              <View style={styles.accountIconTile}>
+                <Feather name="lock" size={20} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardHeaderTitle}>Password</Text>
+                <Text style={styles.cardHeaderSubtitle}>Change the password used to sign in</Text>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => setShowPasswordForm((v) => !v)}
+              style={[styles.outlineBtn, { marginTop: spacing.md }]}
+            >
+              <Text style={styles.outlineBtnText}>{showPasswordForm ? 'Cancel' : 'Reset Password'}</Text>
+            </Pressable>
+
+            {showPasswordForm && (
+              <View style={{ marginTop: spacing.md }}>
+                <IconInput
+                  icon="lock"
+                  placeholder="New password (min 8 characters)"
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  secureTextEntry
+                  returnKeyType="next"
+                  blurOnSubmit={false}
+                  onSubmitEditing={() => confirmPasswordInputRef.current?.focus()}
+                />
+                <IconInput
+                  ref={confirmPasswordInputRef}
+                  icon="lock"
+                  placeholder="Confirm new password"
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry
+                  returnKeyType="done"
+                  onSubmitEditing={handleConfirmPasswordSubmit}
+                />
+                {passwordError && <Text style={styles.errorText}>{passwordError}</Text>}
+                {passwordSuccess && <Text style={styles.successText}>Password updated.</Text>}
+                <Pressable
+                  style={styles.primaryBtnFilled}
+                  onPress={handleChangePassword}
+                  disabled={passwordLoading}
+                >
+                  <Text style={styles.primaryBtnFilledText}>
+                    {passwordLoading ? 'Updating...' : 'Confirm New Password'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </Card>
+
+          <Text style={styles.sectionHeaderTitle}>ACCOUNT</Text>
+          <LogoutButton variant="row" style={{ marginBottom: spacing.lg }} />
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  scrollContent: { flex: 1 },
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
@@ -473,6 +411,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    zIndex: 10,
   },
   topHeaderDesktop: {
     height: 64,

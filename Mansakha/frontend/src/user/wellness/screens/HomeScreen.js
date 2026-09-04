@@ -182,17 +182,6 @@ export default function HomeScreen({ navigation }) {
                     <Text style={styles.gridSub}>Check your history</Text>
                   </Pressable>
 
-                  <Pressable
-                    style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}
-                    onPress={() => navigation?.navigate('Journal')}
-                  >
-                    <View style={styles.gridIconCircle}>
-                      <Feather name="book-open" size={20} color={colors.primary} />
-                    </View>
-                    <Text style={styles.gridTitle}>My Journal</Text>
-                    <Text style={styles.gridSub}>Write it down</Text>
-                  </Pressable>
-
                   {hasAssignedCounsellor && (
                     <Pressable
                       style={[styles.gridCard, isDesktop && styles.gridCardDesktop]}

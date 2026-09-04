@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, Linking, Modal } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import {
   useAudioRecorder,
@@ -19,7 +19,6 @@ import { typography } from '../../shared/theme/typography';
 import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
-import TopRightActions from '../../shared/components/TopRightActions';
 import { LoadingState, ErrorState } from '../../shared/components/QueryStates';
 import {
   useAssignedCounsellor,
@@ -32,6 +31,18 @@ import {
 // Minimum gap between "user is typing" pings sent to the backend while
 // composing - avoids firing one per keystroke.
 const TYPING_PING_THROTTLE_MS = 1500;
+
+// Frequently used emojis for quick selection
+const QUICK_EMOJIS = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+  '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+  '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
+  '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+  '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
+  '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗',
+  '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯',
+  '👍', '👎', '👏', '🙌', '🙏', '❤️', '💖', '✨', '🔥', '🎉'
+];
 
 // Formats a whole/fractional number of seconds as WhatsApp-style "m:ss".
 function formatDuration(totalSeconds) {
@@ -63,6 +74,8 @@ export default function CounsellorChatScreen({ navigation }) {
   const [draft, setDraft] = useState('');
   const [isSendingVoice, setIsSendingVoice] = useState(false);
   const [playingMessageId, setPlayingMessageId] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const scrollRef = useRef(null);
   const lastTypingPingAtRef = useRef(0);
 
@@ -92,9 +105,15 @@ export default function CounsellorChatScreen({ navigation }) {
   };
 
   const handleSend = async () => {
+    if (recorderState.isRecording || isPaused) {
+      handleFinishVoiceRecording();
+      return;
+    }
+
     const text = draft.trim();
     if (!text) return;
     setDraft('');
+    setShowEmojiPicker(false);
     try {
       await sendMessage.mutateAsync(text);
     } catch (err) {
@@ -111,11 +130,10 @@ export default function CounsellorChatScreen({ navigation }) {
     }
   };
 
-  // Web-only: Enter alone sends the message (and must not also insert a
-  // newline); Shift+Enter inserts a newline normally. Native mobile has no
-  // hardware Enter key semantics for this, so this is guarded to web only -
-  // untouched on a real device build, where the multiline TextInput just
-  // keeps its default newline-on-Enter behavior.
+  const handleSelectEmoji = (emoji) => {
+    handleDraftChange(draft + emoji);
+  };
+
   const handleComposerKeyPress = (e) => {
     if (Platform.OS !== 'web') return;
     const nativeEvent = e.nativeEvent || {};
@@ -128,31 +146,7 @@ export default function CounsellorChatScreen({ navigation }) {
     }
   };
 
-  const handleMicPress = async () => {
-    if (recorderState.isRecording) {
-      const durationSeconds = (recorderState.durationMillis || 0) / 1000;
-      try {
-        await recorder.stop();
-      } catch (err) {
-        toast.error(err.message || 'Could not stop recording.');
-        return;
-      }
-      const uri = recorder.uri;
-      if (!uri) {
-        toast.error('Recording failed - no audio was captured.');
-        return;
-      }
-      setIsSendingVoice(true);
-      try {
-        await sendVoiceMessage.mutateAsync({ uri, durationSeconds });
-      } catch (err) {
-        toast.error(err.message || 'Could not send that voice message.');
-      } finally {
-        setIsSendingVoice(false);
-      }
-      return;
-    }
-
+  const handleStartVoiceRecording = async () => {
     try {
       let permission = await getRecordingPermissionsAsync();
       if (!permission.granted) {
@@ -165,8 +159,53 @@ export default function CounsellorChatScreen({ navigation }) {
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
       await recorder.prepareToRecordAsync();
       recorder.record();
+      setIsPaused(false);
     } catch (err) {
       toast.error(err.message || 'Could not start recording.');
+    }
+  };
+
+  const handleTogglePauseRecording = () => {
+    if (isPaused) {
+      recorder.record();
+      setIsPaused(false);
+    } else {
+      recorder.pause();
+      setIsPaused(true);
+    }
+  };
+
+  const handleDeleteRecording = async () => {
+    try {
+      await recorder.stop();
+    } catch (err) {
+      // Ignore cleanup error on cancel
+    } finally {
+      setIsPaused(false);
+    }
+  };
+
+  const handleFinishVoiceRecording = async () => {
+    const durationSeconds = (recorderState.durationMillis || 0) / 1000;
+    try {
+      await recorder.stop();
+    } catch (err) {
+      toast.error(err.message || 'Could not stop recording.');
+      return;
+    }
+    const uri = recorder.uri;
+    if (!uri) {
+      toast.error('Recording failed - no audio was captured.');
+      return;
+    }
+    setIsSendingVoice(true);
+    try {
+      await sendVoiceMessage.mutateAsync({ uri, durationSeconds });
+    } catch (err) {
+      toast.error(err.message || 'Could not send that voice message.');
+    } finally {
+      setIsSendingVoice(false);
+      setIsPaused(false);
     }
   };
 
@@ -181,7 +220,8 @@ export default function CounsellorChatScreen({ navigation }) {
     setPlayingMessageId(m.messageId);
   };
 
-  const sendDisabled = !draft.trim() || sendMessage.isPending || recorderState.isRecording;
+  const isRecordingActive = recorderState.isRecording || isPaused;
+  const sendDisabled = (!draft.trim() && !isRecordingActive) || sendMessage.isPending || isSendingVoice;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -199,26 +239,18 @@ export default function CounsellorChatScreen({ navigation }) {
           <Text style={styles.subtext}>Private, opted-in support</Text>
         </View>
         <View style={{ flex: 1 }} />
-        {/* Green outline circle - the universal "make a call" convention
-            (vs. red for emergency/decline), which tells this apart from the
-            header's red Get Help Now button on color semantics alone,
-            stronger than the blue-vs-red the two used to rely on. */}
+        {/* Single Green Call Button for Counsellor */}
         {!!counsellor && (
           <Pressable onPress={handleCall} style={styles.callIconBtn} hitSlop={8} accessibilityLabel="Call counsellor">
             <Feather name="phone" size={18} color={colors.success} />
           </Pressable>
         )}
-        <TopRightActions />
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
         {counsellorQuery.isLoading || messagesQuery.isLoading ? (
           <LoadingState />
         ) : counsellorQuery.isError || messagesQuery.isError ? (
-          // Previously fell through to "no counsellor assigned" on ANY
-          // failure here (a brief server restart, a network blip) -
-          // confirmed live as a misleading message on a real request
-          // failure, not an actual absence of an assigned counsellor.
           <ErrorState
             message="Couldn't load your counsellor chat. Check your connection and try again."
             onRetry={() => { counsellorQuery.refetch(); messagesQuery.refetch(); }}
@@ -236,6 +268,12 @@ export default function CounsellorChatScreen({ navigation }) {
               onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
               showsVerticalScrollIndicator={false}
             >
+              <View style={styles.dateBadgeContainer}>
+                <View style={styles.dateBadge}>
+                  <Text style={styles.dateBadgeText}>Today</Text>
+                </View>
+              </View>
+
               {messages.length === 0 ? (
                 <Text style={styles.emptyText}>No messages yet - say hello.</Text>
               ) : (
@@ -245,6 +283,11 @@ export default function CounsellorChatScreen({ navigation }) {
                   const isThisPlaying = isVoice && playingMessageId === m.messageId && playerStatus.playing;
                   return (
                     <View key={m.messageId} style={[styles.bubbleRow, isUser ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
+                      {!isUser && (
+                        <View style={styles.avatarTile}>
+                          <Feather name="user" size={16} color={colors.primary} />
+                        </View>
+                      )}
                       <View style={[styles.bubbleColumn, isUser ? styles.bubbleColumnRight : styles.bubbleColumnLeft]}>
                         {isVoice ? (
                           <Pressable
@@ -273,8 +316,16 @@ export default function CounsellorChatScreen({ navigation }) {
                             <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{m.body}</Text>
                           </View>
                         )}
-                        <Text style={styles.timestamp}>{formatTimestamp(m.sentAt)}</Text>
+                        <View style={styles.metaRow}>
+                          <Text style={styles.timestamp}>{formatTimestamp(m.sentAt)}</Text>
+                          {isUser && <Feather name="check-circle" size={10} color={colors.primary} style={styles.readIcon} />}
+                        </View>
                       </View>
+                      {isUser && (
+                        <View style={[styles.avatarTile, styles.userAvatarTile]}>
+                          <Feather name="user" size={16} color={colors.white} />
+                        </View>
+                      )}
                     </View>
                   );
                 })
@@ -287,37 +338,85 @@ export default function CounsellorChatScreen({ navigation }) {
               </View>
             )}
 
+            {/* Emoji Selection Grid Popup */}
+            {showEmojiPicker && (
+              <View style={styles.emojiPickerContainer}>
+                <View style={styles.emojiHeader}>
+                  <Text style={styles.emojiHeaderText}>Select Emoji</Text>
+                  <Pressable onPress={() => setShowEmojiPicker(false)} hitSlop={8}>
+                    <Feather name="x" size={18} color={colors.textSecondary} />
+                  </Pressable>
+                </View>
+                <ScrollView contentContainerStyle={styles.emojiGrid} keyboardShouldPersistTaps="handled">
+                  {QUICK_EMOJIS.map((emoji, index) => (
+                    <Pressable
+                      key={index}
+                      style={styles.emojiItem}
+                      onPress={() => handleSelectEmoji(emoji)}
+                    >
+                      <Text style={styles.emojiText}>{emoji}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+
             <View style={styles.composerContainer}>
-              <View style={styles.inputPill}>
-                {recorderState.isRecording ? (
+              <View style={styles.inputContainer}>
+                {isRecordingActive ? (
                   <View style={styles.recordingIndicator}>
+                    <Pressable
+                      onPress={handleDeleteRecording}
+                      style={styles.actionIconButton}
+                      accessibilityRole="button"
+                      accessibilityLabel="Delete recording"
+                    >
+                      <Feather name="trash-2" size={20} color={colors.danger} />
+                    </Pressable>
+                    <Pressable
+                      onPress={handleTogglePauseRecording}
+                      style={styles.actionIconButton}
+                      accessibilityRole="button"
+                      accessibilityLabel={isPaused ? 'Resume recording' : 'Pause recording'}
+                    >
+                      <Feather name={isPaused ? 'play' : 'pause'} size={20} color={colors.primary} />
+                    </Pressable>
                     <View style={styles.recordingDot} />
-                    <Text style={styles.recordingText}>Recording... {formatDuration((recorderState.durationMillis || 0) / 1000)}</Text>
+                    <Text style={styles.recordingText}>
+                      {isPaused ? 'Paused' : 'Recording...'} {formatDuration((recorderState.durationMillis || 0) / 1000)}
+                    </Text>
                   </View>
                 ) : (
-                  <TextInput
-                    style={styles.composerInput}
-                    value={draft}
-                    onChangeText={handleDraftChange}
-                    onKeyPress={handleComposerKeyPress}
-                    placeholder="Type a message..."
-                    placeholderTextColor={colors.textSecondary}
-                    multiline
-                  />
+                  <>
+                    <TextInput
+                      style={styles.composerInput}
+                      value={draft}
+                      onChangeText={handleDraftChange}
+                      onKeyPress={handleComposerKeyPress}
+                      placeholder="Type a message..."
+                      placeholderTextColor={colors.textSecondary}
+                      multiline
+                    />
+                    <Pressable
+                      style={styles.inlineIconButton}
+                      onPress={() => setShowEmojiPicker((prev) => !prev)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Choose emoji"
+                    >
+                      <Feather name="smile" size={20} color={showEmojiPicker ? colors.primary : colors.textSecondary} />
+                    </Pressable>
+                    <Pressable
+                      style={styles.inlineIconButton}
+                      onPress={handleStartVoiceRecording}
+                      disabled={isSendingVoice}
+                      accessibilityRole="button"
+                      accessibilityLabel="Record voice message"
+                    >
+                      <Feather name="mic" size={20} color={colors.primary} />
+                    </Pressable>
+                  </>
                 )}
-                <Pressable
-                  style={[styles.micBtn, recorderState.isRecording && styles.micBtnActive]}
-                  onPress={handleMicPress}
-                  disabled={isSendingVoice}
-                  accessibilityRole="button"
-                  accessibilityLabel={recorderState.isRecording ? 'Stop recording' : 'Record a voice message'}
-                >
-                  <Feather
-                    name={isSendingVoice ? 'loader' : recorderState.isRecording ? 'square' : 'mic'}
-                    size={18}
-                    color={recorderState.isRecording ? colors.white : colors.primary}
-                  />
-                </Pressable>
+
                 <Pressable
                   style={[styles.sendBtn, sendDisabled && styles.sendBtnDisabled]}
                   onPress={handleSend}
@@ -363,48 +462,67 @@ const styles = StyleSheet.create({
     borderColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
   },
   body: { flex: 1, width: '100%' },
   content: { flex: 1, padding: spacing.xl },
   heroText: { ...typography.body, color: colors.textSecondary, textAlign: 'center', lineHeight: 24 },
   thread: { flex: 1 },
-  threadContent: { padding: spacing.lg, gap: spacing.sm, flexGrow: 1 },
+  threadContent: { padding: spacing.lg, gap: spacing.md, flexGrow: 1 },
   emptyText: { ...typography.caption, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xl },
-  bubbleRow: { flexDirection: 'row' },
+  dateBadgeContainer: { alignItems: 'center', marginVertical: spacing.xs },
+  dateBadge: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    ...shadow.card,
+  },
+  dateBadgeText: { ...typography.caption, color: colors.textSecondary, fontWeight: '600' },
+  bubbleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.xs },
   bubbleRowLeft: { justifyContent: 'flex-start' },
   bubbleRowRight: { justifyContent: 'flex-end' },
-  bubbleColumn: { maxWidth: '80%' },
+  avatarTile: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  userAvatarTile: { backgroundColor: colors.primary },
+  bubbleColumn: { maxWidth: '75%' },
   bubbleColumnLeft: { alignItems: 'flex-start' },
   bubbleColumnRight: { alignItems: 'flex-end' },
   bubble: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.xl,
+    ...shadow.card,
   },
-  // Same asymmetric "tail" corner as ChatScreen.js's AI-chat bubbles
-  // (bubbleAi/bubbleUser there) - own messages tuck in the top-right
-  // corner, the other party's tuck in the top-left - so the two chat
-  // screens read as one consistent bubble style, not two different ones.
-  bubbleOfficial: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderTopLeftRadius: 4 },
-  bubbleUser: { backgroundColor: colors.primary, borderTopRightRadius: 4 },
+  bubbleOfficial: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xs,
+  },
+  bubbleUser: {
+    backgroundColor: colors.primaryLight,
+    borderTopRightRadius: radius.xs,
+  },
   bubbleText: { ...typography.body, color: colors.textPrimary },
-  bubbleTextUser: { color: colors.white },
-  timestamp: { ...typography.caption, color: colors.textSecondary, marginTop: 2, fontSize: 11 },
-  // Voice message bubble - a natural variant of the text bubble (same
-  // shape/background rules), swapping the body text for a play/pause
-  // control, a static "waveform" decoration, and the recorded duration.
+  bubbleTextUser: { color: colors.primaryDark },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
+  timestamp: { ...typography.caption, color: colors.textSecondary, fontSize: 11 },
+  readIcon: { marginLeft: 2 },
   voiceBubble: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minWidth: 160 },
   voicePlayBtn: {
     width: 28, height: 28, borderRadius: radius.pill,
     alignItems: 'center', justifyContent: 'center',
   },
   voicePlayBtnOfficial: { backgroundColor: colors.primary },
-  voicePlayBtnUser: { backgroundColor: colors.white },
+  voicePlayBtnUser: { backgroundColor: colors.primaryDark },
   waveform: { flexDirection: 'row', alignItems: 'center', gap: 3, flex: 1 },
   waveformBar: { width: 3, borderRadius: 2 },
   waveformBarOfficial: { backgroundColor: colors.border },
-  waveformBarUser: { backgroundColor: 'rgba(255,255,255,0.5)' },
+  waveformBarUser: { backgroundColor: colors.primary },
   voiceDuration: { ...typography.caption, color: colors.textPrimary },
   typingRow: {
     paddingHorizontal: spacing.lg,
@@ -417,45 +535,88 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.background,
   },
-  inputPill: {
+  // Updated input container to be rectangular with rounded corners instead of oval/pill
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.xs,
+    paddingVertical: 6,
     ...shadow.card,
   },
   composerInput: {
     flex: 1,
     maxHeight: 100,
-    paddingHorizontal: spacing.sm,
+    paddingLeft: spacing.xs,
+    paddingRight: spacing.xs,
     paddingTop: Platform.OS === 'web' ? 10 : 8,
     paddingBottom: Platform.OS === 'web' ? 10 : 8,
     color: colors.textPrimary,
     ...typography.body,
+  },
+  inlineIconButton: {
+    padding: spacing.xs,
+    marginRight: 2,
+  },
+  actionIconButton: {
+    padding: spacing.xs,
   },
   recordingIndicator: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
+    paddingRight: spacing.xs,
   },
-  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
-  recordingText: { ...typography.body, color: colors.textPrimary },
-  micBtn: {
-    width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center', marginLeft: 4,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  micBtnActive: { backgroundColor: colors.danger, borderColor: colors.danger },
+  recordingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger, marginLeft: spacing.xs },
+  recordingText: { ...typography.body, color: colors.textPrimary, flex: 1 },
   sendBtn: {
-    width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.primary,
-    alignItems: 'center', justifyContent: 'center', marginLeft: 4,
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 4,
   },
   sendBtnDisabled: { opacity: 0.5 },
+  // Emoji Picker Container & Styles
+  emojiPickerContainer: {
+    maxHeight: 200,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  emojiHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  emojiHeaderText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+  },
+  emojiItem: {
+    width: '10%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emojiText: {
+    fontSize: 22,
+  },
 });
