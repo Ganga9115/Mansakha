@@ -301,6 +301,9 @@ const styles = StyleSheet.create({
 
   /* Dialog Box / Pop-up Styles */
   contentArea: { flex: 1, position: 'relative' },
+  // Same glassmorphism recipe as the delete-confirm modal below, so both
+  // popups on this screen (and every other popup in the app) read as one
+  // consistent style rather than one glass and one flat.
   inlineOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
@@ -308,17 +311,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     padding: spacing.xl,
     zIndex: 50,
+    ...Platform.select({
+      web: { backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' },
+      default: {},
+    }),
   },
   dialogBox: {
     width: '100%',
     maxWidth: 500,
     maxHeight: '80%',
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderRadius: radius.xxl,
     padding: spacing.xl,
     overflow: 'hidden',
-    ...shadow.card,
-    elevation: 5,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 1)',
+    ...Platform.select({
+      web: { backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)' },
+      default: {},
+    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 32,
+    elevation: 10,
   },
   dialogHeader: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: spacing.md },
   dialogTitle: { ...typography.h3, color: colors.textPrimary, fontWeight: '700' },
