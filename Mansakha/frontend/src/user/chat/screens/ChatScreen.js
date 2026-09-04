@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -14,8 +14,6 @@ const OLLAMA = "http://127.0.0.1:11434";
 const CHAT = OLLAMA + "/api/chat";
 const TAGS = OLLAMA + "/api/tags";
 const SYSTEM = `You are Mansakha, a calm and supportive conversational companion. Listen with empathy. Keep replies short and natural. Ask one gentle question at a time. Do not diagnose mental-health conditions. Do not assign risk levels or distress scores. Do not claim to be a doctor, counsellor, lawyer or police officer. Do not claim you contacted anyone. A separate post-conversation distress analysis handles distress scoring. If immediate danger is described, do not ask same question again and again, encourage immediate local emergency help.`;
-
-const EMOJI_LIST = ['😊', '❤️', '👍', '🙏', '🌿', '✨', '🌊', '💡', '🤗', '😌', '💪', '🌸'];
 
 function Bubble({ message }) {
   const isUser = message.role === 'user';
@@ -58,7 +56,6 @@ export default function ChatScreen({ navigation }) {
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioUrl, setAudioUrl] = useState(null);
-  const [showEmojis, setShowEmojis] = useState(false);
 
   // Refs
   const videoRef = useRef(null);
@@ -142,7 +139,6 @@ export default function ChatScreen({ navigation }) {
     if (audioBlob || audioUrl || isRecording) {
       const textMessage = `🎤 [Voice Note - ${recordingTime}s]`;
       deleteRecording();
-      setShowEmojis(false);
       setStatus("Mansakha is thinking...");
       try {
         await askOllama(textMessage, messages);
@@ -154,7 +150,6 @@ export default function ChatScreen({ navigation }) {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
-    setShowEmojis(false);
     setStatus("Mansakha is thinking...");
     try {
       await askOllama(text, messages);
@@ -376,19 +371,6 @@ export default function ChatScreen({ navigation }) {
           contentContainerStyle={styles.listContent}
         />
 
-        {/* Emoji Selector */}
-        {showEmojis && (
-          <View style={styles.emojiRowContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiScroll}>
-              {EMOJI_LIST.map((e, idx) => (
-                <Pressable key={idx} onPress={() => setDraft(prev => prev + e)} style={styles.emojiBtn}>
-                  <Text style={{ fontSize: 20 }}>{e}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
         {/* Dynamic Action Input Panel */}
         <View style={styles.inputSectionContainer}>
           {/* Vertical Icon-Only Recording Overlay Box */}
@@ -442,10 +424,6 @@ export default function ChatScreen({ navigation }) {
               </Pressable>
 
               <View style={styles.textInputRow}>
-                <Pressable style={styles.iconBtn} onPress={() => setShowEmojis(prev => !prev)}>
-                  <Feather name="smile" size={20} color={colors.textSecondary} />
-                </Pressable>
-
                 <TextInput
                   style={styles.textInput}
                   placeholder={isRecording || audioUrl ? "Voice note recorded..." : "Type a message..."}
@@ -581,14 +559,6 @@ const styles = StyleSheet.create({
   },
   videoControlText: { color: colors.white, fontSize: 12, fontWeight: '600' },
 
-  emojiRowContainer: {
-    backgroundColor: colors.surface, borderRadius: radius.md,
-    paddingVertical: 6, paddingHorizontal: 8, marginBottom: 8,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  emojiScroll: { flexDirection: 'row', gap: 12, alignItems: 'center' },
-  emojiBtn: { padding: 4 },
-
   inputSectionContainer: {
     marginBottom: spacing.md,
     position: 'relative',
@@ -670,15 +640,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: colors.surface,
     borderRadius: 24,
-    paddingHorizontal: 12,
+    paddingLeft: 16,
+    paddingRight: 12,
     paddingVertical: 4,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  iconBtn: { padding: 6 },
   textInput: {
     flex: 1, ...typography.body, color: colors.textPrimary,
-    maxHeight: 100, paddingHorizontal: 8,
+    maxHeight: 100, paddingRight: 8,
     paddingTop: Platform.OS === 'web' ? 10 : 8,
     paddingBottom: Platform.OS === 'web' ? 10 : 8,
     outlineStyle: 'none',

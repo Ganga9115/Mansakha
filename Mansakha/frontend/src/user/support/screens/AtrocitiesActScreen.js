@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, LayoutAnimation, Platform, UIManager, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
@@ -248,7 +248,11 @@ export default function AtrocitiesActScreen({ navigation }) {
         {/* Hero Section */}
         <View style={styles.bannerContainer}>
           <View style={styles.bannerIconBox}>
-            <Feather name="scale" size={28} color={colors.sidebarBg} />
+            <Image 
+              source={require('../../../../assets/justice.png')} 
+              style={styles.bannerImage} 
+              resizeMode="contain"
+            />
           </View>
 
           <View style={styles.bannerContent}>
@@ -368,13 +372,16 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   bannerIconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    width: 60,
+    height: 60,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
+  },
+  bannerImage: {
+    width: 70,
+    height: 70,
   },
   bannerRightIconBox: {
     width: 52,
