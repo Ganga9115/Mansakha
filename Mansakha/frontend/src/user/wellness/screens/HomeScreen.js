@@ -115,7 +115,7 @@ export default function HomeScreen({ navigation }) {
                           <Feather name="heart" size={16} color={colors.primaryDark} style={{ marginRight: spacing.sm }} />
                           <Text style={styles.recommendationLabel}>Recommendation</Text>
                           {data.recommendation.actionType === 'wellness' && (
-                            <Pressable style={styles.recommendationPill} onPress={() => navigation?.navigate('Wellbeing')}>
+                            <Pressable style={styles.recommendationPill} onPress={() => navigation?.navigate('wellbeing')}>
                               <Text style={styles.recommendationPillText}>My Well-being</Text>
                             </Pressable>
                           )}
@@ -150,7 +150,7 @@ export default function HomeScreen({ navigation }) {
                   <View style={styles.gridContainer}>
                     <Pressable
                       style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('Wellbeing')}
+                      onPress={() => navigation?.navigate('wellbeing')}
                     >
                       <View style={styles.gridIconSquare}>
                         <Feather name="trending-up" size={18} color={colors.primary} />
