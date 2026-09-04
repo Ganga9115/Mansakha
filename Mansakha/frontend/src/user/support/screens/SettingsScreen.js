@@ -58,11 +58,11 @@ const INDIAN_LANGUAGES = [
   { value: 'mai', label: 'Maithili (मैथिली)' },
   { value: 'ml', label: 'Malayalam (മലയാളം)' },
   { value: 'mni', label: 'Manipuri (মৈতৈলোন্)' },
-  { value: 'mr', label: 'Marathi (मराठी)' },
+  { value: 'mr', label: 'Marathi (মરાઠી)' },
   { value: 'ne', label: 'Nepali (नेपाली)' },
   { value: 'or', label: 'Odia (ଓଡ଼ିଆ)' },
   { value: 'pa', label: 'Punjabi (ਪੰਜਾਬੀ)' },
-  { value: 'sa', label: 'Sanskrit (সংस्कृतम्)' },
+  { value: 'sa', label: 'Sanskrit (সংસ્કૃતમ્)' },
   { value: 'sat', label: 'Santali (ᱥᱟᱱᱛᱟᱲᱤ)' },
   { value: 'sd', label: 'Sindhi (سنڌي)' },
   { value: 'ta', label: 'Tamil (தமிழ்)' },
@@ -203,18 +203,36 @@ export default function SettingsScreen({ navigation }) {
 
             <View style={styles.divider} />
 
-            {/* Renders all cases without the bracketed numbers */}
+            {/* Renders cases displaying Docket ID, Case Type, and Case Stage */}
             {casesList.length > 0 ? (
-              casesList.map((c, index) => (
-                <InfoTileRow
-                  key={c.userId || c.caseNumber || index}
-                  icon="briefcase"
-                  label={`Case ${index + 1}`}
-                  loading={dashboardQuery.isLoading}
-                  value={`Stage: ${c.caseStage || c.stage || 'Trial'}`}
-                  isLast={index === casesList.length - 1}
-                />
-              ))
+              casesList.map((c, index) => {
+                const docketId = c.docketId || c.docketNo || c.caseNumber || 'N/A';
+                const caseType = c.caseType || c.type || 'N/A';
+                const caseStage = c.caseStage || c.stage || 'Trial';
+
+                return (
+                  <View
+                    key={c.userId || c.caseNumber || index}
+                    style={[styles.infoTileRow, index !== casesList.length - 1 && styles.rowBorder]}
+                  >
+                    <View style={styles.tileIconContainer}>
+                      <Feather name="briefcase" size={18} color={colors.primary} />
+                    </View>
+                    <View style={styles.tileTextWrap}>
+                      <Text style={styles.tileLabel}>{`CASE ${index + 1}`}</Text>
+                      {dashboardQuery.isLoading ? (
+                        <Skeleton width={120} height={14} />
+                      ) : (
+                        <View style={styles.caseDetailsColumn}>
+                          <Text style={styles.tileValue}>{`Docket ID : ${docketId}`}</Text>
+                          <Text style={styles.tileValue}>{`Case Type : ${caseType}`}</Text>
+                          <Text style={styles.tileValue}>{`Case Stage : ${caseStage}`}</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                );
+              })
             ) : (
               <InfoTileRow
                 icon="briefcase"
@@ -520,6 +538,7 @@ const styles = StyleSheet.create({
   tileTextWrap: { flex: 1 },
   tileLabel: { ...typography.caption, color: colors.textSecondary, textTransform: 'uppercase' },
   tileValue: { ...typography.bodyStrong, color: colors.textPrimary, marginTop: 2 },
+  caseDetailsColumn: { marginTop: 2, gap: 2 },
   outlineBtn: {
     borderWidth: 1.5,
     borderColor: colors.border,

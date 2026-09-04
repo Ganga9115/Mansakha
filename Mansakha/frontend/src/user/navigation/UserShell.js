@@ -23,6 +23,7 @@ import SettingsScreen from '../support/screens/SettingsScreen';
 import ChatScreen from '../chat/screens/ChatScreen';
 import WellnessScreen from '../wellness/screens/WellnessScreen';
 import JournalScreen from '../wellness/screens/JournalScreen';
+import MyEntryScreen from '../wellness/screens/MyEntry';
 import CounsellorChatScreen from '../chat/screens/CounsellorChatScreen';
 
 import { useUserDashboard, useAssignedCounsellor } from '../shared/services/hooks';
@@ -32,7 +33,6 @@ const Drawer = createDrawerNavigator();
 const CheckinStack = createNativeStackNavigator();
 const RootStack = createNativeStackNavigator();
 
-// Nested stack for Check-in flow (Check-in -> Confirmation)
 function CheckinTab() {
   return (
     <CheckinStack.Navigator screenOptions={{ headerShown: false }}>
@@ -50,11 +50,6 @@ const SCREENS = {
   mycounsellor: CounsellorChatScreen,
 };
 
-// Map screen keys to Feather icons - shared between the bottom tab bar
-// (mobile/tablet) and the sidebar (desktop) so the same icon appears
-// either way. Support has no entry here - it's no longer a tab/sidebar
-// item (see the "support" RootStack.Screen in ShellStack below), and
-// SidebarNav already skips any route missing from this map.
 const TAB_ICONS = {
   home: 'home',
   checkin: 'mic',
@@ -111,9 +106,6 @@ function TabNavigator() {
   );
 }
 
-// Desktop tier: a permanent (non-overlay, non-swipeable) drawer used
-// purely as a left sidebar rail. Same routes/screens as TabNavigator -
-// only the navigation chrome differs.
 function DesktopNavigator() {
   const dashboard = useUserDashboard();
   const counsellor = useAssignedCounsellor();
@@ -142,11 +134,8 @@ function DesktopNavigator() {
       <Drawer.Screen name="Chatbot" component={ChatScreen} />
       <Drawer.Screen name="Wellbeing" component={WellnessScreen} />
       <Drawer.Screen name="Journal" component={JournalScreen} />
+      <Drawer.Screen name="MyEntry" component={MyEntryScreen} />
       <Drawer.Screen name="CounsellorChat" component={CounsellorChatScreen} />
-      {/* Every page - including any added later - keeps the permanent
-          sidebar/top bar on desktop, so it's registered here as a Drawer.Screen,
-          not left to fall through to ShellStack's outer RootStack (which has
-          no sidebar at all, being a sibling of this whole Drawer). */}
       <Drawer.Screen name="support" component={SupportScreen} />
       <Drawer.Screen name="AtrocitiesAct" component={AtrocitiesActScreen} />
     </Drawer.Navigator>
@@ -171,19 +160,6 @@ function DesktopNavigatorWithFAB() {
   );
 }
 
-// Screens pushed on top of the tab/drawer navigator (not part of the daily
-// tab bar) - reached via Home's quick-action tiles or Settings' conditional
-// counsellor-chat entry point. Nesting these above MainTabs, rather than
-// adding more tabs, keeps the 5-item tab bar/sidebar from getting crowded;
-// `navigation.navigate('Chatbot')` called from any screen inside MainTabs
-// bubbles up to this stack automatically.
-//
-// "support" is registered here unconditionally (regardless of includeExtras/
-// tier) rather than as a Tab.Screen/Drawer.Screen - it's no longer a
-// persistent nav item in the tab bar or the desktop sidebar, but Home's
-// "Support Helpline" quick-action tile and the header bell still both call
-// navigation.navigate('support'), so the route itself has to keep existing
-// somewhere reachable on every tier.
 function ShellStack({ tabs, includeExtras = true }) {
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
@@ -195,6 +171,7 @@ function ShellStack({ tabs, includeExtras = true }) {
           <RootStack.Screen name="Chatbot" component={ChatScreen} />
           <RootStack.Screen name="Wellbeing" component={WellnessScreen} />
           <RootStack.Screen name="Journal" component={JournalScreen} />
+          <RootStack.Screen name="MyEntry" component={MyEntryScreen} />
           <RootStack.Screen name="CounsellorChat" component={CounsellorChatScreen} />
         </>
       )}

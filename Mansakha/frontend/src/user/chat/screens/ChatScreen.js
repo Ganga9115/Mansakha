@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, FlatList, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, FlatList, TextInput, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -9,19 +9,25 @@ import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import TopRightActions from '../../shared/components/TopRightActions';
 import { useCheckin, useLogChatTurn } from '../../shared/services/hooks';
-import { analyzeConversation } from '../../shared/services/ollamaClient';
+
 const OLLAMA = "http://127.0.0.1:11434";
 const CHAT = OLLAMA + "/api/chat";
 const TAGS = OLLAMA + "/api/tags";
 const SYSTEM = `You are Mansakha, a calm and supportive conversational companion. Listen with empathy. Keep replies short and natural. Ask one gentle question at a time. Do not diagnose mental-health conditions. Do not assign risk levels or distress scores. Do not claim to be a doctor, counsellor, lawyer or police officer. Do not claim you contacted anyone. A separate post-conversation distress analysis handles distress scoring. If immediate danger is described, do not ask same question again and again, encourage immediate local emergency help.`;
+
+const EMOJI_LIST = ['😊', '❤️', '👍', '🙏', '🌿', '✨', '🌊', '💡', '🤗', '😌', '💪', '🌸'];
 
 function Bubble({ message }) {
   const isUser = message.role === 'user';
   return (
     <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
       <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAi]}>
-        <Text style={[styles.bubbleRole, isUser && { color: 'rgba(255,255,255,0.8)' }]}>{isUser ? 'YOU' : 'MANSAKHA'}</Text>
-        <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{message.content}</Text>
+        <Text style={[styles.bubbleRole, isUser && { color: 'rgba(255,255,255,0.8)' }]}>
+          {isUser ? 'YOU' : 'MANSAKHA'}
+        </Text>
+        <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
+          {message.content}
+        </Text>
       </View>
     </View>
   );
@@ -37,27 +43,46 @@ export default function ChatScreen({ navigation }) {
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('Connecting to Ollama...');
 
-  // Voice Call state - triggered from the composer's mic button (see
-  // toggleCall below), not a separate tab/mode anymore. Recognized speech
-  // and spoken replies flow into the same `messages` array as typed text,
-  // so a call's turns render as ordinary bubbles in the one chat thread.
+  // Call & Video States
   const [inCall, setInCall] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
+  const [isVideoCall, setIsVideoCall] = useState(false);
+  const [facingMode, setFacingMode] = useState('user');
   const [voiceState, setVoiceState] = useState('Ready to talk');
-  const recognitionRef = useRef(null);
-  // Set once a call happens this session - read by analyzeDistress to
-  // decide whether to report this check-in as 'IVRS' or 'Chatbot', now that
-  // there's no explicit mode toggle to read that from.
-  const usedVoiceRef = useRef(false);
 
-  // Analysis State
-  const [analysis, setAnalysis] = useState(null);
+  // Layout Toggle & Recording States
+  const [showExpandedMenu, setShowExpandedMenu] = useState(false);
+  const [showRecorderBox, setShowRecorderBox] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [audioUrl, setAudioUrl] = useState(null);
+  const [showEmojis, setShowEmojis] = useState(false);
 
+  // Refs
+  const videoRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordTimerRef = useRef(null);
+  const audioElementRef = useRef(null);
   const listRef = useRef(null);
-  
+
   useEffect(() => {
     loadModels();
+    return () => {
+      stopMediaStream();
+      if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    };
   }, []);
+
+  const stopMediaStream = () => {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      mediaStreamRef.current = null;
+    }
+  };
 
   const loadModels = async () => {
     try {
@@ -80,7 +105,7 @@ export default function ChatScreen({ navigation }) {
   const askOllama = async (text, currentMsgs) => {
     const newMessages = [...currentMsgs, { role: "user", content: text }];
     setMessages(newMessages);
-    
+
     try {
       const r = await fetch(CHAT, {
         method: "POST",
@@ -96,256 +121,215 @@ export default function ChatScreen({ navigation }) {
       const d = await r.json();
       const reply = d?.message?.content?.trim();
       if (!reply) throw new Error("Empty response");
-      
+
       setMessages(prev => [...prev, { role: "assistant", content: reply }]);
       setStatus(`● Connected • ${model}`);
 
-      // Persist this exchange (was never actually saved anywhere before -
-      // the whole conversation lived only in this component's React state).
-      // Fire-and-forget: a save failure shouldn't interrupt the live chat,
-      // it just means this turn won't count toward the 5,000-word scoring
-      // trigger server-side.
       logChatTurn.mutate({ userMessage: text, aiMessage: reply });
-
       return reply;
     } catch (e) {
-      setMessages(currentMsgs); // revert
+      setMessages(currentMsgs);
       setStatus("✕ Ollama error: " + e.message);
       throw e;
     }
   };
 
-  const handleSendText = async () => {
+  const handleSend = async () => {
+    if (isRecording) {
+      stopVoiceRecording();
+    }
+
+    if (audioBlob || audioUrl || isRecording) {
+      const textMessage = `🎤 [Voice Note - ${recordingTime}s]`;
+      deleteRecording();
+      setShowEmojis(false);
+      setStatus("Mansakha is thinking...");
+      try {
+        await askOllama(textMessage, messages);
+        requestAnimationFrame(() => listRef.current?.scrollToEnd?.({ animated: true }));
+      } catch (err) {}
+      return;
+    }
+
     const text = draft.trim();
     if (!text) return;
     setDraft('');
+    setShowEmojis(false);
     setStatus("Mansakha is thinking...");
     try {
       await askOllama(text, messages);
       requestAnimationFrame(() => listRef.current?.scrollToEnd?.({ animated: true }));
+    } catch (err) {}
+  };
+
+  const toggleVoiceCall = () => {
+    if (inCall && !isVideoCall) {
+      endCall();
+    } else {
+      stopMediaStream();
+      setIsVideoCall(false);
+      setInCall(true);
+      setVoiceState("Voice Call Active");
+    }
+  };
+
+  const toggleVideoCall = async (mode = 'user') => {
+    if (inCall && isVideoCall) {
+      endCall();
+      return;
+    }
+
+    if (Platform.OS !== 'web' || !navigator.mediaDevices?.getUserMedia) {
+      setIsVideoCall(true);
+      setInCall(true);
+      setVoiceState("Video Call Active");
+      return;
+    }
+
+    try {
+      stopMediaStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: mode },
+        audio: true,
+      });
+      mediaStreamRef.current = stream;
+      if (videoRef.current) videoRef.current.srcObject = stream;
+      setIsVideoCall(true);
+      setInCall(true);
+      setFacingMode(mode);
+      setVoiceState("Video Call Active");
     } catch (err) {
-      // error handled in askOllama
+      alert("Could not access camera/microphone: " + err.message);
     }
   };
 
-  // --- Voice Logic (Web Only for Prototype) ---
-  const getVoice = () => {
-    if (!window.speechSynthesis) return null;
-    const voices = window.speechSynthesis.getVoices();
-    const preferred = [
-      "Microsoft Aria Online (Natural) - English (India)",
-      "Microsoft Heera - English (India)",
-      "Google English",
-      "Samantha",
-      "Microsoft Zira"
-    ];
-    return voices.find(v => preferred.some(p => v.name.includes(p))) ||
-           voices.find(v => v.lang.toLowerCase().startsWith("en-in")) ||
-           voices.find(v => v.lang.toLowerCase().startsWith("en")) ||
-           voices[0];
+  const toggleCameraFacing = () => {
+    const nextMode = facingMode === 'user' ? 'environment' : 'user';
+    toggleVideoCall(nextMode);
   };
 
-  const speak = (text) => {
-    return new Promise(res => {
-      if (!window.speechSynthesis) return res();
-      setSpeaking(true);
-      setVoiceState("Speaking...");
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      const v = getVoice();
-      if (v) u.voice = v;
-      u.lang = v?.lang || "en-IN";
-      u.rate = 0.9;
-      u.onend = u.onerror = () => {
-        setSpeaking(false);
-        res();
+  const endCall = () => {
+    setInCall(false);
+    setIsVideoCall(false);
+    stopMediaStream();
+    setVoiceState("Call ended");
+  };
+
+  // Toggle vertical box state on click
+  const handleRecorderClick = () => {
+    if (showRecorderBox) {
+      setShowRecorderBox(false);
+    } else {
+      setShowRecorderBox(true);
+      if (!isRecording && !audioUrl) {
+        startVoiceRecording();
+      }
+    }
+  };
+
+  // Voice Recorder Controls
+  const startVoiceRecording = async () => {
+    deleteRecording();
+    if (Platform.OS !== 'web' || !navigator.mediaDevices?.getUserMedia) {
+      setIsRecording(true);
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
-      window.speechSynthesis.speak(u);
-    });
+
+      mediaRecorder.onstop = () => {
+        stream.getTracks().forEach(track => track.stop());
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        setAudioBlob(blob);
+        setAudioUrl(url);
+        setIsRecording(false);
+        setIsPaused(false);
+        clearInterval(recordTimerRef.current);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      setIsPaused(false);
+      setRecordingTime(0);
+      recordTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+    } catch (err) {
+      alert("Microphone permission denied: " + err.message);
+    }
   };
 
-  const makeRecognition = () => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return null;
-    const r = new SR();
-    r.continuous = false;
-    r.interimResults = true;
-    r.lang = "en-IN";
-    r.onstart = () => {
-      if (inCallRef.current) {
-        setVoiceState("Listening...");
-        setStatus("● Microphone active");
+  const pauseVoiceRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      if (isPaused) {
+        mediaRecorderRef.current.resume();
+        setIsPaused(false);
+        recordTimerRef.current = setInterval(() => {
+          setRecordingTime(prev => prev + 1);
+        }, 1000);
+      } else {
+        mediaRecorderRef.current.pause();
+        setIsPaused(true);
+        clearInterval(recordTimerRef.current);
       }
-    };
-    r.onspeechstart = () => {
-      if (speakingRef.current) {
-        window.speechSynthesis?.cancel();
-        setSpeaking(false);
-        setVoiceState("Listening...");
-      }
-    };
-    r.onresult = e => {
-      let f = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) f += e.results[i][0].transcript;
-      }
-      if (f.trim()) {
-        if (speakingRef.current) {
-          window.speechSynthesis?.cancel();
-          setSpeaking(false);
-          setVoiceState("Listening...");
-        }
-        handleVoiceInput(f.trim());
-      }
-    };
-    r.onerror = e => {
-      if (inCallRef.current && e.error !== "not-allowed") {
-        setTimeout(startListening, 500);
-      } else if (e.error === "not-allowed") {
-        setStatus("Allow microphone access.");
-      }
-    };
-    r.onend = () => {
-      if (inCallRef.current) {
-        setTimeout(startListening, 300);
-      }
-    };
-    return r;
-  };
-
-  // We need refs inside callbacks since speech API uses old closures
-  const inCallRef = useRef(inCall);
-  const speakingRef = useRef(speaking);
-  inCallRef.current = inCall;
-  speakingRef.current = speaking;
-  const messagesRef = useRef(messages);
-  messagesRef.current = messages;
-
-  const startListening = () => {
-    if (!inCallRef.current) return;
-    if (!recognitionRef.current) {
-      recognitionRef.current = makeRecognition();
-    }
-    if (!recognitionRef.current) {
-      setStatus("Speech recognition unavailable.");
-      return;
-    }
-    try {
-      recognitionRef.current.start();
-    } catch (e) {}
-  };
-
-  const stopListening = () => {
-    try {
-      recognitionRef.current?.stop();
-    } catch (e) {}
-  };
-
-  const handleVoiceInput = async (text) => {
-    if (!inCallRef.current) return;
-    stopListening();
-    setStatus("Mansakha is thinking...");
-    try {
-      const reply = await askOllama(text, messagesRef.current);
-      await speak(reply);
-      if (inCallRef.current) {
-        setTimeout(startListening, 250);
-      }
-    } catch (e) {
-      setVoiceState("Connection problem");
-      if (inCallRef.current) setTimeout(startListening, 1000);
     }
   };
 
-  const toggleCall = async () => {
-    if (Platform.OS !== 'web') {
-      alert("Voice input requires a web browser in this prototype.");
-      return;
-    }
-    if (inCall) {
-      setInCall(false);
-      window.speechSynthesis?.cancel();
-      stopListening();
-      setVoiceState("Call ended");
-      setTimeout(analyzeDistress, 150);
-      return;
-    }
-    if (models.length === 0) {
-      alert("No Ollama models connected.");
-      return;
-    }
-    usedVoiceRef.current = true;
-    setInCall(true);
-    setAnalysis(null);
-    // Appended, not a reset - a call picks up in the same thread as any
-    // typed messages already here, since both now share one chat view.
-    const greeting = "Hello. I'm here to listen. Take your time. How are you feeling today?";
-    setMessages(prev => [...prev, { role: "assistant", content: greeting }]);
-    await speak(greeting);
-    if (inCallRef.current) {
-      startListening();
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    } else {
+      setIsRecording(false);
     }
   };
 
-  const analyzeDistress = async () => {
-    const turns = messagesRef.current.filter(m => m.role === "user");
-    if (!turns.length) {
-      setAnalysis({
-        score: null,
-        description: "There is not enough user conversation to analyze.",
-        meta: ""
-      });
-      return;
+  const togglePlayback = () => {
+    if (!audioUrl) return;
+    if (!audioElementRef.current) {
+      audioElementRef.current = new Audio(audioUrl);
+      audioElementRef.current.onended = () => setIsPlaying(false);
     }
-    
-    setAnalysis({ score: 'Analyzing...', description: 'Reviewing the conversation for signs of distress...', meta: `Local analysis via ${model}` });
-    
-    try {
-      // 1. Analyze the conversation using the standard ollamaClient logic
-      const aiAnalysis = await analyzeConversation(messagesRef.current, model);
-      
-      // 2. Format responses for the backend
-      const formattedResponses = messagesRef.current
-        .filter(m => m.role === "user" || m.role === "assistant")
-        .map(m => (m.role === "user" ? "Person: " : "Mansakha: ") + m.content);
 
-      // 3. Submit to backend to update distress scores in the DB
-      const result = await submitMutation.mutateAsync({
-        channel: usedVoiceRef.current ? 'IVRS' : 'Chatbot',
-        responses: formattedResponses,
-        aiAnalysis
-      });
-
-      // 4. Update the UI with the final result
-      let rawScore = Number(result?.scoreValue);
-      let scoreVal = Number.isFinite(rawScore) ? Math.round(rawScore > 10 ? rawScore / 10 : rawScore) : 5;
-      scoreVal = Math.max(0, Math.min(10, scoreVal));
-
-      setAnalysis({
-        score: scoreVal,
-        description: result.summary || "Conversation analyzed and safely stored.",
-        meta: `Post-conversation analysis • ${new Date().toLocaleTimeString()}`
-      });
-      setStatus(`● Distress analysis complete • ${model}`);
-    } catch (e) {
-      setAnalysis({
-        score: 'Error',
-        description: 'Failed to analyze or save the distress score.',
-        meta: e.message
-      });
-      setStatus("✕ Distress analysis failed");
+    if (isPlaying) {
+      audioElementRef.current.pause();
+      setIsPlaying(false);
+    } else {
+      audioElementRef.current.play();
+      setIsPlaying(true);
     }
   };
 
-  const getScoreColor = (score) => {
-    if (typeof score !== 'number') return colors.textPrimary;
-    if (score >= 7) return colors.danger;
-    if (score >= 4) return colors.warning;
-    return colors.success;
+  const deleteRecording = () => {
+    if (audioElementRef.current) {
+      audioElementRef.current.pause();
+      audioElementRef.current = null;
+    }
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+    clearInterval(recordTimerRef.current);
+    setIsRecording(false);
+    setIsPaused(false);
+    setIsPlaying(false);
+    setAudioBlob(null);
+    setAudioUrl(null);
+    setRecordingTime(0);
+    setShowRecorderBox(false);
   };
+
+  const isSendActive = draft.trim().length > 0 || isRecording || audioBlob !== null || audioUrl !== null;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Top Header */}
       <View style={styles.topHeader}>
         {tier !== 'desktop' && (
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
@@ -356,13 +340,33 @@ export default function ChatScreen({ navigation }) {
           <Feather name="cpu" size={18} color={colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.statusTitle}>Local AI</Text>
+          <Text style={styles.statusTitle}>Mansakha AI Counsellor</Text>
           <Text style={styles.subtext}>{inCall ? voiceState : status}</Text>
         </View>
         <TopRightActions />
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center', paddingTop: spacing.md }]}>
+        {/* Video Overlay UI */}
+        {inCall && isVideoCall && (
+          <View style={styles.videoContainer}>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              style={{ width: '100%', height: 220, borderRadius: radius.md, backgroundColor: '#000', objectFit: 'cover' }}
+            />
+            <View style={styles.videoOverlayControls}>
+              <Pressable style={styles.videoControlBtn} onPress={toggleCameraFacing}>
+                <Feather name="refresh-cw" size={14} color={colors.white} />
+                <Text style={styles.videoControlText}>{facingMode === 'user' ? ' Back Camera' : ' Front Camera'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
+
+        {/* Message Stream */}
         <FlatList
           ref={listRef}
           data={messages}
@@ -371,51 +375,163 @@ export default function ChatScreen({ navigation }) {
           renderItem={({ item }) => <Bubble message={item} />}
           contentContainerStyle={styles.listContent}
         />
-        {analysis && (
-          <View style={styles.analysisPanel}>
-            <View style={styles.analysisHeader}>
-              <Text style={styles.analysisTitle}>Distress Analysis</Text>
-              <Text style={[styles.score, { color: getScoreColor(analysis.score) }]}>
-                {analysis.score !== null && analysis.score !== 'Error' && analysis.score !== 'Analyzing...' ? `${analysis.score} / 10` : analysis.score}
-              </Text>
-            </View>
-            <Text style={styles.analysisDesc}>{analysis.description}</Text>
-            <Text style={styles.analysisMeta}>{analysis.meta}</Text>
+
+        {/* Emoji Selector */}
+        {showEmojis && (
+          <View style={styles.emojiRowContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.emojiScroll}>
+              {EMOJI_LIST.map((e, idx) => (
+                <Pressable key={idx} onPress={() => setDraft(prev => prev + e)} style={styles.emojiBtn}>
+                  <Text style={{ fontSize: 20 }}>{e}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </View>
         )}
-        <View style={styles.inputContainer}>
-          <View style={styles.inputPill}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Type a message..."
-              placeholderTextColor={colors.textSecondary}
-              value={draft}
-              onChangeText={setDraft}
-              onKeyPress={(e) => {
-                if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                  e.preventDefault();
-                  handleSendText();
-                }
-              }}
-              multiline
-            />
-            {/* Mic now starts/ends a live voice call with Mansakha (what the
-                old separate "Voice Call" tab did) rather than dictating text
-                into the composer - tap again (shown as a red phone-off
-                button while a call is active) to hang up. Recognized speech
-                and spoken replies land in the same bubble list above as any
-                typed message. */}
-            <Pressable
-              style={[styles.micBtn, inCall && styles.micBtnActive]}
-              onPress={toggleCall}
-              accessibilityLabel={inCall ? 'End voice call with Mansakha' : 'Start voice call with Mansakha'}
-            >
-              <Feather name={inCall ? "phone-off" : "mic"} size={18} color={inCall ? colors.white : colors.primary} />
-            </Pressable>
-            <Pressable style={[styles.sendBtn, !draft.trim() && styles.sendBtnDisabled]} onPress={handleSendText} disabled={!draft.trim()}>
-              <Feather name="send" size={18} color={colors.white} />
-            </Pressable>
-          </View>
+
+        {/* Dynamic Action Input Panel */}
+        <View style={styles.inputSectionContainer}>
+          {/* Vertical Icon-Only Recording Overlay Box */}
+          {showRecorderBox && (
+            <View style={styles.verticalRecorderBox}>
+              <View style={styles.recorderTimerHeader}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingTimeText}>{recordingTime}s</Text>
+              </View>
+
+              <View style={styles.verticalActionsContainer}>
+                {/* Pause / Play Icon */}
+                <Pressable
+                  style={[styles.verticalActionIconBtn, { backgroundColor: colors.primary + '15' }]}
+                  onPress={isRecording ? pauseVoiceRecording : togglePlayback}
+                >
+                  <Feather
+                    name={isRecording ? (isPaused ? "play" : "pause") : (isPlaying ? "pause" : "play")}
+                    size={20}
+                    color={colors.primary}
+                  />
+                </Pressable>
+
+                {/* Delete Icon */}
+                <Pressable
+                  style={[styles.verticalActionIconBtn, { backgroundColor: colors.danger + '15' }]}
+                  onPress={deleteRecording}
+                >
+                  <Feather name="trash-2" size={20} color={colors.danger} />
+                </Pressable>
+
+                {/* Send Icon */}
+                <Pressable
+                  style={[styles.verticalActionIconBtn, { backgroundColor: colors.primary }]}
+                  onPress={handleSend}
+                >
+                  <Feather name="send" size={18} color={colors.white} />
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          {!showExpandedMenu ? (
+            /* NORMAL MODE: Single Input Box with Center Wave Icon */
+            <View style={styles.singleInputWrapper}>
+              <Pressable
+                style={styles.floatingWaveTriggerBtn}
+                onPress={() => setShowExpandedMenu(true)}
+              >
+                <Feather name="activity" size={20} color={colors.white} />
+              </Pressable>
+
+              <View style={styles.textInputRow}>
+                <Pressable style={styles.iconBtn} onPress={() => setShowEmojis(prev => !prev)}>
+                  <Feather name="smile" size={20} color={colors.textSecondary} />
+                </Pressable>
+
+                <TextInput
+                  style={styles.textInput}
+                  placeholder={isRecording || audioUrl ? "Voice note recorded..." : "Type a message..."}
+                  placeholderTextColor={colors.textSecondary}
+                  value={draft}
+                  onChangeText={setDraft}
+                  editable={!isRecording && !audioUrl}
+                  onKeyPress={(e) => {
+                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  multiline
+                />
+
+                {/* Universal Send Button */}
+                <Pressable
+                  style={[styles.sendBtn, !isSendActive && styles.sendBtnDisabled]}
+                  onPress={handleSend}
+                  disabled={!isSendActive}
+                >
+                  <Feather name="send" size={18} color={colors.white} />
+                </Pressable>
+              </View>
+            </View>
+          ) : (
+            /* EXPANDED MODE */
+            <View style={styles.expandedMenuContainer}>
+              <View style={styles.sideActionsGroup}>
+                <Pressable
+                  style={[styles.actionCircleBtn, inCall && isVideoCall && { backgroundColor: colors.danger }]}
+                  onPress={() => toggleVideoCall('user')}
+                >
+                  <Feather
+                    name={inCall && isVideoCall ? "video-off" : "video"}
+                    size={18}
+                    color={inCall && isVideoCall ? colors.white : colors.textPrimary}
+                  />
+                </Pressable>
+                <Pressable
+                  style={[styles.actionCircleBtn, inCall && !isVideoCall && { backgroundColor: colors.danger }]}
+                  onPress={toggleVoiceCall}
+                >
+                  <Feather
+                    name={inCall && !isVideoCall ? "phone-off" : "phone"}
+                    size={18}
+                    color={inCall && !isVideoCall ? colors.white : colors.textPrimary}
+                  />
+                </Pressable>
+              </View>
+
+              <View style={[styles.textInputRow, { flex: 1, marginBottom: 0 }]}>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Type..."
+                  placeholderTextColor={colors.textSecondary}
+                  value={draft}
+                  onChangeText={setDraft}
+                  onKeyPress={(e) => {
+                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                />
+              </View>
+
+              <View style={styles.sideActionsGroup}>
+                {/* Always stays a microphone icon; toggles menu on click */}
+                <Pressable
+                  style={[styles.actionCircleBtn, showRecorderBox && { backgroundColor: colors.primary + '20' }]}
+                  onPress={handleRecorderClick}
+                >
+                  <Feather name="mic" size={18} color={showRecorderBox ? colors.primary : colors.textPrimary} />
+                </Pressable>
+
+                <Pressable
+                  style={[styles.actionCircleBtn, styles.cancelCircleBtn]}
+                  onPress={() => setShowExpandedMenu(false)}
+                >
+                  <Feather name="x" size={18} color={colors.white} />
+                </Pressable>
+              </View>
+            </View>
+          )}
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -442,7 +558,6 @@ const styles = StyleSheet.create({
   subtext: { ...typography.caption, color: colors.textSecondary },
   body: { flex: 1, paddingHorizontal: spacing.lg },
   listContent: { paddingBottom: spacing.xl },
-  emptyText: { textAlign: 'center', color: colors.textSecondary, marginTop: spacing.xxl },
   bubbleRow: { flexDirection: 'row', marginBottom: spacing.sm },
   bubbleRowUser: { justifyContent: 'flex-end' },
   bubble: { maxWidth: '80%', borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
@@ -451,11 +566,106 @@ const styles = StyleSheet.create({
   bubbleRole: { fontSize: 10, fontWeight: 'bold', opacity: 0.65, marginBottom: 4, color: colors.textPrimary },
   bubbleText: { ...typography.body, color: colors.textPrimary },
   bubbleTextUser: { color: colors.white },
-  inputContainer: {
-    paddingVertical: spacing.md,
-    backgroundColor: colors.background, 
+
+  videoContainer: {
+    marginBottom: spacing.md,
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  inputPill: {
+  videoOverlayControls: { position: 'absolute', bottom: 8, right: 8 },
+  videoControlBtn: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill,
+  },
+  videoControlText: { color: colors.white, fontSize: 12, fontWeight: '600' },
+
+  emojiRowContainer: {
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    paddingVertical: 6, paddingHorizontal: 8, marginBottom: 8,
+    borderWidth: 1, borderColor: colors.border,
+  },
+  emojiScroll: { flexDirection: 'row', gap: 12, alignItems: 'center' },
+  emojiBtn: { padding: 4 },
+
+  inputSectionContainer: {
+    marginBottom: spacing.md,
+    position: 'relative',
+  },
+
+  /* Compact Vertical Recorder Box Overlay (Icons Only) */
+  verticalRecorderBox: {
+    position: 'absolute',
+    bottom: 56,
+    right: 48,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  recorderTimerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+    gap: 6,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+  },
+  recordingTimeText: {
+    ...typography.caption,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  verticalActionsContainer: {
+    flexDirection: 'column',
+    gap: spacing.xs,
+  },
+  verticalActionIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  singleInputWrapper: {
+    position: 'relative',
+    paddingTop: 16,
+  },
+  floatingWaveTriggerBtn: {
+    position: 'absolute',
+    top: -4,
+    alignSelf: 'center',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#1E3A8A',
+    borderWidth: 3,
+    borderColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  textInputRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
@@ -465,35 +675,46 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  iconBtn: { padding: 6 },
   textInput: {
     flex: 1, ...typography.body, color: colors.textPrimary,
-    maxHeight: 120, paddingHorizontal: 8,
+    maxHeight: 100, paddingHorizontal: 8,
     paddingTop: Platform.OS === 'web' ? 10 : 8,
     paddingBottom: Platform.OS === 'web' ? 10 : 8,
     outlineStyle: 'none',
-  },
-  micBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center', marginLeft: 4,
-    borderWidth: 1, borderColor: colors.border,
-  },
-  // Solid red "in a call, tap to hang up" state - same red-active convention
-  // used for the counsellor chat's own voice-note recording button.
-  micBtnActive: {
-    borderColor: colors.danger, backgroundColor: colors.danger,
   },
   sendBtn: {
     width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary,
     alignItems: 'center', justifyContent: 'center', marginLeft: 4,
   },
   sendBtnDisabled: { opacity: 0.5 },
-  analyzeBtn: { width: '100%', padding: spacing.md, backgroundColor: colors.surface, borderRadius: radius.md, borderWidth: 1, borderColor: colors.border, alignItems: 'center' },
-  analyzeBtnText: { ...typography.body, color: colors.textPrimary, fontWeight: '600' },
-  note: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xl },
-  analysisPanel: { marginTop: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, borderWidth: 1, borderColor: colors.border },
-  analysisHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.sm },
-  analysisTitle: { ...typography.h3, fontWeight: 'bold', color: colors.textPrimary },
-  score: { fontSize: 24, fontWeight: '800' },
-  analysisDesc: { ...typography.body, color: colors.textSecondary, marginBottom: spacing.sm },
-  analysisMeta: { ...typography.caption, color: colors.textSecondary },
+
+  expandedMenuContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: colors.border,
+    elevation: 3,
+  },
+  sideActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  actionCircleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelCircleBtn: {
+    backgroundColor: colors.textSecondary,
+  },
 });
