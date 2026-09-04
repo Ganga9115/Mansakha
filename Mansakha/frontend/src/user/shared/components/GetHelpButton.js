@@ -69,22 +69,27 @@ export default function GetHelpButton({ asHeaderIcon = false }) {
         />
       </Pressable>
 
-      <Modal visible={confirmOpen} transparent animationType="fade" onRequestClose={() => setConfirmOpen(false)}>
-        <View style={styles.backdrop}>
-          <View style={styles.card}>
-            <View style={styles.iconTile}>
+      <Modal
+        visible={confirmOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmOpen(false)}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconTile}>
               <Feather name="alert-triangle" size={28} color={colors.danger} />
             </View>
-            <Text style={styles.title}>Get Help Now?</Text>
-            <Text style={styles.body}>
+            <Text style={styles.confirmTitle}>Get Help Now?</Text>
+            <Text style={styles.confirmBody}>
               This will immediately notify your counsellor, your district administration, and your state
               administration that you need urgent help, and will help connect you to the Police Control Room.
             </Text>
-            <Pressable style={styles.confirmBtn} onPress={handleConfirm} disabled={triggerUrgentHelp.isPending}>
-              <Text style={styles.confirmBtnText}>{triggerUrgentHelp.isPending ? 'Sending...' : 'Yes, Get Help Now'}</Text>
+            <Pressable style={styles.confirmDeleteBtn} onPress={handleConfirm} disabled={triggerUrgentHelp.isPending}>
+              <Text style={styles.confirmDeleteBtnText}>{triggerUrgentHelp.isPending ? 'Sending...' : 'Yes, Get Help Now'}</Text>
             </Pressable>
-            <Pressable style={styles.cancelBtn} onPress={() => setConfirmOpen(false)} disabled={triggerUrgentHelp.isPending}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+            <Pressable style={styles.confirmCancelBtn} onPress={() => setConfirmOpen(false)} disabled={triggerUrgentHelp.isPending}>
+              <Text style={styles.confirmCancelBtnText}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -115,7 +120,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
-  backdrop: {
+  // Verbatim copy of MyEntry.js's delete-confirmation modal styles (the
+  // "journal delete" popup), renamed to this file's own content - kept
+  // textually identical, not just value-equal, so there is no possible
+  // source of drift between the two anywhere in the app.
+  confirmBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     alignItems: 'center',
@@ -126,7 +135,7 @@ const styles = StyleSheet.create({
       default: {},
     }),
   },
-  card: {
+  confirmCard: {
     width: '100%',
     maxWidth: 340,
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
@@ -145,7 +154,7 @@ const styles = StyleSheet.create({
     shadowRadius: 32,
     elevation: 10,
   },
-  iconTile: {
+  confirmIconTile: {
     width: 56,
     height: 56,
     borderRadius: radius.pill,
@@ -154,9 +163,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: spacing.md,
   },
-  title: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.sm, textAlign: 'center' },
-  body: { ...typography.bodySmall, color: '#4A4A4A', textAlign: 'center', marginBottom: spacing.xl, lineHeight: 18 },
-  confirmBtn: {
+  confirmTitle: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.sm, textAlign: 'center' },
+  confirmBody: { ...typography.bodySmall, color: '#4A4A4A', textAlign: 'center', marginBottom: spacing.xl, lineHeight: 18 },
+  confirmDeleteBtn: {
     width: '100%',
     backgroundColor: colors.danger,
     borderRadius: radius.lg,
@@ -164,7 +173,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: spacing.sm,
   },
-  confirmBtnText: { ...typography.bodyStrong, color: colors.white },
-  cancelBtn: { width: '100%', paddingVertical: spacing.sm, alignItems: 'center' },
-  cancelBtnText: { ...typography.bodyStrong, color: '#4A4A4A' },
+  confirmDeleteBtnText: { ...typography.bodyStrong, color: colors.white },
+  confirmCancelBtn: { width: '100%', paddingVertical: spacing.sm, alignItems: 'center' },
+  confirmCancelBtnText: { ...typography.bodyStrong, color: '#4A4A4A' },
 });
