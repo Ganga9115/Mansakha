@@ -420,7 +420,12 @@ router.get(
   async (req, res) => {
     const { jurisdictionId } = req.params;
 
-    const { data: jurisdiction } = await supabase.from('jurisdictions').select('level').eq('jurisdiction_id', jurisdictionId).single();
+    // Raw pg, not Supabase REST - both branches below now use it (the
+    // district branch used to make two sequential PostgREST calls, ~1-2s
+    // each, for this jurisdiction-picker's live Alerts Feed; a single-row
+    // lookup by primary key has no reason to cost that on its own).
+    const { rows: jurisdictionRows } = await pool.query('select level from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+    const jurisdiction = jurisdictionRows[0];
     if (!jurisdiction) {
       return fail(res, 'Jurisdiction not found', 404);
     }
@@ -430,32 +435,39 @@ router.get(
       // Alerts Feed is for actionable items only (a Critical alert or an
       // SOS, each with a real open/acknowledged/resolved state) -
       // 'disengagement'/'weekly_review' are informational notices with no
-      // alerts/sos_events row and stay bell-only. Filtering by source at the
-      // query level - and embedding BOTH alerts() and sos_events() - means
-      // every row is guaranteed a real linked object; the previous version
-      // only ever selected alerts() and read `n.alerts.user_id`
-      // unconditionally, which threw (TypeError: Cannot read properties of
-      // null) the moment this official had received even one 'sos' (or
-      // disengagement/weekly_review) notification - confirmed live as a
-      // real crash, not hypothetical, since SOS is explicitly routed here.
-      const { data, error } = await supabase
-        .from('alert_notifications')
-        .select('notified_at, source, priority, alerts(alert_id, user_id, triggered_at, alert_statuses(name)), sos_events(sos_event_id, user_id, triggered_at, acknowledged_at, resolved_at)')
-        .eq('official_id', req.auth.officialId)
-        .in('source', ['distress_score', 'sos'])
-        .order('notified_at', { ascending: false })
-        .limit(50);
-      if (error) return fail(res, 'Could not load alerts', 500);
+      // alerts/sos_events row and stay bell-only. LEFT JOINing both alerts
+      // and sos_events (rather than PostgREST's embed syntax) means every
+      // row is guaranteed a real linked object regardless of which one its
+      // source populated (schema.sql's exactly-one-subject constraint) - the
+      // previous version only ever selected alerts() and read
+      // `n.alerts.user_id` unconditionally, which threw (TypeError: Cannot
+      // read properties of null) the moment this official had received even
+      // one 'sos' (or disengagement/weekly_review) notification - confirmed
+      // live as a real crash, not hypothetical, since SOS is explicitly
+      // routed here.
+      const { rows } = await pool.query(
+        `select an.notified_at, an.source, an.priority,
+                a.alert_id, a.user_id as alert_user_id, a.triggered_at as alert_triggered_at, ast.name as alert_status_name,
+                se.sos_event_id, se.user_id as sos_user_id, se.triggered_at as sos_triggered_at, se.acknowledged_at, se.resolved_at
+         from alert_notifications an
+         left join alerts a on a.alert_id = an.alert_id
+         left join alert_statuses ast on ast.alert_status_id = a.alert_status_id
+         left join sos_events se on se.sos_event_id = an.sos_event_id
+         where an.official_id = $1 and an.source in ('distress_score', 'sos')
+         order by an.notified_at desc
+         limit 50`,
+        [req.auth.officialId]
+      );
 
-      formattedAlerts = (data || []).map((n) => {
+      formattedAlerts = rows.map((n) => {
         const isUrgentHelp = n.source === 'sos';
         return {
-          alertId: isUrgentHelp ? n.sos_events.sos_event_id : n.alerts.alert_id,
-          userId: isUrgentHelp ? n.sos_events.user_id : n.alerts.user_id,
-          triggeredAt: isUrgentHelp ? n.sos_events.triggered_at : n.alerts.triggered_at,
+          alertId: isUrgentHelp ? n.sos_event_id : n.alert_id,
+          userId: isUrgentHelp ? n.sos_user_id : n.alert_user_id,
+          triggeredAt: isUrgentHelp ? n.sos_triggered_at : n.alert_triggered_at,
           status: isUrgentHelp
-            ? (n.sos_events.resolved_at ? 'Resolved' : n.sos_events.acknowledged_at ? 'Acknowledged' : 'Open')
-            : n.alerts.alert_statuses.name,
+            ? (n.resolved_at ? 'Resolved' : n.acknowledged_at ? 'Acknowledged' : 'Open')
+            : n.alert_status_name,
           // AdminAlerts.jsx keys its SOS badge/red-urgent-border off these two
           // fields - the crash-fix above stopped the TypeError but never
           // actually forwarded them, so every alert rendered identically
@@ -1113,15 +1125,27 @@ router.get(
     const { data: officialRows } = await supabase.from('officials').select('official_id, full_name').in('official_id', counsellorIds);
     const fullNameById = new Map((officialRows || []).map((o) => [o.official_id, o.full_name]));
 
-    const results = [];
-    for (const officialId of counsellorIds) {
-      // eslint-disable-next-line no-await-in-loop
-      const { data: users } = await supabase
-        .from('users')
-        .select('status, linked_to_user_id, distress_scores(score_value, computed_at)')
-        .eq('assigned_counsellor_id', officialId);
+    // One query for every counsellor's users, not one query PER counsellor -
+    // the previous version awaited a separate supabase.from() inside this
+    // loop (only ever silenced with an eslint-disable, never actually
+    // fixed), which meant a jurisdiction with 20 counsellors made 20
+    // sequential ~1-2s PostgREST round trips (20-40s) to load this one page.
+    // A single .in() call plus grouping in JS is both correct (identical
+    // per-counsellor results) and a single round trip regardless of how many
+    // counsellors there are.
+    const { data: allUsers } = await supabase
+      .from('users')
+      .select('assigned_counsellor_id, status, linked_to_user_id, distress_scores(score_value, computed_at)')
+      .in('assigned_counsellor_id', counsellorIds);
 
-      const activeCaseCount = (users || []).filter((u) => u.status === 'active').length;
+    const usersByCounsellor = new Map(counsellorIds.map((id) => [id, []]));
+    for (const u of allUsers || []) {
+      usersByCounsellor.get(u.assigned_counsellor_id)?.push(u);
+    }
+
+    const results = counsellorIds.map((officialId) => {
+      const users = usersByCounsellor.get(officialId) || [];
+      const activeCaseCount = users.filter((u) => u.status === 'active').length;
 
       // EFFICACY PROXY (documented judgment call, per the spec's own
       // acknowledged ambiguity): there is no assignment-history table
@@ -1141,7 +1165,7 @@ router.get(
       // 1-case average as a solid signal.
       let dropSum = 0;
       let consideredCount = 0;
-      for (const u of users || []) {
+      for (const u of users) {
         // A dependent case's distress_scores embed shows the exact same
         // trend as its anchor (real scores only ever live under the
         // anchor - see countUsersByRisk above), so it's skipped here rather
@@ -1154,14 +1178,14 @@ router.get(
         consideredCount += 1;
       }
 
-      results.push({
+      return {
         officialId,
         fullName: fullNameById.get(officialId) || null,
         activeCaseCount,
         avgDistressPointDrop: consideredCount > 0 ? Math.round((dropSum / consideredCount) * 10) / 10 : null,
         usersConsideredForEfficacy: consideredCount,
-      });
-    }
+      };
+    });
 
     return ok(res, { counsellors: results });
   }

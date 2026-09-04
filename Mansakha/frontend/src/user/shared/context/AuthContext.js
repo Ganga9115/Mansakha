@@ -28,6 +28,14 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     setSession(null);
     await AsyncStorage.removeItem(STORAGE_KEY);
+    // Web-only nav state persistence (RootNavigator.js's NAV_STATE_STORAGE_KEY)
+    // is meant to survive a page RELOAD of the same live session, restoring
+    // whatever screen was open - it was never meant to survive a logout. Left
+    // uncleared, the next login (even a different person, on a shared device)
+    // would land straight back on whatever deep screen (e.g. AI Chat) was
+    // open when this session logged out, instead of defaulting to Home -
+    // confirmed live. Harmless no-op on native, which doesn't use this key.
+    await AsyncStorage.removeItem('mansakha_nav_state');
   };
 
   const updateSession = async (patch) => {

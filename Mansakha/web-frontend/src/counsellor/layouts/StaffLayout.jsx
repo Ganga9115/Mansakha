@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Inbox, Users, Bell, BarChart3, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
@@ -22,7 +22,7 @@ const NAV_ITEMS = [
 // to sit alone in its own row inside the page content with a lot of empty
 // space next to it - the header is where a page's primary action belongs,
 // same place profile/notifications/logout already live).
-export default function StaffLayout({ children, title = 'Dashboard', headerAction = null }) {
+export default function StaffLayout({ children, title = 'Dashboard', headerAction = null, titleAction = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -31,12 +31,24 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
   const profilePath = '/counsellor/profile';
   // Same icon as whichever sidebar item matches the current page, so the
   // top bar always shows a page icon + name, matching the User app.
-  // Longest-path-wins: Dashboard's own path (/counsellor) is a prefix of
-  // every other route here, so a plain first-match would always pick
-  // Dashboard's icon instead of the more specific current page's.
-  const activeNavItem = NAV_ITEMS
-    .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
-    .sort((a, b) => b.path.length - a.path.length)[0];
+  // Dashboard's own path (/counsellor) is excluded from prefix-matching
+  // (only matches when it's the exact path) - otherwise, since it's a
+  // literal prefix of every other route here, it would win prefix-matching
+  // against every other item too and permanently show as "active".
+  // Case Detail (and its /notes, /chat children) are siblings of every item
+  // above, not nested under one, so they never match by prefix at all -
+  // confirmed live as the sidebar showing nothing highlighted while viewing
+  // a case, even though it was clearly reached from Case Queue or My Users.
+  // Whichever list it was opened from passes that via location.state.fromNav
+  // (see MyUsers.jsx/CaseQueue.jsx's "View Case" and CaseDetail.jsx's own
+  // sub-navigation); this defaults to My Users when that's missing (e.g. a
+  // direct link/refresh, or reached from Alerts/the notification bell).
+  const isCaseDetailRoute = /^\/counsellor\/case-detail\//.test(location.pathname);
+  const activeNavItem = isCaseDetailRoute
+    ? NAV_ITEMS.find((item) => item.name === (location.state?.fromNav || 'My Users'))
+    : NAV_ITEMS
+        .filter((item) => location.pathname === item.path || (item.path !== '/counsellor' && location.pathname.startsWith(`${item.path}/`)))
+        .sort((a, b) => b.path.length - a.path.length)[0];
   const TitleIcon = activeNavItem?.icon;
 
   return (
@@ -82,23 +94,21 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
         <nav className="space-y-2 p-6">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
+            const isActive = activeNavItem?.name === item.name;
             return (
-              <NavLink
+              <Link
                 key={item.name}
                 to={item.path}
-                end
                 onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                    isActive
-                      ? 'bg-[#519BCE] text-white shadow-sm'
-                      : 'text-blue-100 hover:bg-white/10'
-                  }`
-                }
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
+                  isActive
+                    ? 'bg-[#519BCE] text-white shadow-sm'
+                    : 'text-blue-100 hover:bg-white/10'
+                }`}
               >
                 <Icon size={18} />
                 <span className="text-sm">{item.name}</span>
-              </NavLink>
+              </Link>
             );
           })}
         </nav>
@@ -120,6 +130,7 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
             </button>
             {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80] shrink-0 hidden sm:block" />}
             <h2 className="text-lg sm:text-xl font-bold text-[#3D5A80] truncate">{title}</h2>
+            {titleAction && <div className="ml-2 shrink-0">{titleAction}</div>}
             {headerAction && <div className="ml-2 shrink-0">{headerAction}</div>}
           </div>
 

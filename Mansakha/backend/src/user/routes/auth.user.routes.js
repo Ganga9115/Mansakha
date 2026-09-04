@@ -1,6 +1,7 @@
 const express = require('express');
 const bcrypt = require('bcrypt');
 const { supabase } = require('../../core/db/supabaseClient');
+const { pool } = require('../../core/db/pgPool');
 const { signToken } = require('../../core/utils/jwt');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { verifyToken } = require('../../core/middleware/verifyToken');
@@ -35,13 +36,24 @@ router.post('/login', userLoginLimiter, async (req, res) => {
   const genericFailure = () => fail(res, 'No matching record found - check your details and try again', 401);
 
   console.log('User login attempt for docket:', docketNumber);
-  const { data: user, error: userError } = await supabase
-    .from('users')
-    .select('user_id, password_hash, must_change_password, status, linked_to_user_id')
-    .ilike('docket_number', escapeLikePattern(docketNumber.trim()))
-    .maybeSingle();
+  // Raw pg (not Supabase REST), self-joined to the anchor in one round trip -
+  // this is the single hottest endpoint in the app (every login hits it),
+  // and the previous version made a SECOND sequential PostgREST call
+  // (~1-2s) just to read the anchor's password/status whenever this docket
+  // was a linked/dependent case. The join is a no-op (anchor columns come
+  // back null) for the common single-case login, so this is a pure win
+  // either way, not a tradeoff.
+  const { rows } = await pool.query(
+    `select u.user_id, u.password_hash, u.must_change_password, u.status, u.linked_to_user_id,
+            anchor.password_hash as anchor_password_hash, anchor.status as anchor_status
+     from users u
+     left join users anchor on anchor.user_id = u.linked_to_user_id
+     where u.docket_number ilike $1
+     limit 1`,
+    [escapeLikePattern(docketNumber.trim())]
+  );
+  const user = rows[0];
 
-  if (userError) console.error('User query error:', userError);
   if (!user) {
     console.log('User not found for docket:', docketNumber);
     return genericFailure();
@@ -58,20 +70,11 @@ router.post('/login', userLoginLimiter, async (req, res) => {
   // in the family so it becomes "the" password for every docket the person
   // has, not just the one they changed it through.
   const anchorUserId = user.linked_to_user_id || user.user_id;
-  let anchorPasswordHash = user.password_hash;
-  let anchorStatus = user.status;
-  if (user.linked_to_user_id) {
-    const { data: anchor, error: anchorError } = await supabase
-      .from('users')
-      .select('password_hash, status')
-      .eq('user_id', anchorUserId)
-      .maybeSingle();
-    if (anchorError || !anchor) {
-      console.error('User login: could not load anchor for linked case', anchorError?.message);
-      return genericFailure();
-    }
-    anchorPasswordHash = anchor.password_hash;
-    anchorStatus = anchor.status;
+  const anchorPasswordHash = user.linked_to_user_id ? user.anchor_password_hash : user.password_hash;
+  const anchorStatus = user.linked_to_user_id ? user.anchor_status : user.status;
+  if (user.linked_to_user_id && anchorPasswordHash == null) {
+    console.error('User login: could not load anchor for linked case', anchorUserId);
+    return genericFailure();
   }
 
   const hashToCheck = user.must_change_password ? user.password_hash : anchorPasswordHash;

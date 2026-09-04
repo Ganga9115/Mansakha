@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Search } from 'lucide-react';
 import StaffLayout from '../layouts/StaffLayout';
 import { useMyUsers } from '../services/hooks';
 
@@ -14,8 +15,9 @@ const PAGE_SIZE = 20;
 
 export default function MyUsers() {
   const [riskLevel, setRiskLevel] = useState('');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const { data, loading, error } = useMyUsers(riskLevel || undefined, page);
+  const { data, loading, error } = useMyUsers(riskLevel || undefined, page, search || undefined);
   const navigate = useNavigate();
 
   const cases = data?.cases || [];
@@ -28,6 +30,16 @@ export default function MyUsers() {
 
         {/* FILTER BAR */}
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+          <div className="relative flex-1 min-w-[220px]">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+              placeholder="Search by name, docket number, or case ID..."
+              className="w-full pl-9 pr-3 py-2 bg-[#F8F9FA] rounded-lg text-gray-700 font-medium border-none focus:outline-none focus:ring-1 focus:ring-[#519BCE]"
+            />
+          </div>
           <select
             value={riskLevel}
             onChange={(e) => { setRiskLevel(e.target.value); setPage(1); }}
@@ -49,7 +61,7 @@ export default function MyUsers() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
-                  <th className="py-3.5 px-6">User ID</th>
+                  <th className="py-3.5 px-6">Name / Docket</th>
                   <th className="py-3.5 px-4">Case Stage</th>
                   <th className="py-3.5 px-4">Distress Score</th>
                   <th className="py-3.5 px-4">Risk Level</th>
@@ -64,7 +76,10 @@ export default function MyUsers() {
                 ) : cases.map((item) => (
                   <tr key={item.userId} className="hover:bg-gray-50/70 transition">
                     <td className="py-4 px-6">
-                    <p className="font-bold text-gray-800">Case {item.userId.slice(0, 8)}</p>
+                    <p className="font-bold text-gray-800">{item.fullName || `Case ${item.userId.slice(0, 8)}`}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5">
+                      {item.docketNumber ? `Docket ${item.docketNumber}` : `Case ${item.userId.slice(0, 8)}`}
+                    </p>
                     {item.caseBackground && (
                       <p className="text-[11px] text-gray-400 mt-0.5 max-w-xs truncate">{item.caseBackground}</p>
                     )}
