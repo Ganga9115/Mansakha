@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Modal, ScrollView, Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -143,23 +143,37 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.danger,
   },
+  // Same glassmorphism recipe as GetHelpButton/LogoutButton/the journal
+  // delete confirm, so every popup in the app reads as one consistent style.
   backdrop: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.3)',
     alignItems: 'flex-end',
     paddingTop: 70,
     paddingRight: spacing.lg,
+    ...Platform.select({
+      web: { backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' },
+      default: {},
+    }),
   },
   panel: {
     width: 320,
     maxWidth: '90%',
     maxHeight: 420,
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
     borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 1)',
     padding: spacing.lg,
-    ...shadow.card,
+    ...Platform.select({
+      web: { backdropFilter: 'blur(32px)', WebkitBackdropFilter: 'blur(32px)' },
+      default: {},
+    }),
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.15,
+    shadowRadius: 32,
+    elevation: 10,
   },
   panelTitle: { ...typography.h3, color: colors.textPrimary, marginBottom: spacing.sm },
   // `flex: 1` + `minHeight: 0` (not `maxHeight`) is what actually makes this

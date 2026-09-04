@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     padding: 24,
     ...Platform.select({
-      web: { backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' },
+      web: { backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' },
       default: {},
     }),
   },
