@@ -26,24 +26,6 @@ import TopRightActions from '../../shared/components/TopRightActions';
 import LogoutButton from '../../shared/components/LogoutButton';
 import { Skeleton } from '../../shared/components/Skeleton';
 
-function InfoTileRow({ icon, label, value, loading, iconColor = colors.primary, isLast = false }) {
-  return (
-    <View style={[styles.infoTileRow, !isLast && styles.rowBorder]}>
-      <View style={styles.tileIconContainer}>
-        <Feather name={icon} size={18} color={iconColor} />
-      </View>
-      <View style={styles.tileTextWrap}>
-        <Text style={styles.tileLabel}>{label}</Text>
-        {loading ? (
-          <Skeleton width={120} height={14} />
-        ) : (
-          <Text style={styles.tileValue}>{value}</Text>
-        )}
-      </View>
-    </View>
-  );
-}
-
 const INDIAN_LANGUAGES = [
   { value: 'en', label: 'English' },
   { value: 'as', label: 'Assamese (অসমীয়া)' },
@@ -184,194 +166,232 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       <ScrollView style={styles.scrollContent} bounces={false} showsVerticalScrollIndicator={false}>
-        {/* Main Rounded Body Area */}
         <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-          {/* Account Details Card */}
-          <Text style={styles.sectionHeaderTitle}>ACCOUNT OVERVIEW</Text>
+          
+          {/* ACCOUNT OVERVIEW */}
+          <View style={styles.sectionHeaderWrap}>
+            <Text style={styles.sectionHeaderTitle}>ACCOUNT OVERVIEW</Text>
+            <View style={styles.blueBar} />
+          </View>
+
           <Card style={styles.customCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.accountIconTile}>
-                <Feather name="user-check" size={22} color={colors.primary} />
+            {/* User Profile Hero Box */}
+            <View style={styles.heroBox}>
+              <View style={styles.userProfileLeft}>
+                <View style={styles.heroAvatar}>
+                  <Feather name="user" size={26} color="#1F497D" />
+                </View>
+                <View>
+                  <Text style={styles.heroTitle}>
+                    {session?.accountType === 'user' ? 'User Profile' : session?.accountType || 'User'}
+                  </Text>
+                  <Text style={styles.heroSubtitle}>Registered User Profile</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardHeaderTitle}>
-                  {session?.accountType === 'user' ? 'User Profile' : session?.accountType || 'User'}
-                </Text>
-                <Text style={styles.cardHeaderSubtitle}>Registered User Profile</Text>
+
+              <View style={styles.shieldBadgeContainer}>
+                <Feather name="shield" size={32} color="#1F497D" />
+                <View style={styles.shieldCheckMark}>
+                  <Feather name="check" size={10} color="#FFFFFF" />
+                </View>
               </View>
             </View>
 
-            <View style={styles.divider} />
-
-            {/* Renders cases displaying Docket ID, Case Type, and Case Stage */}
+            {/* Linked Cases Horizontal Layout */}
             {casesList.length > 0 ? (
               casesList.map((c, index) => {
                 const docketId = c.docketId || c.docketNo || c.caseNumber || 'N/A';
                 const caseType = c.caseType || c.type || 'N/A';
                 const caseStage = c.caseStage || c.stage || 'Trial';
+                const isRehab = caseStage.toLowerCase().includes('rehab');
 
                 return (
-                  <View
-                    key={c.userId || c.caseNumber || index}
-                    style={[styles.infoTileRow, index !== casesList.length - 1 && styles.rowBorder]}
-                  >
-                    <View style={styles.tileIconContainer}>
-                      <Feather name="briefcase" size={18} color={colors.primary} />
+                  <View key={c.userId || c.caseNumber || index} style={styles.caseRowContainer}>
+                    <View style={styles.caseLeftCol}>
+                      <View style={styles.caseIconBox}>
+                        <Feather name="briefcase" size={18} color="#1F497D" />
+                      </View>
+                      <View style={styles.casePill}>
+                        <Text style={styles.casePillText}>{`CASE ${index + 1}`}</Text>
+                      </View>
                     </View>
-                    <View style={styles.tileTextWrap}>
-                      <Text style={styles.tileLabel}>{`CASE ${index + 1}`}</Text>
-                      {dashboardQuery.isLoading ? (
-                        <Skeleton width={120} height={14} />
-                      ) : (
-                        <View style={styles.caseDetailsColumn}>
-                          <Text style={styles.tileValue}>{`Docket ID : ${docketId}`}</Text>
-                          <Text style={styles.tileValue}>{`Case Type : ${caseType}`}</Text>
-                          <Text style={styles.tileValue}>{`Case Stage : ${caseStage}`}</Text>
+
+                    <View style={styles.caseDataGrid}>
+                      <View style={styles.caseGridItem}>
+                        <Text style={styles.fieldLabel}>Docket ID</Text>
+                        <Text style={styles.fieldValueBold}>{docketId}</Text>
+                      </View>
+
+                      <View style={[styles.caseGridItem, { flex: 1.5 }]}>
+                        <Text style={styles.fieldLabel}>Case Type</Text>
+                        <Text style={styles.fieldValueBold}>{caseType}</Text>
+                      </View>
+
+                      <View style={styles.caseGridItem}>
+                        <Text style={styles.fieldLabel}>Case Stage</Text>
+                        <View style={[styles.stageBadge, isRehab ? styles.stageRehab : styles.stageTrial]}>
+                          <Feather 
+                            name={isRehab ? "users" : "scale"} 
+                            size={12} 
+                            color={isRehab ? "#6B21A8" : "#15803D"} 
+                          />
+                          <Text style={[styles.stageBadgeText, isRehab ? styles.stageRehabText : styles.stageTrialText]}>
+                            {caseStage}
+                          </Text>
                         </View>
-                      )}
+                      </View>
                     </View>
                   </View>
                 );
               })
             ) : (
-              <InfoTileRow
-                icon="briefcase"
-                label="Case Status"
-                loading={dashboardQuery.isLoading}
-                value="No cases linked"
-                isLast
-              />
+              <View style={styles.caseRowContainer}>
+                <Text style={styles.fieldLabel}>No cases linked</Text>
+              </View>
             )}
           </Card>
 
-          {/* Preferences Section */}
-          <Text style={styles.sectionHeaderTitle}>PREFERENCES</Text>
+          {/* PREFERENCES */}
+          <View style={styles.sectionHeaderWrap}>
+            <Text style={styles.sectionHeaderTitle}>PREFERENCES</Text>
+            <View style={styles.blueBar} />
+          </View>
+
           <Card style={styles.customCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.accountIconTile}>
-                <Feather name="globe" size={20} color={colors.primary} />
+            <View style={styles.preferenceRow}>
+              <View style={styles.prefLeft}>
+                <View style={styles.prefIconBox}>
+                  <Feather name="globe" size={18} color="#1F497D" />
+                </View>
+                <View>
+                  <Text style={styles.prefTitle}>Display Language</Text>
+                  <Text style={styles.prefSubtitle}>Select your preferred interface language</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardHeaderTitle}>Display Language</Text>
-                <Text style={styles.cardHeaderSubtitle}>Select your preferred interface language</Text>
+
+              <View style={styles.dropdownContainer}>
+                <Dropdown
+                  options={INDIAN_LANGUAGES}
+                  value={currentDisplayLanguageId}
+                  onChange={async (value) => {
+                    setDisplayLanguageId(value);
+                    try {
+                      await updateLanguage.mutateAsync(value);
+                      toast.success('Display language updated.');
+                    } catch (err) {
+                      toast.error(err.message || 'Could not update language');
+                    }
+                  }}
+                  placeholder="Select interface language"
+                  disabled={updateLanguage.isPending}
+                />
               </View>
-            </View>
-            <View style={{ marginTop: spacing.md, marginBottom: spacing.xl }}>
-              <Dropdown
-                options={INDIAN_LANGUAGES}
-                value={currentDisplayLanguageId}
-                onChange={async (value) => {
-                  setDisplayLanguageId(value);
-                  try {
-                    await updateLanguage.mutateAsync(value);
-                    toast.success('Display language updated.');
-                  } catch (err) {
-                    toast.error(err.message || 'Could not update language');
-                  }
-                }}
-                placeholder="Select interface language"
-                disabled={updateLanguage.isPending}
-              />
             </View>
 
-            <View style={styles.divider} />
+            <View style={styles.rowDivider} />
 
-            <View style={[styles.cardHeader, { marginTop: spacing.md }]}>
-              <View style={styles.accountIconTile}>
-                <Feather name="mic" size={20} color={colors.primary} />
+            <View style={styles.preferenceRow}>
+              <View style={styles.prefLeft}>
+                <View style={styles.prefIconBox}>
+                  <Feather name="mic" size={18} color="#1F497D" />
+                </View>
+                <View>
+                  <Text style={styles.prefTitle}>Speaking Language</Text>
+                  <Text style={styles.prefSubtitle}>Language used for voice check-ins and AI calls</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardHeaderTitle}>Speaking Language</Text>
-                <Text style={styles.cardHeaderSubtitle}>Language used for voice check-ins and AI calls</Text>
+
+              <View style={styles.dropdownContainer}>
+                <Dropdown
+                  options={INDIAN_LANGUAGES}
+                  value={currentSpeakingLanguageId}
+                  onChange={(value) => {
+                    setSpeakingLanguageId(value);
+                    toast.success('Speaking language updated.');
+                  }}
+                  placeholder="Select voice language"
+                />
               </View>
-            </View>
-            <View style={{ marginTop: spacing.md }}>
-              <Dropdown
-                options={INDIAN_LANGUAGES}
-                value={currentSpeakingLanguageId}
-                onChange={(value) => {
-                  setSpeakingLanguageId(value);
-                  toast.success('Speaking language updated.');
-                }}
-                placeholder="Select voice language"
-              />
             </View>
           </Card>
 
-          {/* Communication Preferences */}
-          <Text style={styles.sectionHeaderTitle}>COMMUNICATION PREFERENCES</Text>
+          {/* COMMUNICATION PREFERENCES */}
+          <View style={styles.sectionHeaderWrap}>
+            <Text style={styles.sectionHeaderTitle}>COMMUNICATION PREFERENCES</Text>
+            <View style={styles.blueBar} />
+          </View>
+
           <Card style={styles.customCard}>
             <View style={styles.toggleRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardHeaderTitle}>Prefer a human counsellor</Text>
-                <Text style={styles.cardHeaderSubtitle}>Get matched with a counsellor for chat & calls</Text>
+                <Text style={styles.prefTitle}>Prefer a human counsellor</Text>
+                <Text style={styles.prefSubtitle}>Get matched with a counsellor for chat & calls</Text>
               </View>
               <Switch
                 value={localOptedForCounsellor}
                 onValueChange={handleToggleCounsellorPreference}
                 disabled={updateCounsellorPreference.isPending}
-                trackColor={{ true: colors.primary }}
+                trackColor={{ false: '#E2E8F0', true: '#1F497D' }}
+                thumbColor="#FFFFFF"
               />
             </View>
           </Card>
 
-          {!localOptedForCounsellor && (
-            <Card style={[styles.customCard, styles.counsellorInviteCard]}>
-              <Feather name="user-plus" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
-              <Text style={styles.cardHeaderTitle}>Want to talk to someone?</Text>
-              <Text style={styles.cardHeaderSubtitle}>
-                Turn on "Prefer a human counsellor" above to get matched with a real counsellor you can message or call directly.
-              </Text>
-            </Card>
-          )}
+          {/* SYSTEM */}
+          <View style={styles.sectionHeaderWrap}>
+            <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>
+            <View style={styles.blueBar} />
+          </View>
 
-          {localOptedForCounsellor && !hasAssignedCounsellor && (
-            <Card style={[styles.customCard, styles.counsellorInviteCard]}>
-              <Feather name="clock" size={20} color={colors.primary} style={{ marginBottom: spacing.xs }} />
-              <Text style={styles.cardHeaderTitle}>Finding you a counsellor</Text>
-              <Text style={styles.cardHeaderSubtitle}>
-                You're opted in - we'll connect you with a counsellor as soon as one is available in your area.
-              </Text>
-            </Card>
-          )}
-
-          {/* Notifications & System Info Card */}
-          <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>
           <Card style={styles.customCard}>
-            <InfoTileRow
-              icon="bell"
-              label="Push Notifications"
-              value="Enabled"
-              iconColor={colors.primary}
-            />
-            <InfoTileRow
-              icon="info"
-              label="App Version"
-              value="v2.4.0 (Mansakha Official)"
-              iconColor={colors.textSecondary}
-              isLast
-            />
-          </Card>
-
-          {/* Security Card - Reset Password */}
-          <Text style={styles.sectionHeaderTitle}>SECURITY</Text>
-          <Card style={styles.customCard}>
-            <View style={styles.cardHeader}>
-              <View style={styles.accountIconTile}>
-                <Feather name="lock" size={20} color={colors.primary} />
+            <View style={styles.systemRow}>
+              <View style={styles.prefLeft}>
+                <View style={styles.prefIconBox}>
+                  <Feather name="bell" size={18} color="#1F497D" />
+                </View>
+                <Text style={styles.prefTitle}>Push Notifications</Text>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardHeaderTitle}>Password</Text>
-                <Text style={styles.cardHeaderSubtitle}>Change the password used to sign in</Text>
-              </View>
+              <Text style={styles.systemValueText}>Enabled</Text>
             </View>
 
-            <Pressable
-              onPress={() => setShowPasswordForm((v) => !v)}
-              style={[styles.outlineBtn, { marginTop: spacing.md }]}
-            >
-              <Text style={styles.outlineBtnText}>{showPasswordForm ? 'Cancel' : 'Reset Password'}</Text>
-            </Pressable>
+            <View style={styles.rowDivider} />
+
+            <View style={styles.systemRow}>
+              <View style={styles.prefLeft}>
+                <View style={styles.prefIconBox}>
+                  <Feather name="info" size={18} color="#64748B" />
+                </View>
+                <Text style={styles.prefTitle}>App Version</Text>
+              </View>
+              <Text style={styles.systemValueText}>v2.4.0 (Mansakha Official)</Text>
+            </View>
+          </Card>
+
+          {/* SECURITY */}
+          <View style={styles.sectionHeaderWrap}>
+            <Text style={styles.sectionHeaderTitle}>SECURITY</Text>
+            <View style={styles.blueBar} />
+          </View>
+
+          <Card style={styles.customCard}>
+            <View style={styles.preferenceRow}>
+              <View style={styles.prefLeft}>
+                <View style={styles.prefIconBox}>
+                  <Feather name="lock" size={18} color="#1F497D" />
+                </View>
+                <View>
+                  <Text style={styles.prefTitle}>Password</Text>
+                  <Text style={styles.prefSubtitle}>Change the password used to sign in</Text>
+                </View>
+              </View>
+
+              <Pressable
+                onPress={() => setShowPasswordForm((v) => !v)}
+                style={styles.outlineBtn}
+              >
+                <Text style={styles.outlineBtnText}>{showPasswordForm ? 'Cancel' : 'Reset Password'}</Text>
+              </Pressable>
+            </View>
 
             {showPasswordForm && (
               <View style={{ marginTop: spacing.md }}>
@@ -410,7 +430,10 @@ export default function SettingsScreen({ navigation }) {
             )}
           </Card>
 
-          <Text style={styles.sectionHeaderTitle}>ACCOUNT</Text>
+          <View style={styles.sectionHeaderWrap}>
+            <Text style={styles.sectionHeaderTitle}>ACCOUNT</Text>
+            <View style={styles.blueBar} />
+          </View>
           <LogoutButton variant="row" style={{ marginBottom: spacing.lg }} />
         </View>
       </ScrollView>
@@ -419,13 +442,13 @@ export default function SettingsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   scrollContent: { flex: 1 },
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xxl,
-    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.md, // Reduced side gap
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -440,120 +463,267 @@ const styles = StyleSheet.create({
   headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
-    position: 'relative',
-  },
-  avatarContainerDesktop: { width: 40, height: 40 },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: colors.primaryDark,
-    borderRadius: radius.pill,
-    padding: 3,
+    marginRight: spacing.sm,
   },
   headerInfo: { flex: 1 },
-  pillBadge: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
   pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
-  subtext: { ...typography.caption, color: colors.textSecondary },
-  headerRight: { marginLeft: spacing.md },
-  headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  iconCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  headerRight: { marginLeft: spacing.sm },
   contentBody: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    marginTop: -spacing.xl,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: spacing.md, // Reduced side gap
+    paddingTop: spacing.md,
     paddingBottom: spacing.xxxl,
   },
   contentBodyDesktop: {
     marginTop: 0,
-    borderTopLeftRadius: 0,
-    borderTopRightRadius: 0,
+  },
+
+  /* Section Titles */
+  sectionHeaderWrap: {
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    alignSelf: 'flex-start',
   },
   sectionHeaderTitle: {
-    ...typography.label,
-    color: colors.primaryDark,
-    marginBottom: spacing.xs,
-    letterSpacing: 1,
-    marginTop: spacing.sm,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F497D',
+    letterSpacing: 0.8,
   },
+  blueBar: {
+    height: 3,
+    backgroundColor: '#1F497D',
+    width: 28,
+    marginTop: 4,
+    borderRadius: 2,
+  },
+
+  /* Custom Clean Card */
   customCard: {
-    borderRadius: radius.xl,
-    backgroundColor: colors.surface,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    padding: spacing.md, // Reduced card padding from 24 to 16
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...shadow.card,
+    borderColor: '#E2E8F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  counsellorInviteCard: { backgroundColor: colors.primaryLight, borderColor: colors.primaryLight },
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  accountIconTile: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  cardHeaderTitle: { ...typography.h3, color: colors.textPrimary },
-  cardHeaderSubtitle: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-  divider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md },
-  infoTileRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs },
-  rowBorder: { borderBottomWidth: 1, borderColor: colors.border, paddingBottom: spacing.sm, marginBottom: spacing.sm },
-  tileIconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  tileTextWrap: { flex: 1 },
-  tileLabel: { ...typography.caption, color: colors.textSecondary, textTransform: 'uppercase' },
-  tileValue: { ...typography.bodyStrong, color: colors.textPrimary, marginTop: 2 },
-  caseDetailsColumn: { marginTop: 2, gap: 2 },
-  outlineBtn: {
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
+
+  /* Profile Hero Banner */
+  heroBox: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 12,
+    padding: 14, // Tighter inner padding
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  userProfileLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  heroTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  heroSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  shieldBadgeContainer: {
+    position: 'relative',
+    opacity: 0.9,
+  },
+  shieldCheckMark: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: '#1F497D',
+    borderRadius: 8,
+    width: 14,
+    height: 14,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  outlineBtnText: { ...typography.bodyStrong, color: colors.textPrimary },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: spacing.xs },
-  buttonRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  halfBtn: { flex: 1 },
+
+  /* Horizontal Case Layout */
+  caseRowContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  caseLeftCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 110, // Slightly reduced to fit tighter layouts
+  },
+  caseIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  casePill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  casePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1F497D',
+  },
+  caseDataGrid: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 6,
+  },
+  caseGridItem: {
+    flex: 1,
+  },
+  fieldLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  fieldValueBold: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  /* Stage Badges */
+  stageBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  stageTrial: {
+    backgroundColor: '#DCFCE7',
+  },
+  stageTrialText: {
+    color: '#15803D',
+    fontWeight: '600',
+    fontSize: 11,
+  },
+  stageRehab: {
+    backgroundColor: '#F3E8FF',
+  },
+  stageRehabText: {
+    color: '#6B21A8',
+    fontWeight: '600',
+    fontSize: 11,
+  },
+
+  /* Preference Rows Layout */
+  preferenceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  prefLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
+  },
+  prefIconBox: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  prefTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  prefSubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  dropdownContainer: {
+    width: 180, // Tighter dropdown width
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: 12,
+  },
+
+  /* System Cards */
+  systemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  systemValueText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+
+  /* Toggle Row */
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  /* Buttons */
+  outlineBtn: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  outlineBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+  },
   primaryBtnFilled: {
-    backgroundColor: colors.primaryDark,
+    backgroundColor: '#1F497D',
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',

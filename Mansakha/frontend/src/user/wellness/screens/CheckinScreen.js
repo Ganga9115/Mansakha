@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
@@ -44,13 +44,13 @@ export default function CheckinScreen({ navigation }) {
     }
   }, [historyQuery.data]);
 
-const FALLBACK_QUESTIONS = [
-  "Take your time. Can you tell me a little more about how you're feeling?",
-  "I'm here to listen. What else is on your mind?",
-  "Is there anything else you'd like to share today?",
-  "How has everything been affecting your daily life?",
-  "Are you receiving any support from family, friends, or your community right now?"
-];
+  const FALLBACK_QUESTIONS = [
+    "Take your time. Can you tell me a little more about how you're feeling?",
+    "I'm here to listen. What else is on your mind?",
+    "Is there anything else you'd like to share today?",
+    "How has everything been affecting your daily life?",
+    "Are you receiving any support from family, friends, or your community right now?"
+  ];
 
   const loadNextQuestion = async (history) => {
     setLoading(true);
@@ -96,9 +96,6 @@ const FALLBACK_QUESTIONS = [
     const newHistory = [...responses, { q: currentQuestion.text, a: combinedAnswer }];
     setResponses(newHistory);
     
-    // Async save - fire-and-forget, errors intentionally swallowed (see
-    // useAppendInteraction's own backend route comment on why this is a
-    // best-effort no-op today).
     appendInteraction.mutate(`Mansakha: ${currentQuestion.text}\nPerson: ${combinedAnswer}`, { onError: () => {} });
     
     if (newHistory.length >= TOTAL_QUESTIONS) {
@@ -149,6 +146,19 @@ const FALLBACK_QUESTIONS = [
 
   const progressPercentage = Math.min((responses.length / TOTAL_QUESTIONS) * 100, 100);
 
+  // Dynamic helper to match icons for dynamic AI options
+  const getOptionIcon = (opt) => {
+    const lower = opt.toLowerCase();
+    if (lower.includes('okay') || lower.includes('good') || lower === 'yes') return { name: 'smile', bg: '#EBF5FF', color: '#3B82F6' };
+    if (lower.includes('anxious') || lower.includes('sad') || lower === 'no') return { name: 'frown', bg: '#FEF3C7', color: '#D97706' };
+    if (lower.includes('help') || lower.includes('support')) return { name: 'life-buoy', bg: '#D1FAE5', color: '#059669' };
+    if (lower.includes('other') || lower.includes('more')) return { name: 'more-horizontal', bg: '#F3E8FF', color: '#8B5CF6' };
+    return { name: 'check-circle', bg: '#F1F5F9', color: '#64748B' };
+  };
+
+  // Check if options are long text to adapt layout dynamically
+  const isLongOptions = currentQuestion.options.some(opt => opt.length > 25);
+
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
@@ -162,6 +172,7 @@ const FALLBACK_QUESTIONS = [
           )}
           <View style={styles.headerInfo}>
             <Text style={styles.pageTitle}>Check-in</Text>
+            {isDesktop && <Text style={styles.subtext}>A safe space to share and be heard.</Text>}
           </View>
         </View>
         <View style={styles.headerRightRow}>
@@ -177,7 +188,7 @@ const FALLBACK_QUESTIONS = [
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{flexGrow:1}}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.xl }}>
         <View
           style={[
             styles.contentBody,
@@ -185,7 +196,7 @@ const FALLBACK_QUESTIONS = [
             { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' },
           ]}
         >
-          {/* Progress Bar */}
+          {/* Progress Header */}
           <View style={styles.progressContainer}>
             <View style={styles.progressTextRow}>
               <Text style={styles.progressLabel}>Question {responses.length + 1} of {TOTAL_QUESTIONS}</Text>
@@ -196,7 +207,7 @@ const FALLBACK_QUESTIONS = [
             </View>
           </View>
 
-          {/* Questionnaire Card */}
+          {/* Main Question Card */}
           <View style={styles.card}>
             {loading || submitting || isFinished ? (
               <View style={styles.loadingArea}>
@@ -207,23 +218,44 @@ const FALLBACK_QUESTIONS = [
               </View>
             ) : (
               <View style={styles.questionArea}>
-                <View style={styles.aiBadge}>
-                  <Feather name="cpu" size={16} color={colors.primaryDark} style={{ marginRight: spacing.xs }} />
-                  <Text style={styles.aiBadgeText}>AI Companion</Text>
+                {/* Header Row inside Card */}
+                <View style={styles.cardHeaderRow}>
+                  <View style={styles.aiBadge}>
+                    <Feather name="sparkles" size={14} color="#4F46E5" style={{ marginRight: spacing.xs }} />
+                    <Text style={styles.aiBadgeText}>AI Companion</Text>
+                  </View>
+
+                  <View style={styles.botGraphicContainer}>
+                    <View style={styles.botAvatarCircle}>
+                      <Feather name="cpu" size={32} color="#2563EB" />
+                    </View>
+                  </View>
                 </View>
                 
-                <Text style={styles.questionText}>{currentQuestion.text}</Text>
+                <Text style={styles.mainTitle}>
+                  {responses.length === 0 ? "Hello. I'm here to listen." : `Question ${responses.length + 1}`}
+                </Text>
+                <Text style={styles.subQuestionText}>{currentQuestion.text}</Text>
 
-                <View style={styles.optionsContainer}>
+                {/* Dynamic Options Container */}
+                <View style={[styles.optionsGrid, isLongOptions && styles.optionsColumn]}>
                   {currentQuestion.options.map((opt, i) => {
                     const isSelected = selectedOptions.includes(opt);
+                    const iconInfo = getOptionIcon(opt);
                     return (
                       <Pressable 
                         key={i} 
-                        style={[styles.optionChip, isSelected && styles.optionChipSelected]}
+                        style={[
+                          styles.optionCard, 
+                          isLongOptions && styles.optionCardFull,
+                          isSelected && styles.optionCardSelected
+                        ]}
                         onPress={() => toggleOption(opt)}
                       >
-                        <Text style={[styles.optionChipText, isSelected && styles.optionChipTextSelected]}>{opt}</Text>
+                        <View style={[styles.iconCircle, { backgroundColor: iconInfo.bg }]}>
+                          <Feather name={iconInfo.name} size={22} color={iconInfo.color} />
+                        </View>
+                        <Text style={[styles.optionCardText, isSelected && styles.optionCardTextSelected]}>{opt}</Text>
                       </Pressable>
                     );
                   })}
@@ -231,7 +263,7 @@ const FALLBACK_QUESTIONS = [
 
                 {selectedOptions.includes('Other...') && (
                   <TextInput
-                    style={[styles.textInput, { marginTop: spacing.md }]}
+                    style={styles.textInput}
                     placeholder="Type your own answer here..."
                     placeholderTextColor={colors.textSecondary}
                     value={draft}
@@ -242,6 +274,9 @@ const FALLBACK_QUESTIONS = [
                   />
                 )}
 
+                <View style={styles.divider} />
+
+                {/* Card Actions */}
                 <View style={styles.actionRow}>
                   <Pressable style={styles.skipBtn} onPress={() => handleNext(true)}>
                     <Text style={styles.skipBtnText}>
@@ -256,17 +291,17 @@ const FALLBACK_QUESTIONS = [
                     <Text style={styles.nextBtnText}>
                       {responses.length === TOTAL_QUESTIONS - 1 ? 'Finish & Submit' : 'Next'}
                     </Text>
-                    {responses.length === TOTAL_QUESTIONS - 1 ? (
-                      <Feather name="check" size={18} color={colors.white} style={{ marginLeft: spacing.xs }} />
-                    ) : (
-                      <Feather name="arrow-right" size={18} color={colors.white} style={{ marginLeft: spacing.xs }} />
-                    )}
+                    <Feather 
+                      name={responses.length === TOTAL_QUESTIONS - 1 ? "check" : "arrow-right"} 
+                      size={18} 
+                      color={colors.white} 
+                      style={{ marginLeft: spacing.xs }} 
+                    />
                   </Pressable>
                 </View>
               </View>
             )}
           </View>
-
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -274,148 +309,186 @@ const FALLBACK_QUESTIONS = [
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
   topHeader: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#FFFFFF',
     paddingTop: spacing.xxxl,
     paddingBottom: spacing.xl,
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
   },
   topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, alignItems: 'center' },
   headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
-    width: 56,
-    height: 56,
+    width: 48,
+    height: 48,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
-    position: 'relative',
   },
   headerInfo: { flex: 1 },
-  pillBadge: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
-  subtext: { ...typography.caption, color: colors.textSecondary },
+  pageTitle: { ...typography.h1, color: '#1E293B', fontSize: 22, fontWeight: '700' },
+  subtext: { ...typography.caption, color: '#64748B', marginTop: 2 },
   headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  
   contentBody: {
     flex: 1,
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    marginTop: -spacing.xl,
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.lg,
+    paddingTop: spacing.xl,
   },
-  contentBodyDesktop: { marginTop: 0, borderTopLeftRadius: 0, borderTopRightRadius: 0 },
+  contentBodyDesktop: { marginTop: 0 },
   
   progressContainer: { marginBottom: spacing.xl },
-  progressTextRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.sm },
-  progressLabel: { ...typography.bodyStrong, color: colors.primaryDark },
-  progressPercent: { ...typography.body, color: colors.textSecondary },
-  progressTrack: { height: 8, backgroundColor: colors.border, borderRadius: radius.pill, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: colors.primary },
+  progressTextRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
+  progressLabel: { ...typography.bodyStrong, color: '#334155', fontWeight: '600' },
+  progressPercent: { ...typography.body, color: '#94A3B8', fontSize: 13 },
+  progressTrack: { height: 6, backgroundColor: '#E2E8F0', borderRadius: radius.pill, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: '#3B82F6', borderRadius: radius.pill },
 
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.xl,
+    borderColor: '#E2E8F0',
+    padding: 32,
     ...shadow.card,
-    minHeight: 400,
-    justifyContent: 'center'
+    minHeight: 440,
   },
-  loadingArea: { alignItems: 'center', justifyContent: 'center' },
-  loadingText: { ...typography.body, color: colors.textSecondary, marginTop: spacing.md },
+  loadingArea: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 300 },
+  loadingText: { ...typography.body, color: '#64748B', marginTop: spacing.md },
 
-  questionArea: { flex: 1, justifyContent: 'flex-start' },
+  questionArea: { flex: 1 },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
   aiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.md,
-    marginBottom: spacing.lg
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
   },
-  aiBadgeText: { ...typography.caption, color: colors.primaryDark, fontWeight: '600' },
-  questionText: {
-    ...typography.h3,
-    color: colors.textPrimary,
-    marginBottom: spacing.xl,
-    lineHeight: 28,
+  aiBadgeText: { ...typography.caption, color: '#4F46E5', fontWeight: '600', fontSize: 13 },
+  botGraphicContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: -8,
   },
-  optionsContainer: {
+  botAvatarCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mainTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginTop: spacing.sm,
+    marginBottom: 4,
+  },
+  subQuestionText: {
+    fontSize: 15,
+    color: '#64748B',
+    marginBottom: 28,
+  },
+  optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.xl,
+    gap: 16,
+    marginBottom: 20,
   },
-  optionChip: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.pill,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
+  optionsColumn: {
+    flexDirection: 'column',
   },
-  optionChipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+  optionCard: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  optionChipText: {
-    ...typography.body,
-    color: colors.textPrimary,
+  optionCardFull: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    paddingVertical: 14,
   },
-  optionChipTextSelected: {
-    color: colors.white,
+  optionCardSelected: {
+    borderColor: '#3B82F6',
+    backgroundColor: '#F0F6FF',
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  optionCardText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#334155',
+    textAlign: 'center',
+  },
+  optionCardTextSelected: {
+    color: '#2563EB',
     fontWeight: '600',
   },
   textInput: {
     ...typography.body,
-    color: colors.textPrimary,
+    color: '#0F172A',
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    backgroundColor: colors.background,
+    borderColor: '#CBD5E1',
+    borderRadius: 12,
+    backgroundColor: '#F8FAFC',
     padding: spacing.md,
-    minHeight: 120,
+    minHeight: 100,
     textAlignVertical: 'top',
-    marginBottom: spacing.xl
+    marginBottom: spacing.lg,
   },
-
+  divider: {
+    height: 1,
+    backgroundColor: '#F1F5F9',
+    marginVertical: spacing.lg,
+  },
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 'auto'
   },
-  skipBtn: { padding: spacing.sm },
-  skipBtnText: { ...typography.body, color: colors.textSecondary, textDecorationLine: 'underline' },
+  skipBtn: { paddingVertical: spacing.sm },
+  skipBtnText: { fontSize: 14, color: '#64748B', textDecorationLine: 'underline' },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
+    backgroundColor: '#3B82F6',
+    paddingHorizontal: 28,
+    paddingVertical: 12,
     borderRadius: radius.pill,
-    ...shadow.pop
   },
-  nextBtnDisabled: { opacity: 0.5 },
-  nextBtnText: { ...typography.bodyStrong, color: colors.white }
+  nextBtnDisabled: { opacity: 0.4 },
+  nextBtnText: { fontSize: 15, fontWeight: '600', color: colors.white },
 });
