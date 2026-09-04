@@ -9,7 +9,6 @@ import { colors } from '../shared/theme/colors';
 import { typography } from '../shared/theme/typography';
 import { tabletShellWidth, sidebarWidth } from '../shared/theme/layout';
 import { useResponsive } from '../shared/hooks/useResponsive';
-import { getNavItemsForRole } from './roleNavConfig';
 import SidebarNav from '../shared/components/SidebarNav';
 import AiChatButton from '../shared/components/AiChatButton';
 
@@ -45,6 +44,7 @@ function CheckinTab() {
 const SCREENS = {
   home: HomeScreen,
   checkin: CheckinTab,
+  wellbeing: WellnessScreen,
   history: DistressHistoryScreen,
   settings: SettingsScreen,
   mycounsellor: CounsellorChatScreen,
@@ -53,6 +53,7 @@ const SCREENS = {
 const TAB_ICONS = {
   home: 'home',
   checkin: 'mic',
+  wellbeing: 'heart',
   history: 'bar-chart-2',
   settings: 'user',
   mycounsellor: 'message-square',
@@ -92,6 +93,7 @@ function TabNavigator() {
     >
       <Tab.Screen name="home" component={SCREENS.home} options={{ title: 'Home' }} />
       <Tab.Screen name="checkin" component={SCREENS.checkin} options={{ title: 'Check-in' }} />
+      <Tab.Screen name="wellbeing" component={SCREENS.wellbeing} options={{ title: 'My well-being' }} />
       <Tab.Screen name="history" component={SCREENS.history} options={{ title: 'History' }} />
       <Tab.Screen
         name="mycounsellor"
@@ -128,11 +130,11 @@ function DesktopNavigator() {
     >
       <Drawer.Screen name="home" component={SCREENS.home} options={{ title: 'Home' }} />
       <Drawer.Screen name="checkin" component={SCREENS.checkin} options={{ title: 'Check-in' }} />
+      <Drawer.Screen name="wellbeing" component={SCREENS.wellbeing} options={{ title: 'My well-being' }} />
       <Drawer.Screen name="history" component={SCREENS.history} options={{ title: 'History' }} />
       <Drawer.Screen name="mycounsellor" component={SCREENS.mycounsellor} options={{ title: 'My Counsellor' }} />
       <Drawer.Screen name="settings" component={SCREENS.settings} options={{ title: 'Profile' }} />
       <Drawer.Screen name="Chatbot" component={ChatScreen} />
-      <Drawer.Screen name="Wellbeing" component={WellnessScreen} />
       <Drawer.Screen name="Journal" component={JournalScreen} />
       <Drawer.Screen name="MyEntry" component={MyEntryScreen} />
       <Drawer.Screen name="CounsellorChat" component={CounsellorChatScreen} />

@@ -58,33 +58,18 @@ export default function JournalScreen({ navigation }) {
     <View style={styles.container}>
       {/* Top Header */}
       <View style={styles.topHeader}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
-          <Feather name="arrow-left" size={20} color={colors.primaryDark} />
-        </Pressable>
         <View style={styles.headerIconTile}>
-          <Feather name="book-open" size={18} color={colors.primary} />
+          <Feather name="book-open" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.statusTitle}>My Journal</Text>
-          <Text style={styles.subtext}>A private space for your thoughts</Text>
         </View>
 
-        <TopRightActions showNotifications />
+        <TopRightActions />
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-          
-          {/* My Entries Button Row Below Header */}
-          <View style={styles.subHeaderRow}>
-            <Pressable
-              style={styles.myEntriesBtn}
-              onPress={() => navigation.navigate('MyEntry')}
-            >
-              <Feather name="grid" size={15} color={colors.white} />
-              <Text style={styles.myEntriesBtnText}>My Entries</Text>
-            </Pressable>
-          </View>
 
           {/* Decorative Hero Banner */}
           <View style={styles.heroBanner}>
@@ -172,77 +157,109 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  backBtn: { padding: spacing.xs },
   headerIconTile: {
-    width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  statusTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700' },
-  subtext: { ...typography.caption, color: colors.textSecondary },
-  subHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: spacing.md,
-  },
-  myEntriesBtn: {
-    flexDirection: 'row',
+    marginRight: spacing.xs,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.primaryDark,
-    borderRadius: radius.pill,
-    paddingVertical: 8,
-    paddingHorizontal: spacing.lg,
   },
-  myEntriesBtnText: { ...typography.caption, color: colors.white, fontWeight: '700' },
+  statusTitle: {
+    ...typography.h1,
+    color: colors.primaryDark,
+    fontSize: 24,
+    fontWeight: '700',
+  },
 
   body: { padding: spacing.xl },
   heroBanner: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: colors.primaryLight + '60', borderRadius: radius.xxl,
-    paddingVertical: spacing.lg, paddingHorizontal: spacing.xl, marginBottom: spacing.xl,
-    borderWidth: 1, borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.primaryLight + '60',
+    borderRadius: radius.xxl,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   heroLeft: { flex: 1, paddingRight: spacing.md },
   featherIconBadge: {
-    width: 32, height: 32, borderRadius: radius.pill, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xs,
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
   heroTitle: { ...typography.h2, color: colors.primaryDark, fontSize: 20, fontWeight: '800' },
   heroSubtext: { ...typography.caption, color: colors.textSecondary, marginTop: 2, fontSize: 13 },
   heroIllustrationContainer: { justifyContent: 'center', alignItems: 'center' },
 
   composerCard: {
-    backgroundColor: colors.surface, borderRadius: radius.xxl, padding: spacing.xl,
-    borderWidth: 1, borderColor: colors.border, marginBottom: spacing.xxl, ...shadow.card,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
+    padding: spacing.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: spacing.xxl,
+    ...shadow.card,
   },
   titleInputRow: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background,
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.xs, marginBottom: spacing.md, height: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.md,
+    height: 46,
   },
   titleTextInput: { flex: 1, ...typography.body, color: colors.textPrimary, paddingVertical: 0 },
   micPill: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surface,
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.pill,
-    paddingVertical: 4, paddingHorizontal: spacing.md, gap: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingVertical: 4,
+    paddingHorizontal: spacing.md,
+    gap: 4,
   },
   micPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   micPillText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700', fontSize: 12 },
   micPillTextActive: { color: colors.white },
 
   textArea: {
-    ...typography.body, color: colors.textPrimary, minHeight: 140, textAlignVertical: 'top',
-    backgroundColor: colors.background, borderWidth: 1, borderColor: colors.border,
-    borderRadius: radius.xl, padding: spacing.md, marginBottom: spacing.lg, lineHeight: 20,
+    ...typography.body,
+    color: colors.textPrimary,
+    minHeight: 140,
+    textAlignVertical: 'top',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
   },
   composerBottomRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
 
   saveBtn: {
-    backgroundColor: colors.primaryDark, borderRadius: radius.pill,
-    paddingVertical: spacing.sm + 2, paddingHorizontal: spacing.xl,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.primaryDark,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.sm + 2,
+    paddingHorizontal: spacing.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { ...typography.bodyStrong, color: colors.white, fontWeight: '700', fontSize: 14 },

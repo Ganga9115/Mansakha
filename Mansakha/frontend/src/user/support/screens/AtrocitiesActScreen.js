@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Pressable, ScrollView, LayoutAnimation, Platfor
 import { Feather } from '@expo/vector-icons';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
+import { colors } from '../../shared/theme/colors';
+import { typography } from '../../shared/theme/typography';
 import TopRightActions from '../../shared/components/TopRightActions';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -212,10 +214,8 @@ Power to make rules.-
 ];
 
 export default function AtrocitiesActScreen({ navigation }) {
-  // Fixed: removed TypeScript type annotation ': string | null'
   const [openId, setOpenId] = useState(null);
 
-  // Fixed: removed TypeScript type annotation ': string'
   const toggleFaq = (id) => {
     if (Platform.OS !== 'web') {
       LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -225,22 +225,30 @@ export default function AtrocitiesActScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
+      {/* Top Header */}
       <View style={styles.topHeader}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
-          <Feather name="arrow-left" size={20} color="#1F497D" />
-        </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.statusTitle}>Prevention of Atrocities Act</Text>
-          <Text style={styles.subtext}>Know your rights and protections</Text>
+        <View style={styles.headerLeft}>
+          <Text style={styles.pageTitle}>Prevention of Atrocities Act</Text>
         </View>
-        <TopRightActions />
+        <View style={styles.headerRightGroup}>
+          <TopRightActions />
+          <Pressable 
+            onPress={() => navigation.navigate('Profile')} 
+            style={styles.profileAvatarBtn}
+            hitSlop={8}
+          >
+            <View style={styles.avatarContainer}>
+              <Feather name="user" size={18} color={colors.primary} />
+            </View>
+          </Pressable>
+        </View>
       </View>
 
       <View style={styles.body}>
-        {/* Hero Banner */}
+        {/* Hero Section */}
         <View style={styles.bannerContainer}>
           <View style={styles.bannerIconBox}>
-            <Feather name="scale" size={28} color="#1F497D" />
+            <Feather name="scale" size={28} color={colors.sidebarBg} />
           </View>
 
           <View style={styles.bannerContent}>
@@ -264,7 +272,7 @@ export default function AtrocitiesActScreen({ navigation }) {
             <View key={point.id} style={styles.faqCard}>
               <Pressable onPress={() => toggleFaq(point.id)} style={styles.faqHeader}>
                 <View style={styles.cardIconBox}>
-                  <Feather name={point.icon} size={18} color="#1F497D" />
+                  <Feather name={point.icon} size={18} color={colors.primaryDark} />
                 </View>
 
                 <View style={styles.faqTitleContainer}>
@@ -274,7 +282,7 @@ export default function AtrocitiesActScreen({ navigation }) {
                 <Feather 
                   name={isOpen ? 'chevron-down' : 'chevron-right'} 
                   size={20} 
-                  color="#94A3B8" 
+                  color={colors.textSecondary} 
                   style={styles.chevron} 
                 />
               </Pressable>
@@ -307,40 +315,53 @@ export default function AtrocitiesActScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#F8FAFC' 
+    backgroundColor: colors.background,
   },
   topHeader: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
-    paddingHorizontal: 24,
+    backgroundColor: colors.primaryLight,
+    paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.xl,
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderColor: '#E2E8F0',
+    borderBottomColor: colors.border,
   },
-  backBtn: { 
-    marginRight: spacing.md, 
-    padding: spacing.xs 
+  headerLeft: {
+    flex: 1,
   },
-  statusTitle: { 
-    fontSize: 18, 
+  pageTitle: { 
+    ...typography.h1,
+    color: colors.primaryDark,
+    fontSize: 20, 
     fontWeight: '700', 
-    color: '#0F172A' 
   },
-  subtext: { 
-    fontSize: 12, 
-    color: '#64748B' 
+  headerRightGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  profileAvatarBtn: {
+    marginLeft: spacing.xs,
+  },
+  avatarContainer: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   body: { 
     width: '100%', 
-    paddingHorizontal: 32,
+    paddingHorizontal: spacing.xl,
     paddingVertical: spacing.lg,
   },
   bannerContainer: {
-    backgroundColor: '#1F497D',
+    backgroundColor: colors.sidebarBg,
     borderRadius: radius.xl,
-    padding: 24,
+    padding: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: spacing.xl,
@@ -349,8 +370,8 @@ const styles = StyleSheet.create({
   bannerIconBox: {
     width: 52,
     height: 52,
-    borderRadius: 26,
-    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -358,7 +379,7 @@ const styles = StyleSheet.create({
   bannerRightIconBox: {
     width: 52,
     height: 52,
-    borderRadius: 26,
+    borderRadius: radius.pill,
     backgroundColor: 'rgba(255, 255, 255, 0.12)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -368,28 +389,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   bannerTitle: {
-    color: '#FFFFFF',
+    ...typography.bodyStrong,
+    color: colors.sidebarTextActive,
     fontSize: 15,
     fontWeight: '600',
     lineHeight: 22,
     marginBottom: spacing.xs,
   },
   bannerSubtitle: {
-    color: '#93C5FD',
+    ...typography.caption,
+    color: colors.sidebarText,
     fontSize: 12,
   },
   sectionHeader: {
+    ...typography.h3,
     fontSize: 12,
     fontWeight: '700',
-    color: '#1F497D',
+    color: colors.primaryDark,
     marginBottom: spacing.md,
     letterSpacing: 1,
   },
   faqCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     marginBottom: spacing.md,
     overflow: 'hidden',
     width: '100%',
@@ -402,8 +426,8 @@ const styles = StyleSheet.create({
   cardIconBox: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#EEF2FF',
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
@@ -412,49 +436,54 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: { 
+    ...typography.bodyStrong,
     fontSize: 14, 
-    fontWeight: '600', 
-    color: '#0F172A',
+    fontWeight: '700', 
+    color: colors.textPrimary,
   },
   faqBodyContainer: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
     borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
+    borderTopColor: colors.border,
     paddingTop: spacing.md,
   },
   cardBody: { 
+    ...typography.caption,
     fontSize: 13, 
-    color: '#475569', 
+    color: colors.textSecondary, 
     lineHeight: 20 
   },
   chevron: {
     marginLeft: spacing.sm,
   },
   actCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
     padding: spacing.lg,
     marginBottom: spacing.md,
     width: '100%',
   },
   preambleText: { 
+    ...typography.bodySmall,
     fontSize: 13, 
-    color: '#334155', 
+    color: colors.textPrimary, 
     lineHeight: 20 
   },
   chapterTitle: { 
+    ...typography.h3,
     fontSize: 14, 
     fontWeight: '700', 
-    color: '#1F497D', 
+    color: colors.primaryDark, 
     marginBottom: spacing.sm, 
     letterSpacing: 0.5 
   },
   actBodyText: { 
+    ...typography.caption,
     fontSize: 13, 
-    color: '#475569', 
+    color: colors.textSecondary, 
     lineHeight: 20 
   },
 });

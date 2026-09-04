@@ -146,33 +146,32 @@ export default function CheckinScreen({ navigation }) {
 
   const progressPercentage = Math.min((responses.length / TOTAL_QUESTIONS) * 100, 100);
 
-  // Dynamic helper to match icons for dynamic AI options
+  // Dynamic helper to match icons for dynamic AI options using app theme colors
   const getOptionIcon = (opt) => {
     const lower = opt.toLowerCase();
-    if (lower.includes('okay') || lower.includes('good') || lower === 'yes') return { name: 'smile', bg: '#EBF5FF', color: '#3B82F6' };
-    if (lower.includes('anxious') || lower.includes('sad') || lower === 'no') return { name: 'frown', bg: '#FEF3C7', color: '#D97706' };
-    if (lower.includes('help') || lower.includes('support')) return { name: 'life-buoy', bg: '#D1FAE5', color: '#059669' };
-    if (lower.includes('other') || lower.includes('more')) return { name: 'more-horizontal', bg: '#F3E8FF', color: '#8B5CF6' };
-    return { name: 'check-circle', bg: '#F1F5F9', color: '#64748B' };
+    if (lower.includes('okay') || lower.includes('good') || lower === 'yes') return { name: 'smile', bg: colors.primaryLight, color: colors.primary };
+    if (lower.includes('anxious') || lower.includes('sad') || lower === 'no') return { name: 'frown', bg: colors.warningLight, color: colors.warning };
+    if (lower.includes('help') || lower.includes('support')) return { name: 'life-buoy', bg: colors.successLight, color: colors.success };
+    if (lower.includes('other') || lower.includes('more')) return { name: 'more-horizontal', bg: colors.primaryLight, color: colors.primaryDark };
+    return { name: 'check-circle', bg: colors.primaryLight, color: colors.textSecondary };
   };
 
-  // Check if options are long text to adapt layout dynamically
   const isLongOptions = currentQuestion.options.some(opt => opt.length > 25);
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Dynamic Header */}
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
           {isDesktop ? (
             <Feather name="mic" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather name="mic" size={28} color={colors.primary} />
+              <Feather name="mic" size={24} color={colors.primary} />
             </View>
           )}
           <View style={styles.headerInfo}>
             <Text style={styles.pageTitle}>Check-in</Text>
-            {isDesktop && <Text style={styles.subtext}>A safe space to share and be heard.</Text>}
           </View>
         </View>
         <View style={styles.headerRightRow}>
@@ -188,7 +187,7 @@ export default function CheckinScreen({ navigation }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.xl }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.xxxl }}>
         <View
           style={[
             styles.contentBody,
@@ -221,13 +220,13 @@ export default function CheckinScreen({ navigation }) {
                 {/* Header Row inside Card */}
                 <View style={styles.cardHeaderRow}>
                   <View style={styles.aiBadge}>
-                    <Feather name="sparkles" size={14} color="#4F46E5" style={{ marginRight: spacing.xs }} />
+                    <Feather name="sparkles" size={14} color={colors.primary} style={{ marginRight: spacing.xs }} />
                     <Text style={styles.aiBadgeText}>AI Companion</Text>
                   </View>
 
                   <View style={styles.botGraphicContainer}>
                     <View style={styles.botAvatarCircle}>
-                      <Feather name="cpu" size={32} color="#2563EB" />
+                      <Feather name="cpu" size={28} color={colors.primaryDark} />
                     </View>
                   </View>
                 </View>
@@ -253,7 +252,7 @@ export default function CheckinScreen({ navigation }) {
                         onPress={() => toggleOption(opt)}
                       >
                         <View style={[styles.iconCircle, { backgroundColor: iconInfo.bg }]}>
-                          <Feather name={iconInfo.name} size={22} color={iconInfo.color} />
+                          <Feather name={iconInfo.name} size={20} color={iconInfo.color} />
                         </View>
                         <Text style={[styles.optionCardText, isSelected && styles.optionCardTextSelected]}>{opt}</Text>
                       </Pressable>
@@ -294,7 +293,7 @@ export default function CheckinScreen({ navigation }) {
                     <Feather 
                       name={responses.length === TOTAL_QUESTIONS - 1 ? "check" : "arrow-right"} 
                       size={18} 
-                      color={colors.white} 
+                      color={colors.onPrimary} 
                       style={{ marginLeft: spacing.xs }} 
                     />
                   </Pressable>
@@ -309,62 +308,118 @@ export default function CheckinScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
   topHeader: {
-    backgroundColor: '#FFFFFF',
-    paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xl,
-    paddingHorizontal: spacing.xl,
+    backgroundColor: colors.primaryLight,
+    paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
+    paddingBottom: spacing.lg,
+    paddingHorizontal: 36, // 1 cm horizontal gap
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: colors.border,
   },
-  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, alignItems: 'center' },
-  headerIconDesktop: { marginRight: spacing.sm },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  topHeaderDesktop: { 
+    height: 64, 
+    paddingTop: 0, 
+    paddingBottom: 0, 
+    alignItems: 'center' 
+  },
+  headerIconDesktop: { 
+    marginRight: spacing.sm 
+  },
+  headerLeft: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    flex: 1 
+  },
   avatarContainer: {
-    width: 48,
-    height: 48,
+    width: 42,
+    height: 42,
     borderRadius: radius.pill,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.md,
   },
-  headerInfo: { flex: 1 },
-  pageTitle: { ...typography.h1, color: '#1E293B', fontSize: 22, fontWeight: '700' },
-  subtext: { ...typography.caption, color: '#64748B', marginTop: 2 },
-  headerRightRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  headerInfo: { 
+    flex: 1 
+  },
+  pageTitle: {
+    ...typography.h1,
+    color: colors.primaryDark,
+  },
+  headerRightRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: spacing.md 
+  },
   
   contentBody: {
     flex: 1,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: 36, // 1 cm horizontal gap
     paddingTop: spacing.xl,
   },
-  contentBodyDesktop: { marginTop: 0 },
+  contentBodyDesktop: { 
+    marginTop: 0 
+  },
   
-  progressContainer: { marginBottom: spacing.xl },
-  progressTextRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: spacing.xs },
-  progressLabel: { ...typography.bodyStrong, color: '#334155', fontWeight: '600' },
-  progressPercent: { ...typography.body, color: '#94A3B8', fontSize: 13 },
-  progressTrack: { height: 6, backgroundColor: '#E2E8F0', borderRadius: radius.pill, overflow: 'hidden' },
-  progressFill: { height: '100%', backgroundColor: '#3B82F6', borderRadius: radius.pill },
+  progressContainer: { 
+    marginBottom: spacing.xl 
+  },
+  progressTextRow: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: spacing.xs 
+  },
+  progressLabel: { 
+    ...typography.bodyStrong, 
+    color: colors.textPrimary 
+  },
+  progressPercent: { 
+    ...typography.bodySmall, 
+    color: colors.textSecondary 
+  },
+  progressTrack: { 
+    height: 6, 
+    backgroundColor: colors.border, 
+    borderRadius: radius.pill, 
+    overflow: 'hidden' 
+  },
+  progressFill: { 
+    height: '100%', 
+    backgroundColor: colors.primary, 
+    borderRadius: radius.pill 
+  },
 
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 32,
-    ...shadow.card,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    ...shadow.sm,
     minHeight: 440,
   },
-  loadingArea: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 300 },
-  loadingText: { ...typography.body, color: '#64748B', marginTop: spacing.md },
+  loadingArea: { 
+    flex: 1, 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    minHeight: 300 
+  },
+  loadingText: { 
+    ...typography.body, 
+    color: colors.textSecondary, 
+    marginTop: spacing.md 
+  },
 
-  questionArea: { flex: 1 },
+  questionArea: { 
+    flex: 1 
+  },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -373,46 +428,49 @@ const styles = StyleSheet.create({
   aiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EEF2FF',
+    backgroundColor: colors.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: radius.pill,
   },
-  aiBadgeText: { ...typography.caption, color: '#4F46E5', fontWeight: '600', fontSize: 13 },
+  aiBadgeText: { 
+    ...typography.label, 
+    color: colors.primaryDark, 
+    fontSize: 12 
+  },
   botGraphicContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#EFF6FF',
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.primaryLight,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: -8,
+    marginTop: -4,
   },
   botAvatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#DBEAFE',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   mainTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#0F172A',
+    ...typography.h2,
+    color: colors.textPrimary,
     marginTop: spacing.sm,
     marginBottom: 4,
   },
   subQuestionText: {
-    fontSize: 15,
-    color: '#64748B',
-    marginBottom: 28,
+    ...typography.body,
+    color: colors.textSecondary,
+    marginBottom: spacing.xxl,
   },
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 20,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
   },
   optionsColumn: {
     flexDirection: 'column',
@@ -420,12 +478,12 @@ const styles = StyleSheet.create({
   optionCard: {
     flex: 1,
     minWidth: 140,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 16,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -433,37 +491,35 @@ const styles = StyleSheet.create({
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    paddingVertical: 14,
+    paddingVertical: spacing.md,
   },
   optionCardSelected: {
-    borderColor: '#3B82F6',
-    backgroundColor: '#F0F6FF',
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    marginBottom: spacing.sm,
   },
   optionCardText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#334155',
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   optionCardTextSelected: {
-    color: '#2563EB',
-    fontWeight: '600',
+    color: colors.primaryDark,
   },
   textInput: {
     ...typography.body,
-    color: '#0F172A',
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    backgroundColor: '#F8FAFC',
+    borderColor: colors.borderStrong,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
     padding: spacing.md,
     minHeight: 100,
     textAlignVertical: 'top',
@@ -471,7 +527,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: colors.border,
     marginVertical: spacing.lg,
   },
   actionRow: {
@@ -479,16 +535,27 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  skipBtn: { paddingVertical: spacing.sm },
-  skipBtnText: { fontSize: 14, color: '#64748B', textDecorationLine: 'underline' },
+  skipBtn: { 
+    paddingVertical: spacing.sm 
+  },
+  skipBtnText: { 
+    ...typography.bodySmall, 
+    color: colors.textSecondary, 
+    textDecorationLine: 'underline' 
+  },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 28,
-    paddingVertical: 12,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.md,
     borderRadius: radius.pill,
   },
-  nextBtnDisabled: { opacity: 0.4 },
-  nextBtnText: { fontSize: 15, fontWeight: '600', color: colors.white },
+  nextBtnDisabled: { 
+    opacity: 0.4 
+  },
+  nextBtnText: { 
+    ...typography.bodyStrong, 
+    color: colors.onPrimary 
+  },
 });

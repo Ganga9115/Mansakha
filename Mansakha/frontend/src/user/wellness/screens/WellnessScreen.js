@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Linking, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
 import { colors } from '../../shared/theme/colors';
@@ -112,17 +112,12 @@ export default function WellnessScreen({ navigation }) {
       {/* Top Header */}
       <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
         <View style={styles.headerLeft}>
-          <Pressable onPress={() => navigation?.goBack()} style={styles.backBtn} hitSlop={8}>
-            <Feather name="arrow-left" size={20} color={colors.primaryDark} />
-          </Pressable>
-
           <View style={styles.headerIconTile}>
-            <Feather name="trending-up" size={18} color={colors.primary} />
+            <Feather name="sun" size={22} color={colors.primaryDark} />
           </View>
 
           <View style={{ flex: 1 }}>
             <Text style={styles.statusTitle}>My Well-being</Text>
-            <Text style={styles.subtext}>Your emotional wellbeing toolkit</Text>
           </View>
         </View>
 
@@ -132,10 +127,9 @@ export default function WellnessScreen({ navigation }) {
               fullName={userData?.fullName}
               alertCount={userData?.alerts?.length || 0}
               onBellPress={() => {}}
-              showNotifications
             />
           ) : (
-            <TopRightActions showNotifications />
+            <TopRightActions />
           )}
         </View>
       </View>
@@ -155,7 +149,7 @@ export default function WellnessScreen({ navigation }) {
         <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
           <View style={[styles.body, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
             {/* Hero Journal Card with Illustration */}
-            <Pressable style={styles.journalBanner} onPress={() => navigation?.navigate('Journal')}>
+            <Pressable style={styles.journalBanner} onPress={() => navigation?.navigate('MyEntry')}>
               <View style={styles.journalIconTile}>
                 <Feather name="book-open" size={22} color={colors.primary} />
               </View>
@@ -217,12 +211,14 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
-    paddingTop: spacing.xxl,
+    paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
   topHeaderDesktop: {
     height: 64,
@@ -231,18 +227,18 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   headerRight: { marginLeft: spacing.md },
-  backBtn: { marginRight: spacing.md, padding: spacing.xs },
   headerIconTile: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
   },
-  statusTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700' },
-  subtext: { ...typography.caption, color: colors.textSecondary },
+  statusTitle: {
+    ...typography.h1,
+    color: colors.primaryDark,
+    fontSize: 20,
+    fontWeight: '700',
+  },
   body: { padding: spacing.xl },
   fullScreenBody: { flex: 1, backgroundColor: colors.background },
   fullScreenBodyInner: { padding: spacing.xl, paddingTop: spacing.xxl, flexGrow: 1 },

@@ -34,7 +34,6 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
           bottom, not here - one place for it, not duplicated in the
           sidebar too. */}
       <View style={styles.cornerCell}>
-
         {/* Mansakha Logo */}
         <Image
           source={require('../../../../assets/logo-3.png')}
@@ -46,8 +45,10 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
       <View style={styles.body}>
         <View style={styles.items}>
           {state?.routes?.map((route, index) => {
-            // Hide secondary screens that are in the drawer but shouldn't be in the sidebar menu
+            // Hide secondary/internal screens that aren't mapped in TAB_ICONS
             if (!icons[route.name]) return null;
+            
+            // Hide 'mycounsellor' if the user isn't opted in or assigned
             if (route.name === 'mycounsellor' && !showMyCounsellor) return null;
 
             const descriptor = descriptors?.[route.key];
