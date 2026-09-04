@@ -148,8 +148,7 @@ export default function StaffLogin() {
       {/* Left Pane - Branding & Features */}
       <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 xl:px-24 bg-gradient-to-br from-[#3D5A80] to-[#519BCE] text-white h-full relative">
         <div className="mb-12">
-          <h1 className="text-5xl font-extrabold mb-3 tracking-tight">Mansakha</h1>
-          <p className="text-xl text-blue-100/90 font-light">Mind matters. We're listening.</p>
+          <img src="/logo-3.png" alt="Mansakha" className="h-auto w-64" />
         </div>
 
         <div className="space-y-3 max-w-sm">
