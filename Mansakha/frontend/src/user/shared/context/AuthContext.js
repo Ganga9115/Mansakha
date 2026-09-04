@@ -23,6 +23,17 @@ export function AuthProvider({ children }) {
   const login = async (sessionData) => {
     setSession(sessionData);
     await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
+    // Same reasoning as logout()'s own removeItem below, but covering the gap
+    // that fix didn't: a saved nav_state survives just fine if the *previous*
+    // session ended via a clean logout, but nothing ends it if that previous
+    // session instead ended by token expiry, a browser crash, or just closing
+    // the tab - the RootNavigator.js restoration check only verifies "is this
+    // a logged-in-shaped state," not "does this belong to the session that's
+    // logging in right now," so a stale state passes that check and gets
+    // restored regardless. Clearing it on every successful login (not just
+    // logout) guarantees every login starts at Home, independent of how the
+    // last session ended. Harmless no-op on native, which doesn't use this key.
+    await AsyncStorage.removeItem('mansakha_nav_state');
   };
 
   const logout = async () => {
