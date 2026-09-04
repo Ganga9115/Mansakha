@@ -445,20 +445,21 @@ router.post('/chat/log', async (req, res) => {
 router.post('/urgent-help', async (req, res) => {
   const userId = req.auth.userId;
 
-  const { data: user, error: userError } = await supabase
-    .from('users')
-    .select('jurisdiction_id, assigned_counsellor_id')
-    .eq('user_id', userId)
-    .single();
+  // All three independent - the SOS event insert doesn't need anything read
+  // from `user`/`identity` first (it only needs userId, already known from
+  // the auth token) - running them concurrently instead of one after
+  // another matters most exactly here, the single most time-critical action
+  // in the app.
+  const [
+    { data: user, error: userError },
+    { data: identity },
+    { data: sosEvent, error: sosError },
+  ] = await Promise.all([
+    supabase.from('users').select('jurisdiction_id, assigned_counsellor_id').eq('user_id', userId).single(),
+    supabase.from('user_identity').select('contact_number').eq('user_id', userId).maybeSingle(),
+    supabase.from('sos_events').insert({ user_id: userId }).select('sos_event_id, triggered_at').single(),
+  ]);
   if (userError || !user) return fail(res, 'User record not found', 404);
-
-  const { data: identity } = await supabase.from('user_identity').select('contact_number').eq('user_id', userId).maybeSingle();
-
-  const { data: sosEvent, error: sosError } = await supabase
-    .from('sos_events')
-    .insert({ user_id: userId })
-    .select('sos_event_id, triggered_at')
-    .single();
   if (sosError) return fail(res, `Could not record urgent-help request: ${sosError.message}`, 500);
 
   let counsellorId = user.assigned_counsellor_id;
@@ -479,29 +480,34 @@ router.post('/urgent-help', async (req, res) => {
   // anchor already (see auth.user.routes.js's login).
   const jurisdictionIds = await getJurisdictionIdsForCaseFamily(userId);
   const adminIdSet = new Set();
-  for (const jid of jurisdictionIds) {
+  // Each jurisdiction's own 3-step walk (district -> parent -> admin roles)
+  // is a genuine dependency chain, but a person with several linked cases
+  // has several INDEPENDENT jurisdictions to walk - those now run
+  // concurrently (Promise.all) instead of one full chain after another,
+  // which used to make an SOS - the single most time-critical action in the
+  // app - wait out N x 2 sequential PostgREST round trips before ever
+  // notifying anyone.
+  const adminIdsPerJurisdiction = await Promise.all(jurisdictionIds.map(async (jid) => {
     // Walk the jurisdiction tree up from this district to find its parent
     // state - State Administration is scoped to that state row, not the
     // district itself, so this can't be a simple eq() on jid alone.
-    // eslint-disable-next-line no-await-in-loop
     const { data: districtRow } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', jid).maybeSingle();
     let stateJurisdictionId = null;
     if (districtRow?.parent_id) {
-      // eslint-disable-next-line no-await-in-loop
       const { data: parentRow } = await supabase.from('jurisdictions').select('jurisdiction_id, level').eq('jurisdiction_id', districtRow.parent_id).maybeSingle();
       if (parentRow?.level === 'state') stateJurisdictionId = parentRow.jurisdiction_id;
     }
 
     const idsToCheck = stateJurisdictionId ? [jid, stateJurisdictionId] : [jid];
-    // eslint-disable-next-line no-await-in-loop
     const { data: adminRoles } = await supabase
       .from('official_roles')
       .select('official_id, roles(role_name)')
       .in('jurisdiction_id', idsToCheck)
       .is('revoked_at', null);
-    for (const r of adminRoles || []) {
-      if (r.roles?.role_name === 'Administration') adminIdSet.add(r.official_id);
-    }
+    return (adminRoles || []).filter((r) => r.roles?.role_name === 'Administration').map((r) => r.official_id);
+  }));
+  for (const ids of adminIdsPerJurisdiction) {
+    for (const id of ids) adminIdSet.add(id);
   }
 
   const recipientIds = [...new Set([counsellorId, ...adminIdSet].filter(Boolean))];

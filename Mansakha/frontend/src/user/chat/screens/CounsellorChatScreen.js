@@ -20,7 +20,7 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import TopRightActions from '../../shared/components/TopRightActions';
-import { LoadingState } from '../../shared/components/QueryStates';
+import { LoadingState, ErrorState } from '../../shared/components/QueryStates';
 import {
   useAssignedCounsellor,
   useCounsellorMessages,
@@ -214,6 +214,15 @@ export default function CounsellorChatScreen({ navigation }) {
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
         {counsellorQuery.isLoading || messagesQuery.isLoading ? (
           <LoadingState />
+        ) : counsellorQuery.isError || messagesQuery.isError ? (
+          // Previously fell through to "no counsellor assigned" on ANY
+          // failure here (a brief server restart, a network blip) -
+          // confirmed live as a misleading message on a real request
+          // failure, not an actual absence of an assigned counsellor.
+          <ErrorState
+            message="Couldn't load your counsellor chat. Check your connection and try again."
+            onRetry={() => { counsellorQuery.refetch(); messagesQuery.refetch(); }}
+          />
         ) : !counsellorQuery.data?.assigned ? (
           <View style={styles.content}>
             <Text style={styles.heroText}>You do not currently have a counsellor assigned.</Text>

@@ -366,7 +366,7 @@ router.get('/cases', requireRole(['Counsellor']), generalApiLimiter, async (req,
 });
 
 router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  const { riskLevel, page = 1 } = req.query;
+  const { riskLevel, q, page = 1 } = req.query;
   const pageSize = 20;
   const offset = (Math.max(1, parseInt(page, 10)) - 1) * pageSize;
 
@@ -386,12 +386,18 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
       // ever written under the anchor's user_id (see auth.user.routes.js's
       // login), so a dependent case's own literal user_id would never appear
       // in `messages` even when the person has real unread messages.
-      `select u.user_id, u.linked_to_user_id, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name
+      // full_name joined via coalesce(linked_to_user_id, user_id) - a
+      // dependent case has no user_identity row of its own (see
+      // createLinkedCase in userProvisioning.js), so this feeds the search
+      // box below with the real person's name regardless of which of their
+      // cases this row is.
+      `select u.user_id, u.linked_to_user_id, u.docket_number, u.case_stage, u.case_background, ds.score_value, rl.name as risk_level_name, ui.full_name
        from users u
        left join lateral (
          select score_value, risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
        where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed' and u.status = 'active'`,
       [req.auth.officialId]
     ),
@@ -407,6 +413,8 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
 
   let cases = rows.map((u) => ({
     userId: u.user_id,
+    docketNumber: u.docket_number,
+    fullName: u.full_name || null,
     caseStage: u.case_stage,
     score: u.score_value !== null ? Number(u.score_value) : null,
     riskLevel: u.risk_level_name,
@@ -417,6 +425,18 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
   }));
 
   if (riskLevel) cases = cases.filter((c) => c.riskLevel === riskLevel);
+  // Search by case id, docket number, or name - matched against the same
+  // full caseload this counsellor's queue already loads (pagination below
+  // slices AFTER this, same as the riskLevel filter above), so this searches
+  // every case they hold, not just the current page.
+  if (q && q.trim()) {
+    const needle = q.trim().toLowerCase();
+    cases = cases.filter((c) =>
+      c.userId.toLowerCase().includes(needle) ||
+      (c.docketNumber || '').toLowerCase().includes(needle) ||
+      (c.fullName || '').toLowerCase().includes(needle)
+    );
+  }
   cases.sort((a, b) => (RISK_SORT_ORDER[b.riskLevel] || 0) - (RISK_SORT_ORDER[a.riskLevel] || 0));
 
   const total = cases.length;

@@ -121,46 +121,42 @@ router.post('/fetch-case', async (req, res) => {
 // with that. Full detail (identity + case + jurisdiction), not just the
 // truncated fields Counsellor's case queue shows.
 router.get('/users', async (req, res) => {
-  const { data, error } = await supabase
-    .from('users')
-    .select(`
-      user_id, docket_number, case_stage, status, case_background, enrolled_at, linked_to_user_id,
-      case_types(name),
-      jurisdictions(name)
-    `)
-    .eq('auth_method', 'data_operator')
-    .order('enrolled_at', { ascending: false });
-  if (error) return fail(res, `Could not load users: ${error.message}`, 500);
-
-  // Multi-Case-Per-Person Support - a dependent case has no user_identity row
-  // of its own (it inherits the anchor's - see createLinkedCase in
-  // userProvisioning.js), so a direct user_identity(...) embed on this row
-  // would always come back null even though the real person's name/contact
-  // are known via their anchor. Resolved via each row's own anchor instead.
-  const anchorIds = [...new Set((data || []).map((u) => u.linked_to_user_id || u.user_id))];
-  const { data: identities } = await supabase
-    .from('user_identity')
-    .select('user_id, full_name, contact_number, address')
-    .in('user_id', anchorIds);
-  const identityByAnchor = new Map((identities || []).map((i) => [i.user_id, i]));
+  // Raw pg (not Supabase REST) in one query - a PostgREST round trip costs
+  // ~1-2s here (documented elsewhere in this codebase's raw-pg conversions),
+  // and the previous version did two of them sequentially (users, then a
+  // separate user_identity lookup) for what's this screen's own landing
+  // page, felt on every load. ui joined via coalesce(linked_to_user_id,
+  // user_id) - a dependent case (Multi-Case-Per-Person Support) has no
+  // user_identity row of its own (it inherits the anchor's - see
+  // createLinkedCase in userProvisioning.js), so joining on u.user_id
+  // directly would show a blank name/contact/address for one even though
+  // the real person's identity is known via their other case.
+  const { rows } = await pool.query(
+    `select u.user_id, u.docket_number, u.case_stage, u.status, u.case_background, u.enrolled_at,
+            ct.name as case_type_name, j.name as jurisdiction_name,
+            ui.full_name, ui.contact_number, ui.address
+     from users u
+     left join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     where u.auth_method = 'data_operator'
+     order by u.enrolled_at desc`
+  );
 
   return ok(res, {
-    users: (data || []).map((u) => {
-      const identity = identityByAnchor.get(u.linked_to_user_id || u.user_id);
-      return {
-        userId: u.user_id,
-        docketNumber: u.docket_number,
-        fullName: identity?.full_name || null,
-        contactNumber: identity?.contact_number || null,
-        address: identity?.address || null,
-        caseType: u.case_types?.name || null,
-        jurisdictionName: u.jurisdictions?.name || null,
-        caseStage: u.case_stage,
-        status: u.status,
-        caseBackground: u.case_background,
-        enrolledAt: u.enrolled_at,
-      };
-    }),
+    users: rows.map((u) => ({
+      userId: u.user_id,
+      docketNumber: u.docket_number,
+      fullName: u.full_name || null,
+      contactNumber: u.contact_number || null,
+      address: u.address || null,
+      caseType: u.case_type_name || null,
+      jurisdictionName: u.jurisdiction_name || null,
+      caseStage: u.case_stage,
+      status: u.status,
+      caseBackground: u.case_background,
+      enrolledAt: u.enrolled_at,
+    })),
   });
 });
 

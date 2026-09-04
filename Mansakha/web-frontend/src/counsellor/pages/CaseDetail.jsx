@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, ChevronRight, ChevronDown, Repeat } from 'lucide-react';
 import {
   useCaseDetail,
   useScheduleSession,
@@ -69,6 +69,49 @@ function CaseTrendChart({ history }) {
       >
         {points.map((p, i) => <span key={i} className="text-center whitespace-nowrap">{p.label}</span>)}
       </div>
+    </div>
+  );
+}
+
+// Multi-Case-Per-Person Support - a quick way to jump between a person's
+// linked cases right from the title, so switching doesn't require scrolling
+// down to the Linked Cases panel further down the page. Only rendered when
+// there's actually more than one case (see otherLinkedCases below).
+function SwitchCaseDropdown({ cases, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-50 transition"
+      >
+        <Repeat size={13} /> Switch Case <ChevronDown size={13} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-50 overflow-hidden">
+          <p className="text-[10px] font-bold text-gray-400 uppercase px-3 pt-2.5 pb-1">This person's other cases</p>
+          {cases.map((c) => (
+            <button
+              key={c.userId}
+              onClick={() => { setOpen(false); onSelect(c.userId); }}
+              className="w-full text-left px-3 py-2 hover:bg-gray-50 transition border-t border-gray-50"
+            >
+              <p className="text-xs font-bold text-gray-800">Docket {c.docketNumber || '-'}</p>
+              <p className="text-[10px] text-gray-500">{c.caseType || '-'} · {c.caseStage || '-'}</p>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -157,27 +200,40 @@ export default function CaseDetail() {
   const allLinkedCases = linkedCasesQuery.data?.cases || [];
   const otherLinkedCases = allLinkedCases.filter((c) => !c.isCurrent);
 
-  // Moved into the header (StaffLayout's headerAction) rather than sitting
-  // alone in its own row inside the page content, where it left a lot of
-  // empty space next to it - the header is where a page's primary action
-  // belongs, same as profile/notifications/logout already do.
+  // Solid blue (not outline) per explicit request - this is the page's
+  // primary action, so it should read as such against the search bar it
+  // now sits next to.
   const chatWithUserButton = data.optedForManualCounsellor ? (
-    <div className="relative inline-block">
+    <div className="relative inline-block shrink-0">
       <button
         onClick={() => navigate(`/counsellor/case-detail/${userId}/chat`)}
-        className="px-4 py-2 border border-[#519BCE] text-[#519BCE] rounded-lg text-xs font-medium hover:bg-blue-50 transition flex items-center gap-2"
+        className="px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition flex items-center gap-2"
       >
         <MessageCircle size={14} /> Chat with User
       </button>
       {data.hasUnreadMessage && (
-        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>
       )}
     </div>
   ) : null;
 
   return (
-    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`} headerAction={chatWithUserButton}>
+    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
       <div className="space-y-6">
+
+        {/* CASE ACTION BAR - switch-case on the left (only if this person
+            has other cases), primary chat action on the right. No search
+            here - search stays on My Users only, per explicit request. */}
+        {(otherLinkedCases.length > 0 || chatWithUserButton) && (
+          <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+            <div>
+              {otherLinkedCases.length > 0 && (
+                <SwitchCaseDropdown cases={otherLinkedCases} onSelect={(id) => navigate(`/counsellor/case-detail/${id}`)} />
+              )}
+            </div>
+            {chatWithUserButton}
+          </div>
+        )}
 
         {/* TOP SUMMARY HEADER */}
         <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between flex-wrap gap-4">
@@ -329,6 +385,19 @@ export default function CaseDetail() {
               <p className="text-xs text-gray-600 leading-relaxed">{data.caseBackground || 'No background notes on file.'}</p>
             </div>
 
+            {/* Case Notes - own page (CaseNotes.jsx), not expanded inline
+                here: a case can accumulate a long thread (every AI-drafted
+                note per check-in included), which used to push the rest of
+                the case file below the fold. Placed directly under Case
+                Background per explicit request. */}
+            <button
+              onClick={() => navigate(`/counsellor/case-detail/${userId}/notes`)}
+              className="w-full bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between hover:bg-gray-50 transition text-left"
+            >
+              <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
+              <ChevronRight size={18} className="text-gray-400" />
+            </button>
+
             {/* Scheduled Counsellings */}
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
               <h3 className="font-bold text-sm text-gray-800 flex items-center gap-2"><CalendarPlus size={16} /> Schedule a Session</h3>
@@ -346,47 +415,6 @@ export default function CaseDetail() {
                 {scheduleSession.loading ? 'Scheduling...' : 'Schedule'}
               </button>
             </div>
-
-            {/* Case Notes - own page (CaseNotes.jsx), not expanded inline
-                here: a case can accumulate a long thread (every AI-drafted
-                note per check-in included), which used to push the rest of
-                the case file below the fold. Moved here under Schedule a
-                Session per explicit request, rather than duplicating it in
-                the left column too. */}
-            <button
-              onClick={() => navigate(`/counsellor/case-detail/${userId}/notes`)}
-              className="w-full bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between hover:bg-gray-50 transition text-left"
-            >
-              <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
-              <ChevronRight size={18} className="text-gray-400" />
-            </button>
-
-            {/* Linked Cases - Multi-Case-Per-Person Support: this person has
-                more than one docket, so this panel offers a jump-off point to
-                their other case(s). Hidden entirely for the (common)
-                single-case person - see allLinkedCases above. */}
-            {allLinkedCases.length > 1 && (
-              <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-                <h3 className="font-bold text-sm text-gray-800">Linked Cases</h3>
-                <div className="space-y-2">
-                  {otherLinkedCases.map((c) => (
-                    <button
-                      key={c.userId}
-                      onClick={() => navigate(`/counsellor/case-detail/${c.userId}`)}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 transition text-left"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-bold text-gray-800 truncate">{c.docketNumber || 'No docket number'}</p>
-                        <p className="text-[11px] text-gray-500 mt-0.5 truncate">
-                          {c.caseType || 'Unknown type'} · {c.caseStage || '-'} · {c.jurisdictionName || '-'}
-                        </p>
-                      </div>
-                      <ChevronRight size={16} className="text-gray-400 flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
           </div>
 
