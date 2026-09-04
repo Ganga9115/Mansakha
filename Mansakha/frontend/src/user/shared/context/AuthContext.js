@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Session state - Build Prompt Section 0b: role/jurisdiction are NOT decoded from
@@ -8,6 +9,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const AuthContext = createContext(null);
 const STORAGE_KEY = 'mansakha_session';
+const NAV_STATE_KEY = 'mansakha_nav_state';
+
+// RootNavigator.js deliberately keeps this key in per-tab sessionStorage, not
+// AsyncStorage (localStorage on web, shared across every tab of the same
+// origin) - see that file for why. Login/logout need to clear the exact same
+// storage the navigator itself reads, or clearing here would silently no-op.
+function clearNavState() {
+  if (Platform.OS === 'web') window.sessionStorage.removeItem(NAV_STATE_KEY);
+}
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null); // { token, accountType: 'ministry'|'staff'|'user', mustChangePassword? }
@@ -33,7 +43,7 @@ export function AuthProvider({ children }) {
     // restored regardless. Clearing it on every successful login (not just
     // logout) guarantees every login starts at Home, independent of how the
     // last session ended. Harmless no-op on native, which doesn't use this key.
-    await AsyncStorage.removeItem('mansakha_nav_state');
+    clearNavState();
   };
 
   const logout = async () => {
@@ -46,7 +56,7 @@ export function AuthProvider({ children }) {
     // would land straight back on whatever deep screen (e.g. AI Chat) was
     // open when this session logged out, instead of defaulting to Home -
     // confirmed live. Harmless no-op on native, which doesn't use this key.
-    await AsyncStorage.removeItem('mansakha_nav_state');
+    clearNavState();
   };
 
   const updateSession = async (patch) => {

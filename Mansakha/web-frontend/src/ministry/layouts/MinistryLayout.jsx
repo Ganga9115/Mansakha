@@ -50,8 +50,8 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
         } lg:translate-x-0`}
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 shrink-0">
-          <div>
-            <h1 className="text-xl font-bold tracking-wide leading-tight">Mansakha</h1>
+          <div className="flex flex-col items-start gap-0.5">
+            <img src="/logo-3.png" alt="Mansakha" className="h-auto w-[185px]" />
             <p className="text-[11px] text-blue-200 italic leading-tight">Ministry Console</p>
           </div>
           <button
