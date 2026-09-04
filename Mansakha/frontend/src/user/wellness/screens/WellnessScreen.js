@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Animated, Linking } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
 import { colors } from '../../shared/theme/colors';
@@ -14,16 +14,13 @@ import { useResponsive } from '../../shared/hooks/useResponsive';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useWellnessSuggestions, useUserDashboard } from '../../shared/services/hooks';
 import JournalIllustration from '../../shared/components/JournalIllustration';
+import { MeditationList, MeditationPlayer, findExerciseAnimation, findExerciseTeaser } from '../components/GuidedMeditations';
 
 const SEGMENTS = [
   { value: 'exercise', label: 'Exercise', icon: 'activity' },
   { value: 'meditation', label: 'Meditation', icon: 'user' },
   { value: 'music', label: 'Music', icon: 'music' },
 ];
-
-const INHALE_MS = 4000;
-const HOLD_MS = 2000;
-const EXHALE_MS = 4000;
 
 function getExerciseIcon(title = '', category = '') {
   if (category === 'music') return 'music';
@@ -42,60 +39,7 @@ function getExerciseIcon(title = '', category = '') {
   return 'activity';
 }
 
-function BreathingTimer() {
-  const scale = useRef(new Animated.Value(1)).current;
-  const [running, setRunning] = useState(false);
-  const [phase, setPhase] = useState('Ready');
-
-  useEffect(() => {
-    if (!running) {
-      scale.stopAnimation();
-      scale.setValue(1);
-      setPhase('Ready');
-      return undefined;
-    }
-
-    let cancelled = false;
-    let holdTimeout = null;
-
-    const runCycle = () => {
-      if (cancelled) return;
-      setPhase('Inhale');
-      Animated.timing(scale, { toValue: 1.4, duration: INHALE_MS, useNativeDriver: true }).start(({ finished }) => {
-        if (!finished || cancelled) return;
-        setPhase('Hold');
-        holdTimeout = setTimeout(() => {
-          if (cancelled) return;
-          setPhase('Exhale');
-          Animated.timing(scale, { toValue: 1, duration: EXHALE_MS, useNativeDriver: true }).start(({ finished: doneExhale }) => {
-            if (doneExhale && !cancelled) runCycle();
-          });
-        }, HOLD_MS);
-      });
-    };
-    runCycle();
-
-    return () => {
-      cancelled = true;
-      if (holdTimeout) clearTimeout(holdTimeout);
-      scale.stopAnimation();
-    };
-  }, [running]);
-
-  return (
-    <View style={styles.timerWrap}>
-      <View style={styles.breathCircleOuter}>
-        <Animated.View style={[styles.breathCircle, { transform: [{ scale }] }]} />
-      </View>
-      <Text style={styles.phaseText}>{phase}</Text>
-      <Pressable style={styles.primaryBtn} onPress={() => setRunning((r) => !r)}>
-        <Text style={styles.primaryBtnText}>{running ? 'Stop' : 'Start Breathing Exercise'}</Text>
-      </Pressable>
-    </View>
-  );
-}
-
-function ContentList({ category }) {
+function ContentList({ category, onOpenTechnique }) {
   const query = useWellnessSuggestions(category);
   const toast = useToast();
 
@@ -105,13 +49,25 @@ function ContentList({ category }) {
         <View style={styles.contentListGap}>
           {data.suggestions.map((item) => {
             const iconName = getExerciseIcon(item.title, category);
+            // Real physical exercises whose title matches one of our animated
+            // techniques open the same full-screen animated player Meditation
+            // uses, instead of just linking out.
+            const AnimationComponent = category === 'exercise' ? findExerciseAnimation(item.title) : null;
+            // The backend only stores one long instructional paragraph per
+            // item - showing that whole thing as the card preview reads much
+            // denser than every other card in the app, so a short frontend
+            // teaser stands in on the card while the real text still shows
+            // once the exercise is opened.
+            const cardPreviewText = (category === 'exercise' && findExerciseTeaser(item.title)) || item.body;
 
             return (
               <Pressable
                 key={item.contentId}
                 style={styles.contentCard}
                 onPress={() => {
-                  if (item.url) {
+                  if (AnimationComponent) {
+                    onOpenTechnique({ title: item.title, instructions: item.body || item.title, icon: iconName, duration: item.duration, Component: AnimationComponent });
+                  } else if (item.url) {
                     Linking.openURL(item.url).catch(() => toast.error('Could not open link.'));
                   }
                 }}
@@ -123,13 +79,13 @@ function ContentList({ category }) {
 
                   <View style={styles.itemTextContainer}>
                     <Text style={styles.itemTitle}>{item.title}</Text>
-                    {!!item.body && <Text style={styles.itemBody}>{item.body}</Text>}
+                    {!!cardPreviewText && <Text style={styles.itemBody}>{cardPreviewText}</Text>}
                   </View>
 
                   {item.duration && (
-                    <View style={styles.durationRow}>
-                      <Feather name="clock" size={14} color={colors.textSecondary} />
-                      <Text style={styles.durationText}>{item.duration}</Text>
+                    <View style={styles.durationPill}>
+                      <Feather name="clock" size={11} color={colors.primary} />
+                      <Text style={styles.durationPillText}>{item.duration}</Text>
                     </View>
                   )}
                 </View>
@@ -145,7 +101,8 @@ function ContentList({ category }) {
 export default function WellnessScreen({ navigation }) {
   const { tier, isDesktop } = useResponsive();
   const [segment, setSegment] = useState('exercise');
-  
+  const [openedTechnique, setOpenedTechnique] = useState(null);
+
   // Fetch user profile data just like HomeScreen does
   const dashboardQuery = useUserDashboard();
   const userData = dashboardQuery.data;
@@ -183,57 +140,74 @@ export default function WellnessScreen({ navigation }) {
         </View>
       </View>
 
-      <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
-        <View style={[styles.body, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
-          {/* Hero Journal Card with Illustration */}
-          <Pressable style={styles.journalBanner} onPress={() => navigation?.navigate('Journal')}>
-            <View style={styles.journalIconTile}>
-              <Feather name="book-open" size={22} color={colors.primary} />
-            </View>
-
-            <View style={styles.journalTextContainer}>
-              <Text style={styles.journalTitle}>My Journal</Text>
-              <Text style={styles.journalSubtext}>Write down how you're feeling, in your own words</Text>
-            </View>
-
-            {/* Banner Illustration */}
-            <View style={styles.illustrationWrap}>
-              <JournalIllustration width={130} height={85} />
-            </View>
-
-            <View style={styles.journalChevronBtn}>
-              <Feather name="chevron-right" size={16} color={colors.white} />
-            </View>
-          </Pressable>
-
-          {/* Underlined Segment Tabs */}
-          <View style={styles.tabsContainer}>
-            {SEGMENTS.map((tab) => {
-              const isActive = segment === tab.value;
-              return (
-                <Pressable
-                  key={tab.value}
-                  style={[styles.tabButton, isActive && styles.tabButtonActive]}
-                  onPress={() => setSegment(tab.value)}
-                >
-                  <Feather
-                    name={tab.icon}
-                    size={16}
-                    color={isActive ? colors.primary : colors.textSecondary}
-                    style={{ marginRight: 6 }}
-                  />
-                  <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
-                    {tab.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+      {openedTechnique ? (
+        // A real screen swap (a sibling of the tab-browsing ScrollView below,
+        // not nested inside it) rather than a Modal - a Modal would portal
+        // above the Drawer sidebar too, and this should only replace the
+        // content area between the header and the sidebar, not cover both.
+        // Shared by both Meditation and Exercise - whichever tab opened it.
+        <ScrollView style={styles.fullScreenBody} bounces={false} showsVerticalScrollIndicator={false}>
+          <View style={[styles.fullScreenBodyInner, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+            <MeditationPlayer exercise={openedTechnique} onBack={() => setOpenedTechnique(null)} />
           </View>
+        </ScrollView>
+      ) : (
+        <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
+          <View style={[styles.body, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+            {/* Hero Journal Card with Illustration */}
+            <Pressable style={styles.journalBanner} onPress={() => navigation?.navigate('Journal')}>
+              <View style={styles.journalIconTile}>
+                <Feather name="book-open" size={22} color={colors.primary} />
+              </View>
 
-          {/* Tab Content */}
-          {segment === 'meditation' ? <BreathingTimer /> : <ContentList category={segment} />}
-        </View>
-      </ScrollView>
+              <View style={styles.journalTextContainer}>
+                <Text style={styles.journalTitle}>My Journal</Text>
+                <Text style={styles.journalSubtext}>Write down how you're feeling, in your own words</Text>
+              </View>
+
+              {/* Banner Illustration */}
+              <View style={styles.illustrationWrap}>
+                <JournalIllustration width={130} height={85} />
+              </View>
+
+              <View style={styles.journalChevronBtn}>
+                <Feather name="chevron-right" size={16} color={colors.white} />
+              </View>
+            </Pressable>
+
+            {/* Underlined Segment Tabs */}
+            <View style={styles.tabsContainer}>
+              {SEGMENTS.map((tab) => {
+                const isActive = segment === tab.value;
+                return (
+                  <Pressable
+                    key={tab.value}
+                    style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                    onPress={() => setSegment(tab.value)}
+                  >
+                    <Feather
+                      name={tab.icon}
+                      size={16}
+                      color={isActive ? colors.primary : colors.textSecondary}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            {/* Tab Content */}
+            {segment === 'meditation' ? (
+              <MeditationList onSelect={setOpenedTechnique} />
+            ) : (
+              <ContentList category={segment} onOpenTechnique={setOpenedTechnique} />
+            )}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -270,6 +244,8 @@ const styles = StyleSheet.create({
   statusTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700' },
   subtext: { ...typography.caption, color: colors.textSecondary },
   body: { padding: spacing.xl },
+  fullScreenBody: { flex: 1, backgroundColor: colors.background },
+  fullScreenBodyInner: { padding: spacing.xl, paddingTop: spacing.xxl, flexGrow: 1 },
 
   /* Journal Card Header */
   journalBanner: {
@@ -357,27 +333,11 @@ const styles = StyleSheet.create({
   itemTextContainer: { flex: 1, paddingRight: spacing.md },
   itemTitle: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 15, fontWeight: '700' },
   itemBody: { ...typography.caption, color: colors.textSecondary, marginTop: 4, lineHeight: 18, fontSize: 12 },
-  durationRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  durationText: { ...typography.caption, color: colors.textSecondary, fontSize: 12, fontWeight: '500' },
-
-  /* Breathing Timer */
-  timerWrap: { alignItems: 'center', paddingVertical: spacing.xxl },
-  breathCircleOuter: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
+  durationPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    backgroundColor: colors.primary + '20',
+    paddingHorizontal: spacing.sm, paddingVertical: 4,
+    borderRadius: radius.pill,
   },
-  breathCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: colors.primary },
-  phaseText: { ...typography.h2, color: colors.textPrimary, marginBottom: spacing.xl },
-  primaryBtn: {
-    backgroundColor: colors.primaryDark,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xxl,
-  },
-  primaryBtnText: { ...typography.bodyStrong, color: colors.white },
+  durationPillText: { ...typography.caption, color: colors.primary, fontWeight: '700', fontSize: 11 },
 });
