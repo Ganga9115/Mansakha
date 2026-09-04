@@ -88,7 +88,7 @@ export default function NotificationBell({ size = 18, color = colors.primaryDark
         {unreadCount > 0 && <View style={styles.bellDot} />}
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           {/* Swallow taps inside the panel so they don't fall through to the backdrop and close it. */}
           <Pressable style={styles.panel} onPress={() => {}}>

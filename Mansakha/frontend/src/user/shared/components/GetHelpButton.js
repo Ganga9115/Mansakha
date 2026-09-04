@@ -72,7 +72,7 @@ export default function GetHelpButton({ asHeaderIcon = false }) {
       <Modal
         visible={confirmOpen}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setConfirmOpen(false)}
       >
         <View style={styles.confirmBackdrop}>

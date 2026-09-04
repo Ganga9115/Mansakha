@@ -188,7 +188,7 @@ export default function MyEntry({ navigation }) {
       <Modal
         visible={!!entryToDelete}
         transparent
-        animationType="fade"
+        animationType="none"
         onRequestClose={() => setEntryToDelete(null)}
       >
         <View style={styles.confirmBackdrop}>
