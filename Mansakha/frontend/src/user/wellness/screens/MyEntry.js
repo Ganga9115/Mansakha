@@ -65,10 +65,6 @@ export default function MyEntry({ navigation }) {
         <TopRightActions showNotifications />
       </View>
 
-      {/* contentArea is the positioning boundary for the entry-detail overlay below -
-          it sits under topHeader and to the right of the sidebar automatically,
-          since that's already this screen's own layout region. */}
-      <View style={styles.contentArea}>
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
 
@@ -150,11 +146,15 @@ export default function MyEntry({ navigation }) {
         </View>
       </ScrollView>
 
-      {/* Entry Details - deliberately NOT React Native's <Modal> (which always
-          portals to cover the full window, sidebar included, on web). A plain
-          conditional View confined to contentArea's own bounds keeps the
-          overlay under the top bar and to the right of the sidebar instead. */}
-      {!!selectedEntry && (
+      {/* Entry Details - a real Modal (portals above the sidebar/header too),
+          same as the delete confirmation below, so the blur covers the
+          full screen rather than just this screen's own content area. */}
+      <Modal
+        visible={!!selectedEntry}
+        transparent
+        animationType="none"
+        onRequestClose={() => setSelectedEntry(null)}
+      >
         <View style={styles.inlineOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSelectedEntry(null)} />
           <View style={styles.dialogBox}>
@@ -181,8 +181,7 @@ export default function MyEntry({ navigation }) {
             </View>
           </View>
         </View>
-      )}
-      </View>
+      </Modal>
 
       {/* Delete Confirmation - same glassmorphism style as GetHelpButton's confirm modal */}
       <Modal
@@ -300,7 +299,6 @@ const styles = StyleSheet.create({
   boxDate: { ...typography.caption, color: colors.textSecondary, fontSize: 11 },
 
   /* Dialog Box / Pop-up Styles */
-  contentArea: { flex: 1, position: 'relative' },
   // Same glassmorphism recipe as the delete-confirm modal below, so both
   // popups on this screen (and every other popup in the app) read as one
   // consistent style rather than one glass and one flat.
