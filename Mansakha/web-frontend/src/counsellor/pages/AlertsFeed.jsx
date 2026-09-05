@@ -105,9 +105,6 @@ export default function AlertsFeed() {
                 <div>
                   <h4 className="font-bold text-sm text-gray-800 flex items-center gap-2">
                     Case {item.userId.slice(0, 8)}
-                    {item.source === 'sos' && (
-                      <span className="px-1.5 py-0.5 rounded bg-rose-600 text-white text-[9px] font-bold uppercase">SOS</span>
-                    )}
                     {item.priority === 'urgent' && item.source !== 'sos' && (
                       <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-bold uppercase">Urgent</span>
                     )}

@@ -1,22 +1,38 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from "react-router-dom";
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowLeft, Phone, Mic, Send, Play, Pause } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Phone, 
+  Mic, 
+  Send, 
+  Play, 
+  Pause, 
+  Smile, 
+  User, 
+  CheckCircle2, 
+  Trash2, 
+  X 
+} from 'lucide-react';
 import { useCaseMessages, useSendCaseMessage, useSendCaseVoiceMessage, useSendTypingPing } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
-// Wrapped in StaffLayout (top bar + sidebar stay visible, per the user's
-// explicit call) - the chat itself still fills the available height as one
-// tall card, with its own slim internal header (who-you're-talking-to +
-// call icon), a full-height scrollable thread, and a composer pinned to the
-// card's bottom, so it still reads like the mobile app's user<->AI chat
-// screen rather than a small embedded widget.
 const TYPING_PING_INTERVAL_MS = 1500;
 
-// Static decorative "waveform" for voice bubbles - a fixed row of bar
-// heights, not a real amplitude readout (no client-side audio analysis
-// happening here), just enough visual texture to read as a voice message.
-const WAVEFORM_BARS = [3, 7, 11, 6, 9, 4, 8, 12, 5, 9, 3];
+// WhatsApp-style static waveform bars matching the exact lengths from reference
+const WAVEFORM_BAR_HEIGHTS = [6, 12, 8, 16, 10, 14, 7, 11];
+
+// Quick selection emoji list
+const QUICK_EMOJIS = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+  '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+  '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
+  '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+  '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
+  '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗',
+  '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯',
+  '👍', '👎', '👏', '🙌', '🙏', '❤️', '💖', '✨', '🔥', '🎉'
+];
 
 function formatDuration(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds || 0));
@@ -27,13 +43,31 @@ function formatDuration(totalSeconds) {
 
 function formatTime(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
 function pickRecorderMimeType() {
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mp4'];
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return undefined;
   return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+// Animated "user is typing..." message bubble matching the React Native implementation
+function TypingBubble() {
+  return (
+    <div className="flex items-end gap-2 justify-start my-1">
+      <div className="w-8 h-8 rounded-full bg-[#EBF3FA] flex items-center justify-center shrink-0">
+        <User size={16} className="text-[#3D5A80]" />
+      </div>
+      <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-xs px-4 py-3 flex items-center gap-1.5">
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.3s]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.15s]" />
+        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" />
+      </div>
+    </div>
+  );
 }
 
 export default function CaseChat() {
@@ -44,14 +78,14 @@ export default function CaseChat() {
   const sendMessage = useSendCaseMessage(userId);
   const sendVoiceMessage = useSendCaseVoiceMessage(userId);
   const sendTypingPing = useSendTypingPing(userId);
+  
   const [draft, setDraft] = useState('');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const lastTypingPingRef = useRef(0);
   const listEndRef = useRef(null);
 
-  // Voice recording state (MediaRecorder-backed) - `recordSecondsRef` mirrors
-  // `recordSeconds` so the recorder's onstop closure (created once at
-  // recorder.start() time) can read the final elapsed duration without
-  // going stale.
+  // Voice recording state
   const [isRecording, setIsRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   const [recordError, setRecordError] = useState('');
@@ -61,25 +95,21 @@ export default function CaseChat() {
   const recordTimerRef = useRef(null);
   const recordSecondsRef = useRef(0);
 
-  // Voice playback - one shared <audio> element re-pointed at whichever
-  // bubble is currently playing, rather than one element per message.
+  // Shared audio playback
   const audioRef = useRef(null);
   const [playingMessageId, setPlayingMessageId] = useState(null);
   if (!audioRef.current && typeof Audio !== 'undefined') {
     audioRef.current = new Audio();
   }
 
-  // Polled every 3s while this page is open (mirrors the mobile side) so a
-  // message the user sends - and the otherPartyTyping flag - shows up here
-  // without a manual refresh.
   useEffect(() => {
     const interval = setInterval(() => refetch(), 3000);
     return () => clearInterval(interval);
   }, [refetch]);
 
   useEffect(() => {
-    listEndRef.current?.scrollIntoView({ block: 'end' });
-  }, [data?.messages?.length]);
+    listEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [data?.messages?.length, data?.otherPartyTyping]);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -89,8 +119,6 @@ export default function CaseChat() {
     return () => audio.removeEventListener('ended', handleEnded);
   }, []);
 
-  // Stop any in-progress recording/playback if the counsellor navigates away
-  // mid-recording.
   useEffect(() => () => {
     clearInterval(recordTimerRef.current);
     streamRef.current?.getTracks().forEach((track) => track.stop());
@@ -101,6 +129,7 @@ export default function CaseChat() {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
+    setShowEmojiPicker(false);
     await sendMessage.mutate(text);
     refetch();
   };
@@ -108,8 +137,6 @@ export default function CaseChat() {
   const handleDraftChange = (e) => {
     setDraft(e.target.value);
     const now = Date.now();
-    // Throttled to roughly once every 1.5s while actively typing - not on
-    // every keystroke.
     if (now - lastTypingPingRef.current > TYPING_PING_INTERVAL_MS) {
       lastTypingPingRef.current = now;
       sendTypingPing();
@@ -121,7 +148,10 @@ export default function CaseChat() {
       e.preventDefault();
       handleSend();
     }
-    // Shift+Enter falls through and inserts a newline normally.
+  };
+
+  const handleSelectEmoji = (emoji) => {
+    setDraft((prev) => prev + emoji);
   };
 
   const handleTogglePlay = (m) => {
@@ -157,13 +187,15 @@ export default function CaseChat() {
         chunksRef.current = [];
         streamRef.current?.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
-        try {
-          await sendVoiceMessage.mutate(blob, finalDuration);
-          refetch();
-        } catch (err) {
-          const message = err.message || 'Could not send voice message';
-          setRecordError(message);
-          toast.error(message);
+        if (finalDuration > 0) {
+          try {
+            await sendVoiceMessage.mutate(blob, finalDuration);
+            refetch();
+          } catch (err) {
+            const message = err.message || 'Could not send voice message';
+            setRecordError(message);
+            toast.error(message);
+          }
         }
       };
 
@@ -172,6 +204,7 @@ export default function CaseChat() {
       setRecordSeconds(0);
       recordSecondsRef.current = 0;
       setIsRecording(true);
+      setIsPaused(false);
       recordTimerRef.current = setInterval(() => {
         recordSecondsRef.current += 1;
         setRecordSeconds(recordSecondsRef.current);
@@ -185,138 +218,289 @@ export default function CaseChat() {
     }
   };
 
-  const stopRecording = () => {
+  const stopAndSendRecording = () => {
     clearInterval(recordTimerRef.current);
     recordTimerRef.current = null;
     setIsRecording(false);
+    setIsPaused(false);
     mediaRecorderRef.current?.stop();
   };
 
-  const handleMicClick = () => {
-    if (isRecording) stopRecording();
-    else startRecording();
+  const cancelRecording = () => {
+    clearInterval(recordTimerRef.current);
+    recordTimerRef.current = null;
+    recordSecondsRef.current = 0;
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.onstop = null;
+      mediaRecorderRef.current.stop();
+    }
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    setIsRecording(false);
+    setIsPaused(false);
+    setRecordSeconds(0);
   };
 
+  const togglePauseRecording = () => {
+    if (!mediaRecorderRef.current) return;
+    if (isPaused) {
+      mediaRecorderRef.current.resume();
+      recordTimerRef.current = setInterval(() => {
+        recordSecondsRef.current += 1;
+        setRecordSeconds(recordSecondsRef.current);
+      }, 1000);
+      setIsPaused(false);
+    } else {
+      mediaRecorderRef.current.pause();
+      clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+      setIsPaused(true);
+    }
+  };
+
+  const sendDisabled = (!draft.trim() && !isRecording) || sendMessage.loading;
+
   return (
-    <StaffLayout title={`Chat: ${userId.slice(0, 8)}`}>
-      <div className="h-[calc(100vh-8rem)] flex flex-col bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-        {/* Slim internal header - just back + call. No case-id/"Chat with
-            User" label here - StaffLayout's own title bar already says
-            "Chat: {id}", so repeating it just eats into the chat's own
-            space for no reason. */}
-        <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-blue-50/60 shrink-0">
-          <button
-            onClick={() => navigate(`/counsellor/case-detail/${userId}`)}
-            className="p-1.5 -ml-1 rounded-full hover:bg-white/70 transition text-[#3D5A80]"
-            aria-label="Back to Case File"
-          >
-            <ArrowLeft size={20} />
-          </button>
+    <StaffLayout title={`Chat: ${userId ? userId.slice(0, 8) : ''}`}>
+      <div className="h-[calc(100vh-8rem)] flex flex-col bg-[#F8FAFC] rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+        
+        {/* Top Header Matching UI Spec */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-[#EBF3FA] shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate(`/counsellor/case-detail/${userId}`)}
+              className="p-1.5 -ml-1 rounded-full hover:bg-white/60 transition text-[#1E293B]"
+              aria-label="Back to Case File"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-full bg-white/80 border border-[#CBD5E1] flex items-center justify-center text-[#1E293B] shrink-0">
+                <User size={22} />
+              </div>
+              <div className="flex flex-col">
+                <h1 className="text-base font-bold text-[#0F172A] leading-tight">
+                  {data?.userName || 'User Support'}
+                </h1>
+                <p className="text-xs text-[#64748B]">Private, opted-in support</p>
+              </div>
+            </div>
+          </div>
+
           {data?.phone && (
             <a
               href={`tel:${data.phone}`}
-              className="p-2 rounded-full border border-emerald-500 text-emerald-600 hover:bg-emerald-50 transition shrink-0"
+              className="w-9 h-9 rounded-full border-2 border-[#22C55E] bg-white flex items-center justify-center text-[#22C55E] hover:bg-emerald-50 transition shrink-0 shadow-xs"
               title="Call User"
               aria-label="Call User"
             >
-              <Phone size={16} />
+              <Phone size={18} />
             </a>
           )}
         </div>
 
-        {/* Message thread - fills remaining height, scrolls on its own */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 no-scrollbar">
+        {/* Scrollable Message Thread */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 no-scrollbar">
+          <div className="flex justify-center my-1">
+            <div className="bg-white px-3 py-1 rounded-full border border-gray-100 shadow-xs">
+              <span className="text-[11px] font-semibold text-[#64748B]">Today</span>
+            </div>
+          </div>
+
           {loading && !data ? (
-            <p className="text-xs text-gray-400">Loading messages...</p>
+            <p className="text-xs text-center text-gray-400 mt-4">Loading messages...</p>
           ) : (data?.messages || []).length === 0 ? (
-            <p className="text-xs text-gray-400">No messages yet.</p>
-          ) : data.messages.map((m) => {
-            const isOfficial = m.senderType === 'official';
-            const isPlaying = playingMessageId === m.messageId;
-            return (
-              <div key={m.messageId} className={`flex flex-col ${isOfficial ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[75%] px-3.5 py-2.5 rounded-2xl text-xs leading-relaxed ${isOfficial ? 'bg-[#519BCE] text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
-                  {m.messageType === 'voice' ? (
-                    <div className="flex items-center gap-2 min-w-[140px]">
+            <p className="text-xs text-center text-gray-400 mt-4">No messages yet - say hello.</p>
+          ) : (
+            data.messages.map((m) => {
+              const isUser = m.senderType === 'user';
+              const isVoice = m.messageType === 'voice';
+              const isThisPlaying = isVoice && playingMessageId === m.messageId;
+
+              return (
+                <div
+                  key={m.messageId}
+                  className={`flex items-end gap-2 ${isUser ? 'justify-start' : 'justify-end'}`}
+                >
+                  {isUser && (
+                    <div className="w-8 h-8 rounded-full bg-[#EBF3FA] flex items-center justify-center shrink-0">
+                      <User size={16} className="text-[#3D5A80]" />
+                    </div>
+                  )}
+
+                  <div className={`flex flex-col max-w-[75%] ${isUser ? 'items-start' : 'items-end'}`}>
+                    {isVoice ? (
                       <button
                         type="button"
                         onClick={() => handleTogglePlay(m)}
-                        className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition ${isOfficial ? 'bg-white/20 hover:bg-white/30' : 'bg-white hover:bg-gray-50 border border-gray-200'}`}
-                        aria-label={isPlaying ? 'Pause voice message' : 'Play voice message'}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xs transition min-w-[170px] ${
+                          isUser
+                            ? 'bg-white border border-gray-100 rounded-tl-xs text-[#0F172A]'
+                            : 'bg-[#EBF3FA] rounded-tr-xs text-[#1E293B]'
+                        }`}
                       >
-                        {isPlaying ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
+                        <div
+                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white ${
+                            isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'
+                          }`}
+                        >
+                          {isThisPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                        </div>
+                        <div className="flex-1 flex items-center gap-0.5 h-4">
+                          {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
+                            <span
+                              key={idx}
+                              className={`w-0.5 rounded-full ${
+                                isUser ? 'bg-gray-300' : 'bg-[#3D5A80]/40'
+                              }`}
+                              style={{ height: `${h}px` }}
+                            />
+                          ))}
+                        </div>
+                        <span
+                          className={`text-xs font-medium tabular-nums ${
+                            isUser ? 'text-[#0F172A]' : 'text-[#1E293B]'
+                          }`}
+                        >
+                          {formatDuration(m.durationSeconds)}
+                        </span>
                       </button>
-                      <div className="flex-1 flex items-end gap-0.5 h-4">
-                        {WAVEFORM_BARS.map((h, i) => (
-                          <span
-                            key={i}
-                            className={`w-0.5 rounded-full ${isOfficial ? 'bg-white/60' : 'bg-gray-400'}`}
-                            style={{ height: `${h}px` }}
-                          />
-                        ))}
+                    ) : (
+                      <div
+                        className={`px-4 py-3 rounded-2xl shadow-xs text-sm leading-relaxed ${
+                          isUser
+                            ? 'bg-white text-[#0F172A] border border-gray-100 rounded-tl-xs'
+                            : 'bg-[#EBF3FA] text-[#1E293B] rounded-tr-xs'
+                        }`}
+                      >
+                        {m.body}
                       </div>
-                      <span className={`shrink-0 text-[11px] tabular-nums ${isOfficial ? 'text-white/90' : 'text-gray-500'}`}>
-                        {formatDuration(m.durationSeconds)}
+                    )}
+
+                    <div className="flex items-center gap-1 mt-1 px-1">
+                      <span className="text-[11px] text-[#64748B]">
+                        {formatTime(m.sentAt)}
                       </span>
+                      {!isUser && (
+                        <CheckCircle2 size={12} className="text-[#3D5A80] inline" />
+                      )}
                     </div>
-                  ) : (
-                    m.body
+                  </div>
+
+                  {!isUser && (
+                    <div className="w-8 h-8 rounded-full bg-[#3D5A80] flex items-center justify-center shrink-0 text-white">
+                      <User size={16} />
+                    </div>
                   )}
                 </div>
-                <span className="text-[10px] text-gray-400 mt-1 px-1">{formatTime(m.sentAt)}</span>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
+
+          {data?.otherPartyTyping && <TypingBubble />}
           <div ref={listEndRef} />
         </div>
 
-        {data?.otherPartyTyping && (
-          <p className="px-4 pb-1 text-[11px] text-gray-400 italic shrink-0">User is typing...</p>
+        {/* Emoji Grid Popup */}
+        {showEmojiPicker && (
+          <div className="bg-white border-t border-gray-200 p-3 max-h-48 overflow-y-auto shrink-0 shadow-lg">
+            <div className="flex justify-between items-center mb-2 px-1">
+              <span className="text-xs font-semibold text-[#64748B]">Select Emoji</span>
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(false)}
+                className="text-gray-400 hover:text-gray-600 transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <div className="grid grid-cols-10 gap-1 text-center">
+              {QUICK_EMOJIS.map((emoji, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => handleSelectEmoji(emoji)}
+                  className="p-1.5 text-xl hover:bg-gray-100 rounded transition"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Composer - a floating white rounded-pill bar with margin around it
-            against the card's light-gray footer strip, holding a borderless
-            auto-growing textarea, a mic button (recording toggle), and a
-            filled-blue send button - matching the reference screenshot. */}
-        <div className="border-t border-gray-200 bg-gray-50 px-3 py-3 shrink-0">
-          <div className="flex items-center gap-1.5 bg-white rounded-full border border-gray-200 shadow-md px-2 py-1.5">
+        {/* Composer Bar */}
+        <div className="p-4 bg-[#F8FAFC] shrink-0">
+          <div className="flex items-center gap-2 bg-white rounded-2xl border border-gray-200/80 shadow-sm px-3 py-1.5">
             {isRecording ? (
-              <div className="flex-1 flex items-center gap-2 px-3 py-1.5 text-xs text-red-500 font-medium">
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
-                Recording {formatDuration(recordSeconds)}
+              <div className="flex-1 flex items-center gap-3 px-2 py-1.5">
+                <button
+                  type="button"
+                  onClick={cancelRecording}
+                  className="text-red-500 p-1 hover:bg-red-50 rounded-full transition"
+                  title="Delete recording"
+                  aria-label="Delete recording"
+                >
+                  <Trash2 size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={togglePauseRecording}
+                  className="text-[#3D5A80] p-1 hover:bg-blue-50 rounded-full transition"
+                  title={isPaused ? 'Resume recording' : 'Pause recording'}
+                  aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
+                >
+                  {isPaused ? <Play size={20} /> : <Pause size={20} />}
+                </button>
+                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-sm font-medium text-[#0F172A] flex-1">
+                  {isPaused ? 'Paused' : 'Recording...'} {formatDuration(recordSeconds)}
+                </span>
               </div>
             ) : (
-              <textarea
-                rows={1}
-                value={draft}
-                onChange={handleDraftChange}
-                onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
-                className="flex-1 px-3 py-1.5 bg-transparent border-0 outline-none resize-none text-xs max-h-24 overflow-y-auto"
-              />
+              <>
+                <textarea
+                  rows={1}
+                  value={draft}
+                  onChange={handleDraftChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a message..."
+                  className="flex-1 px-2 py-2 bg-transparent border-0 outline-none resize-none text-sm text-[#0F172A] placeholder-[#64748B] max-h-24"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowEmojiPicker((prev) => !prev)}
+                  className={`p-2 transition rounded-full hover:bg-gray-50 ${
+                    showEmojiPicker ? 'text-[#3D5A80]' : 'text-[#64748B]'
+                  }`}
+                  aria-label="Choose emoji"
+                >
+                  <Smile size={20} />
+                </button>
+                <button
+                  type="button"
+                  onClick={startRecording}
+                  className="p-2 text-[#3D5A80] hover:bg-blue-50 rounded-full transition"
+                  aria-label="Record voice message"
+                >
+                  <Mic size={20} />
+                </button>
+              </>
             )}
+
             <button
               type="button"
-              onClick={handleMicClick}
-              className={`shrink-0 p-2.5 rounded-full border transition ${isRecording ? 'bg-red-500 border-red-500 text-white animate-pulse' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}
-              aria-label={isRecording ? 'Stop recording' : 'Record voice message'}
-              title={isRecording ? 'Stop recording' : 'Record voice message'}
-            >
-              <Mic size={16} />
-            </button>
-            <button
-              type="button"
-              onClick={handleSend}
-              disabled={sendMessage.loading || !draft.trim() || isRecording}
-              className="shrink-0 p-2.5 rounded-full bg-[#519BCE] hover:bg-[#3d83b3] text-white disabled:opacity-40 disabled:hover:bg-[#519BCE] transition"
+              onClick={isRecording ? stopAndSendRecording : handleSend}
+              disabled={sendDisabled}
+              className="w-10 h-10 rounded-full bg-[#3D5A80] hover:bg-[#2D4360] text-white flex items-center justify-center shrink-0 disabled:opacity-50 transition shadow-xs"
               aria-label="Send message"
-              title="Send message"
             >
-              <Send size={16} />
+              <Send size={18} />
             </button>
           </div>
-          {recordError && <p className="text-[11px] text-red-500 px-3 pt-1.5">{recordError}</p>}
+          {recordError && <p className="text-xs text-red-500 px-3 pt-1.5">{recordError}</p>}
         </div>
+
       </div>
     </StaffLayout>
   );
