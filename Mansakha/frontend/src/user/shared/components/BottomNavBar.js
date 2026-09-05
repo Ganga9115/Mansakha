@@ -7,6 +7,14 @@ import { typography } from '../theme/typography';
 // Import your service hooks
 import { useUserDashboard, useAssignedCounsellor } from '../services/hooks';
 
+// Approx rendered height of the floating navCard below (paddingVertical:10
+// top+bottom + icon 22 + label's marginTop 4 + its ~15 lineHeight + the
+// navItem's paddingBottom 4). Exported so other floating elements - the
+// AI chat FAB (see AiChatButton.js) - can reserve enough clearance above
+// this bar's `bottom` inset instead of guessing a magic number that drifts
+// out of sync whenever this bar's own sizing changes.
+export const BOTTOM_NAV_BAR_HEIGHT = 65;
+
 export default function BottomNavBar({ currentTab = 'Home', navigation }) {
   const insets = useSafeAreaInsets();
 
