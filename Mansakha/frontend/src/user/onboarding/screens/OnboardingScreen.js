@@ -22,7 +22,7 @@ export default function OnboardingScreen({ navigation }) {
         {/* Curved Top Header using the top blob color */}
         <View style={styles.headerBackground}>
           <Image
-            source={require('/Users/s.ganga/Desktop/Mansakha/Mansakha/frontend/assets/logo-2.png')}
+            source={require('../../../../assets/logo-2.png')}
             style={styles.logo}
             resizeMode="contain"
           />

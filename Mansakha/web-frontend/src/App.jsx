@@ -13,6 +13,10 @@ import CounsellorCaseChat from './counsellor/pages/CaseChat';
 import AlertsFeed from './counsellor/pages/AlertsFeed';
 import CounsellorReports from './counsellor/pages/Reports';
 import CounsellorSettings from './counsellor/pages/Settings';
+import CounsellorMailInbox from './counsellor/pages/MailInbox';
+import CounsellorMailSent from './counsellor/pages/MailSent';
+import CounsellorMailArchived from './counsellor/pages/MailArchived';
+import CounsellorMailThread from './counsellor/pages/MailThread';
 
 import DistrictAdminDashboard from './district_admin/pages/AdminDashboard';
 import DistrictCaseDetail from './district_admin/pages/CaseDetail';
@@ -20,6 +24,10 @@ import DistrictAdminAlerts from './district_admin/pages/AdminAlerts';
 import UserRegistration from './district_admin/pages/UserRegistration';
 import DistrictReports from './district_admin/pages/Reports';
 import DistrictSettings from './district_admin/pages/Settings';
+import DistrictMailInbox from './district_admin/pages/MailInbox';
+import DistrictMailSent from './district_admin/pages/MailSent';
+import DistrictMailArchived from './district_admin/pages/MailArchived';
+import DistrictMailThread from './district_admin/pages/MailThread';
 
 import StateDashboard from './state_admin/pages/StateDashboard';
 import StateAdminDistrictDashboard from './state_admin/pages/AdminDashboard';
@@ -28,6 +36,10 @@ import StateAnalysis from './state_admin/pages/Analysis';
 import StateAdminAlerts from './state_admin/pages/AdminAlerts';
 import StateReports from './state_admin/pages/Reports';
 import StateSettings from './state_admin/pages/Settings';
+import StateMailInbox from './state_admin/pages/MailInbox';
+import StateMailSent from './state_admin/pages/MailSent';
+import StateMailArchived from './state_admin/pages/MailArchived';
+import StateMailThread from './state_admin/pages/MailThread';
 
 import NationalDashboard from './national_admin/pages/NationalDashboard';
 import NationalStateDashboard from './national_admin/pages/StateDashboard';
@@ -37,6 +49,10 @@ import NationalAnalysis from './national_admin/pages/Analysis';
 import NationalAdminAlerts from './national_admin/pages/AdminAlerts';
 import NationalReports from './national_admin/pages/Reports';
 import NationalSettings from './national_admin/pages/Settings';
+import NationalMailInbox from './national_admin/pages/MailInbox';
+import NationalMailSent from './national_admin/pages/MailSent';
+import NationalMailArchived from './national_admin/pages/MailArchived';
+import NationalMailThread from './national_admin/pages/MailThread';
 
 import MinistryLoginPage from './ministry/pages/Login';
 import MinistryDashboard from './ministry/pages/MinistryDashboard';
@@ -48,12 +64,20 @@ import Heatmap from './ministry/pages/Heatmap';
 import ReportsInbox from './ministry/pages/ReportsInbox';
 import EmergencyBroadcast from './ministry/pages/EmergencyBroadcast';
 import MinistrySettings from './ministry/pages/Settings';
+import MinistryMailInbox from './ministry/pages/MailInbox';
+import MinistryMailSent from './ministry/pages/MailSent';
+import MinistryMailArchived from './ministry/pages/MailArchived';
+import MinistryMailThread from './ministry/pages/MailThread';
 
 import DataOperatorDashboard from './dataoperator/pages/Dashboard';
 import DataOperatorFetchCase from './dataoperator/pages/FetchCase';
 import DataOperatorUsers from './dataoperator/pages/Users';
 import DataOperatorLinkCases from './dataoperator/pages/LinkCases';
 import DataOperatorSettings from './dataoperator/pages/Settings';
+import DataOperatorMailInbox from './dataoperator/pages/MailInbox';
+import DataOperatorMailSent from './dataoperator/pages/MailSent';
+import DataOperatorMailArchived from './dataoperator/pages/MailArchived';
+import DataOperatorMailThread from './dataoperator/pages/MailThread';
 
 export default function App() {
   return (
@@ -77,6 +101,10 @@ export default function App() {
         <Route path="/counsellor/case-detail/:id/chat" element={<RequireAuth><CounsellorCaseChat /></RequireAuth>} />
         <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
         <Route path="/counsellor/reports" element={<RequireAuth><CounsellorReports /></RequireAuth>} />
+        <Route path="/counsellor/mail" element={<RequireAuth><CounsellorMailInbox /></RequireAuth>} />
+        <Route path="/counsellor/mail/sent" element={<RequireAuth><CounsellorMailSent /></RequireAuth>} />
+        <Route path="/counsellor/mail/archived" element={<RequireAuth><CounsellorMailArchived /></RequireAuth>} />
+        <Route path="/counsellor/mail/thread/:threadId" element={<RequireAuth><CounsellorMailThread /></RequireAuth>} />
         <Route path="/counsellor/profile" element={<RequireAuth><CounsellorSettings /></RequireAuth>} />
 
         {/* District Admin - case-level dashboard is the default view;
@@ -86,6 +114,10 @@ export default function App() {
         <Route path="/districtadmin/alerts" element={<RequireAuth><DistrictAdminAlerts /></RequireAuth>} />
         <Route path="/districtadmin/registration" element={<RequireAuth><UserRegistration /></RequireAuth>} />
         <Route path="/districtadmin/reports" element={<RequireAuth><DistrictReports /></RequireAuth>} />
+        <Route path="/districtadmin/mail" element={<RequireAuth><DistrictMailInbox /></RequireAuth>} />
+        <Route path="/districtadmin/mail/sent" element={<RequireAuth><DistrictMailSent /></RequireAuth>} />
+        <Route path="/districtadmin/mail/archived" element={<RequireAuth><DistrictMailArchived /></RequireAuth>} />
+        <Route path="/districtadmin/mail/thread/:threadId" element={<RequireAuth><DistrictMailThread /></RequireAuth>} />
         <Route path="/districtadmin/profile" element={<RequireAuth><DistrictSettings /></RequireAuth>} />
 
         {/* State/UT Admin - aggregate (district-wise breakdown) is the
@@ -97,6 +129,10 @@ export default function App() {
         <Route path="/stateadmin/analysis" element={<RequireAuth><StateAnalysis /></RequireAuth>} />
         <Route path="/stateadmin/alerts" element={<RequireAuth><StateAdminAlerts /></RequireAuth>} />
         <Route path="/stateadmin/reports" element={<RequireAuth><StateReports /></RequireAuth>} />
+        <Route path="/stateadmin/mail" element={<RequireAuth><StateMailInbox /></RequireAuth>} />
+        <Route path="/stateadmin/mail/sent" element={<RequireAuth><StateMailSent /></RequireAuth>} />
+        <Route path="/stateadmin/mail/archived" element={<RequireAuth><StateMailArchived /></RequireAuth>} />
+        <Route path="/stateadmin/mail/thread/:threadId" element={<RequireAuth><StateMailThread /></RequireAuth>} />
         <Route path="/stateadmin/profile" element={<RequireAuth><StateSettings /></RequireAuth>} />
 
         {/* National Admin - state-wise breakdown by default; drills into a
@@ -109,6 +145,10 @@ export default function App() {
         <Route path="/nationaladmin/state/:jurisdictionId" element={<RequireAuth><NationalStateDashboard /></RequireAuth>} />
         <Route path="/nationaladmin/district/:jurisdictionId" element={<RequireAuth><NationalDistrictDashboard /></RequireAuth>} />
         <Route path="/nationaladmin/case-detail/:id" element={<RequireAuth><NationalCaseDetail /></RequireAuth>} />
+        <Route path="/nationaladmin/mail" element={<RequireAuth><NationalMailInbox /></RequireAuth>} />
+        <Route path="/nationaladmin/mail/sent" element={<RequireAuth><NationalMailSent /></RequireAuth>} />
+        <Route path="/nationaladmin/mail/archived" element={<RequireAuth><NationalMailArchived /></RequireAuth>} />
+        <Route path="/nationaladmin/mail/thread/:threadId" element={<RequireAuth><NationalMailThread /></RequireAuth>} />
         <Route path="/nationaladmin/profile" element={<RequireAuth><NationalSettings /></RequireAuth>} />
 
         {/* Ministry */}
@@ -121,6 +161,10 @@ export default function App() {
         <Route path="/ministry/heatmap" element={<RequireAuth loginPath="/ministry/login"><Heatmap /></RequireAuth>} />
         <Route path="/ministry/reports" element={<RequireAuth loginPath="/ministry/login"><ReportsInbox /></RequireAuth>} />
         <Route path="/ministry/broadcast" element={<RequireAuth loginPath="/ministry/login"><EmergencyBroadcast /></RequireAuth>} />
+        <Route path="/ministry/mail" element={<RequireAuth loginPath="/ministry/login"><MinistryMailInbox /></RequireAuth>} />
+        <Route path="/ministry/mail/sent" element={<RequireAuth loginPath="/ministry/login"><MinistryMailSent /></RequireAuth>} />
+        <Route path="/ministry/mail/archived" element={<RequireAuth loginPath="/ministry/login"><MinistryMailArchived /></RequireAuth>} />
+        <Route path="/ministry/mail/thread/:threadId" element={<RequireAuth loginPath="/ministry/login"><MinistryMailThread /></RequireAuth>} />
         <Route path="/ministry/profile" element={<RequireAuth loginPath="/ministry/login"><MinistrySettings /></RequireAuth>} />
 
         {/* Data Operator - signs in via the shared Staff Login (/login)
@@ -130,6 +174,10 @@ export default function App() {
         <Route path="/dataoperator/fetch-case" element={<RequireAuth><DataOperatorFetchCase /></RequireAuth>} />
         <Route path="/dataoperator/users" element={<RequireAuth><DataOperatorUsers /></RequireAuth>} />
         <Route path="/dataoperator/link-cases" element={<RequireAuth><DataOperatorLinkCases /></RequireAuth>} />
+        <Route path="/dataoperator/mail" element={<RequireAuth><DataOperatorMailInbox /></RequireAuth>} />
+        <Route path="/dataoperator/mail/sent" element={<RequireAuth><DataOperatorMailSent /></RequireAuth>} />
+        <Route path="/dataoperator/mail/archived" element={<RequireAuth><DataOperatorMailArchived /></RequireAuth>} />
+        <Route path="/dataoperator/mail/thread/:threadId" element={<RequireAuth><DataOperatorMailThread /></RequireAuth>} />
         <Route path="/dataoperator/profile" element={<RequireAuth><DataOperatorSettings /></RequireAuth>} />
       </Routes>
       </ToastProvider>

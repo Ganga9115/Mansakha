@@ -90,7 +90,7 @@ export default function Settings() {
             )}
             <div>
               <h4 className="font-bold text-gray-800 text-base">{me?.fullName || 'Loading...'}</h4>
-              <p className="text-xs text-gray-500">Senior Counsellor</p>
+              <p className="text-xs text-gray-500">Counsellor</p>
               <input
                 type="file"
                 accept="image/*"
@@ -128,7 +128,6 @@ export default function Settings() {
           <h3 className="font-bold text-sm text-gray-800">Counsellor Details</h3>
           <DetailRow label="Assigned District" value={role?.jurisdictionName || '-'} />
           <DetailRow label="Mobile Number (login credential)" value={me?.phone || '-'} />
-          <DetailRow label="WhatsApp Number" value={me?.whatsappNumber || 'Not set'} />
           <DetailRow label="Counsellor ID" value={me?.staffId || '-'} />
         </div>
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, BarChart3, UserPlus, User, LogOut, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Bell, BarChart3, UserPlus, User, LogOut, Menu, X, Mail } from 'lucide-react';
 import { logout } from '../services/auth';
-import { useMe } from '../services/hooks';
+import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 
 // District Admin's own dedicated shell - own copy of what used to be the
@@ -11,19 +11,22 @@ import NotificationBell from '../components/NotificationBell';
 // sub-jurisdictions, which District Admin has none of). "Register User" was
 // previously unreachable (page existed, no nav link and no route) - added
 // here since user-credential creation is core to this role's job, matching
-// Data Operator's own equivalent nav item.
+// Data Operator's own equivalent nav item. Mail sits directly above Profile
+// per explicit product placement.
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/districtadmin' },
   { name: 'Register User', icon: UserPlus, path: '/districtadmin/registration' },
   { name: 'Alerts', icon: Bell, path: '/districtadmin/alerts' },
   { name: 'Reports', icon: BarChart3, path: '/districtadmin/reports' },
+  { name: 'Mail', icon: Mail, path: '/districtadmin/mail' },
   { name: 'Profile', icon: User, path: '/districtadmin/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Dashboard' }) {
+export default function StaffLayout({ children, title = 'Dashboard', headerAction = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
+  const { data: mailUnread } = useMailUnreadCount();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const profilePath = '/districtadmin/profile';
@@ -67,7 +70,7 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
               <NavLink
                 key={item.name}
                 to={item.path}
-                end
+                end={item.name !== 'Mail'}
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
                   `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
@@ -78,7 +81,12 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
                 }
               >
                 <Icon size={18} />
-                <span className="text-sm">{item.name}</span>
+                <span className="text-sm flex-1">{item.name}</span>
+                {item.name === 'Mail' && mailUnread?.count > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {mailUnread.count > 99 ? '99+' : mailUnread.count}
+                  </span>
+                )}
               </NavLink>
             );
           })}
@@ -97,6 +105,7 @@ export default function StaffLayout({ children, title = 'Dashboard' }) {
             </button>
             {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80] shrink-0 hidden sm:block" />}
             <h2 className="text-lg sm:text-xl font-bold text-[#3D5A80] truncate">{title}</h2>
+            {headerAction && <div className="ml-2 shrink-0">{headerAction}</div>}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">
