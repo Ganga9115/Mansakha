@@ -121,7 +121,7 @@ export default function WellnessScreen({ navigation }) {
         ]}
       >
         <View style={styles.headerLeft}>
-          <View style={styles.headerIconTile}>
+          <View style={[styles.headerIconTile, !isDesktop && styles.headerIconTileMobile]}>
             <Feather name="sun" size={22} color={colors.primaryDark} />
           </View>
 
@@ -255,6 +255,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.sm,
   },
+  headerIconTileMobile: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+  },
   statusTitle: {
     ...typography.h1,
     color: colors.primaryDark,
@@ -322,10 +328,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     marginBottom: spacing.xl,
   },
-  // Equal-width flex columns instead of auto-sized-plus-margin tabs, so all
-  // three tabs always fit exactly within the screen width on mobile - the
-  // "Music" label getting cut off was this row overflowing past the right
-  // edge on narrow phones.
   tabsContainerMobile: {
     justifyContent: 'space-between',
   },
