@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../../shared/context/AuthContext';
 import { useToast } from '../../shared/context/ToastContext';
@@ -22,6 +23,7 @@ import Dropdown from '../../shared/components/Dropdown';
 import IconInput from '../../shared/components/IconInput';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
+import MenuButton from '../../shared/components/MenuButton';
 import LogoutButton from '../../shared/components/LogoutButton';
 
 const INDIAN_LANGUAGES = [
@@ -61,6 +63,7 @@ export default function SettingsScreen({ navigation }) {
   const [displayLanguageId, setDisplayLanguageId] = useState(null);
   const [speakingLanguageId, setSpeakingLanguageId] = useState(null);
   const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
 
   const [localOptedForCounsellor, setLocalOptedForCounsellor] = useState(false);
 
@@ -135,8 +138,16 @@ export default function SettingsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Sticky Blue Header Section */}
-      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && styles.topHeaderMobile,
+          !isDesktop && { paddingTop: insets.top + spacing.md },
+        ]}
+      >
         <View style={styles.headerLeft}>
+          {!isDesktop && <MenuButton />}
           {isDesktop ? (
             <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop}/>
           ) : (
@@ -160,7 +171,7 @@ export default function SettingsScreen({ navigation }) {
       </View>
 
       <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={styles.scrollContent}>
-        <View style={styles.contentBody}>
+        <View style={[styles.contentBody, !isDesktop && styles.contentBodyMobile]}>
           
           {/* ACCOUNT OVERVIEW */}
           <View style={styles.sectionHeaderWrap}>
@@ -189,16 +200,38 @@ export default function SettingsScreen({ navigation }) {
               </View>
             </View>
 
-            {/* Linked Cases Horizontal Layout */}
+            {/* Linked Cases */}
             {casesList.length > 0 ? (
               casesList.map((c, index) => {
                 const docketId = c.docketId || c.docketNo || c.caseNumber || 'N/A';
                 const caseType = c.caseType || c.type || 'N/A';
                 const caseStage = c.caseStage || c.stage || 'Trial';
                 const isRehab = caseStage.toLowerCase().includes('rehab');
+                const key = c.userId || c.caseNumber || index;
+
+                // Mobile: plain "Label : Value" text, no icons or colored
+                // stage pills - just the case's own three details, stacked.
+                if (!isDesktop) {
+                  return (
+                    <View key={key} style={styles.caseSimpleBlock}>
+                      <View style={styles.caseSimpleRow}>
+                        <Text style={styles.caseSimpleLabel}>Docket ID :</Text>
+                        <Text style={styles.caseSimpleValue}>{docketId}</Text>
+                      </View>
+                      <View style={styles.caseSimpleRow}>
+                        <Text style={styles.caseSimpleLabel}>Case Type :</Text>
+                        <Text style={styles.caseSimpleValue}>{caseType}</Text>
+                      </View>
+                      <View style={styles.caseSimpleRow}>
+                        <Text style={styles.caseSimpleLabel}>Case Stage :</Text>
+                        <Text style={styles.caseSimpleValue}>{caseStage}</Text>
+                      </View>
+                    </View>
+                  );
+                }
 
                 return (
-                  <View key={c.userId || c.caseNumber || index} style={styles.caseRowContainer}>
+                  <View key={key} style={styles.caseRowContainer}>
                     <View style={styles.caseIconBox}>
                       <Feather color={colors.primary} name="briefcase" size={18}/>
                     </View>
@@ -218,7 +251,7 @@ export default function SettingsScreen({ navigation }) {
                         <Text style={styles.fieldLabel}>Case Stage</Text>
                         <View style={[styles.stageBadge, isRehab ? styles.stageRehab : styles.stageTrial]}>
                           <Feather color={isRehab ? '#6B21A8' : '#15803D'} name={isRehab ? 'users' : 'scale'} size={12}/>
-                          <Text style={[styles.stageBadgeText, isRehab ? styles.stageRehabText : styles.stageTrialText]}>
+                          <Text style={[isRehab ? styles.stageRehabText : styles.stageTrialText]}>
                             {caseStage}
                           </Text>
                         </View>
@@ -241,8 +274,8 @@ export default function SettingsScreen({ navigation }) {
           </View>
 
           <Card style={styles.customCard}>
-            <View style={styles.preferenceRow}>
-              <View style={styles.prefLeft}>
+            <View style={[styles.preferenceRow, !isDesktop && styles.preferenceRowMobile]}>
+              <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
                   <Feather color={colors.primary} name="globe" size={18}/>
                 </View>
@@ -252,7 +285,7 @@ export default function SettingsScreen({ navigation }) {
                 </View>
               </View>
 
-              <View style={styles.dropdownContainer}>
+              <View style={[styles.dropdownContainer, !isDesktop && styles.dropdownContainerMobile]}>
                 <Dropdown
                   onChange={async (value) => {
                     setDisplayLanguageId(value);
@@ -273,8 +306,8 @@ export default function SettingsScreen({ navigation }) {
 
             <View style={styles.rowDivider}/>
 
-            <View style={styles.preferenceRow}>
-              <View style={styles.prefLeft}>
+            <View style={[styles.preferenceRow, !isDesktop && styles.preferenceRowMobile]}>
+              <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
                   <Feather color={colors.primary} name="mic" size={18}/>
                 </View>
@@ -284,7 +317,7 @@ export default function SettingsScreen({ navigation }) {
                 </View>
               </View>
 
-              <View style={styles.dropdownContainer}>
+              <View style={[styles.dropdownContainer, !isDesktop && styles.dropdownContainerMobile]}>
                 <Dropdown
                   onChange={(value) => {
                     setSpeakingLanguageId(value);
@@ -327,26 +360,26 @@ export default function SettingsScreen({ navigation }) {
           </View>
 
           <Card style={styles.customCard}>
-            <View style={styles.systemRow}>
-              <View style={styles.prefLeft}>
+            <View style={[styles.systemRow, !isDesktop && styles.systemRowMobile]}>
+              <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
                   <Feather color={colors.primary} name="bell" size={18}/>
                 </View>
                 <Text style={styles.prefTitle}>Push Notifications</Text>
               </View>
-              <Text style={styles.systemValueText}>Enabled</Text>
+              <Text style={[styles.systemValueText, !isDesktop && styles.systemValueTextMobile]}>Enabled</Text>
             </View>
 
             <View style={styles.rowDivider}/>
 
-            <View style={styles.systemRow}>
-              <View style={styles.prefLeft}>
+            <View style={[styles.systemRow, !isDesktop && styles.systemRowMobile]}>
+              <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
                   <Feather color={colors.textSecondary} name="info" size={18}/>
                 </View>
                 <Text style={styles.prefTitle}>App Version</Text>
               </View>
-              <Text style={styles.systemValueText}>v2.4.0 (Mansakha Official)</Text>
+              <Text style={[styles.systemValueText, !isDesktop && styles.systemValueTextMobile]}>v2.4.0 (Mansakha Official)</Text>
             </View>
           </Card>
 
@@ -357,18 +390,21 @@ export default function SettingsScreen({ navigation }) {
           </View>
 
           <Card style={styles.customCard}>
-            <View style={styles.preferenceRow}>
-              <View style={styles.prefLeft}>
+            <View style={[styles.preferenceRow, !isDesktop && styles.preferenceRowMobile]}>
+              <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
                   <Feather color={colors.primary} name="lock" size={18}/>
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.prefTitle}>Password</Text>
                   <Text style={styles.prefSubtitle}>Change the password used to sign in</Text>
                 </View>
               </View>
 
-              <Pressable onPress={() => setShowPasswordForm((v) => !v)} style={styles.outlineBtn}>
+              <Pressable
+                onPress={() => setShowPasswordForm((v) => !v)}
+                style={[styles.outlineBtn, !isDesktop && styles.outlineBtnMobile]}
+              >
                 <Text style={styles.outlineBtnText}>{showPasswordForm ? 'Cancel' : 'Reset Password'}</Text>
               </Pressable>
             </View>
@@ -441,6 +477,13 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     alignItems: 'center',
   },
+  // The desktop/tablet "1cm gap" of 36px either side eats too much of a
+  // narrow phone's width once combined with the rest of this screen's
+  // fixed-width elements (the language dropdowns, the case-details grid) -
+  // trimmed back down to the app's normal edge spacing on mobile only.
+  topHeaderMobile: {
+    paddingHorizontal: spacing.xl,
+  },
   headerIconDesktop: { 
     marginRight: spacing.sm 
   },
@@ -477,6 +520,9 @@ const styles = StyleSheet.create({
   },
   contentBodyDesktop: {
     marginTop: 0,
+  },
+  contentBodyMobile: {
+    paddingHorizontal: spacing.xl,
   },
 
   /* Section Titles */
@@ -594,6 +640,29 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
 
+  /* Mobile: plain "Label : Value" case details, no icons/colored pills */
+  caseSimpleBlock: {
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  caseSimpleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 2,
+  },
+  caseSimpleLabel: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    width: 90,
+  },
+  caseSimpleValue: {
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
+    flex: 1,
+    flexShrink: 1,
+  },
+
   /* Stage Badges */
   stageBadge: {
     flexDirection: 'row',
@@ -628,11 +697,23 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.xs,
   },
+  // The language name + its fixed-width dropdown no longer fit comfortably
+  // side by side on a phone - stacked instead (label/subtitle on top, the
+  // dropdown full-width below) so neither gets squeezed.
+  preferenceRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.sm,
+  },
   prefLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
     marginRight: spacing.xs,
+  },
+  prefLeftMobile: {
+    flex: undefined,
+    marginRight: 0,
   },
   prefIconBox: {
     width: 36,
@@ -655,6 +736,9 @@ const styles = StyleSheet.create({
   dropdownContainer: {
     width: 180,
   },
+  dropdownContainerMobile: {
+    width: '100%',
+  },
   rowDivider: {
     height: 1,
     backgroundColor: colors.border,
@@ -667,9 +751,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // `alignItems: 'center'` against a fixed-width label was drifting the
+  // value text down into (and visually through) the label whenever the
+  // label itself had no room and wrapped - flex-start plus letting the
+  // value itself wrap (below) fixes both sides of that collision.
+  systemRowMobile: {
+    alignItems: 'flex-start',
+  },
   systemValueText: {
     ...typography.bodyStrong,
     color: colors.textPrimary,
+  },
+  systemValueTextMobile: {
+    flex: 1,
+    flexShrink: 1,
+    textAlign: 'right',
+    marginLeft: spacing.sm,
   },
 
   /* Toggle Row */
@@ -686,6 +783,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingHorizontal: 12,
     paddingVertical: 6,
+  },
+  // Sits on its own row below the label now (see preferenceRowMobile) - kept
+  // at its natural compact size rather than stretching full-width.
+  outlineBtnMobile: {
+    alignSelf: 'flex-start',
   },
   outlineBtnText: {
     ...typography.caption,

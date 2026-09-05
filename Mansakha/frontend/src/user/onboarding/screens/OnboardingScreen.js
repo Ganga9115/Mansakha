@@ -1,6 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, SafeAreaView, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { View, Text, Pressable, StyleSheet, SafeAreaView, Platform, Image } from 'react-native';
 import { authContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 
@@ -16,26 +15,17 @@ export default function OnboardingScreen({ navigation }) {
   if (Platform.OS === 'web') {
     return null;
   }
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={{ flex: 1, width: '100%', maxWidth: authContentWidth[tier], alignSelf: 'center' }}>
-        {/* Curved Blue Top Header */}
+        {/* Curved Top Header using the top blob color */}
         <View style={styles.headerBackground}>
-          <Text style={styles.brandTitle}>MANSAKHA</Text>
-          <Text style={styles.tagline}>Your trusted support & advocacy portal</Text>
-
-          {/* Hero Graphic Badge */}
-          <View style={styles.heroIllustrationContainer}>
-            <View style={styles.illustrationCircle}>
-              <Feather name="shield" size={68} color="#0284C7" />
-              <View style={styles.floatingBadgeLeft}>
-                <Feather name="file-text" size={20} color="#38BDF8" />
-              </View>
-              <View style={styles.floatingBadgeRight}>
-                <Feather name="heart" size={20} color="#F43F5E" />
-              </View>
-            </View>
-          </View>
+          <Image
+            source={require('/Users/s.ganga/Desktop/Mansakha/Mansakha/frontend/assets/logo-2.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
         </View>
 
         {/* Main Content Area */}
@@ -72,64 +62,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   headerBackground: {
-    backgroundColor: '#80CAFF',
-    paddingTop: 48,
-    paddingBottom: 60,
+    backgroundColor: '#BAE6FD',
+    paddingTop: 64,
+    paddingBottom: 70,
     alignItems: 'center',
+    justifyContent: 'center',
     borderBottomLeftRadius: 140,
     borderBottomRightRadius: 140,
     paddingHorizontal: 24,
   },
-  brandTitle: {
-    fontSize: 38,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 2,
-  },
-  tagline: {
-    fontSize: 16,
-    fontStyle: 'italic',
-    color: '#FFFFFF',
-    marginTop: 4,
-    fontWeight: '500',
-  },
-  heroIllustrationContainer: {
-    marginTop: 28,
-    marginBottom: -40,
-  },
-  illustrationCircle: {
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  floatingBadgeLeft: {
-    position: 'absolute',
-    top: 10,
-    left: -8,
-    backgroundColor: '#E0F2FE',
-    padding: 8,
-    borderRadius: 20,
-  },
-  floatingBadgeRight: {
-    position: 'absolute',
-    bottom: 12,
-    right: -8,
-    backgroundColor: '#FFE4E6',
-    padding: 8,
-    borderRadius: 20,
+  logo: {
+    width: '75%',
+    height: 120,
   },
   contentContainer: {
     flex: 1,
-    paddingTop: 60,
+    paddingTop: 80,
     paddingHorizontal: 32,
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -137,7 +85,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 15,
-    color: '#519BCE',
+    color: '#1E1B4B',
     textAlign: 'center',
     lineHeight: 24,
     fontWeight: '500',
@@ -156,7 +104,7 @@ const styles = StyleSheet.create({
   },
   activeDot: {
     width: 24,
-    backgroundColor: '#80CAFF',
+    backgroundColor: '#7DD3FC',
   },
   actionWrapper: {
     width: '100%',
@@ -164,18 +112,18 @@ const styles = StyleSheet.create({
   },
   getStartedBtn: {
     width: '100%',
-    backgroundColor: '#80CAFF',
+    backgroundColor: '#BAE6FD', // Updated to match header curve color
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#80CAFF',
+    shadowColor: '#BAE6FD', // Updated shadow color
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 3,
   },
   getStartedBtnText: {
-    color: '#FFFFFF',
+    color: '#1E1B4B',
     fontSize: 18,
     fontWeight: '700',
   },

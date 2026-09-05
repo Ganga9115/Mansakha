@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
@@ -19,11 +20,12 @@ import GetHelpButton from '../../shared/components/GetHelpButton';
 // celebratory layout stays intact.
 export default function CheckinConfirmationScreen({ route }) {
   const { tier } = useResponsive();
+  const insets = useSafeAreaInsets();
   const { riskLevel, summary, alertTriggered } = route?.params || {};
 
   return (
     <View style={styles.container}>
-      <View style={styles.helpButtonWrapper}>
+      <View style={[styles.helpButtonWrapper, { top: insets.top + spacing.md }]}>
         <GetHelpButton asHeaderIcon />
       </View>
       <View style={{ maxWidth: formContentWidth[tier], width: '100%', alignItems: 'center' }}>

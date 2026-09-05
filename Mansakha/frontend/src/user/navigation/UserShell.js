@@ -1,16 +1,23 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 import { colors } from '../shared/theme/colors';
 import { typography } from '../shared/theme/typography';
+import { spacing } from '../shared/theme/spacing';
+import { radius } from '../shared/theme/radius';
+import { shadow } from '../shared/theme/shadow';
 import { tabletShellWidth, sidebarWidth } from '../shared/theme/layout';
 import { useResponsive } from '../shared/hooks/useResponsive';
 import SidebarNav from '../shared/components/SidebarNav';
 import AiChatButton from '../shared/components/AiChatButton';
+import MobileSidebarOverlay from '../shared/components/MobileSidebarOverlay';
+import { MobileSidebarProvider } from '../shared/context/MobileSidebarContext';
+import { TAB_ICONS } from './tabConfig';
 
 import HomeScreen from '../wellness/screens/HomeScreen';
 import CheckinScreen from '../wellness/screens/CheckinScreen';
@@ -50,19 +57,27 @@ const SCREENS = {
   mycounsellor: CounsellorChatScreen,
 };
 
-const TAB_ICONS = {
-  home: 'home',
-  checkin: 'mic',
-  wellbeing: 'heart',
-  history: 'bar-chart-2',
-  settings: 'user',
-  mycounsellor: 'message-square',
+// Short labels for the bottom tab bar specifically (distinct from each
+// screen's own `options.title`, which SidebarNav/the hamburger menu still
+// read as-is) - with up to 6 tabs visible at once, the full titles ("My
+// well-being", "My Counsellor") don't leave every item enough width for a
+// consistent look; short enough that all six fit comfortably at one fixed
+// font size, without needing to shrink any single one down further than
+// the rest.
+const TAB_BAR_LABELS = {
+  home: 'Home',
+  checkin: 'Check-in',
+  wellbeing: 'Wellness',
+  history: 'History',
+  mycounsellor: 'Chat',
+  settings: 'Profile',
 };
 
 function TabNavigator() {
   const dashboard = useUserDashboard();
   const counsellor = useAssignedCounsellor();
   const showMyCounsellor = !!(dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned);
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -70,25 +85,68 @@ function TabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.borderStrong,
+        // A small floating/contained pill above the phone's own gesture
+        // area, not an edge-to-edge bar - marginBottom (at least the safe
+        // area's own bottom inset) keeps it clear of the system nav/home
+        // indicator, and marginHorizontal + rounded corners read as a
+        // contained bar rather than a full-width dock. Left in normal flow
+        // (no `position: absolute`) so react-navigation keeps auto-sizing
+        // every screen's content around its real rendered height - nothing
+        // else needs its own bottom-padding math to avoid being covered.
         tabBarStyle: {
           backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
+          borderTopWidth: 0,
           height: 64,
+          marginHorizontal: spacing.sm,
+          marginBottom: Math.max(insets.bottom, spacing.sm),
+          borderRadius: radius.xl,
+          paddingHorizontal: spacing.xs,
           paddingBottom: 8,
           paddingTop: 8,
-          elevation: 0,
-          shadowOpacity: 0,
+          flexDirection: 'row',
+          alignItems: 'center',
+          ...shadow.pop,
         },
-        tabBarLabelStyle: {
-          fontSize: typography.caption.fontSize,
-          fontFamily: typography.bodyStrong.fontFamily,
-          marginTop: 2,
+        // Explicit `flex: 1` (on top of react-navigation's own default,
+        // which already does this) so every one of the up to 6 items gets
+        // exactly the same, equal share of the bar's width - centered
+        // content and no horizontal padding of its own, so nothing nudges
+        // one icon closer to its neighbour or the bar's edge than another.
+        tabBarItemStyle: {
+          flex: 1,
+          paddingHorizontal: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
+        tabBarIconStyle: {
+          marginBottom: 0,
         },
         tabBarIcon: ({ color, size }) => {
           const iconName = TAB_ICONS[route.name] || 'circle';
           return <Feather name={iconName} size={size || 22} color={color} />;
         },
+        // A custom label (rather than tabBarLabelStyle + options.title) so
+        // every item's text renders at the same fixed size by default -
+        // `adjustsFontSizeToFit` only kicks in as a last-resort safety net
+        // on an unusually narrow phone, rather than being how normal-width
+        // phones fit these labels (which would make items look visibly
+        // inconsistent with each other).
+        tabBarLabel: ({ color }) => (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.9}
+            style={{
+              color,
+              fontSize: typography.caption.fontSize,
+              fontFamily: typography.bodyStrong.fontFamily,
+              marginTop: 2,
+              textAlign: 'center',
+            }}
+          >
+            {TAB_BAR_LABELS[route.name] || route.name}
+          </Text>
+        ),
       })}
     >
       <Tab.Screen name="home" component={SCREENS.home} options={{ title: 'Home' }} />
@@ -104,6 +162,13 @@ function TabNavigator() {
         }}
       />
       <Tab.Screen name="settings" component={SCREENS.settings} options={{ title: 'Profile' }} />
+      {/* Journal and MyEntry aren't primary tabs (no icon in the tab bar),
+          but registering them here rather than as a RootStack-level push
+          (as Chatbot/CounsellorChat still are below) means navigating to
+          them keeps this same floating tab bar visible underneath, instead
+          of hiding it like a full-screen stack push would. */}
+      <Tab.Screen name="Journal" component={JournalScreen} options={{ tabBarButton: () => null }} />
+      <Tab.Screen name="MyEntry" component={MyEntryScreen} options={{ tabBarButton: () => null }} />
     </Tab.Navigator>
   );
 }
@@ -146,10 +211,13 @@ function DesktopNavigator() {
 
 function TabNavigatorWithFAB() {
   return (
-    <View style={{ flex: 1 }}>
-      <TabNavigator />
-      <AiChatButton />
-    </View>
+    <MobileSidebarProvider>
+      <View style={{ flex: 1 }}>
+        <TabNavigator />
+        <AiChatButton />
+        <MobileSidebarOverlay />
+      </View>
+    </MobileSidebarProvider>
   );
 }
 
@@ -172,8 +240,10 @@ function ShellStack({ tabs, includeExtras = true }) {
         <>
           <RootStack.Screen name="Chatbot" component={ChatScreen} />
           <RootStack.Screen name="Wellbeing" component={WellnessScreen} />
-          <RootStack.Screen name="Journal" component={JournalScreen} />
-          <RootStack.Screen name="MyEntry" component={MyEntryScreen} />
+          {/* Journal and MyEntry are registered inside TabNavigator itself
+              (as hidden, icon-less tabs) instead of here, so navigating to
+              them keeps the floating bottom tab bar visible - see
+              TabNavigator's own comment above. */}
           <RootStack.Screen name="CounsellorChat" component={CounsellorChatScreen} />
         </>
       )}

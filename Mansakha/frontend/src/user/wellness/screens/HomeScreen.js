@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -12,6 +13,7 @@ import Card from '../../shared/components/Card';
 import RiskBadge from '../../shared/components/RiskBadge';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
+import MenuButton from '../../shared/components/MenuButton';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor } from '../../shared/services/hooks';
 
@@ -22,6 +24,7 @@ export default function HomeScreen({ navigation }) {
   const assignedCounsellorQuery = useAssignedCounsellor();
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
   const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
   const today = new Date();
   const dayStr = `Day - ${String(today.getDate()).padStart(2, '0')}`;
   const monthStr = `Month - ${today.toLocaleString('default', { month: 'long' })}`;
@@ -38,8 +41,15 @@ export default function HomeScreen({ navigation }) {
           return (
             <>
               {/* Top Profile Header */}
-              <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
+              <View
+                style={[
+                  styles.topHeader,
+                  isDesktop && styles.topHeaderDesktop,
+                  !isDesktop && { paddingTop: insets.top + spacing.md },
+                ]}
+              >
                 <View style={styles.headerLeft}>
+                  {!isDesktop && <MenuButton />}
                   {isDesktop ? (
                     <Feather name="home" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
                   ) : (
@@ -71,7 +81,7 @@ export default function HomeScreen({ navigation }) {
                 {/* Main Body Area */}
                 <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
                   {/* Date Ticker */}
-                  <View style={styles.dateTicker}>
+                  <View style={[styles.dateTicker, !isDesktop && styles.dateTickerMobile]}>
                     <Text style={styles.tickerText}>{dayStr}</Text>
                     <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
                     <Text style={styles.tickerText}>{yearStr}</Text>
@@ -226,12 +236,6 @@ export default function HomeScreen({ navigation }) {
                                       <Text style={styles.sessionMetaText}>{timeStr}</Text>
                                     </View>
                                   </View>
-
-                                  <View style={styles.sessionActionBtns}>
-                                    <Pressable style={styles.joinBtn}>
-                                      <Text style={styles.joinBtnText}>Join Session</Text>
-                                    </Pressable>
-                                  </View>
                                 </View>
                               </View>
                             );
@@ -348,6 +352,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.lg,
     paddingHorizontal: spacing.sm,
+  },
+  // A little extra clearance below the header on mobile, where the ticker
+  // otherwise sits right up against it.
+  dateTickerMobile: {
+    marginTop: spacing.sm,
   },
   tickerText: { ...typography.bodyStrong, color: colors.primary },
   tickerTextActive: { color: colors.error },
@@ -540,18 +549,6 @@ const styles = StyleSheet.create({
   sessionTitle: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14, fontWeight: '700' },
   iconMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   sessionMetaText: { ...typography.caption, color: colors.textSecondary, fontSize: 12 },
-
-  sessionActionBtns: {
-    justifyContent: 'center',
-  },
-  joinBtn: {
-    backgroundColor: colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: radius.md,
-    alignItems: 'center',
-  },
-  joinBtnText: { ...typography.caption, color: colors.white, fontWeight: '700' },
 
   /* Recent Activity Box */
   activityRowItem: {

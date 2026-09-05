@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, Linking, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, Linking, Modal, Animated } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import {
   useAudioRecorder,
@@ -63,8 +64,59 @@ function formatTimestamp(sentAt) {
 // audio's amplitude, just a few bars of varying height for visual texture.
 const WAVEFORM_BAR_HEIGHTS = [6, 12, 8, 16, 10, 14, 7, 11];
 
+// WhatsApp-style "typing..." indicator, rendered as a real received-message
+// bubble (same avatar/bubble shape as any other counsellor message) at the
+// bottom of the thread rather than static text above the composer - driven
+// entirely by `otherPartyTyping`, which the messages poll already surfaces
+// server-side (see useCounsellorMessages/the typing-ping backend route), so
+// this only changes how that real state is presented, not what drives it.
+function TypingBubble() {
+  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+
+  useEffect(() => {
+    const loops = dots.map((value, i) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(i * 150),
+          Animated.timing(value, { toValue: 1, duration: 300, useNativeDriver: true }),
+          Animated.timing(value, { toValue: 0, duration: 300, useNativeDriver: true }),
+          Animated.delay((2 - i) * 150),
+        ])
+      )
+    );
+    loops.forEach((l) => l.start());
+    return () => {
+      loops.forEach((l) => l.stop());
+      dots.forEach((v) => v.setValue(0));
+    };
+  }, []);
+
+  return (
+    <View style={[styles.bubbleRow, styles.bubbleRowLeft]}>
+      <View style={styles.avatarTile}>
+        <Feather name="user" size={16} color={colors.primary} />
+      </View>
+      <View style={[styles.bubble, styles.bubbleOfficial, styles.typingBubble]}>
+        {dots.map((value, i) => (
+          <Animated.View
+            key={i}
+            style={[
+              styles.typingDot,
+              {
+                opacity: value.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }),
+                transform: [{ translateY: value.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }],
+              },
+            ]}
+          />
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function CounsellorChatScreen({ navigation }) {
-  const { tier } = useResponsive();
+  const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const counsellorQuery = useAssignedCounsellor();
   const messagesQuery = useCounsellorMessages();
@@ -104,13 +156,16 @@ export default function CounsellorChatScreen({ navigation }) {
     Linking.openURL(`tel:${counsellor.phone}`).catch(() => toast.error('Could not start a call on this device.'));
   };
 
-  const handleSend = async () => {
+  // Accepts an optional override so the "Enter/Send" native-keyboard path
+  // below can send the just-typed text directly instead of round-tripping
+  // through `draft` state (which hasn't re-rendered yet at that point).
+  const handleSend = async (overrideText) => {
     if (recorderState.isRecording || isPaused) {
       handleFinishVoiceRecording();
       return;
     }
 
-    const text = draft.trim();
+    const text = (overrideText ?? draft).trim();
     if (!text) return;
     setDraft('');
     setShowEmojiPicker(false);
@@ -122,6 +177,17 @@ export default function CounsellorChatScreen({ navigation }) {
   };
 
   const handleDraftChange = (text) => {
+    // On Android/iOS, a multiline TextInput inserts a literal "\n" when the
+    // keyboard's own Enter/Send key is pressed - there's no reliable way to
+    // intercept and suppress that before it commits (unlike the web path in
+    // handleComposerKeyPress below, which can call preventDefault). Treating
+    // a newly-typed trailing newline as "Send" mirrors this screen's
+    // existing web Enter-to-send behaviour on mobile too, so the keyboard's
+    // Send/Enter key works exactly like tapping the Send button.
+    if (Platform.OS !== 'web' && text.endsWith('\n') && !draft.endsWith('\n')) {
+      handleSend(text.slice(0, -1));
+      return;
+    }
     setDraft(text);
     const now = Date.now();
     if (now - lastTypingPingAtRef.current >= TYPING_PING_THROTTLE_MS) {
@@ -225,7 +291,7 @@ export default function CounsellorChatScreen({ navigation }) {
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
         {tier !== 'desktop' && (
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
             <Feather name="arrow-left" size={20} color={colors.primaryDark} />
@@ -330,13 +396,9 @@ export default function CounsellorChatScreen({ navigation }) {
                   );
                 })
               )}
-            </ScrollView>
 
-            {otherPartyTyping && (
-              <View style={styles.typingRow}>
-                <Text style={styles.typingText}>{counsellor?.fullName || 'Your counsellor'} is typing...</Text>
-              </View>
-            )}
+              {otherPartyTyping && <TypingBubble />}
+            </ScrollView>
 
             {/* Emoji Selection Grid Popup */}
             {showEmojiPicker && (
@@ -395,6 +457,7 @@ export default function CounsellorChatScreen({ navigation }) {
                       onKeyPress={handleComposerKeyPress}
                       placeholder="Type a message..."
                       placeholderTextColor={colors.textSecondary}
+                      returnKeyType="send"
                       multiline
                     />
                     <Pressable
@@ -531,12 +594,20 @@ const styles = StyleSheet.create({
   waveformBarOfficial: { backgroundColor: colors.border },
   waveformBarUser: { backgroundColor: colors.primary },
   voiceDuration: { ...typography.caption, color: colors.textPrimary },
-  typingRow: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    backgroundColor: colors.surface,
+  // WhatsApp-style typing bubble - same bubble shape as a real message, just
+  // three animated dots instead of text.
+  typingBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: spacing.md + 2,
   },
-  typingText: { ...typography.caption, color: colors.textSecondary, fontStyle: 'italic' },
+  typingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textSecondary,
+  },
   composerContainer: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,

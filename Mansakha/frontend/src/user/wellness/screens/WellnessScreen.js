@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Linking, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
 import { colors } from '../../shared/theme/colors';
@@ -10,6 +11,7 @@ import { shadow } from '../../shared/theme/shadow';
 import { dashboardContentWidth } from '../../shared/theme/layout';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
+import MenuButton from '../../shared/components/MenuButton';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useWellnessSuggestions, useUserDashboard } from '../../shared/services/hooks';
@@ -100,6 +102,7 @@ function ContentList({ category, onOpenTechnique }) {
 
 export default function WellnessScreen({ navigation }) {
   const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
   const [segment, setSegment] = useState('exercise');
   const [openedTechnique, setOpenedTechnique] = useState(null);
 
@@ -110,8 +113,15 @@ export default function WellnessScreen({ navigation }) {
   return (
     <View style={styles.screen}>
       {/* Top Header */}
-      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && { paddingTop: insets.top + spacing.md },
+        ]}
+      >
         <View style={styles.headerLeft}>
+          {!isDesktop && <MenuButton />}
           <View style={styles.headerIconTile}>
             <Feather name="sun" size={22} color={colors.primaryDark} />
           </View>
@@ -149,7 +159,10 @@ export default function WellnessScreen({ navigation }) {
         <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
           <View style={[styles.body, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
             {/* Hero Journal Card with Illustration */}
-            <Pressable style={styles.journalBanner} onPress={() => navigation?.navigate('MyEntry')}>
+            <Pressable
+              style={[styles.journalBanner, !isDesktop && styles.journalBannerMobile]}
+              onPress={() => navigation?.navigate('MyEntry')}
+            >
               <View style={styles.journalIconTile}>
                 <Feather name="book-open" size={22} color={colors.primary} />
               </View>
@@ -159,24 +172,32 @@ export default function WellnessScreen({ navigation }) {
                 <Text style={styles.journalSubtext}>Write down how you're feeling, in your own words</Text>
               </View>
 
-              {/* Banner Illustration */}
-              <View style={styles.illustrationWrap}>
-                <JournalIllustration width={130} height={85} />
-              </View>
+              {/* Desktop keeps the inline illustration exactly as before. On
+                  mobile it's dropped rather than floated elsewhere - with
+                  the book icon already leading the row on the left, a
+                  second book+pencil graphic elsewhere in the card just read
+                  as a duplicate/misplaced icon, not a deliberate flourish. */}
+              {isDesktop && (
+                <View style={styles.illustrationWrap}>
+                  <JournalIllustration width={130} height={85} />
+                </View>
+              )}
 
               <View style={styles.journalChevronBtn}>
                 <Feather name="chevron-right" size={16} color={colors.white} />
               </View>
             </Pressable>
 
-            {/* Underlined Segment Tabs */}
-            <View style={styles.tabsContainer}>
+            {/* Underlined Segment Tabs - equal-width flex columns on mobile so
+                all three (Exercise/Meditation/Music) always fit the screen
+                width instead of overflowing past its right edge. */}
+            <View style={[styles.tabsContainer, !isDesktop && styles.tabsContainerMobile]}>
               {SEGMENTS.map((tab) => {
                 const isActive = segment === tab.value;
                 return (
                   <Pressable
                     key={tab.value}
-                    style={[styles.tabButton, isActive && styles.tabButtonActive]}
+                    style={[styles.tabButton, !isDesktop && styles.tabButtonMobile, isActive && styles.tabButtonActive]}
                     onPress={() => setSegment(tab.value)}
                   >
                     <Feather
@@ -185,7 +206,7 @@ export default function WellnessScreen({ navigation }) {
                       color={isActive ? colors.primary : colors.textSecondary}
                       style={{ marginRight: 6 }}
                     />
-                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]}>
+                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>
                       {tab.label}
                     </Text>
                   </Pressable>
@@ -266,6 +287,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: spacing.lg,
   },
+  journalBannerMobile: {
+    // Tighter padding + gap on mobile so the icon/text/illustration/chevron
+    // row has more room to breathe on a narrow screen.
+    padding: spacing.lg,
+  },
   journalTextContainer: { flex: 1, zIndex: 2 },
   journalTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700', fontSize: 18 },
   journalSubtext: { ...typography.caption, color: colors.textSecondary, marginTop: 4, fontSize: 13, maxWidth: '85%' },
@@ -291,6 +317,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     marginBottom: spacing.xl,
   },
+  // Equal-width flex columns instead of auto-sized-plus-margin tabs, so all
+  // three tabs always fit exactly within the screen width on mobile - the
+  // "Music" label getting cut off was this row overflowing past the right
+  // edge on narrow phones.
+  tabsContainerMobile: {
+    justifyContent: 'space-between',
+  },
   tabButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -299,6 +332,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: 'transparent',
     marginRight: spacing.lg,
+  },
+  tabButtonMobile: {
+    flex: 1,
+    justifyContent: 'center',
+    marginRight: 0,
+    paddingHorizontal: spacing.xs,
   },
   tabButtonActive: {
     borderBottomColor: colors.primary,

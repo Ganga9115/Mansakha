@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   useFonts,
@@ -53,18 +54,20 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="dark" />
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <ToastProvider>
-            <LanguageProvider>
-              <AuthProvider>
-                <RootNavigator />
-              </AuthProvider>
-            </LanguageProvider>
-          </ToastProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <ToastProvider>
+              <LanguageProvider>
+                <AuthProvider>
+                  <RootNavigator />
+                </AuthProvider>
+              </LanguageProvider>
+            </ToastProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

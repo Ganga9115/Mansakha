@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Modal, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
 import { colors } from '../../shared/theme/colors';
@@ -14,7 +15,8 @@ import { useJournalEntries, useDeleteJournalEntry, useUpdateJournalEntry } from 
 import TopRightActions from '../../shared/components/TopRightActions';
 
 export default function MyEntry({ navigation }) {
-  const { tier } = useResponsive();
+  const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const entriesQuery = useJournalEntries();
   const deleteEntry = useDeleteJournalEntry();
@@ -76,7 +78,7 @@ export default function MyEntry({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Navigation Header */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerIconTile}>
           <Feather name="layout" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
         </View>
