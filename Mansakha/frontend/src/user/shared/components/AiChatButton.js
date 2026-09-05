@@ -2,15 +2,30 @@ import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useNavigation, useNavigationState } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { shadow } from '../theme/shadow';
 import { useResponsive } from '../hooks/useResponsive';
+import { BOTTOM_NAV_BAR_HEIGHT } from './BottomNavBar';
+
+// Extra breathing room above the bottom nav bar so the FAB never touches
+// (let alone overlaps) it - roughly the 20-30px buffer requested on top of
+// the nav bar's own height and safe-area inset.
+const FAB_GAP_ABOVE_NAV_BAR = 28;
 
 export default function AiChatButton() {
   const navigation = useNavigation();
   const { isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
+
+  // Mirrors BottomNavBar's own `bottom: Math.max(insets.bottom, 12)` so this
+  // stays clear of it on every device - phones with a large safe-area inset
+  // (e.g. the home-indicator gesture area) push the nav bar further up than
+  // a flat, un-adjusted offset accounted for, which is what let the two
+  // collide before.
+  const mobileBottom = Math.max(insets.bottom, 12) + BOTTOM_NAV_BAR_HEIGHT + FAB_GAP_ABOVE_NAV_BAR;
 
   const currentRouteName = useNavigationState(state => {
     if (!state) return null;
@@ -51,7 +66,7 @@ export default function AiChatButton() {
 
   return (
     <Pressable
-      style={[styles.fab, { bottom: isDesktop ? 24 : 84 }]}
+      style={[styles.fab, { bottom: isDesktop ? 24 : mobileBottom }]}
       onPress={openChat}
       accessibilityRole="button"
       accessibilityLabel="Open AI Chatbot"
@@ -72,6 +87,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadow.pop,
+    // Above BottomNavBar's navCard (elevation: 6) so the FAB always draws on
+    // top of it on Android, in addition to sitting clear of it vertically.
+    elevation: 10,
     zIndex: 20,
   },
 });
