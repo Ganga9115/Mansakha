@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/counsellor' },
   { name: 'My Users', icon: Users, path: '/counsellor/my-users' },
   { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
-  { name: 'Reports', icon: BarChart3, path: '/counsellor/reports' },
+  { name: 'Analysis', icon: BarChart3, path: '/counsellor/analysis' },
   { name: 'Mail', icon: Mail, path: '/counsellor/mail' },
   { name: 'Profile', icon: User, path: '/counsellor/profile' },
 ];

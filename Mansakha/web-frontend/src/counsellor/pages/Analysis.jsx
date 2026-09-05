@@ -2,10 +2,19 @@ import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
 import { useCounsellorDashboard, useReportsAnalytics } from '../services/hooks';
 
-// Counsellor's own copy of the shared Analytics & Reports page - simplified
-// to just Counsellor's own dashboard data (no admin/jurisdiction branching,
-// since this file only ever serves Counsellor now). No CSV export here -
-// that's an Administration-only action (GET /api/admin/.../export).
+// Counsellor's own Analysis page - simplified to just Counsellor's own
+// dashboard data (no admin/jurisdiction branching, since this file only ever
+// serves Counsellor now). No CSV export here - that's an Administration-only
+// action (GET /api/admin/.../export).
+//
+// This used to be named "Reports" - renamed (page, nav item, and route) to
+// match the District/State/National tiers' own Reports/Analysis split: read-
+// only analytics belongs under Analysis, not Reports. Counsellor never gets
+// the new case-wise/district-wise/state-wise report generate/submit/review
+// workflow those tiers now have (explicitly out of scope - Counsellor isn't
+// part of that reporting hierarchy), so there's no separate Reports page
+// left to keep here; this content is ALL Counsellor's "Reports" page ever
+// was, so it's a rename in place, not a split into two pages.
 
 const RANGE_MAP = {
   'Last 7 Days': '7d',
@@ -14,7 +23,7 @@ const RANGE_MAP = {
   'Custom Range': 'custom',
 };
 
-export default function Reports() {
+export default function Analysis() {
   const [timeRange, setTimeRange] = useState('Last 30 Days');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -44,7 +53,7 @@ export default function Reports() {
   const moderate = counsellorData?.moderate || 0;
 
   return (
-    <StaffLayout title="Analytics & Operational Reports">
+    <StaffLayout title="Analysis">
       <div className="space-y-6">
 
         {/* TOP CONTROLS & DATE FILTER */}
