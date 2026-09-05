@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, FlatList, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -33,6 +34,7 @@ function Bubble({ message }) {
 
 export default function ChatScreen({ navigation }) {
   const { tier } = useResponsive();
+  const insets = useSafeAreaInsets();
   const submitMutation = useCheckin();
   const logChatTurn = useLogChatTurn();
   const [model, setModel] = useState('gemma3:4b');
@@ -325,7 +327,7 @@ export default function ChatScreen({ navigation }) {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Top Header */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, tier !== 'desktop' && { paddingTop: insets.top + spacing.md }]}>
         {tier !== 'desktop' && (
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
             <Feather name="arrow-left" size={20} color={colors.primaryDark} />

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -13,6 +14,7 @@ import { useCheckin, useUserDashboard, useUserHistory, useAppendInteraction } fr
 import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING } from '../../shared/services/ollamaClient';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
+import MenuButton from '../../shared/components/MenuButton';
 
 const TOTAL_QUESTIONS = 5;
 
@@ -24,6 +26,7 @@ export default function CheckinScreen({ navigation }) {
   const submitMutation = useCheckin();
   const historyQuery = useUserHistory();
   const appendInteraction = useAppendInteraction();
+  const insets = useSafeAreaInsets();
 
   const [responses, setResponses] = useState([]); // Array of { q, a }
   const [currentQuestion, setCurrentQuestion] = useState({
@@ -161,8 +164,15 @@ export default function CheckinScreen({ navigation }) {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Dynamic Header */}
-      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && { paddingTop: insets.top + spacing.md },
+        ]}
+      >
         <View style={styles.headerLeft}>
+          {!isDesktop && <MenuButton />}
           {isDesktop ? (
             <Feather name="mic" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
@@ -187,7 +197,7 @@ export default function CheckinScreen({ navigation }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.xxxl }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.xxxl }}>
         <View
           style={[
             styles.contentBody,
@@ -207,7 +217,7 @@ export default function CheckinScreen({ navigation }) {
           </View>
 
           {/* Main Question Card */}
-          <View style={styles.card}>
+          <View style={[styles.card, !isDesktop && styles.cardMobile]}>
             {loading || submitting || isFinished ? (
               <View style={styles.loadingArea}>
                 <ActivityIndicator size="large" color={colors.primary} />
@@ -242,17 +252,19 @@ export default function CheckinScreen({ navigation }) {
                     const isSelected = selectedOptions.includes(opt);
                     const iconInfo = getOptionIcon(opt);
                     return (
-                      <Pressable 
-                        key={i} 
+                      <Pressable
+                        key={i}
                         style={[
-                          styles.optionCard, 
+                          styles.optionCard,
                           isLongOptions && styles.optionCardFull,
+                          !isDesktop && styles.optionCardMobile,
+                          isLongOptions && !isDesktop && styles.optionCardFullMobile,
                           isSelected && styles.optionCardSelected
                         ]}
                         onPress={() => toggleOption(opt)}
                       >
-                        <View style={[styles.iconCircle, { backgroundColor: iconInfo.bg }]}>
-                          <Feather name={iconInfo.name} size={20} color={iconInfo.color} />
+                        <View style={[styles.iconCircle, !isDesktop && styles.iconCircleMobile, { backgroundColor: iconInfo.bg }]}>
+                          <Feather name={iconInfo.name} size={!isDesktop ? 16 : 20} color={iconInfo.color} />
                         </View>
                         <Text style={[styles.optionCardText, isSelected && styles.optionCardTextSelected]}>{opt}</Text>
                       </Pressable>
@@ -405,6 +417,14 @@ const styles = StyleSheet.create({
     ...shadow.sm,
     minHeight: 440,
   },
+  // No fixed minHeight on mobile - a short question with few options
+  // shouldn't be forced to leave a huge blank area below it, and a long one
+  // with many options should be free to grow as tall as it needs to since
+  // the screen around it now actually scrolls (see the ScrollView above).
+  cardMobile: {
+    minHeight: undefined,
+    padding: spacing.lg,
+  },
   loadingArea: { 
     flex: 1, 
     alignItems: 'center', 
@@ -487,11 +507,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Smaller, tighter option cards on mobile - two per row still fit
+  // comfortably, and a screenful of long, single-column options (see
+  // optionCardFullMobile) no longer eats the whole viewport height.
+  optionCardMobile: {
+    minWidth: 100,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
   optionCardFull: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     paddingVertical: spacing.md,
+  },
+  optionCardFullMobile: {
+    paddingVertical: spacing.sm,
   },
   optionCardSelected: {
     borderColor: colors.primary,
@@ -504,6 +535,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+  },
+  iconCircleMobile: {
+    width: 30,
+    height: 30,
+    marginBottom: spacing.xs,
   },
   optionCardText: {
     ...typography.bodyStrong,

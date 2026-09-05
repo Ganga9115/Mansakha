@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, Linking, ScrollView, Switch } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
 import { colors } from '../../shared/theme/colors';
@@ -33,6 +34,7 @@ export default function SupportScreen({ navigation }) {
   const updateCounsellorPreference = useUpdateCounsellorPreference();
   const toast = useToast();
   const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
 
   // Same three states SettingsScreen.js already handles for this preference -
   // see its own comment: the backend shape is
@@ -63,7 +65,13 @@ export default function SupportScreen({ navigation }) {
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
       {/* Header Banner */}
-      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && { paddingTop: insets.top + spacing.md },
+        ]}
+      >
         <View style={styles.headerLeft}>
           {/* Support used to be a permanent tab/sidebar item, so it never
               needed a way back. Now that it's only reachable via Home's

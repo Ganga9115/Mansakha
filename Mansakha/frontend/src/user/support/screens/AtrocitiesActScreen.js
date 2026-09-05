@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, LayoutAnimation, Platform, UIManager, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
 import { colors } from '../../shared/theme/colors';
 import { typography } from '../../shared/theme/typography';
+import { useResponsive } from '../../shared/hooks/useResponsive';
 import TopRightActions from '../../shared/components/TopRightActions';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -215,6 +217,8 @@ Power to make rules.-
 
 export default function AtrocitiesActScreen({ navigation }) {
   const [openId, setOpenId] = useState(null);
+  const { isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
 
   const toggleFaq = (id) => {
     if (Platform.OS !== 'web') {
@@ -226,21 +230,32 @@ export default function AtrocitiesActScreen({ navigation }) {
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
       {/* Top Header */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
+        <View style={[styles.headerLeft, !isDesktop && styles.headerLeftMobile]}>
+          {!isDesktop && (
+            <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+              <Feather name="arrow-left" size={20} color={colors.primaryDark} />
+            </Pressable>
+          )}
           <Text style={styles.pageTitle}>Prevention of Atrocities Act</Text>
         </View>
         <View style={styles.headerRightGroup}>
           <TopRightActions />
-          <Pressable 
-            onPress={() => navigation.navigate('Profile')} 
-            style={styles.profileAvatarBtn}
-            hitSlop={8}
-          >
-            <View style={styles.avatarContainer}>
-              <Feather name="user" size={18} color={colors.primary} />
-            </View>
-          </Pressable>
+          {/* Mobile drops this profile icon entirely (not replaced) - the
+              hamburger menu/bottom tab bar already gets you to Profile, and
+              this button duplicated that on a header that's otherwise
+              plain. Desktop is unchanged. */}
+          {isDesktop && (
+            <Pressable
+              onPress={() => navigation.navigate('Profile')}
+              style={styles.profileAvatarBtn}
+              hitSlop={8}
+            >
+              <View style={styles.avatarContainer}>
+                <Feather name="user" size={18} color={colors.primary} />
+              </View>
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -334,6 +349,14 @@ const styles = StyleSheet.create({
   },
   headerLeft: {
     flex: 1,
+  },
+  headerLeftMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backBtn: {
+    marginRight: spacing.sm,
+    padding: spacing.xs,
   },
   pageTitle: { 
     ...typography.h1,

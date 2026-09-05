@@ -1,5 +1,6 @@
 import React from 'react';
 import { FlatList, View, Text, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -12,6 +13,7 @@ import Card from '../../shared/components/Card';
 import RiskBadge from '../../shared/components/RiskBadge';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
+import MenuButton from '../../shared/components/MenuButton';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useDistressHistory, useUserDashboard } from '../../shared/services/hooks';
 
@@ -88,6 +90,7 @@ export default function DistressHistoryScreen() {
   const query = useDistressHistory();
   const dashboardQuery = useUserDashboard();
   const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
 
   const keyExtractor = (item, index) => `${item.computedAt}-${index}`;
   const renderItem = ({ item }) => (
@@ -108,8 +111,15 @@ export default function DistressHistoryScreen() {
   return (
     <View style={styles.container}>
       {/* Top Profile Header */}
-      <View style={[styles.topHeader, isDesktop && styles.topHeaderDesktop]}>
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && { paddingTop: insets.top + spacing.md },
+        ]}
+      >
         <View style={styles.headerLeft}>
+          {!isDesktop && <MenuButton />}
           {isDesktop ? (
             <Feather name="bar-chart-2" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (

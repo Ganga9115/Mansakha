@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
 import { colors } from '../../shared/theme/colors';
@@ -15,7 +16,8 @@ import TopRightActions from '../../shared/components/TopRightActions';
 import JournalIllustration from '../../shared/components/JournalIllustration';
 
 export default function JournalScreen({ navigation }) {
-  const { tier } = useResponsive();
+  const { tier, isDesktop } = useResponsive();
+  const insets = useSafeAreaInsets();
   const toast = useToast();
   const addEntry = useAddJournalEntry();
 
@@ -33,6 +35,26 @@ export default function JournalScreen({ navigation }) {
     setTitle('');
     setContent('');
   };
+
+  // Extracted once so it can be placed in either spot below without
+  // duplicating its press handler/styling - desktop keeps it inline next to
+  // the title field (unchanged); mobile moves it down next to Save Entry so
+  // the order reads Voice Input -> Save Entry.
+  const voiceInputButton = SPEECH_TO_TEXT_SUPPORTED ? (
+    <Pressable
+      onPress={speech.toggle}
+      style={[styles.micPill, speech.listening && styles.micPillActive]}
+    >
+      <Feather
+        name={speech.listening ? "mic-off" : "mic"}
+        size={13}
+        color={speech.listening ? colors.white : colors.primary}
+      />
+      <Text style={[styles.micPillText, speech.listening && styles.micPillTextActive]}>
+        {speech.listening ? 'Listening...' : 'Voice input'}
+      </Text>
+    </Pressable>
+  ) : null;
 
   const handleSave = async () => {
     const trimmedTitle = title.trim();
@@ -57,7 +79,7 @@ export default function JournalScreen({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
         <View style={styles.headerIconTile}>
           <Feather name="book-open" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
         </View>
@@ -96,21 +118,7 @@ export default function JournalScreen({ navigation }) {
                 value={title}
                 onChangeText={setTitle}
               />
-              {SPEECH_TO_TEXT_SUPPORTED && (
-                <Pressable
-                  onPress={speech.toggle}
-                  style={[styles.micPill, speech.listening && styles.micPillActive]}
-                >
-                  <Feather
-                    name={speech.listening ? "mic-off" : "mic"}
-                    size={13}
-                    color={speech.listening ? colors.white : colors.primary}
-                  />
-                  <Text style={[styles.micPillText, speech.listening && styles.micPillTextActive]}>
-                    {speech.listening ? 'Listening...' : 'Voice input'}
-                  </Text>
-                </Pressable>
-              )}
+              {isDesktop && voiceInputButton}
             </View>
 
             <TextInput
@@ -123,7 +131,8 @@ export default function JournalScreen({ navigation }) {
               numberOfLines={8}
             />
 
-            <View style={styles.composerBottomRow}>
+            <View style={[styles.composerBottomRow, !isDesktop && styles.composerBottomRowMobile]}>
+              {!isDesktop && voiceInputButton}
               <Pressable
                 style={[
                   styles.saveBtn,
@@ -250,6 +259,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
+  },
+  // Voice Input moves down here on mobile (see the JSX above), ordered
+  // before Save Entry - space-between puts it on the left, Save Entry on
+  // the right, same as a typical form footer.
+  composerBottomRowMobile: {
+    justifyContent: 'space-between',
   },
 
   saveBtn: {
