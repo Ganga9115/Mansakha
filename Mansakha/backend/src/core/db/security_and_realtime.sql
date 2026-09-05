@@ -90,3 +90,8 @@ on conflict (id) do nothing;
 -- (a victim can only ever request their own or a linked docket's court
 -- details) lives in the route handler itself.
 alter table court_case_details enable row level security;
+
+-- Detailed PDF Reports (migration_025) - service_role bypasses RLS same as
+-- every other table here; jurisdiction-scoping for who can see/review a
+-- given recipient row lives in the route handlers (requireJurisdiction).
+alter table report_recipients enable row level security;

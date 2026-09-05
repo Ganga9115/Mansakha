@@ -257,6 +257,32 @@ export function useUpdateReportStatus() {
   return { mutate, loading };
 }
 
+// Mirrors useExportReportCsv-style raw-fetch-to-blob-download pattern (see
+// e.g. district_admin/services/hooks.js), against Ministry's own PDF route.
+export function useDownloadReportPdf() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, filename = 'report') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/ministry/reports/${reportId}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to download PDF');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 export function useCounsellorPerformance(jurisdictionId) {
   const token = getToken();
   return useQuery(

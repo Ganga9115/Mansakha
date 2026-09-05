@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import MinistryLayout from '../layouts/MinistryLayout';
-import { ChevronDown, ChevronUp, FilePlus, CheckCircle2 } from 'lucide-react';
-import { useReportsInbox, useUpdateReportStatus, useJurisdictionOptions } from '../services/hooks';
+import { ChevronDown, ChevronUp, FilePlus, CheckCircle2, Download } from 'lucide-react';
+import { useReportsInbox, useUpdateReportStatus, useJurisdictionOptions, useDownloadReportPdf } from '../services/hooks';
 import ReportBuilder from '../components/ReportBuilder';
+import ReportSnapshotView from '../components/ReportSnapshotView';
 
 const STATUS_BADGE = {
   Draft: 'bg-gray-100 text-gray-600',
@@ -10,7 +11,7 @@ const STATUS_BADGE = {
   Reviewed: 'bg-emerald-100 text-emerald-700',
 };
 
-function ReportRow({ r, showReviewAction, onMarkReviewed, markingId }) {
+function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload, downloadingId }) {
   const [expanded, setExpanded] = useState(false);
   return (
     <div>
@@ -31,6 +32,16 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId }) {
           <p className="text-xs text-gray-500">Submitted by {r.generatedByName || 'Unknown'} - {new Date(r.generatedAt).toLocaleString()}</p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onDownload(r.reportId, r.jurisdictionName || 'report'); }}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onDownload(r.reportId, r.jurisdictionName || 'report'); } }}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-md text-[11px] font-semibold transition"
+          >
+            <Download size={13} />
+            {downloadingId === r.reportId ? 'Downloading...' : 'PDF'}
+          </span>
           {showReviewAction && r.status !== 'Reviewed' && (
             <span
               role="button"
@@ -54,9 +65,7 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId }) {
               <p className="whitespace-pre-wrap">{r.commentary}</p>
             </div>
           )}
-          <pre className="bg-gray-50 rounded-lg p-4 overflow-x-auto whitespace-pre-wrap">
-            {JSON.stringify(r.snapshot, null, 2)}
-          </pre>
+          <ReportSnapshotView snapshot={r.snapshot} />
         </div>
       )}
     </div>
@@ -74,12 +83,14 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId }) {
 export default function ReportsInbox() {
   const { data, loading, error, refetch } = useReportsInbox();
   const updateStatus = useUpdateReportStatus();
+  const downloadPdf = useDownloadReportPdf();
   const nationalQuery = useJurisdictionOptions('national');
   const nationalJurisdictionId = nationalQuery.data?.jurisdictions?.[0]?.jurisdictionId;
 
   const [tab, setTab] = useState('inbox');
   const [showBuilder, setShowBuilder] = useState(false);
   const [markingId, setMarkingId] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
   const [actionError, setActionError] = useState(null);
 
   const reports = data?.reports || [];
@@ -99,6 +110,18 @@ export default function ReportsInbox() {
       setActionError(err.message || 'Could not update report status.');
     } finally {
       setMarkingId(null);
+    }
+  };
+
+  const handleDownloadPdf = async (reportId, name) => {
+    setActionError(null);
+    setDownloadingId(reportId);
+    try {
+      await downloadPdf.mutate(reportId, name);
+    } catch (err) {
+      setActionError(err.message || 'Could not download PDF.');
+    } finally {
+      setDownloadingId(null);
     }
   };
 
@@ -154,6 +177,8 @@ export default function ReportsInbox() {
                   showReviewAction={tab === 'inbox'}
                   onMarkReviewed={handleMarkReviewed}
                   markingId={markingId}
+                  onDownload={handleDownloadPdf}
+                  downloadingId={downloadingId}
                 />
               ))}
             </div>

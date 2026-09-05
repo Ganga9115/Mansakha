@@ -163,6 +163,20 @@ export default function HomeScreen({ navigation }) {
                   <View style={styles.gridContainer}>
                     <Pressable
                       style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                      onPress={() => navigation?.navigate('CaseDetails')}
+                    >
+                      <View style={styles.gridIconSquare}>
+                        <Feather name="file-text" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.gridTitle}>Case Details</Text>
+                        <Text style={styles.gridSub}>Court case status</Text>
+                      </View>
+                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                    </Pressable>
+
+                    <Pressable
+                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
                       onPress={() => navigation?.navigate('wellbeing')}
                     >
                       <View style={styles.gridIconSquare}>
@@ -191,20 +205,6 @@ export default function HomeScreen({ navigation }) {
                         <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                       </Pressable>
                     )}
-
-                    <Pressable
-                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('CaseDetails')}
-                    >
-                      <View style={styles.gridIconSquare}>
-                        <Feather name="file-text" size={18} color={colors.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.gridTitle}>Case Details</Text>
-                        <Text style={styles.gridSub}>Court case status</Text>
-                      </View>
-                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                    </Pressable>
                   </View>
 
                   {/* Two Column Layout for Upcoming Sessions and Recent Activity */}

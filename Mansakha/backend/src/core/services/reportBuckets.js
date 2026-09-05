@@ -73,4 +73,7 @@ function bucketize(rows, buckets, dateField) {
   return perBucket;
 }
 
-module.exports = { resolveDateWindow, bucketize };
+// resolveBuckets is also exported (previously internal-only) for
+// reportPeriods.js's 'custom' period type to reuse directly - same "6 even
+// slices across a window" logic, without duplicating it.
+module.exports = { resolveDateWindow, bucketize, resolveBuckets };
