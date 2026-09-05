@@ -26,7 +26,8 @@
           "locationAlwaysAndWhenInUsePermission": "Mansakha uses your location to auto-fill your State and District at login."
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }

@@ -23,6 +23,7 @@ import SupportScreen from '../support/screens/SupportScreen';
 import AtrocitiesActScreen from '../support/screens/AtrocitiesActScreen';
 import SettingsScreen from '../support/screens/SettingsScreen';
 import ChatScreen from '../chat/screens/ChatScreen';
+import CaseDetailsScreen from '../wellness/screens/CaseDetailsScreen';
 import WellnessScreen from '../wellness/screens/WellnessScreen';
 import JournalScreen from '../wellness/screens/JournalScreen';
 import MyEntryScreen from '../wellness/screens/MyEntry';
@@ -186,6 +187,7 @@ function DesktopNavigator() {
       <Drawer.Screen name="CounsellorChat" component={CounsellorChatScreen} />
       <Drawer.Screen name="support" component={SupportScreen} />
       <Drawer.Screen name="AtrocitiesAct" component={AtrocitiesActScreen} />
+      <Drawer.Screen name="CaseDetails" component={CaseDetailsScreen} />
     </Drawer.Navigator>
   );
 }
@@ -217,6 +219,7 @@ function ShellStack({ tabs, includeExtras = true }) {
       <RootStack.Screen name="MainTabs" component={tabs} />
       <RootStack.Screen name="support" component={SupportScreen} />
       <RootStack.Screen name="AtrocitiesAct" component={AtrocitiesActScreen} />
+      <RootStack.Screen name="CaseDetails" component={CaseDetailsScreen} />
       {includeExtras && (
         <>
           <RootStack.Screen name="Chatbot" component={ChatScreen} />
