@@ -13,7 +13,7 @@ import Card from '../../shared/components/Card';
 import RiskBadge from '../../shared/components/RiskBadge';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
-import MenuButton from '../../shared/components/MenuButton';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useDistressHistory, useUserDashboard } from '../../shared/services/hooks';
 
@@ -86,7 +86,7 @@ function TrendChart({ scores }) {
   );
 }
 
-export default function DistressHistoryScreen() {
+export default function DistressHistoryScreen({ navigation }) {
   const query = useDistressHistory();
   const dashboardQuery = useUserDashboard();
   const { tier, isDesktop } = useResponsive();
@@ -114,17 +114,16 @@ export default function DistressHistoryScreen() {
       <View
         style={[
           styles.topHeader,
-          isDesktop && styles.topHeaderDesktop,
-          !isDesktop && { paddingTop: insets.top + spacing.md },
+          isDesktop ? styles.topHeaderDesktop : styles.topHeaderMobile,
+          !isDesktop && { paddingTop: insets.top + spacing.sm, paddingBottom: spacing.md },
         ]}
       >
         <View style={styles.headerLeft}>
-          {!isDesktop && <MenuButton />}
           {isDesktop ? (
             <Feather name="bar-chart-2" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather name="bar-chart-2" size={28} color={colors.primary} />
+              <Feather name="bar-chart-2" size={22} color={colors.primary} />
             </View>
           )}
 
@@ -146,19 +145,19 @@ export default function DistressHistoryScreen() {
       </View>
 
       {/* Main Content Body */}
-      <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+      <View style={[
+        styles.contentBody, 
+        isDesktop ? styles.contentBodyDesktop : styles.contentBodyMobile, 
+        { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }
+      ]}>
         <QueryBoundary query={query} empty={(data) => !data?.scores?.length}>
           {(data) => {
-            // TrendChart plots left-to-right chronologically, so it needs
-            // scores oldest-first (the order the API already returns) - but
-            // the list below reads newest-first, so it gets its own reversed
-            // copy rather than changing the order the chart relies on.
             const latestFirst = [...data.scores].reverse();
             return (
               <FlatList
                 data={latestFirst}
                 keyExtractor={keyExtractor}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={[styles.list, !isDesktop && styles.listMobile]}
                 showsVerticalScrollIndicator={false}
                 ListHeaderComponent={
                   <View>
@@ -172,6 +171,8 @@ export default function DistressHistoryScreen() {
           }}
         </QueryBoundary>
       </View>
+
+      {!isDesktop && <BottomNavBar currentTab="History" navigation={navigation} />}
     </View>
   );
 }
@@ -180,61 +181,53 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
-    paddingTop: spacing.xxxl,
-    paddingBottom: spacing.xxl,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, alignItems: 'center' },
+  topHeaderDesktop: { 
+    height: 64, 
+    paddingTop: 0, 
+    paddingBottom: 0, 
+    alignItems: 'center' 
+  },
+  topHeaderMobile: {
+    paddingBottom: spacing.md,
+  },
   headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
-    width: 56,
-    height: 56,
+    width: 36,
+    height: 36,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
-    position: 'relative',
-  },
-  avatarContainerDesktop: { width: 40, height: 40 },
-  avatarEditBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: colors.primaryDark,
-    borderRadius: radius.pill,
-    padding: 3,
+    marginRight: spacing.sm,
   },
   headerInfo: { flex: 1 },
-  pillBadge: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.pill,
-    alignSelf: 'flex-start',
-    marginBottom: 4,
-  },
-  pillText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
-  subtext: { ...typography.caption, color: colors.textSecondary },
+  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 20, fontWeight: '700' },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  
   contentBody: {
     flex: 1,
     backgroundColor: colors.background,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
-    marginTop: -spacing.xl,
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+  },
+  contentBodyMobile: {
+    marginTop: 0, // Removed negative margin to prevent top header overlap
+    paddingTop: spacing.md,
   },
   contentBodyDesktop: {
     marginTop: 0,
     borderTopLeftRadius: 0,
     borderTopRightRadius: 0,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
   },
   list: { paddingBottom: spacing.xxxl },
+  // Increased bottom clearance so the last list item clears the floating bottom navbar & FAB
+  listMobile: { paddingBottom: 140 },
   sectionHeaderTitle: {
     ...typography.label,
     color: colors.primaryDark,

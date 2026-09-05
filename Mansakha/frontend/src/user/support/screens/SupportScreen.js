@@ -69,7 +69,7 @@ export default function SupportScreen({ navigation }) {
         style={[
           styles.topHeader,
           isDesktop && styles.topHeaderDesktop,
-          !isDesktop && { paddingTop: insets.top + spacing.md },
+          !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
         ]}
       >
         <View style={styles.headerLeft}>
@@ -211,8 +211,8 @@ const styles = StyleSheet.create({
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   backBtn: { marginRight: spacing.sm, padding: spacing.xs },
   avatarContainer: {
-    width: 56,
-    height: 56,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     alignItems: 'center',

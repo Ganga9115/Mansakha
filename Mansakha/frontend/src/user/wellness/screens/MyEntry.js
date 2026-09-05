@@ -13,6 +13,7 @@ import { useResponsive } from '../../shared/hooks/useResponsive';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useJournalEntries, useDeleteJournalEntry, useUpdateJournalEntry } from '../../shared/services/hooks';
 import TopRightActions from '../../shared/components/TopRightActions';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 
 export default function MyEntry({ navigation }) {
   const { tier, isDesktop } = useResponsive();
@@ -78,7 +79,7 @@ export default function MyEntry({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Navigation Header */}
-      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
         <View style={styles.headerIconTile}>
           <Feather name="layout" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
         </View>
@@ -89,7 +90,7 @@ export default function MyEntry({ navigation }) {
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
-        <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+        <View style={[styles.body, !isDesktop && styles.bodyMobile, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
 
           {/* Search Bar */}
           <View style={styles.searchWrap}>
@@ -180,6 +181,8 @@ export default function MyEntry({ navigation }) {
           </QueryBoundary>
         </View>
       </ScrollView>
+
+      {!isDesktop && <BottomNavBar currentTab="Wellness" navigation={navigation} />}
 
       {/* Entry Details Modal */}
       <Modal
@@ -320,6 +323,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   body: { padding: spacing.xl },
+  // Clearance for the floating BottomNavBar so the last grid row isn't
+  // covered by it.
+  bodyMobile: { paddingBottom: 100 },
 
   searchWrap: {
     flexDirection: 'row',

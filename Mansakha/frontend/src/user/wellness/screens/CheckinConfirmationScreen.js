@@ -10,6 +10,7 @@ import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import StatusBadge from '../../shared/components/StatusBadge';
 import GetHelpButton from '../../shared/components/GetHelpButton';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 
 // The only screen in the app with no header bar at all (a full-screen,
 // centered "success" card), which meant it was also the only screen without
@@ -18,8 +19,8 @@ import GetHelpButton from '../../shared/components/GetHelpButton';
 // (grep found it on all 10 other user screens). Floated top-right rather
 // than building a header bar just for this one screen, so the existing
 // celebratory layout stays intact.
-export default function CheckinConfirmationScreen({ route }) {
-  const { tier } = useResponsive();
+export default function CheckinConfirmationScreen({ route, navigation }) {
+  const { tier, isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
   const { riskLevel, summary, alertTriggered } = route?.params || {};
 
@@ -28,7 +29,7 @@ export default function CheckinConfirmationScreen({ route }) {
       <View style={[styles.helpButtonWrapper, { top: insets.top + spacing.md }]}>
         <GetHelpButton asHeaderIcon />
       </View>
-      <View style={{ maxWidth: formContentWidth[tier], width: '100%', alignItems: 'center' }}>
+      <View style={{ maxWidth: formContentWidth[tier], width: '100%', alignItems: 'center', paddingBottom: !isDesktop ? 100 : 0 }}>
         {/* Illustration Asset */}
         <View style={styles.illustrationWrapper}>
           <Image
@@ -67,6 +68,7 @@ export default function CheckinConfirmationScreen({ route }) {
           </View>
         )}
       </View>
+      {!isDesktop && <BottomNavBar currentTab="CheckIn" navigation={navigation} />}
     </View>
   );
 }

@@ -327,7 +327,7 @@ export default function ChatScreen({ navigation }) {
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       {/* Top Header */}
-      <View style={[styles.topHeader, tier !== 'desktop' && { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.topHeader, tier !== 'desktop' && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
         {tier !== 'desktop' && (
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
             <Feather name="arrow-left" size={20} color={colors.primaryDark} />

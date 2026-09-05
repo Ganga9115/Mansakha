@@ -230,7 +230,7 @@ export default function AtrocitiesActScreen({ navigation }) {
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
       {/* Top Header */}
-      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
         <View style={[styles.headerLeft, !isDesktop && styles.headerLeftMobile]}>
           {!isDesktop && (
             <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>

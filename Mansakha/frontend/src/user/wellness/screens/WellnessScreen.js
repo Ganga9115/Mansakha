@@ -11,7 +11,7 @@ import { shadow } from '../../shared/theme/shadow';
 import { dashboardContentWidth } from '../../shared/theme/layout';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
-import MenuButton from '../../shared/components/MenuButton';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useWellnessSuggestions, useUserDashboard } from '../../shared/services/hooks';
@@ -117,11 +117,10 @@ export default function WellnessScreen({ navigation }) {
         style={[
           styles.topHeader,
           isDesktop && styles.topHeaderDesktop,
-          !isDesktop && { paddingTop: insets.top + spacing.md },
+          !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
         ]}
       >
         <View style={styles.headerLeft}>
-          {!isDesktop && <MenuButton />}
           <View style={styles.headerIconTile}>
             <Feather name="sun" size={22} color={colors.primaryDark} />
           </View>
@@ -151,13 +150,13 @@ export default function WellnessScreen({ navigation }) {
         // content area between the header and the sidebar, not cover both.
         // Shared by both Meditation and Exercise - whichever tab opened it.
         <ScrollView style={styles.fullScreenBody} bounces={false} showsVerticalScrollIndicator={false}>
-          <View style={[styles.fullScreenBodyInner, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+          <View style={[styles.fullScreenBodyInner, !isDesktop && styles.fullScreenBodyInnerMobile, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
             <MeditationPlayer exercise={openedTechnique} onBack={() => setOpenedTechnique(null)} />
           </View>
         </ScrollView>
       ) : (
         <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
-          <View style={[styles.body, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+          <View style={[styles.body, !isDesktop && styles.bodyMobile, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
             {/* Hero Journal Card with Illustration */}
             <Pressable
               style={[styles.journalBanner, !isDesktop && styles.journalBannerMobile]}
@@ -223,6 +222,8 @@ export default function WellnessScreen({ navigation }) {
           </View>
         </ScrollView>
       )}
+
+      {!isDesktop && <BottomNavBar currentTab="Wellness" navigation={navigation} />}
     </View>
   );
 }
@@ -261,8 +262,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   body: { padding: spacing.xl },
+  // Clearance for the floating BottomNavBar so the last card in the list
+  // isn't covered by it.
+  bodyMobile: { paddingBottom: 100 },
   fullScreenBody: { flex: 1, backgroundColor: colors.background },
   fullScreenBodyInner: { padding: spacing.xl, paddingTop: spacing.xxl, flexGrow: 1 },
+  fullScreenBodyInnerMobile: { paddingBottom: 100 },
 
   /* Journal Card Header */
   journalBanner: {

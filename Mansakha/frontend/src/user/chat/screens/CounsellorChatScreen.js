@@ -290,19 +290,29 @@ export default function CounsellorChatScreen({ navigation }) {
   const sendDisabled = (!draft.trim() && !isRecordingActive) || sendMessage.isPending || isSendingVoice;
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
+    <KeyboardAvoidingView 
+      style={styles.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
         {tier !== 'desktop' && (
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
             <Feather name="arrow-left" size={20} color={colors.primaryDark} />
           </Pressable>
         )}
-        <View style={styles.headerIconTile}>
-          <Feather name="user" size={18} color={colors.primary} />
-        </View>
-        <View style={styles.nameBlock}>
-          <Text style={styles.statusTitle}>{counsellor?.fullName || 'My Counsellor'}</Text>
-          <Text style={styles.subtext}>Private, opted-in support</Text>
+        <View style={styles.headerLeft}>
+          {isDesktop ? (
+            <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop}/>
+          ) : (
+            <View style={styles.avatarContainer}>
+              <Feather color={colors.primaryDark} name="user" size={28}/>
+            </View>
+          )}
+
+          <View style={styles.nameBlock}>
+            <Text style={styles.statusTitle}>{counsellor?.fullName || 'My Counsellor'}</Text>
+            <Text style={styles.subtext}>Private, opted-in support</Text>
+          </View>
         </View>
         <View style={{ flex: 1 }} />
         {/* Single Green Call Button for Counsellor */}
@@ -455,6 +465,8 @@ export default function CounsellorChatScreen({ navigation }) {
                       value={draft}
                       onChangeText={handleDraftChange}
                       onKeyPress={handleComposerKeyPress}
+                      onSubmitEditing={() => handleSend()}
+                      blurOnSubmit={false}
                       placeholder="Type a message..."
                       placeholderTextColor={colors.textSecondary}
                       returnKeyType="send"
@@ -482,7 +494,7 @@ export default function CounsellorChatScreen({ navigation }) {
 
                 <Pressable
                   style={[styles.sendBtn, sendDisabled && styles.sendBtnDisabled]}
-                  onPress={handleSend}
+                  onPress={() => handleSend()}
                   disabled={sendDisabled}
                   accessibilityRole="button"
                   accessibilityLabel="Send message"
@@ -510,11 +522,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  backBtn: { marginRight: spacing.sm, padding: spacing.xs },
-  headerIconTile: {
-    width: 36, height: 36, borderRadius: radius.pill, backgroundColor: colors.surface,
-    alignItems: 'center', justifyContent: 'center', marginRight: spacing.md,
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
+  headerIconDesktop: {
+    marginRight: spacing.sm,
+  },
+  avatarContainer: {
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  backBtn: { marginRight: spacing.sm, padding: spacing.xs },
   nameBlock: { flexShrink: 1 },
   statusTitle: {
     ...typography.h1,
