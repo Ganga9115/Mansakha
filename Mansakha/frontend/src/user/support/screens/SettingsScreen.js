@@ -192,7 +192,7 @@ export default function SettingsScreen({ navigation }) {
   const casesList = dashboardQuery.data?.linkedCases?.length
     ? dashboardQuery.data.linkedCases
     : dashboardQuery.data?.caseStatus
-    ? [dashboardQuery.data.caseStatus]
+    ? [{ ...dashboardQuery.data.caseStatus, docketNumber: dashboardQuery.data.docketNumber }]
     : [];
 
   return (
@@ -280,7 +280,7 @@ export default function SettingsScreen({ navigation }) {
             {/* Linked Cases */}
             {casesList.length > 0 ? (
               casesList.map((c, index) => {
-                const docketId = c.docketId || c.docketNo || c.caseNumber || 'N/A';
+                const docketId = c.docketNumber || c.docketId || c.docketNo || c.caseNumber || 'N/A';
                 const caseType = c.caseType || c.type || 'N/A';
                 const caseStage = c.caseStage || c.stage || 'Trial';
                 const isRehab = caseStage.toLowerCase().includes('rehab');
