@@ -19,6 +19,7 @@ import CounsellorMailArchived from './counsellor/pages/MailArchived';
 import CounsellorMailThread from './counsellor/pages/MailThread';
 
 import DistrictAdminDashboard from './district_admin/pages/AdminDashboard';
+import DistrictAnalysis from './district_admin/pages/Analysis';
 import DistrictCaseDetail from './district_admin/pages/CaseDetail';
 import DistrictAdminAlerts from './district_admin/pages/AdminAlerts';
 import UserRegistration from './district_admin/pages/UserRegistration';
@@ -110,6 +111,7 @@ export default function App() {
         {/* District Admin - case-level dashboard is the default view;
             district admin has no sub-jurisdictions to break down. */}
         <Route path="/districtadmin" element={<RequireAuth><DistrictAdminDashboard /></RequireAuth>} />
+        <Route path="/districtadmin/analysis" element={<RequireAuth><DistrictAnalysis /></RequireAuth>} />
         <Route path="/districtadmin/case-detail/:id" element={<RequireAuth><DistrictCaseDetail /></RequireAuth>} />
         <Route path="/districtadmin/alerts" element={<RequireAuth><DistrictAdminAlerts /></RequireAuth>} />
         <Route path="/districtadmin/registration" element={<RequireAuth><UserRegistration /></RequireAuth>} />

@@ -9,6 +9,7 @@ const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { getDescendantJurisdictionIds } = require('../../core/services/jurisdictionTree');
+const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
 
 const router = express.Router();
 
@@ -688,6 +689,20 @@ router.get('/ivrs-log', async (req, res) => {
 // (status, targetJurisdictionId, commentary, insightId) and resolves
 // generatedByName - none of which this route returned before, even though
 // the columns/data have existed since migration_009.
+//
+// LEAK FIX (Detailed PDF Reports): this route had NO where clause at all -
+// every District/State report ever generated, Draft or not, was visible to
+// Ministry regardless of who it was actually routed to. A Ministry recipient
+// is only ever meaningful for a NATIONAL-tier report (District/State reports
+// go to their own parent tier by default, per reportSnapshot.js/the admin
+// routes' POST /reports/generate - Ministry only ever receives one via an
+// explicit optional cc, which is itself only ever added to a National
+// report) that has actually been sent (status in Submitted/Reviewed, never
+// Draft - a Draft has zero report_recipients rows and was never meant to be
+// visible here). report_recipients is attached per report (batched, not
+// N+1) so Ministry can see/act on its own review status - the ministry-type
+// row is unconditionally "mine" here, unlike the admin tiers' inbox route
+// which has to pick its own row out of several possible recipients.
 router.get('/reports', async (req, res) => {
   const { jurisdictionLevel } = req.query;
   const pageSize = 30;
@@ -696,7 +711,7 @@ router.get('/reports', async (req, res) => {
 
   const { rows } = await pool.query(
     `select r.report_id, r.jurisdiction_id, r.generated_by, r.generated_at, r.period_start, r.period_end, r.snapshot,
-            r.status, r.target_jurisdiction_id, r.commentary, r.insight_id,
+            r.status, r.target_jurisdiction_id, r.commentary, r.insight_id, r.period_type,
             origin.name as origin_name, origin.level as origin_level,
             target.name as target_name,
             o.full_name as generator_name,
@@ -705,35 +720,116 @@ router.get('/reports', async (req, res) => {
      left join jurisdictions origin on origin.jurisdiction_id = r.jurisdiction_id
      left join jurisdictions target on target.jurisdiction_id = r.target_jurisdiction_id
      left join officials o on o.official_id = r.generated_by
+     where origin.level = 'national' and r.status in ('Submitted', 'Reviewed')
      order by r.generated_at desc
      limit $1 offset $2`,
     [pageSize, offset]
   );
   const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
 
+  // Batched, not N+1 - one query for every report's Ministry recipient row
+  // at once, same convention the admin tiers' GET /reports uses.
+  const reportIds = rows.map((r) => r.report_id);
+  let ministryRowByReportId = new Map();
+  if (reportIds.length > 0) {
+    const { rows: recipientRows } = await pool.query(
+      `select report_id, recipient_id, status from report_recipients where report_id = any($1::uuid[]) and recipient_type = 'ministry'`,
+      [reportIds]
+    );
+    ministryRowByReportId = new Map(recipientRows.map((r) => [r.report_id, r]));
+  }
+
   // jurisdictionLevel filter kept as a JS-side pass (not a server-side
   // filter) - no current caller passes this param, and filtering post-map
   // avoids relying on untested filter syntax under time pressure.
-  let reports = rows.map((r) => ({
-    reportId: r.report_id,
-    jurisdictionId: r.jurisdiction_id,
-    jurisdictionName: r.origin_name || null,
-    jurisdictionLevel: r.origin_level || null,
-    generatedBy: r.generated_by,
-    generatedByName: r.generator_name || null,
-    generatedAt: r.generated_at,
-    periodStart: r.period_start,
-    periodEnd: r.period_end,
-    snapshot: r.snapshot,
-    status: r.status,
-    targetJurisdictionId: r.target_jurisdiction_id,
-    targetJurisdictionName: r.target_name || null,
-    commentary: r.commentary,
-    insightId: r.insight_id,
-  }));
+  let reports = rows.map((r) => {
+    const myRow = ministryRowByReportId.get(r.report_id);
+    return {
+      reportId: r.report_id,
+      jurisdictionId: r.jurisdiction_id,
+      jurisdictionName: r.origin_name || null,
+      jurisdictionLevel: r.origin_level || null,
+      generatedBy: r.generated_by,
+      generatedByName: r.generator_name || null,
+      generatedAt: r.generated_at,
+      periodType: r.period_type,
+      periodLabel: r.snapshot?.periodLabel || null,
+      periodStart: r.period_start,
+      periodEnd: r.period_end,
+      snapshot: r.snapshot,
+      status: r.status,
+      targetJurisdictionId: r.target_jurisdiction_id,
+      targetJurisdictionName: r.target_name || null,
+      commentary: r.commentary,
+      insightId: r.insight_id,
+      myRecipientId: myRow ? myRow.recipient_id : null,
+      myStatus: myRow ? myRow.status : null,
+    };
+  });
   if (jurisdictionLevel) reports = reports.filter((r) => r.jurisdictionLevel === jurisdictionLevel);
 
   return ok(res, { reports, total: totalCount });
+});
+
+// Streams the rendered PDF for one report - no jurisdiction gate, matching
+// this whole router's own router.use(verifyToken, requireRole(['Ministry']), ...)
+// above (Ministry is unrestricted across every jurisdiction).
+router.get('/reports/:reportId/pdf', async (req, res) => {
+  const { reportId } = req.params;
+
+  const { rows: reportRows } = await pool.query(
+    `select r.report_id, r.jurisdiction_id, r.generated_at, r.period_start, r.period_end, r.snapshot, r.status, r.commentary, r.period_type,
+            origin.name as jurisdiction_name, origin.level as tier,
+            o.full_name as generated_by_name
+     from reports r
+     join jurisdictions origin on origin.jurisdiction_id = r.jurisdiction_id
+     left join officials o on o.official_id = r.generated_by
+     where r.report_id = $1`,
+    [reportId]
+  );
+  const report = reportRows[0];
+  if (!report) return fail(res, 'Report not found', 404);
+
+  const { rows: recipientRows } = await pool.query(
+    `select rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at, j.name as jurisdiction_name
+     from report_recipients rr
+     left join jurisdictions j on j.jurisdiction_id = rr.jurisdiction_id
+     where rr.report_id = $1`,
+    [reportId]
+  );
+
+  const reportForPdf = {
+    jurisdictionName: report.jurisdiction_name,
+    periodLabel: report.snapshot?.periodLabel || '',
+    periodType: report.period_type,
+    tier: report.tier,
+    snapshot: report.snapshot,
+    commentary: report.commentary,
+    status: report.status,
+    generatedByName: report.generated_by_name,
+    generatedAt: report.generated_at,
+    recipients: recipientRows.map((r) => ({
+      recipientType: r.recipient_type,
+      jurisdictionName: r.jurisdiction_name,
+      isPrimary: r.is_primary,
+      status: r.status,
+      reviewedAt: r.reviewed_at,
+    })),
+  };
+
+  let buffer;
+  try {
+    const { html, title, periodLabel } = renderReportHtml(reportForPdf);
+    buffer = await generatePdfBuffer(html, { periodLabel, title });
+  } catch (err) {
+    return fail(res, `Could not generate PDF: ${err.message}`, 500);
+  }
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'export', entityType: 'report', entityId: reportId });
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${report.jurisdiction_name}-report-${reportId}.pdf"`);
+  return res.send(buffer);
 });
 
 module.exports = router;

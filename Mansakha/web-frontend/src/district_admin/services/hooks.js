@@ -112,6 +112,85 @@ export function useExportReportCsv() {
   return { mutate, loading };
 }
 
+// --- Case-wise Reports workflow (District generates a case-wise report and
+// submits it to its own State - required - plus optional direct cc's to
+// National/Ministry; see backend/src/district_admin/routes/
+// districtAdmin.routes.js's own reports/* mount for the exact contract). ---
+
+// Imperative - mutate(payload) posts { jurisdictionId, periodType, year,
+// month|quarter|week, customStart, customEnd, commentary, asDraft,
+// recipients } and resolves { reportId, generatedAt, status }. The required
+// primary recipient (District's own State) is always added server-side -
+// `recipients` here is ONLY the optional extra cc's the checklist UI adds.
+export function useGenerateReport() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/district/reports/generate', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// `box` is 'inbox'|'outbox' - resolves to null/skips the call when
+// jurisdictionId is falsy, matching useAdminDashboard's own guard pattern.
+export function useReportsList(jurisdictionId, box) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve(null);
+    const params = new URLSearchParams({ jurisdictionId, box });
+    return apiClient.get(`/api/admin/district/reports?${params.toString()}`, token);
+  }, [token, jurisdictionId, box]);
+}
+
+// Acts on the CALLER'S OWN recipient row only (a report cc'd to
+// State+National+Ministry is reviewed independently by each) - this is
+// District's own tier-scoped mount, unlike Ministry's copy of this same
+// hook shape which is hardcoded to the national mount.
+export function useUpdateReportStatus() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, status) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/district/reports/${reportId}/status`, { status }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Mirrors useExportReportCsv's exact raw-fetch-to-blob-download pattern,
+// just against the PDF route/content-type instead of the CSV export one.
+export function useDownloadReportPdf() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, filename = 'report') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/admin/district/reports/${reportId}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to download PDF');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 export function useCreateUser() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

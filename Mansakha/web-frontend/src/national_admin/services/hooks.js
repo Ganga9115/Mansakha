@@ -43,6 +43,15 @@ export function useMyJurisdiction() {
   return { jurisdictionId: role?.jurisdictionId, jurisdictionLevel: role?.jurisdictionLevel, loading, error };
 }
 
+export function useJurisdictionOptions(level, parentId) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ level });
+    if (parentId) params.set('parentId', parentId);
+    return apiClient.get(`/api/lookups/jurisdictions?${params.toString()}`, token);
+  }, [token, level, parentId]);
+}
+
 export function useAdminDashboard(jurisdictionId) {
   const token = getToken();
   return useQuery(
@@ -102,6 +111,87 @@ export function useAdminAlerts(jurisdictionId) {
     () => (jurisdictionId ? apiClient.get(`/api/admin/national/alerts/${jurisdictionId}`, token) : Promise.resolve(null)),
     [token, jurisdictionId]
   );
+}
+
+// --- State-wise Reports workflow (National generates a state-wise report -
+// each child state's rollup, side by side - and submits it to Ministry.
+// National has no jurisdiction parent - Ministry itself IS National's
+// "primary recipient", so National never has any optional recipient to
+// add). ---
+
+// Imperative - mutate(payload) posts { jurisdictionId, periodType, year,
+// month|quarter|week, customStart, customEnd, commentary, asDraft } and
+// resolves { reportId, generatedAt, status }. The required primary
+// recipient (Ministry) is always added server-side - National never sends a
+// `recipients` array at all (no valid optional target above it).
+export function useGenerateReport() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/national/reports/generate', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// `box` is 'inbox'|'outbox' - resolves to null/skips the call when
+// jurisdictionId is falsy, matching useAdminDashboard's own guard pattern.
+export function useReportsList(jurisdictionId, box) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve(null);
+    const params = new URLSearchParams({ jurisdictionId, box });
+    return apiClient.get(`/api/admin/national/reports?${params.toString()}`, token);
+  }, [token, jurisdictionId, box]);
+}
+
+// Acts on the CALLER'S OWN recipient row only - this is National's own
+// tier-scoped mount, unlike Ministry's copy of this same hook shape which is
+// ALSO hardcoded to this same national mount (Ministry only ever reviews
+// National's reports in practice, so that hardcoding was never actually
+// wrong - this hook here is National Admin's own separate copy of it).
+export function useUpdateReportStatus() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, status) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/national/reports/${reportId}/status`, { status }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Mirrors useExportReportCsv's exact raw-fetch-to-blob-download pattern,
+// just against the PDF route/content-type instead of the CSV export one.
+export function useDownloadReportPdf() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, filename = 'report') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/admin/national/reports/${reportId}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to download PDF');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
 }
 
 // --- Case Detail (read-only for Administration) ---

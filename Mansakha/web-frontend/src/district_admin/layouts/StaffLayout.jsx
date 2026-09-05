@@ -6,15 +6,20 @@ import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 
 // District Admin's own dedicated shell - own copy of what used to be the
-// shared StaffLayout, trimmed to just District Admin's nav (no Analysis item -
-// comparing sub-jurisdictions only makes sense where there ARE
-// sub-jurisdictions, which District Admin has none of). "Register User" was
-// previously unreachable (page existed, no nav link and no route) - added
-// here since user-credential creation is core to this role's job, matching
-// Data Operator's own equivalent nav item. Mail sits directly above Profile
-// per explicit product placement.
+// shared StaffLayout, trimmed to just District Admin's nav. Analysis was
+// added alongside State/National's own Analysis pages once Reports.jsx's
+// read-only trend/severity/intervention charts moved out into it - unlike
+// State/National's Analysis (built around comparing sub-jurisdictions,
+// which District has none of), District's Analysis is time-series analytics
+// over its own single jurisdiction, so it earns the same nav item for a
+// different reason. "Register User" was previously unreachable (page
+// existed, no nav link and no route) - added here since user-credential
+// creation is core to this role's job, matching Data Operator's own
+// equivalent nav item. Mail sits directly above Profile per explicit
+// product placement.
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/districtadmin' },
+  { name: 'Analysis', icon: BarChart3, path: '/districtadmin/analysis' },
   { name: 'Register User', icon: UserPlus, path: '/districtadmin/registration' },
   { name: 'Alerts', icon: Bell, path: '/districtadmin/alerts' },
   { name: 'Reports', icon: BarChart3, path: '/districtadmin/reports' },

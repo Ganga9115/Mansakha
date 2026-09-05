@@ -1,18 +1,19 @@
 import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
 import { Download } from 'lucide-react';
-import BarChart from '../components/BarChart';
 import { useMyJurisdiction, useAdminDashboard, useExportReportCsv, useReportsAnalytics } from '../services/hooks';
 
-// State Admin's Analysis page - cross-district comparison bars (below),
-// calling the exact same GET /api/admin/state/dashboard/:jurisdictionId
-// StateDashboard.jsx already uses so these numbers can never drift from
-// what the dashboard shows. Also carries State's own time-series/severity/
-// intervention analytics (moved out of Reports.jsx, which is now purely the
-// district-wise report generate/submit/review workflow - that page's
-// content is a periodic report record State sends upward, not open-ended
-// analysis of State's ongoing caseload, and the two don't belong mixed
-// into one page).
+// District Admin's own Analysis page - split out of Reports.jsx, which used
+// to carry both this read-only analytics dashboard AND the real case-wise
+// report generate/submit/review workflow in one file. Reports is now an
+// operational page (generate a report, track its Inbox/Outbox); this is
+// where District's own time-series/severity/intervention analytics live -
+// the distinction State/National already draw between their own Analysis
+// (cross-jurisdiction comparison) and Reports pages, applied here for
+// District's own equivalent analytics content (time-series over ITS OWN
+// jurisdiction, not a cross-child comparison - District has no children to
+// compare, which is why it never had a State/National-style Analysis page
+// until now).
 
 const RANGE_MAP = {
   'Last 7 Days': '7d',
@@ -22,12 +23,12 @@ const RANGE_MAP = {
 };
 
 export default function Analysis() {
-  const { jurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
-  const { data, loading, error } = useAdminDashboard(jurisdictionId);
-
   const [timeRange, setTimeRange] = useState('Last 30 Days');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
+
+  const { jurisdictionId } = useMyJurisdiction();
+  const { data: adminData } = useAdminDashboard(jurisdictionId);
   const exportReport = useExportReportCsv();
 
   const range = RANGE_MAP[timeRange];
@@ -47,10 +48,10 @@ export default function Analysis() {
   const severityDistribution = analyticsData?.severityDistribution || [];
   const interventionPhases = analyticsData?.interventionPhases || { completed: 0, inProgress: 0, planned: 0 };
 
-  const total = data?.totalCases || data?.total || 0;
-  const high = data?.highRiskCases || data?.high || 0;
-  const critical = data?.criticalCases || data?.critical || 0;
-  const moderate = data?.vulnerableUsers || data?.moderate || 0;
+  const total = adminData?.totalCases || adminData?.total || 0;
+  const high = adminData?.highRiskCases || adminData?.high || 0;
+  const critical = adminData?.criticalCases || adminData?.critical || 0;
+  const moderate = adminData?.vulnerableUsers || adminData?.moderate || 0;
 
   const handleExportCsv = async () => {
     try {
@@ -60,175 +61,127 @@ export default function Analysis() {
     }
   };
 
-  const rows = data?.trends || [];
-
   return (
     <StaffLayout title="Analysis">
-      <div className="space-y-8">
+      <div className="space-y-6">
 
-        <section className="space-y-4">
-          <h3 className="font-bold text-sm text-gray-800">Cross-District Comparison</h3>
-          {jurisdictionLoading || loading ? (
-            <p className="text-sm text-gray-400">Loading...</p>
-          ) : error ? (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div>
-          ) : rows.length === 0 ? (
-            <p className="text-sm text-gray-400">No district data yet.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              <BarChart
-                title="Total Cases by District"
-                subtitle="Highest first - where caseload is concentrated."
-                items={rows.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.total }))}
-                valueLabel="cases"
-                barColor="bg-[#519BCE]"
-              />
-              <BarChart
-                title="Critical Cases by District"
-                subtitle="Highest first - where the most urgent cases are concentrated."
-                items={rows.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.critical }))}
-                valueLabel="cases"
-                barColor="bg-purple-600"
-              />
-              <BarChart
-                title="High-Risk Cases by District"
-                subtitle="Highest first - cases flagged High but not yet Critical."
-                items={rows.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.highRisk }))}
-                valueLabel="cases"
-                barColor="bg-rose-500"
-              />
-              <BarChart
-                title="Vulnerable Cases by District"
-                subtitle="Highest first - cases flagged Moderate risk."
-                items={rows.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.vulnerable }))}
-                valueLabel="cases"
-                barColor="bg-amber-500"
-              />
+        {/* TOP CONTROLS & DATE FILTER */}
+        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            {['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Custom Range'].map((r) => (
+              <button
+                key={r}
+                onClick={() => setTimeRange(r)}
+                className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
+                  timeRange === r
+                    ? 'bg-[#519BCE]/15 text-[#519BCE]'
+                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
+
+          {isCustom && (
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <label className="flex items-center gap-1.5 text-gray-600 font-semibold">
+                From
+                <input
+                  type="date"
+                  value={customStart}
+                  max={customEnd || undefined}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700"
+                />
+              </label>
+              <label className="flex items-center gap-1.5 text-gray-600 font-semibold">
+                To
+                <input
+                  type="date"
+                  value={customEnd}
+                  min={customStart || undefined}
+                  onChange={(e) => setCustomEnd(e.target.value)}
+                  className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700"
+                />
+              </label>
+              {customRangeInvalid && (
+                <span className="text-rose-600 font-semibold">End date can't be before start date.</span>
+              )}
             </div>
           )}
-        </section>
 
-        <section className="space-y-4 pt-4 border-t border-gray-200/80">
-          <h3 className="font-bold text-sm text-gray-800">Time-Series Analytics</h3>
+          <button
+            onClick={handleExportCsv}
+            disabled={exportReport.loading}
+            className="ml-auto flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
+          >
+            <Download size={14} />
+            {exportReport.loading ? 'Exporting CSV...' : 'Export Audit CSV'}
+          </button>
+        </div>
 
-          {/* TOP CONTROLS & DATE FILTER */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              {['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Custom Range'].map((r) => (
-                <button
-                  key={r}
-                  onClick={() => setTimeRange(r)}
-                  className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
-                    timeRange === r
-                      ? 'bg-[#519BCE]/15 text-[#519BCE]'
-                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                  }`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
+        {/* TOP ROW: 2 CHARTS */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
 
-            {isCustom && (
-              <div className="flex flex-wrap items-center gap-2 text-xs">
-                <label className="flex items-center gap-1.5 text-gray-600 font-semibold">
-                  From
-                  <input
-                    type="date"
-                    value={customStart}
-                    max={customEnd || undefined}
-                    onChange={(e) => setCustomStart(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700"
-                  />
-                </label>
-                <label className="flex items-center gap-1.5 text-gray-600 font-semibold">
-                  To
-                  <input
-                    type="date"
-                    value={customEnd}
-                    min={customStart || undefined}
-                    onChange={(e) => setCustomEnd(e.target.value)}
-                    className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs text-gray-700"
-                  />
-                </label>
-                {customRangeInvalid && (
-                  <span className="text-rose-600 font-semibold">End date can't be before start date.</span>
-                )}
-              </div>
-            )}
+          <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+            <h3 className="font-bold text-sm text-gray-800">
+              Average Distress Severity Trends
+            </h3>
 
-            <button
-              onClick={handleExportCsv}
-              disabled={exportReport.loading}
-              className="ml-auto flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
+            <ChartStatus
+              pending={chartsPending}
+              invalid={customRangeInvalid}
+              loading={analyticsLoading}
+              error={analyticsError}
             >
-              <Download size={14} />
-              {exportReport.loading ? 'Exporting CSV...' : 'Export Audit CSV'}
-            </button>
+              <TrendChart trend={trend} />
+            </ChartStatus>
           </div>
 
-          {/* TOP ROW: 2 CHARTS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+            <h3 className="font-bold text-sm text-gray-800">
+              Severity Distribution Stacked Matrix
+            </h3>
 
-            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
-              <h3 className="font-bold text-sm text-gray-800">
-                Average Distress Severity Trends
-              </h3>
-
-              <ChartStatus
-                pending={chartsPending}
-                invalid={customRangeInvalid}
-                loading={analyticsLoading}
-                error={analyticsError}
-              >
-                <TrendChart trend={trend} />
-              </ChartStatus>
-            </div>
-
-            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
-              <h3 className="font-bold text-sm text-gray-800">
-                Severity Distribution Stacked Matrix
-              </h3>
-
-              <ChartStatus
-                pending={chartsPending}
-                invalid={customRangeInvalid}
-                loading={analyticsLoading}
-                error={analyticsError}
-              >
-                <SeverityStackedChart severityDistribution={severityDistribution} />
-              </ChartStatus>
-            </div>
-
+            <ChartStatus
+              pending={chartsPending}
+              invalid={customRangeInvalid}
+              loading={analyticsLoading}
+              error={analyticsError}
+            >
+              <SeverityStackedChart severityDistribution={severityDistribution} />
+            </ChartStatus>
           </div>
 
-          {/* BOTTOM ROW: DONUT CHART */}
-          <div className="grid grid-cols-1 gap-6">
+        </div>
 
-            <div className="bg-gradient-to-br from-white to-gray-50 p-6 rounded-2xl border border-gray-200/60 shadow-md space-y-4">
-              <h3 className="font-bold text-sm text-gray-800 tracking-wide">
-                Intervention Phase Breakdown
-              </h3>
+        {/* BOTTOM ROW: DONUT CHART */}
+        <div className="grid grid-cols-1 gap-6">
 
-              <ChartStatus
-                pending={chartsPending}
-                invalid={customRangeInvalid}
-                loading={analyticsLoading}
-                error={analyticsError}
-              >
-                <InterventionDonut interventionPhases={interventionPhases} />
-              </ChartStatus>
-            </div>
+          <div className="bg-gradient-to-br from-white to-gray-50 p-6 rounded-2xl border border-gray-200/60 shadow-md space-y-4">
+            <h3 className="font-bold text-sm text-gray-800 tracking-wide">
+              Intervention Phase Breakdown
+            </h3>
+
+            <ChartStatus
+              pending={chartsPending}
+              invalid={customRangeInvalid}
+              loading={analyticsLoading}
+              error={analyticsError}
+            >
+              <InterventionDonut interventionPhases={interventionPhases} />
+            </ChartStatus>
           </div>
+        </div>
 
-          {/* 4 STATS CARDS AT THE BOTTOM */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            <StatCard title="TOTAL CASELOAD" value={total} subtitle="Across your jurisdiction" accent="blue" />
-            <StatCard title="VULNERABLE (MODERATE)" value={moderate} subtitle="Requires monitoring" accent="emerald" />
-            <StatCard title="HIGH-RISK CASES" value={high} subtitle="High risk level" accent="rose" />
-            <StatCard title="CRITICAL CASES" value={critical} subtitle="Immediate attention" accent="purple" />
-          </div>
-        </section>
+        {/* 4 STATS CARDS AT THE BOTTOM */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard title="TOTAL CASELOAD" value={total} subtitle="Across your jurisdiction" accent="blue" />
+          <StatCard title="VULNERABLE (MODERATE)" value={moderate} subtitle="Requires monitoring" accent="emerald" />
+          <StatCard title="HIGH-RISK CASES" value={high} subtitle="High risk level" accent="rose" />
+          <StatCard title="CRITICAL CASES" value={critical} subtitle="Immediate attention" accent="purple" />
+        </div>
 
       </div>
     </StaffLayout>

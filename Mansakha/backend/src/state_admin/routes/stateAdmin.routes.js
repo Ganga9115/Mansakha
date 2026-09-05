@@ -1,6 +1,6 @@
 const express = require('express');
 const { supabase } = require('../../core/db/supabaseClient');
-const { pool } = require('../../core/db/pgPool');
+const { pool, withTransaction } = require('../../core/db/pgPool');
 const { getDescendantJurisdictionIds, getChildJurisdictions } = require('../../core/services/jurisdictionTree');
 const { writeAuditLog } = require('../../core/services/auditLog');
 const { verifyToken } = require('../../core/middleware/verifyToken');
@@ -12,6 +12,13 @@ const { createUser, updateUser, ProvisioningError } = require('../../user/servic
 const { generateJurisdictionAnalytics } = require('../../ai/gemini');
 const { predictEscalationRiskBatch } = require('../../ai/scoring');
 const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
+// Detailed PDF Reports - State tier only ever computes/renders its own
+// district-wise comparison snapshot, per compute function per tier (this IS
+// shared code across the 3 admin route files, unlike the route files
+// themselves - see reportSnapshot.js's own header comment for why).
+const { resolveReportPeriod } = require('../../core/services/reportPeriods');
+const { computeDistrictWiseSnapshot } = require('../../core/services/reportSnapshot');
+const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
 
 // How far back to look when predicting escalation risk across a whole
 // jurisdiction subtree - predictEscalationRisk itself further caps each
@@ -1191,16 +1198,43 @@ router.get(
   }
 );
 
-// Feature Catalog Section 3.6/4.4 - snapshots the caller's own dashboard
-// numbers (the exact same computation /dashboard/:jurisdictionId already
-// does, so there's no separate aggregation query to keep in sync) into a
-// durable `reports` row Ministry can list (routes/ministry.js's inbox).
-//
-// Ministry Analytics & Workflow spec Task 2E extends this with upward
-// routing: commentary (the sending admin's own write-up), targetJurisdictionId
-// (the parent tier this is being sent TO - setting it also marks the report
-// 'Submitted' immediately instead of leaving it at the column's 'Draft'
-// default), and insightId (optionally linking a Task 2A analytics snapshot).
+// ===== Detailed PDF Reports (State tier) =====
+// Replaces the old single-snapshot/single-target design: a State's report
+// carries a full district-wise comparison snapshot (reportSnapshot.js's
+// computeDistrictWiseSnapshot) over a real calendar period
+// (reportPeriods.js), rendered to a real PDF (reportPdf.js), and routed to
+// one or more recipients (report_recipients) instead of a single
+// target_jurisdiction_id.
+
+const VALID_PERIOD_TYPES = ['weekly', 'monthly', 'quarterly', 'custom'];
+
+// A State's report always goes up to its own National root - this is NEVER
+// trusted from the client. Optional extras from the client are cc's ONLY,
+// and Ministry only - a State (unlike a District) has nothing above it
+// except National and Ministry, so there's no "extra jurisdiction cc" case
+// to validate here at all.
+async function resolveStateReportRecipients(jurisdiction, requestedRecipients) {
+  if (!jurisdiction.parent_id) {
+    throw Object.assign(new Error('This state has no parent jurisdiction configured'), { status: 500 });
+  }
+  const primary = { recipientType: 'jurisdiction', jurisdictionId: jurisdiction.parent_id, isPrimary: true };
+
+  const extras = [];
+  for (const r of requestedRecipients || []) {
+    if (r && r.type === 'ministry') {
+      extras.push({ recipientType: 'ministry', jurisdictionId: null, isPrimary: false });
+    } else {
+      throw Object.assign(new Error(`Invalid recipient: ${JSON.stringify(r)} - a State report only accepts an optional Ministry cc`), { status: 400 });
+    }
+  }
+  return [primary, ...extras];
+}
+
+// Feature Catalog Section 3.6/4.4, rebuilt for Detailed PDF Reports - snapshots
+// a real calendar period (not just "current state") into a durable `reports`
+// row, with an explicit real-report-vs-Draft split (asDraft) and multi-
+// recipient routing (report_recipients) replacing the old single
+// target_jurisdiction_id column.
 router.post(
   '/reports/generate',
   verifyToken,
@@ -1208,104 +1242,330 @@ router.post(
   generalApiLimiter,
   requireJurisdiction((req) => req.body.jurisdictionId),
   async (req, res) => {
-    const { jurisdictionId, periodStart, periodEnd, commentary, targetJurisdictionId, insightId } = req.body;
+    const { jurisdictionId, commentary, insightId, asDraft } = req.body;
     if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
 
-    const { data: jurisdiction, error: jError } = await supabase.from('jurisdictions').select('level, name').eq('jurisdiction_id', jurisdictionId).single();
+    const { data: jurisdiction, error: jError } = await supabase
+      .from('jurisdictions')
+      .select('level, name, parent_id')
+      .eq('jurisdiction_id', jurisdictionId)
+      .single();
     if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
-    if (targetJurisdictionId) {
-      const { data: targetJ } = await supabase.from('jurisdictions').select('jurisdiction_id').eq('jurisdiction_id', targetJurisdictionId).maybeSingle();
-      if (!targetJ) return fail(res, 'targetJurisdictionId not found', 404);
-    }
     if (insightId) {
       const { data: insightRow } = await supabase.from('jurisdiction_analytics_insights').select('insight_id').eq('insight_id', insightId).maybeSingle();
       if (!insightRow) return fail(res, 'insightId not found', 404);
     }
 
-    const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
-    let counts;
-    try {
-      ({ counts } = await countUsersByRisk(allDescendantIds));
-    } catch (err) {
-      return fail(res, `Could not compute jurisdiction counts: ${err.message}`, 500);
+    const periodType = VALID_PERIOD_TYPES.includes(req.body.periodType) ? req.body.periodType : 'custom';
+    const { periodStart, periodEnd, label } = resolveReportPeriod({ ...req.body, periodType });
+
+    // Recipients are only resolved/validated for a real (non-draft) submission -
+    // a Draft's `recipients` body is simply ignored, per the spec.
+    let recipientsToInsert = [];
+    if (!asDraft) {
+      try {
+        recipientsToInsert = await resolveStateReportRecipients(jurisdiction, req.body.recipients);
+      } catch (err) {
+        return fail(res, err.message, err.status || 400);
+      }
     }
 
-    const end = periodEnd ? new Date(periodEnd) : new Date();
-    const start = periodStart ? new Date(periodStart) : new Date(end.getTime() - TREND_PERIOD_DAYS * 86400000);
+    let computedSnapshot;
+    try {
+      computedSnapshot = await computeDistrictWiseSnapshot(jurisdictionId, periodStart, periodEnd, periodType);
+    } catch (err) {
+      return fail(res, `Could not compute report snapshot: ${err.message}`, 500);
+    }
 
-    const insertPayload = {
-      jurisdiction_id: jurisdictionId,
-      generated_by: req.auth.officialId,
-      period_start: start.toISOString(),
-      period_end: end.toISOString(),
-      snapshot: { jurisdictionName: jurisdiction.name, tier: jurisdiction.level, ...counts },
-      commentary: commentary || null,
-      target_jurisdiction_id: targetJurisdictionId || null,
-      insight_id: insightId || null,
-    };
-    // Sending straight up to a parent tier (targetJurisdictionId given)
-    // marks this Submitted immediately, per the spec - this key is omitted
-    // entirely (not set to a literal 'Draft') when no target is given, so
-    // the column's own default applies.
-    if (targetJurisdictionId) insertPayload.status = 'Submitted';
+    // periodLabel lives inside this jsonb (not a reports column) - same
+    // "spread jurisdictionName/tier in at the route level" convention as
+    // before this rebuild.
+    const snapshot = { jurisdictionName: jurisdiction.name, tier: jurisdiction.level, periodLabel: label, ...computedSnapshot };
 
-    const { data, error } = await supabase
-      .from('reports')
-      .insert(insertPayload)
-      .select('report_id, generated_at, status')
-      .single();
-    if (error) return fail(res, `Could not generate report: ${error.message}`, 500);
+    let report;
+    try {
+      report = await withTransaction(async (client) => {
+        const insertPayload = {
+          jurisdiction_id: jurisdictionId,
+          generated_by: req.auth.officialId,
+          period_start: periodStart.toISOString(),
+          period_end: periodEnd.toISOString(),
+          snapshot: JSON.stringify(snapshot),
+          commentary: commentary || null,
+          insight_id: insightId || null,
+          period_type: periodType,
+        };
+        // asDraft omits `status` entirely (not a literal 'Draft') so the
+        // column's own default applies - same convention as the old
+        // no-targetJurisdictionId branch this replaces.
+        if (!asDraft) insertPayload.status = 'Submitted';
 
-    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'report', entityId: data.report_id });
+        const columns = Object.keys(insertPayload);
+        const values = Object.values(insertPayload);
+        const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+        const { rows } = await client.query(
+          `insert into reports (${columns.join(', ')}) values (${placeholders}) returning report_id, generated_at, status`,
+          values
+        );
+        const inserted = rows[0];
 
-    return ok(res, { reportId: data.report_id, generatedAt: data.generated_at, status: data.status }, 'Report generated - visible to Ministry', 201);
+        // Zero report_recipients rows for a Draft - a Draft report hasn't
+        // been sent anywhere yet, per report_recipients' own migration
+        // comment.
+        for (const r of recipientsToInsert) {
+          // eslint-disable-next-line no-await-in-loop
+          await client.query(
+            `insert into report_recipients (report_id, recipient_type, jurisdiction_id, is_primary) values ($1, $2, $3, $4)`,
+            [inserted.report_id, r.recipientType, r.jurisdictionId, r.isPrimary]
+          );
+        }
+
+        return inserted;
+      });
+    } catch (err) {
+      return fail(res, `Could not generate report: ${err.message}`, 500);
+    }
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'report', entityId: report.report_id });
+
+    return ok(res, { reportId: report.report_id, generatedAt: report.generated_at, status: report.status }, 'Report generated', 201);
   }
 );
 
-const REPORT_STATUSES = ['Draft', 'Submitted', 'Reviewed'];
+const REPORT_RECIPIENT_STATUSES = ['Submitted', 'Reviewed'];
 
-// Ministry Analytics & Workflow spec Task 2E - the RECIPIENT tier (whoever
-// the report's target_jurisdiction_id points at) marks a report reviewed
-// after reading it. requireJurisdiction is scoped to target_jurisdiction_id,
-// not the report's own origin jurisdiction_id - the sender shouldn't be able
-// to mark their own upward report "Reviewed". The existence/target-set check
-// runs BEFORE requireJurisdiction (as a plain middleware, not inside the
-// resolver) specifically so a missing report or one with no target yields
-// the spec's requested 404, rather than requireJurisdiction's generic 400
-// "Could not resolve target jurisdiction".
+// Reworked for multi-recipient routing: no more target_jurisdiction_id gate -
+// a report can now have several report_recipients rows (its own National,
+// optionally Ministry), each reviewing independently. This updates ONLY the
+// row belonging to the calling official's own jurisdiction (or the Ministry
+// row, for a Ministry caller) - never any other recipient's row, and never
+// the report's own sender.
 router.patch(
   '/reports/:reportId/status',
   verifyToken,
   requireRole(['Administration', 'Ministry']),
   generalApiLimiter,
-  async (req, res, next) => {
-    const { data: report } = await supabase
-      .from('reports')
-      .select('report_id, target_jurisdiction_id')
-      .eq('report_id', req.params.reportId)
-      .maybeSingle();
-    if (!report || !report.target_jurisdiction_id) return fail(res, 'Report not found or has no target jurisdiction set', 404);
-    req._targetReport = report;
-    next();
-  },
-  requireJurisdiction((req) => req._targetReport.target_jurisdiction_id),
   async (req, res) => {
+    const { reportId } = req.params;
     const { status } = req.body;
-    if (!REPORT_STATUSES.includes(status)) return fail(res, `status must be one of: ${REPORT_STATUSES.join(', ')}`, 400);
+    if (!REPORT_RECIPIENT_STATUSES.includes(status)) return fail(res, `status must be one of: ${REPORT_RECIPIENT_STATUSES.join(', ')}`, 400);
 
-    const { data, error } = await supabase
-      .from('reports')
-      .update({ status })
-      .eq('report_id', req._targetReport.report_id)
-      .select('report_id, status')
-      .single();
-    if (error) return fail(res, `Could not update report status: ${error.message}`, 500);
+    const { rows: reportRows } = await pool.query('select report_id from reports where report_id = $1', [reportId]);
+    if (!reportRows[0]) return fail(res, 'Report not found', 404);
 
-    await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'report', entityId: req._targetReport.report_id });
+    const { rows: recipientRows } = await pool.query(
+      'select recipient_id, recipient_type, jurisdiction_id from report_recipients where report_id = $1',
+      [reportId]
+    );
 
-    return ok(res, { reportId: data.report_id, status: data.status }, 'Report status updated');
+    const isMinistry = req.auth.roles.some((r) => r.roleName === 'Ministry');
+    // Exact match only, not a parent-chain walk - a recipient row's
+    // jurisdiction_id IS the exact jurisdiction the report was sent to, same
+    // set requireJurisdiction() itself builds internally.
+    const assignedIds = new Set(req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean));
+    const myRow = isMinistry
+      ? recipientRows.find((r) => r.recipient_type === 'ministry')
+      : recipientRows.find((r) => r.recipient_type === 'jurisdiction' && assignedIds.has(r.jurisdiction_id));
+    if (!myRow) return fail(res, 'You are not a recipient of this report', 404);
+
+    const patch = { status };
+    if (status === 'Reviewed') {
+      patch.reviewed_by = req.auth.officialId;
+      patch.reviewed_at = new Date().toISOString();
+    }
+
+    const { rows: updatedRows } = await pool.query(
+      `update report_recipients set status = $1, reviewed_by = $2, reviewed_at = $3 where recipient_id = $4 returning recipient_id, status`,
+      [patch.status, patch.reviewed_by || null, patch.reviewed_at || null, myRow.recipient_id]
+    );
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'report', entityId: reportId });
+
+    return ok(res, { reportId, recipientId: updatedRows[0].recipient_id, status: updatedRows[0].status }, 'Report status updated');
   }
 );
+
+// Lists reports this jurisdiction sent (outbox) or received (inbox) -
+// Ministry Analytics & Workflow's "Inbox/Outbox split," rebuilt on
+// report_recipients instead of the old single target_jurisdiction_id.
+router.get(
+  '/reports',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.query.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId, box } = req.query;
+    if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
+    if (box !== 'inbox' && box !== 'outbox') return fail(res, "box must be 'inbox' or 'outbox'", 400);
+
+    let reportRows;
+    let myRowByReportId = new Map();
+    try {
+      if (box === 'outbox') {
+        ({ rows: reportRows } = await pool.query(
+          `select r.report_id, r.jurisdiction_id, r.generated_by, r.generated_at, r.period_start, r.period_end, r.snapshot,
+                  r.status, r.commentary, r.period_type,
+                  j.name as jurisdiction_name, j.level as tier,
+                  o.full_name as generated_by_name
+           from reports r
+           join jurisdictions j on j.jurisdiction_id = r.jurisdiction_id
+           left join officials o on o.official_id = r.generated_by
+           where r.jurisdiction_id = $1
+           order by r.generated_at desc`,
+          [jurisdictionId]
+        ));
+      } else {
+        const { rows } = await pool.query(
+          `select r.report_id, r.jurisdiction_id, r.generated_by, r.generated_at, r.period_start, r.period_end, r.snapshot,
+                  r.status, r.commentary, r.period_type,
+                  origin.name as jurisdiction_name, origin.level as tier,
+                  o.full_name as generated_by_name,
+                  rr.recipient_id as my_recipient_id, rr.status as my_status, rr.is_primary as my_is_primary
+           from report_recipients rr
+           join reports r on r.report_id = rr.report_id
+           join jurisdictions origin on origin.jurisdiction_id = r.jurisdiction_id
+           left join officials o on o.official_id = r.generated_by
+           where rr.recipient_type = 'jurisdiction' and rr.jurisdiction_id = $1
+           order by r.generated_at desc`,
+          [jurisdictionId]
+        );
+        reportRows = rows;
+        myRowByReportId = new Map(rows.map((r) => [r.report_id, { myRecipientId: r.my_recipient_id, myStatus: r.my_status, myIsPrimary: r.my_is_primary }]));
+      }
+
+      // Batched, not N+1 - one query for every report's recipients at once,
+      // grouped in JS, same convention this file's own selectInChunks/
+      // grouped-query helpers use elsewhere.
+      const reportIds = reportRows.map((r) => r.report_id);
+      let recipientsByReportId = new Map();
+      if (reportIds.length > 0) {
+        const { rows: recipientRows } = await pool.query(
+          `select rr.report_id, rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at,
+                  j.name as jurisdiction_name
+           from report_recipients rr
+           left join jurisdictions j on j.jurisdiction_id = rr.jurisdiction_id
+           where rr.report_id = any($1::uuid[])`,
+          [reportIds]
+        );
+        recipientsByReportId = new Map();
+        for (const r of recipientRows) {
+          const list = recipientsByReportId.get(r.report_id) || [];
+          list.push({
+            recipientId: r.recipient_id,
+            recipientType: r.recipient_type,
+            jurisdictionId: r.jurisdiction_id,
+            jurisdictionName: r.jurisdiction_name,
+            isPrimary: r.is_primary,
+            status: r.status,
+            reviewedAt: r.reviewed_at,
+          });
+          recipientsByReportId.set(r.report_id, list);
+        }
+      }
+
+      const reports = reportRows.map((r) => ({
+        reportId: r.report_id,
+        jurisdictionId: r.jurisdiction_id,
+        jurisdictionName: r.jurisdiction_name,
+        tier: r.tier,
+        generatedByName: r.generated_by_name || null,
+        generatedAt: r.generated_at,
+        periodType: r.period_type,
+        periodLabel: r.snapshot?.periodLabel || null,
+        periodStart: r.period_start,
+        periodEnd: r.period_end,
+        status: r.status,
+        commentary: r.commentary,
+        snapshot: r.snapshot,
+        recipients: recipientsByReportId.get(r.report_id) || [],
+        ...(box === 'inbox' ? myRowByReportId.get(r.report_id) : {}),
+      }));
+
+      return ok(res, { reports });
+    } catch (err) {
+      return fail(res, `Could not load reports: ${err.message}`, 500);
+    }
+  }
+);
+
+// Streams the rendered PDF for one report - access is either the report's
+// own sender OR one of its recipients (an OR-across-two-sources check that
+// doesn't fit requireJurisdiction's single-resolver shape, so it's a small
+// custom inline check instead). Ministry bypasses entirely, matching every
+// other route in this file.
+router.get(
+  '/reports/:reportId/pdf',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  async (req, res) => {
+    const { reportId } = req.params;
+
+    const { rows: reportRows } = await pool.query(
+      `select r.report_id, r.jurisdiction_id, r.generated_at, r.period_start, r.period_end, r.snapshot, r.status, r.commentary, r.period_type,
+              origin.name as jurisdiction_name, origin.level as tier,
+              o.full_name as generated_by_name
+       from reports r
+       join jurisdictions origin on origin.jurisdiction_id = r.jurisdiction_id
+       left join officials o on o.official_id = r.generated_by
+       where r.report_id = $1`,
+      [reportId]
+    );
+    const report = reportRows[0];
+    if (!report) return fail(res, 'Report not found', 404);
+
+    const { rows: recipientRows } = await pool.query(
+      `select rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at, j.name as jurisdiction_name
+       from report_recipients rr
+       left join jurisdictions j on j.jurisdiction_id = rr.jurisdiction_id
+       where rr.report_id = $1`,
+      [reportId]
+    );
+
+    const isMinistry = req.auth.roles.some((r) => r.roleName === 'Ministry');
+    if (!isMinistry) {
+      const assignedIds = new Set(req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean));
+      const isSender = assignedIds.has(report.jurisdiction_id);
+      const isRecipient = recipientRows.some((r) => r.jurisdiction_id && assignedIds.has(r.jurisdiction_id));
+      if (!isSender && !isRecipient) return fail(res, 'Outside your assigned jurisdiction', 403);
+    }
+
+    const reportForPdf = {
+      jurisdictionName: report.jurisdiction_name,
+      periodLabel: report.snapshot?.periodLabel || '',
+      periodType: report.period_type,
+      tier: report.tier,
+      snapshot: report.snapshot,
+      commentary: report.commentary,
+      status: report.status,
+      generatedByName: report.generated_by_name,
+      generatedAt: report.generated_at,
+      recipients: recipientRows.map((r) => ({
+        recipientType: r.recipient_type,
+        jurisdictionName: r.jurisdiction_name,
+        isPrimary: r.is_primary,
+        status: r.status,
+        reviewedAt: r.reviewed_at,
+      })),
+    };
+
+    let buffer;
+    try {
+      const { html, title, periodLabel } = renderReportHtml(reportForPdf);
+      buffer = await generatePdfBuffer(html, { periodLabel, title });
+    } catch (err) {
+      return fail(res, `Could not generate PDF: ${err.message}`, 500);
+    }
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'export', entityType: 'report', entityId: reportId });
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.jurisdiction_name}-report-${reportId}.pdf"`);
+    return res.send(buffer);
+  }
+);
+
 
 module.exports = router;

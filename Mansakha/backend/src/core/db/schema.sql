@@ -550,9 +550,33 @@ create table reports (
   period_end              timestamptz not null,
   snapshot                  jsonb not null,
   status                      text not null default 'Draft' check (status in ('Draft', 'Submitted', 'Reviewed')),
-  target_jurisdiction_id        uuid references jurisdictions(jurisdiction_id),
+  target_jurisdiction_id        uuid references jurisdictions(jurisdiction_id), -- superseded by report_recipients below (migration_025); kept for old rows
   commentary                       text,
-  insight_id                         uuid references jurisdiction_analytics_insights(insight_id)
+  insight_id                         uuid references jurisdiction_analytics_insights(insight_id),
+  -- Detailed PDF Reports (migration_025) - which calendar-period resolver
+  -- (services/reportPeriods.js) produced period_start/period_end. Every
+  -- pre-migration row is backfilled to 'custom', since that's exactly what
+  -- an arbitrary start/end range is.
+  period_type                       text check (period_type in ('weekly', 'monthly', 'quarterly', 'custom'))
+);
+
+-- Detailed PDF Reports (migration_025) - multi-recipient routing. See that
+-- migration's own comment for the full reasoning: a report can be sent to
+-- more than one office at once (a District's report to its own State AND,
+-- optionally, National and/or Ministry directly), each reviewing
+-- independently. recipient_type/jurisdiction_id together handle Ministry not
+-- being a real jurisdictions row - a Ministry recipient has
+-- recipient_type='ministry' and a null jurisdiction_id.
+create table report_recipients (
+  recipient_id     uuid primary key default gen_random_uuid(),
+  report_id        uuid not null references reports(report_id),
+  recipient_type   text not null check (recipient_type in ('jurisdiction', 'ministry')),
+  jurisdiction_id  uuid references jurisdictions(jurisdiction_id),
+  is_primary       boolean not null default false,
+  status           text not null default 'Submitted' check (status in ('Submitted', 'Reviewed')),
+  reviewed_by      uuid references officials(official_id),
+  reviewed_at      timestamptz,
+  unique (report_id, recipient_type, jurisdiction_id)
 );
 
 -- ===== Indexes for the access patterns the API contract implies =====
@@ -577,6 +601,10 @@ create index idx_reports_jurisdiction on reports(jurisdiction_id, generated_at d
 create index idx_jurisdiction_analytics_insights_jurisdiction on jurisdiction_analytics_insights(jurisdiction_id, generated_at desc);
 create index idx_policies_jurisdiction on policies(jurisdiction_id, launched_at desc);
 create index idx_reports_target_jurisdiction on reports(target_jurisdiction_id, generated_at desc);
+-- migration_025_report_recipients.sql
+create index idx_report_recipients_report on report_recipients(report_id);
+create index idx_report_recipients_jurisdiction on report_recipients(jurisdiction_id) where recipient_type = 'jurisdiction';
+create unique index idx_report_recipients_one_ministry on report_recipients(report_id) where recipient_type = 'ministry';
 -- migration_011_ollama_and_policies.sql
 -- Description: Adds tables for the Ollama 15-question dynamic Check-In flow and Ministry Policy deployment.
 
