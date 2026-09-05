@@ -11,7 +11,7 @@ import CounsellorCaseDetail from './counsellor/pages/CaseDetail';
 import CounsellorCaseNotes from './counsellor/pages/CaseNotes';
 import CounsellorCaseChat from './counsellor/pages/CaseChat';
 import AlertsFeed from './counsellor/pages/AlertsFeed';
-import CounsellorReports from './counsellor/pages/Reports';
+import CounsellorAnalysis from './counsellor/pages/Analysis';
 import CounsellorSettings from './counsellor/pages/Settings';
 import CounsellorMailInbox from './counsellor/pages/MailInbox';
 import CounsellorMailSent from './counsellor/pages/MailSent';
@@ -101,7 +101,7 @@ export default function App() {
         <Route path="/counsellor/case-detail/:id/notes" element={<RequireAuth><CounsellorCaseNotes /></RequireAuth>} />
         <Route path="/counsellor/case-detail/:id/chat" element={<RequireAuth><CounsellorCaseChat /></RequireAuth>} />
         <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
-        <Route path="/counsellor/reports" element={<RequireAuth><CounsellorReports /></RequireAuth>} />
+        <Route path="/counsellor/analysis" element={<RequireAuth><CounsellorAnalysis /></RequireAuth>} />
         <Route path="/counsellor/mail" element={<RequireAuth><CounsellorMailInbox /></RequireAuth>} />
         <Route path="/counsellor/mail/sent" element={<RequireAuth><CounsellorMailSent /></RequireAuth>} />
         <Route path="/counsellor/mail/archived" element={<RequireAuth><CounsellorMailArchived /></RequireAuth>} />

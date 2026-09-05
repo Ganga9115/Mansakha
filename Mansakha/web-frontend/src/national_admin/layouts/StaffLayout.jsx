@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, Bell, User, LogOut, Menu, X, Mail } from 'lucide-react';
+import { LayoutDashboard, BarChart3, FileText, Bell, User, LogOut, Menu, X, Mail } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -12,7 +12,7 @@ const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/nationaladmin' },
   { name: 'Analysis', icon: BarChart3, path: '/nationaladmin/analysis' },
   { name: 'Alerts', icon: Bell, path: '/nationaladmin/alerts' },
-  { name: 'Reports', icon: BarChart3, path: '/nationaladmin/reports' },
+  { name: 'Reports', icon: FileText, path: '/nationaladmin/reports' },
   { name: 'Mail', icon: Mail, path: '/nationaladmin/mail' },
   { name: 'Profile', icon: User, path: '/nationaladmin/profile' },
 ];
