@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useToast } from '../../shared/context/ToastContext';
@@ -11,8 +11,9 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { useSpeechToText, SPEECH_TO_TEXT_SUPPORTED } from '../../shared/hooks/useSpeechToText';
-import { useAddJournalEntry } from '../../shared/services/hooks';
+import { useAddJournalEntry, useUserDashboard } from '../../shared/services/hooks';
 import TopRightActions from '../../shared/components/TopRightActions';
+import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import JournalIllustration from '../../shared/components/JournalIllustration';
 import BottomNavBar from '../../shared/components/BottomNavBar';
 
@@ -21,6 +22,10 @@ export default function JournalScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const addEntry = useAddJournalEntry();
+
+  // Fetch user profile data for DesktopHeaderActions
+  const dashboardQuery = useUserDashboard();
+  const userData = dashboardQuery.data;
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -76,16 +81,35 @@ export default function JournalScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
-      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
-        <View style={styles.headerIconTile}>
-          <Feather name="book-open" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.statusTitle}>My Journal</Text>
+      {/* Top Navigation Header */}
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
+        ]}
+      >
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconTile}>
+            <Feather name="book-open" size={22} color={colors.primaryDark} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.statusTitle}>My Journal</Text>
+          </View>
         </View>
 
-        <TopRightActions />
+        <View style={styles.headerRight}>
+          {isDesktop ? (
+            <DesktopHeaderActions
+              fullName={userData?.fullName}
+              alertCount={userData?.alerts?.length || 0}
+              onBellPress={() => {}}
+            />
+          ) : (
+            <TopRightActions />
+          )}
+        </View>
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
@@ -158,22 +182,32 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
-    paddingTop: spacing.xxl,
+    paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
+  topHeaderDesktop: {
+    height: 64,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  headerRight: { marginLeft: spacing.md },
   headerIconTile: {
-    marginRight: spacing.xs,
-    justifyContent: 'center',
+    backgroundColor: 'transparent',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
   },
   statusTitle: {
     ...typography.h1,
     color: colors.primaryDark,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
   },
 
