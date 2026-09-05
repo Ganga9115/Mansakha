@@ -264,3 +264,90 @@ export function useCounsellorPerformance(jurisdictionId) {
     [token, jurisdictionId]
   );
 }
+
+// ===== Mansakha Mail =====
+// Internal staff mail (backend/src/mail/routes/mail.routes.js) - role-agnostic
+// endpoints under /api/mail, so these hooks are plain, unprefixed by
+// "ministry" even though this file is Ministry's own copy.
+
+export function useMailDirectory(q) {
+  const token = getToken();
+  return useQuery(() => {
+    const query = (q || '').trim();
+    if (query.length < 2) return Promise.resolve({ officials: [] });
+    return apiClient.get(`/api/mail/directory?q=${encodeURIComponent(query)}`, token);
+  }, [token, q]);
+}
+
+export function useMailInbox(q, page = 1) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ page });
+    if (q) params.set('q', q);
+    return apiClient.get(`/api/mail/inbox?${params.toString()}`, token);
+  }, [token, q, page]);
+}
+
+export function useMailSent(q, page = 1) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ page });
+    if (q) params.set('q', q);
+    return apiClient.get(`/api/mail/sent?${params.toString()}`, token);
+  }, [token, q, page]);
+}
+
+export function useMailArchived(q, page = 1) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ page });
+    if (q) params.set('q', q);
+    return apiClient.get(`/api/mail/archived?${params.toString()}`, token);
+  }, [token, q, page]);
+}
+
+export function useMailThread(threadId) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/mail/threads/${threadId}`, token), [token, threadId]);
+}
+
+// Polled (mirrors useMyNotifications) so the sidebar badge updates without a
+// manual refresh - powers MinistryLayout's Mail nav badge.
+export function useMailUnreadCount() {
+  const token = getToken();
+  const query = useQuery(() => apiClient.get('/api/mail/unread-count', token), [token]);
+  useEffect(() => {
+    const interval = setInterval(() => query.refetch(), 15000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query.refetch]);
+  return query;
+}
+
+// Imperative (non-hook-query) mail actions - compose/reply/send/attach/etc.
+// all just need a one-shot call, not the loading/error/refetch shape above.
+export function useMailActions() {
+  const token = getToken();
+
+  return {
+    // { threadId?, subject?, body, recipientOfficialIds?, asDraft? } - no
+    // threadId => new thread (subject + recipientOfficialIds required);
+    // threadId => reply (subject/recipients inherited server-side).
+    composeOrReply: (payload) => apiClient.post('/api/mail/messages', payload, token),
+    updateDraft: (messageId, body) => apiClient.patch(`/api/mail/messages/${messageId}`, { body }, token),
+    sendDraft: (messageId) => apiClient.post(`/api/mail/messages/${messageId}/send`, {}, token),
+    deleteDraft: (messageId) => apiClient.delete(`/api/mail/messages/${messageId}`, token),
+    uploadAttachment: (messageId, file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.uploadFile(`/api/mail/messages/${messageId}/attachments`, formData, token);
+    },
+    removeAttachment: (messageId, attachmentId) => apiClient.delete(`/api/mail/messages/${messageId}/attachments/${attachmentId}`, token),
+    getAttachmentUrl: (attachmentId) => apiClient.get(`/api/mail/attachments/${attachmentId}`, token),
+    markThreadRead: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/read`, {}, token),
+    markThreadUnread: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/unread`, {}, token),
+    archiveThread: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/archive`, {}, token),
+    unarchiveThread: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/unarchive`, {}, token),
+    deleteThread: (threadId) => apiClient.delete(`/api/mail/threads/${threadId}`, token),
+  };
+}

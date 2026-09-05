@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, FileText, Map, Inbox, Radio, LogOut, User, Trophy, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, FileText, Map, Inbox, Radio, LogOut, User, Trophy, Menu, X, Mail } from 'lucide-react';
 import { logout } from '../services/auth';
-import { useMe } from '../services/hooks';
+import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 
+// Mail sits directly above Profile per explicit product placement.
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/ministry/dashboard' },
   { name: 'Staff Management', icon: Users, path: '/ministry/staff-management' },
@@ -14,6 +15,7 @@ const NAV_ITEMS = [
   { name: 'Analysis', icon: Map, path: '/ministry/heatmap' },
   { name: 'Reports Inbox', icon: Inbox, path: '/ministry/reports' },
   { name: 'Broadcast', icon: Radio, path: '/ministry/broadcast' },
+  { name: 'Mail', icon: Mail, path: '/ministry/mail' },
   { name: 'Profile', icon: User, path: '/ministry/profile' },
 ];
 
@@ -22,10 +24,11 @@ const NAV_ITEMS = [
 // that a shared/parameterized layout with Staff wouldn't pay for itself.
 // Sidebar corner cell/footer pattern matches every other role's layout
 // though, so the sidebar reads as the same product across every role.
-export default function MinistryLayout({ children, title = 'Ministry Console' }) {
+export default function MinistryLayout({ children, title = 'Ministry Console', headerAction = null }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
+  const { data: mailUnread } = useMailUnreadCount();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const profilePath = '/ministry/profile';
@@ -77,7 +80,12 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
                 }
               >
                 <Icon size={18} />
-                <span className="text-sm">{item.name}</span>
+                <span className="text-sm flex-1">{item.name}</span>
+                {item.name === 'Mail' && mailUnread?.count > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
+                    {mailUnread.count > 99 ? '99+' : mailUnread.count}
+                  </span>
+                )}
               </NavLink>
             );
           })}
@@ -95,6 +103,7 @@ export default function MinistryLayout({ children, title = 'Ministry Console' })
             </button>
             {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80] shrink-0 hidden sm:block" />}
             <h2 className="text-lg sm:text-xl font-bold text-[#3D5A80] truncate">{title}</h2>
+            {headerAction && <div className="ml-2 shrink-0">{headerAction}</div>}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">

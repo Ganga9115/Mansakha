@@ -65,6 +65,10 @@ app.use('/api/ministry', require('./src/ministry/routes/ministry.routes'));
 // Data Operator
 app.use('/api/dataoperator', require('./src/dataoperator/routes/dataoperator.routes'));
 
+// Mansakha Mail - internal staff communication, spans every role above
+// rather than belonging to one, so it mounts flat like lookups/me.
+app.use('/api/mail', require('./src/mail/routes/mail.routes'));
+
 app.use((req, res) => {
   res.status(404).json({ success: false, data: null, message: 'Not found' });
 });

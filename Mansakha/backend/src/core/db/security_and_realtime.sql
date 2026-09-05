@@ -67,3 +67,20 @@ on conflict (id) do nothing;
 insert into storage.buckets (id, name, public)
 values ('voice-messages', 'voice-messages', false)
 on conflict (id) do nothing;
+
+-- Mansakha Mail (backend/src/mail/routes/mail.routes.js) - RLS enabled on
+-- all 4 tables; every read/write goes through the backend's service_role
+-- key, which bypasses RLS same as every other table here, so no policies
+-- are added - RBAC/membership checks live in the route handlers themselves.
+alter table mail_threads enable row level security;
+alter table mail_messages enable row level security;
+alter table mail_recipients enable row level security;
+alter table mail_attachments enable row level security;
+
+-- NOT public, matching voice-messages - mail can carry case-adjacent
+-- sensitive content, so attachment downloads always go through a
+-- short-lived signed URL (GET /api/mail/attachments/:attachmentId), never
+-- a permanent public link.
+insert into storage.buckets (id, name, public)
+values ('mail-attachments', 'mail-attachments', false)
+on conflict (id) do nothing;
