@@ -7,7 +7,9 @@ import { radius } from '../../shared/theme/radius';
 import { colors } from '../../shared/theme/colors';
 import { typography } from '../../shared/theme/typography';
 import { useResponsive } from '../../shared/hooks/useResponsive';
+import { useUserDashboard } from '../../shared/services/hooks';
 import TopRightActions from '../../shared/components/TopRightActions';
+import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -208,10 +210,7 @@ Duty of Government to ensure effective implementation of the Act.-
 (4) The Central Government shall, every year, place on the table of each House of Parliament a report on the measures taken by itself and by the State Governments in pursuance of the provisions of this section.
 
 Protection of action taken in good faith.-
-22. No suit, prosecution or other legal proceedings shall lie against the Central Government or against the State Government or any officer or authority of Government or any other person for anything which is in good faith done or intended to be done under this Act.
-
-Power to make rules.-
-23. (1) Full text section rule logic...`,
+22. No suit, prosecution or other legal proceedings shall lie against the Central Government or against the State Government or any officer or authority of Government or any other person for anything which is in good faith done or intended to be done under this Act.`,
   },
 ];
 
@@ -219,6 +218,10 @@ export default function AtrocitiesActScreen({ navigation }) {
   const [openId, setOpenId] = useState(null);
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
+
+  // Fetch user profile data for DesktopHeaderActions (matching JournalScreen pattern)
+  const dashboardQuery = useUserDashboard();
+  const userData = dashboardQuery?.data;
 
   const toggleFaq = (id) => {
     if (Platform.OS !== 'web') {
@@ -229,32 +232,39 @@ export default function AtrocitiesActScreen({ navigation }) {
 
   return (
     <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
-      {/* Top Header */}
-      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
-        <View style={[styles.headerLeft, !isDesktop && styles.headerLeftMobile]}>
+      {/* Top Header — Updated to match JournalScreen pattern */}
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
+        ]}
+      >
+        <View style={styles.headerLeft}>
           {!isDesktop && (
             <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
               <Feather name="arrow-left" size={20} color={colors.primaryDark} />
             </Pressable>
           )}
-          <Text style={styles.pageTitle}>Prevention of Atrocities Act</Text>
+
+          <View style={styles.headerIconTile}>
+            <Feather name="book-open" size={22} color={colors.primaryDark} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.statusTitle}>Prevention of Atrocities Act</Text>
+          </View>
         </View>
-        <View style={styles.headerRightGroup}>
-          <TopRightActions />
-          {/* Mobile drops this profile icon entirely (not replaced) - the
-              hamburger menu/bottom tab bar already gets you to Profile, and
-              this button duplicated that on a header that's otherwise
-              plain. Desktop is unchanged. */}
-          {isDesktop && (
-            <Pressable
-              onPress={() => navigation.navigate('Profile')}
-              style={styles.profileAvatarBtn}
-              hitSlop={8}
-            >
-              <View style={styles.avatarContainer}>
-                <Feather name="user" size={18} color={colors.primary} />
-              </View>
-            </Pressable>
+
+        <View style={styles.headerRight}>
+          {isDesktop ? (
+            <DesktopHeaderActions
+              fullName={userData?.fullName}
+              alertCount={userData?.alerts?.length || 0}
+              onBellPress={() => {}}
+            />
+          ) : (
+            <TopRightActions />
           )}
         </View>
       </View>
@@ -342,43 +352,33 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerLeft: {
-    flex: 1,
+  topHeaderDesktop: {
+    height: 64,
+    paddingTop: 0,
+    paddingBottom: 0,
   },
-  headerLeftMobile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  headerRight: { marginLeft: spacing.md },
   backBtn: {
     marginRight: spacing.sm,
     padding: spacing.xs,
   },
-  pageTitle: { 
+  headerIconTile: {
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  statusTitle: { 
     ...typography.h1,
     color: colors.primaryDark,
     fontSize: 20, 
     fontWeight: '700', 
-  },
-  headerRightGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  profileAvatarBtn: {
-    marginLeft: spacing.xs,
-  },
-  avatarContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   body: { 
     width: '100%', 
