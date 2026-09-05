@@ -55,7 +55,14 @@ export default function CaseDetailsScreen({ navigation }) {
   const courtQuery = useCourtCaseDetails(activeUserId);
 
   return (
-    <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
+    <View style={styles.container}>
+      {/* Fixed top bar - a sibling of the ScrollView below, not its first
+          child, so it stays pinned while the body scrolls underneath it
+          (matches JournalScreen.js's actual structure - AtrocitiesActScreen
+          claims to follow the same pattern but puts its header inside the
+          ScrollView instead, which scrolls it away with the content; that
+          reads as a broken/missing top bar on web/desktop specifically,
+          where a fixed header is the expected behavior). */}
       <View
         style={[
           styles.topHeader,
@@ -83,6 +90,7 @@ export default function CaseDetailsScreen({ navigation }) {
         </View>
       </View>
 
+      <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
       <View style={styles.body}>
         {/* Case switcher - Multi-Case-Per-Person Support: only shown when
             this account actually has more than one docket to choose
@@ -217,12 +225,14 @@ export default function CaseDetailsScreen({ navigation }) {
           </QueryBoundary>
         )}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  scrollView: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
