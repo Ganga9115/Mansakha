@@ -66,6 +66,20 @@ export function useUserDashboard() {
   return useQuery({ queryKey: ['user', 'dashboard'], queryFn: () => apiClient.get('/api/user/dashboard', token), enabled: !!token });
 }
 
+// Case Details (Quick Access) - simulated eCourts data for one of the
+// caller's own dockets (their own anchor case, or any case linked to it -
+// see useUserDashboard's linkedCases, which already lists every docket this
+// account can pass here). `userId` is the target docket's own user_id, not
+// necessarily the caller's own token identity.
+export function useCourtCaseDetails(userId) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'court-case', userId],
+    queryFn: () => apiClient.get(`/api/user/court-case/${userId}`, token),
+    enabled: !!token && !!userId,
+  });
+}
+
 export function useConsentStatus() {
   const token = useToken();
   return useQuery({ queryKey: ['user', 'consent-status'], queryFn: () => apiClient.get('/api/user/consent-status', token), enabled: !!token });

@@ -13,6 +13,15 @@ const { applyStressResponse, selectLeastLoadedCounsellor, notifyWeeklyReview, ge
 const { enqueueAlertDispatch } = require('../../core/services/dispatchWorker');
 const { propagateCounsellorAssignment } = require('../services/userProvisioning');
 const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = require('../../ai/ollama');
+const { isCourtCaseEligible, generateCnrNumber, generateSimulatedCourtCaseDetails } = require('../../core/services/courtCaseSimulation');
+
+// Case Details (Quick Access) - how stale a simulated snapshot can get
+// before being silently regenerated on next read. No real eCourts source
+// exists to poll, so "auto-update" here means "never serve a snapshot
+// older than this without refreshing it first" - a real integration later
+// would replace the regeneration call below with a real fetch, on this same
+// trigger.
+const COURT_CASE_STALE_HOURS = 12;
 
 // Fixed national Police Control Room number - the mobile app dials this
 // directly via the device's own phone dialer (Linking.openURL('tel:...'))
@@ -1221,6 +1230,144 @@ router.post('/questionnaire/submit', async (req, res) => {
     console.error('Questionnaire submit error:', err);
     return fail(res, 'Failed to submit questionnaire', 500);
   }
+});
+
+// Case Details (Quick Access tile) - court-case information for one of the
+// caller's own dockets. `:userId` can be the caller's own anchor id (the
+// common case) or any docket linked to them (Multi-Case-Per-Person Support)
+// - the .or() below is what makes this safe: a docket that belongs to
+// someone else's case family 404s here rather than ever being fetchable by
+// this account, matching the existing linkedCases query's own reasoning in
+// GET /dashboard above.
+router.get('/court-case/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const callerId = req.auth.userId;
+
+  const { data: caseRow, error: caseError } = await supabase
+    .from('users')
+    .select('user_id, docket_number, case_stage, cnr_number, enrolled_at, linked_to_user_id, case_types(name), jurisdictions(name)')
+    .eq('user_id', userId)
+    .or(`user_id.eq.${callerId},linked_to_user_id.eq.${callerId}`)
+    .maybeSingle();
+  if (caseError || !caseRow) return fail(res, 'Case not found', 404);
+
+  if (!isCourtCaseEligible(caseRow.case_stage)) {
+    return ok(res, { available: false, reason: 'Court case details become available once this case reaches Trial stage.' });
+  }
+
+  const { data: existing } = await supabase.from('court_case_details').select('*').eq('user_id', userId).maybeSingle();
+  const isStale = !existing || (Date.now() - new Date(existing.last_synced_at).getTime()) / 3600000 > COURT_CASE_STALE_HOURS;
+
+  let row = existing;
+  if (isStale) {
+    const { data: identity } = await supabase.from('user_identity').select('full_name').eq('user_id', callerId).maybeSingle();
+    const cnrNumber = caseRow.cnr_number || generateCnrNumber(caseRow.docket_number, caseRow.jurisdictions?.name);
+
+    const generated = generateSimulatedCourtCaseDetails({
+      docketNumber: caseRow.docket_number,
+      cnrNumber,
+      caseTypeName: caseRow.case_types?.name || null,
+      jurisdictionName: caseRow.jurisdictions?.name || null,
+      caseStage: caseRow.case_stage,
+      enrolledAt: caseRow.enrolled_at,
+      victimFullName: identity?.full_name || null,
+    });
+
+    const upsertPayload = {
+      user_id: userId,
+      cnr_number: generated.cnrNumber,
+      case_type: generated.caseType,
+      case_category: generated.caseCategory,
+      case_sub_category: generated.caseSubCategory,
+      filing_number: generated.filingNumber,
+      filing_date: generated.filingDate,
+      registration_number: generated.registrationNumber,
+      registration_date: generated.registrationDate,
+      court_complex: generated.courtComplex,
+      court_establishment: generated.courtEstablishment,
+      court_number: generated.courtNumber,
+      coram: generated.coram,
+      case_stage_label: generated.caseStageLabel,
+      first_hearing_date: generated.firstHearingDate,
+      next_hearing_date: generated.nextHearingDate,
+      next_hearing_purpose: generated.nextHearingPurpose,
+      case_status: generated.caseStatus,
+      decision_date: generated.decisionDate,
+      disposal_nature: generated.disposalNature,
+      petitioner_names: generated.petitionerNames,
+      respondent_names: generated.respondentNames,
+      advocate_names: generated.advocateNames,
+      acts_sections: generated.actsSections,
+      fir_police_station: generated.firPoliceStation,
+      fir_number: generated.firNumber,
+      fir_year: generated.firYear,
+      ia_details: generated.iaDetails,
+      hearing_history: generated.hearingHistory,
+      orders: generated.orders,
+      connected_cases: generated.connectedCases,
+      originating_case_number: generated.originatingCaseNumber,
+      transfer_history: generated.transferHistory,
+      objections: generated.objections,
+      hearing_mode: generated.hearingMode,
+      sync_source: 'simulated',
+      last_synced_at: new Date().toISOString(),
+    };
+
+    const { data: upserted, error: upsertError } = await supabase
+      .from('court_case_details')
+      .upsert(upsertPayload, { onConflict: 'user_id' })
+      .select('*')
+      .single();
+    if (upsertError) return fail(res, `Could not load court case details: ${upsertError.message}`, 500);
+    row = upserted;
+
+    if (!caseRow.cnr_number) {
+      await supabase.from('users').update({ cnr_number: generated.cnrNumber }).eq('user_id', userId);
+    }
+  }
+
+  await writeAuditLog({ userId: callerId, action: 'read', entityType: 'simulated_court_case', entityId: userId });
+
+  return ok(res, {
+    available: true,
+    simulated: true,
+    note: 'Simulated data - placeholder for a real eCourts integration that does not exist yet. Not a live government record.',
+    cnrNumber: row.cnr_number,
+    caseType: row.case_type,
+    caseCategory: row.case_category,
+    caseSubCategory: row.case_sub_category,
+    filingNumber: row.filing_number,
+    filingDate: row.filing_date,
+    registrationNumber: row.registration_number,
+    registrationDate: row.registration_date,
+    courtComplex: row.court_complex,
+    courtEstablishment: row.court_establishment,
+    courtNumber: row.court_number,
+    coram: row.coram,
+    caseStageLabel: row.case_stage_label,
+    firstHearingDate: row.first_hearing_date,
+    nextHearingDate: row.next_hearing_date,
+    nextHearingPurpose: row.next_hearing_purpose,
+    caseStatus: row.case_status,
+    decisionDate: row.decision_date,
+    disposalNature: row.disposal_nature,
+    petitionerNames: row.petitioner_names,
+    respondentNames: row.respondent_names,
+    advocateNames: row.advocate_names,
+    actsSections: row.acts_sections,
+    firPoliceStation: row.fir_police_station,
+    firNumber: row.fir_number,
+    firYear: row.fir_year,
+    iaDetails: row.ia_details,
+    hearingHistory: row.hearing_history,
+    orders: row.orders,
+    connectedCases: row.connected_cases,
+    originatingCaseNumber: row.originating_case_number,
+    transferHistory: row.transfer_history,
+    objections: row.objections,
+    hearingMode: row.hearing_mode,
+    lastSyncedAt: row.last_synced_at,
+  });
 });
 
 module.exports = router;

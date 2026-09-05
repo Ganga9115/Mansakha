@@ -209,7 +209,14 @@ create table users (
   -- shown as a truncated excerpt on the Counsellor case list, full text on
   -- Case Detail. Kept on users (not user_identity) since it's case
   -- context for the scoring/alert pipeline's audience, not raw PII.
-  case_background text
+  case_background text,
+  -- Case Details (victim app) - eCourts' 16-char case identifier, one per
+  -- docket (like docket_number itself), NOT resolved through
+  -- linked_to_user_id - a CNR belongs to one specific case file, not a
+  -- person's whole activity history. Currently simulated (see
+  -- core/services/courtCaseSimulation.js) - written by the backend itself
+  -- the first time court details are fetched, never entered by the victim.
+  cnr_number text unique
 );
 
 -- PII kept separate from the scoring/alert pipeline, which only ever touches `users`.
@@ -697,6 +704,55 @@ create index idx_mail_messages_sender_sent on mail_messages(sender_id, sent_at d
 create index idx_mail_recipients_official_inbox on mail_recipients(official_id) where deleted_at is null and archived_at is null;
 create index idx_mail_recipients_message on mail_recipients(message_id);
 create index idx_mail_attachments_message on mail_attachments(message_id);
+
+-- Case Details (victim app) - simulated eCourts integration. See
+-- migration_024_court_case_details.sql for the full reasoning; sync_source
+-- distinguishes simulated data from a future real eCourts data source, both
+-- sharing this same table/shape so nothing else needs to change when a real
+-- source is swapped in.
+create table court_case_details (
+  detail_id               uuid primary key default gen_random_uuid(),
+  user_id                 uuid not null unique references users(user_id),
+  cnr_number              text not null,
+  case_type               text,
+  case_category           text,
+  case_sub_category       text,
+  filing_number           text,
+  filing_date             date,
+  registration_number     text,
+  registration_date       date,
+  court_complex           text,
+  court_establishment     text,
+  court_number            text,
+  coram                   jsonb,
+  case_stage_label        text,
+  first_hearing_date      date,
+  next_hearing_date       date,
+  next_hearing_purpose    text,
+  case_status             text check (case_status in ('Pending', 'Disposed')),
+  decision_date           date,
+  disposal_nature         text,
+  petitioner_names        jsonb,
+  respondent_names        jsonb,
+  advocate_names          jsonb,
+  acts_sections           jsonb,
+  fir_police_station      text,
+  fir_number              text,
+  fir_year                text,
+  ia_details              jsonb,
+  hearing_history         jsonb,
+  orders                  jsonb,
+  connected_cases         jsonb,
+  originating_case_number text,
+  transfer_history        jsonb,
+  objections              jsonb,
+  hearing_mode            text,
+  sync_source             text not null default 'simulated' check (sync_source in ('simulated', 'ecourts_live')),
+  last_synced_at          timestamptz not null default now()
+);
+
+create index idx_users_cnr on users(cnr_number) where cnr_number is not null;
+create index idx_court_case_details_user on court_case_details(user_id);
 
 COMMIT;
 

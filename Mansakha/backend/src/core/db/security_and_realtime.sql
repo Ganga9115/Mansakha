@@ -84,3 +84,9 @@ alter table mail_attachments enable row level security;
 insert into storage.buckets (id, name, public)
 values ('mail-attachments', 'mail-attachments', false)
 on conflict (id) do nothing;
+
+-- Case Details (backend/src/user/routes/user.routes.js) - service_role
+-- bypasses RLS same as every other table here; the authorization check
+-- (a victim can only ever request their own or a linked docket's court
+-- details) lives in the route handler itself.
+alter table court_case_details enable row level security;
