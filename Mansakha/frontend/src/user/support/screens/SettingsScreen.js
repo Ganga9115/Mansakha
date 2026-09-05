@@ -2,7 +2,6 @@ import React, { useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Switch, Image, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../shared/context/AuthContext';
 import { useToast } from '../../shared/context/ToastContext';
 import {
@@ -41,8 +40,8 @@ const INDIAN_LANGUAGES = [
   { value: 'mai', label: 'Maithili (मैथिली)' },
   { value: 'ml', label: 'Malayalam (മലയാളം)' },
   { value: 'mni', label: 'Manipuri (মৈতৈলোন্)' },
-  { value: 'mr', label: 'Marathi (मરાઠી)' },
-  { value: 'ne', label: 'Nepali (नेपाली)' },
+  { value: 'mr', label: 'Marathi (મરાઠી)' },
+  { value: 'ne', label: 'Nepali (নেपाली)' },
   { value: 'or', label: 'Odia (ଓଡ଼ିଆ)' },
   { value: 'pa', label: 'Punjabi (ਪੰਜਾਬੀ)' },
   { value: 'sa', label: 'Sanskrit (সংસ્કૃતમ્)' },
@@ -78,60 +77,6 @@ export default function SettingsScreen({ navigation }) {
       }
     }
   }, [dashboardQuery.data]);
-
-  const handlePickProfileImage = async () => {
-    try {
-      if (Platform.OS !== 'web') {
-        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert('Permission needed', 'Permission to access media library is required to upload a profile photo.');
-          return;
-        }
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const selectedAsset = result.assets[0];
-        setProfileImageUri(selectedAsset.uri);
-        setIsUploadingImage(true);
-
-        try {
-          const formData = new FormData();
-          if (Platform.OS === 'web') {
-            const fetchResponse = await fetch(selectedAsset.uri);
-            const blob = await fetchResponse.blob();
-            formData.append('profileImage', blob, 'profile.jpg');
-          } else {
-            formData.append('profileImage', {
-              uri: selectedAsset.uri,
-              name: 'profile.jpg',
-              type: 'image/jpeg',
-            });
-          }
-
-          await apiClient.post('/api/user/profile-picture', formData, session?.token, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
-
-          await dashboardQuery.refetch();
-          toast.success('Profile picture updated successfully!');
-        } catch (uploadErr) {
-          toast.error(uploadErr.message || 'Updated locally. Failed to save to server.');
-        } finally {
-          setIsUploadingImage(false);
-        }
-      }
-    } catch (err) {
-      toast.error('Failed to select image.');
-      setIsUploadingImage(false);
-    }
-  };
 
   const handleToggleCounsellorPreference = async (value) => {
     setLocalOptedForCounsellor(value);
@@ -210,13 +155,13 @@ export default function SettingsScreen({ navigation }) {
           {isDesktop ? (
             <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop}/>
           ) : (
-            <Pressable onPress={handlePickProfileImage} style={styles.avatarContainer}>
+            <View style={styles.avatarContainer}>
               {profileImageUri ? (
                 <Image source={{ uri: profileImageUri }} style={styles.headerAvatarImage} />
               ) : (
                 <Feather color={colors.primary} name="user" size={28}/>
               )}
-            </Pressable>
+            </View>
           )}
 
           <View style={styles.headerInfo}>
@@ -246,7 +191,7 @@ export default function SettingsScreen({ navigation }) {
             {/* User Profile Hero Box */}
             <View style={styles.heroBox}>
               <View style={styles.userProfileLeft}>
-                <Pressable onPress={handlePickProfileImage} style={styles.heroAvatarContainer}>
+                <View style={styles.heroAvatarContainer}>
                   <View style={styles.heroAvatar}>
                     {profileImageUri ? (
                       <Image source={{ uri: profileImageUri }} style={styles.heroAvatarImage} />
@@ -259,10 +204,7 @@ export default function SettingsScreen({ navigation }) {
                       </View>
                     )}
                   </View>
-                  <View style={styles.editBadge}>
-                    <Feather color={colors.onPrimary} name="edit-2" size={10} />
-                  </View>
-                </Pressable>
+                </View>
                 <View>
                   <Text style={styles.heroTitle}>{userName}</Text>
                   <Text style={styles.heroSubtitle}>Registered User Profile</Text>
@@ -283,7 +225,6 @@ export default function SettingsScreen({ navigation }) {
                 const docketId = c.docketNumber || c.docketId || c.docketNo || c.caseNumber || 'N/A';
                 const caseType = c.caseType || c.type || 'N/A';
                 const caseStage = c.caseStage || c.stage || 'Trial';
-                const isRehab = caseStage.toLowerCase().includes('rehab');
                 const key = c.userId || c.caseNumber || index;
 
                 if (!isDesktop) {
@@ -324,12 +265,7 @@ export default function SettingsScreen({ navigation }) {
 
                       <View style={styles.caseGridItem}>
                         <Text style={styles.fieldLabel}>Case Stage</Text>
-                        <View style={[styles.stageBadge, isRehab ? styles.stageRehab : styles.stageTrial]}>
-                          <Feather color={isRehab ? '#6B21A8' : '#15803D'} name={isRehab ? 'users' : 'scale'} size={12}/>
-                          <Text style={[isRehab ? styles.stageRehabText : styles.stageTrialText]}>
-                            {caseStage}
-                          </Text>
-                        </View>
+                        <Text style={styles.fieldValueBold}>{caseStage}</Text>
                       </View>
                     </View>
                   </View>
@@ -671,19 +607,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  editBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: colors.primary,
-    borderRadius: radius.pill,
-    width: 18,
-    height: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.surface,
-  },
   heroTitle: {
     ...typography.bodyStrong,
     color: colors.textPrimary,
@@ -768,33 +691,6 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     flex: 1,
     flexShrink: 1,
-  },
-
-  /* Stage Badges */
-  stageBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    alignSelf: 'flex-start',
-    gap: 4,
-  },
-  stageTrial: {
-    backgroundColor: colors.successLight,
-  },
-  stageTrialText: {
-    ...typography.caption,
-    color: colors.success,
-    fontWeight: '600',
-  },
-  stageRehab: {
-    backgroundColor: colors.infoLight,
-  },
-  stageRehabText: {
-    ...typography.caption,
-    color: colors.primaryDark,
-    fontWeight: '600',
   },
 
   /* Preference Rows Layout */

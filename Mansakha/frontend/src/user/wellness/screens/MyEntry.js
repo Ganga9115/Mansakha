@@ -11,8 +11,9 @@ import { shadow } from '../../shared/theme/shadow';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useJournalEntries, useDeleteJournalEntry, useUpdateJournalEntry } from '../../shared/services/hooks';
+import { useJournalEntries, useDeleteJournalEntry, useUpdateJournalEntry, useUserDashboard } from '../../shared/services/hooks';
 import TopRightActions from '../../shared/components/TopRightActions';
+import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
 
 export default function MyEntry({ navigation }) {
@@ -22,6 +23,10 @@ export default function MyEntry({ navigation }) {
   const entriesQuery = useJournalEntries();
   const deleteEntry = useDeleteJournalEntry();
   const updateEntry = useUpdateJournalEntry();
+
+  // Fetch user profile data to match WellnessScreen header structure
+  const dashboardQuery = useUserDashboard();
+  const userData = dashboardQuery.data;
 
   const [search, setSearch] = useState('');
   const [selectedEntry, setSelectedEntry] = useState(null);
@@ -79,14 +84,34 @@ export default function MyEntry({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Navigation Header */}
-      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
-        <View style={styles.headerIconTile}>
-          <Feather name="layout" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
+      <View
+        style={[
+          styles.topHeader,
+          isDesktop && styles.topHeaderDesktop,
+          !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
+        ]}
+      >
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconTile}>
+            <Feather name="layout" size={22} color={colors.primaryDark} />
+          </View>
+
+          <View style={{ flex: 1 }}>
+            <Text style={styles.statusTitle}>My Entries</Text>
+          </View>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.statusTitle}>My Entries</Text>
+
+        <View style={styles.headerRight}>
+          {isDesktop ? (
+            <DesktopHeaderActions
+              fullName={userData?.fullName}
+              alertCount={userData?.alerts?.length || 0}
+              onBellPress={() => {}}
+            />
+          ) : (
+            <TopRightActions />
+          )}
         </View>
-        <TopRightActions />
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
@@ -304,27 +329,35 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1, backgroundColor: colors.background },
   topHeader: {
     backgroundColor: colors.primaryLight,
-    paddingTop: spacing.xxl,
+    paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
     paddingBottom: spacing.lg,
     paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
+  topHeaderDesktop: {
+    height: 64,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  headerRight: { marginLeft: spacing.md },
   headerIconTile: {
-    marginRight: spacing.xs,
-    justifyContent: 'center',
+    backgroundColor: 'transparent',
     alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
   },
   statusTitle: {
     ...typography.h1,
     color: colors.primaryDark,
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
   },
   body: { padding: spacing.xl },
-  // Clearance for the floating BottomNavBar so the last grid row isn't
-  // covered by it.
   bodyMobile: { paddingBottom: 100 },
 
   searchWrap: {
