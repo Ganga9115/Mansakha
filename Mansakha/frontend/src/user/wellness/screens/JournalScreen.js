@@ -14,6 +14,7 @@ import { useSpeechToText, SPEECH_TO_TEXT_SUPPORTED } from '../../shared/hooks/us
 import { useAddJournalEntry } from '../../shared/services/hooks';
 import TopRightActions from '../../shared/components/TopRightActions';
 import JournalIllustration from '../../shared/components/JournalIllustration';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 
 export default function JournalScreen({ navigation }) {
   const { tier, isDesktop } = useResponsive();
@@ -36,10 +37,7 @@ export default function JournalScreen({ navigation }) {
     setContent('');
   };
 
-  // Extracted once so it can be placed in either spot below without
-  // duplicating its press handler/styling - desktop keeps it inline next to
-  // the title field (unchanged); mobile moves it down next to Save Entry so
-  // the order reads Voice Input -> Save Entry.
+  // Voice input button rendered next to Save Entry on both web and mobile views.
   const voiceInputButton = SPEECH_TO_TEXT_SUPPORTED ? (
     <Pressable
       onPress={speech.toggle}
@@ -79,7 +77,7 @@ export default function JournalScreen({ navigation }) {
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.md }]}>
+      <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
         <View style={styles.headerIconTile}>
           <Feather name="book-open" size={24} color={colors.primaryDark} style={{ strokeWidth: 2.5 }} />
         </View>
@@ -91,7 +89,7 @@ export default function JournalScreen({ navigation }) {
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
-        <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
+        <View style={[styles.body, !isDesktop && styles.bodyMobile, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
 
           {/* Decorative Hero Banner */}
           <View style={styles.heroBanner}>
@@ -118,7 +116,6 @@ export default function JournalScreen({ navigation }) {
                 value={title}
                 onChangeText={setTitle}
               />
-              {isDesktop && voiceInputButton}
             </View>
 
             <TextInput
@@ -131,8 +128,8 @@ export default function JournalScreen({ navigation }) {
               numberOfLines={8}
             />
 
-            <View style={[styles.composerBottomRow, !isDesktop && styles.composerBottomRowMobile]}>
-              {!isDesktop && voiceInputButton}
+            <View style={styles.composerBottomRow}>
+              {voiceInputButton}
               <Pressable
                 style={[
                   styles.saveBtn,
@@ -150,6 +147,8 @@ export default function JournalScreen({ navigation }) {
           </View>
         </View>
       </ScrollView>
+
+      {!isDesktop && <BottomNavBar currentTab="Wellness" navigation={navigation} />}
     </View>
   );
 }
@@ -179,6 +178,8 @@ const styles = StyleSheet.create({
   },
 
   body: { padding: spacing.xl },
+  // Clearance for the floating BottomNavBar so Save Entry isn't covered.
+  bodyMobile: { paddingBottom: 100 },
   heroBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -258,12 +259,6 @@ const styles = StyleSheet.create({
   composerBottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  // Voice Input moves down here on mobile (see the JSX above), ordered
-  // before Save Entry - space-between puts it on the left, Save Entry on
-  // the right, same as a typical form footer.
-  composerBottomRowMobile: {
     justifyContent: 'space-between',
   },
 

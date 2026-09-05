@@ -3,14 +3,10 @@ import { View, Text, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 
 import { colors } from '../shared/theme/colors';
 import { typography } from '../shared/theme/typography';
-import { spacing } from '../shared/theme/spacing';
-import { radius } from '../shared/theme/radius';
-import { shadow } from '../shared/theme/shadow';
 import { tabletShellWidth, sidebarWidth } from '../shared/theme/layout';
 import { useResponsive } from '../shared/hooks/useResponsive';
 import SidebarNav from '../shared/components/SidebarNav';
@@ -77,7 +73,6 @@ function TabNavigator() {
   const dashboard = useUserDashboard();
   const counsellor = useAssignedCounsellor();
   const showMyCounsellor = !!(dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned);
-  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -85,28 +80,14 @@ function TabNavigator() {
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.borderStrong,
-        // A small floating/contained pill above the phone's own gesture
-        // area, not an edge-to-edge bar - marginBottom (at least the safe
-        // area's own bottom inset) keeps it clear of the system nav/home
-        // indicator, and marginHorizontal + rounded corners read as a
-        // contained bar rather than a full-width dock. Left in normal flow
-        // (no `position: absolute`) so react-navigation keeps auto-sizing
-        // every screen's content around its real rendered height - nothing
-        // else needs its own bottom-padding math to avoid being covered.
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopWidth: 0,
-          height: 64,
-          marginHorizontal: spacing.sm,
-          marginBottom: Math.max(insets.bottom, spacing.sm),
-          borderRadius: radius.xl,
-          paddingHorizontal: spacing.xs,
-          paddingBottom: 8,
-          paddingTop: 8,
-          flexDirection: 'row',
-          alignItems: 'center',
-          ...shadow.pop,
-        },
+        // Every mobile/tablet screen renders its own floating BottomNavBar
+        // (see shared/components/BottomNavBar.js) instead of relying on this
+        // native tab bar - having both rendered at once was showing two
+        // stacked bottom nav bars on screen. Hiding it here rather than
+        // deleting the options below keeps the rest of this file's intent
+        // (icons/labels per route) documented in one place, even though none
+        // of it renders while the bar stays hidden.
+        tabBarStyle: { display: 'none' },
         // Explicit `flex: 1` (on top of react-navigation's own default,
         // which already does this) so every one of the up to 6 items gets
         // exactly the same, equal share of the bar's width - centered

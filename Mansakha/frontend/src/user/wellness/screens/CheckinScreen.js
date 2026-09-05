@@ -14,7 +14,7 @@ import { useCheckin, useUserDashboard, useUserHistory, useAppendInteraction } fr
 import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING } from '../../shared/services/ollamaClient';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
-import MenuButton from '../../shared/components/MenuButton';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 
 const TOTAL_QUESTIONS = 5;
 
@@ -28,7 +28,7 @@ export default function CheckinScreen({ navigation }) {
   const appendInteraction = useAppendInteraction();
   const insets = useSafeAreaInsets();
 
-  const [responses, setResponses] = useState([]); // Array of { q, a }
+  const [responses, setResponses] = useState([]);
   const [currentQuestion, setCurrentQuestion] = useState({
     text: OPENING_GREETING,
     type: 'single',
@@ -149,7 +149,6 @@ export default function CheckinScreen({ navigation }) {
 
   const progressPercentage = Math.min((responses.length / TOTAL_QUESTIONS) * 100, 100);
 
-  // Dynamic helper to match icons for dynamic AI options using app theme colors
   const getOptionIcon = (opt) => {
     const lower = opt.toLowerCase();
     if (lower.includes('okay') || lower.includes('good') || lower === 'yes') return { name: 'smile', bg: colors.primaryLight, color: colors.primary };
@@ -162,184 +161,200 @@ export default function CheckinScreen({ navigation }) {
   const isLongOptions = currentQuestion.options.some(opt => opt.length > 25);
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {/* Dynamic Header */}
-      <View
-        style={[
-          styles.topHeader,
-          isDesktop && styles.topHeaderDesktop,
-          !isDesktop && { paddingTop: insets.top + spacing.md },
-        ]}
-      >
-        <View style={styles.headerLeft}>
-          {!isDesktop && <MenuButton />}
-          {isDesktop ? (
-            <Feather name="mic" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
-          ) : (
-            <View style={styles.avatarContainer}>
-              <Feather name="mic" size={24} color={colors.primary} />
-            </View>
-          )}
-          <View style={styles.headerInfo}>
-            <Text style={styles.pageTitle}>Check-in</Text>
-          </View>
-        </View>
-        <View style={styles.headerRightRow}>
-          {isDesktop ? (
-            <DesktopHeaderActions
-              fullName={dashboardQuery.data?.fullName}
-              alertCount={dashboardQuery.data?.alerts?.length || 0}
-              onBellPress={() => {}}
-            />
-          ) : (
-            <TopRightActions />
-          )}
-        </View>
-      </View>
-
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.xxxl }}>
+    <View style={styles.screen}>
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {/* Dynamic Header */}
         <View
           style={[
-            styles.contentBody,
-            isDesktop && styles.contentBodyDesktop,
-            { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' },
+            styles.topHeader,
+            isDesktop ? styles.topHeaderDesktop : styles.topHeaderMobile,
+            !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
           ]}
         >
-          {/* Progress Header */}
-          <View style={styles.progressContainer}>
-            <View style={styles.progressTextRow}>
-              <Text style={styles.progressLabel}>Question {responses.length + 1} of {TOTAL_QUESTIONS}</Text>
-              <Text style={styles.progressPercent}>{Math.round(progressPercentage)}%</Text>
-            </View>
-            <View style={styles.progressTrack}>
-              <View style={[styles.progressFill, { width: `${progressPercentage}%` }]} />
+          <View style={styles.headerLeft}>
+            {isDesktop ? (
+              <Feather name="mic" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
+            ) : (
+              <View style={styles.avatarContainer}>
+                <Feather name="mic" size={20} color={colors.primary} />
+              </View>
+            )}
+            <View style={styles.headerInfo}>
+              <Text style={styles.pageTitle}>Check-in</Text>
             </View>
           </View>
-
-          {/* Main Question Card */}
-          <View style={[styles.card, !isDesktop && styles.cardMobile]}>
-            {loading || submitting || isFinished ? (
-              <View style={styles.loadingArea}>
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.loadingText}>
-                  {submitting || isFinished ? "Analyzing your responses..." : "Mansakha is thinking..."}
-                </Text>
-              </View>
+          <View style={styles.headerRightRow}>
+            {isDesktop ? (
+              <DesktopHeaderActions
+                fullName={dashboardQuery.data?.fullName}
+                alertCount={dashboardQuery.data?.alerts?.length || 0}
+                onBellPress={() => {}}
+              />
             ) : (
-              <View style={styles.questionArea}>
-                {/* Header Row inside Card */}
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.aiBadge}>
-                    <Feather name="sparkles" size={14} color={colors.primary} style={{ marginRight: spacing.xs }} />
-                    <Text style={styles.aiBadgeText}>AI Companion</Text>
-                  </View>
-
-                  <View style={styles.botGraphicContainer}>
-                    <View style={styles.botAvatarCircle}>
-                      <Feather name="cpu" size={28} color={colors.primaryDark} />
-                    </View>
-                  </View>
-                </View>
-                
-                <Text style={styles.mainTitle}>
-                  {responses.length === 0 ? "Hello. I'm here to listen." : `Question ${responses.length + 1}`}
-                </Text>
-                <Text style={styles.subQuestionText}>{currentQuestion.text}</Text>
-
-                {/* Dynamic Options Container */}
-                <View style={[styles.optionsGrid, isLongOptions && styles.optionsColumn]}>
-                  {currentQuestion.options.map((opt, i) => {
-                    const isSelected = selectedOptions.includes(opt);
-                    const iconInfo = getOptionIcon(opt);
-                    return (
-                      <Pressable
-                        key={i}
-                        style={[
-                          styles.optionCard,
-                          isLongOptions && styles.optionCardFull,
-                          !isDesktop && styles.optionCardMobile,
-                          isLongOptions && !isDesktop && styles.optionCardFullMobile,
-                          isSelected && styles.optionCardSelected
-                        ]}
-                        onPress={() => toggleOption(opt)}
-                      >
-                        <View style={[styles.iconCircle, !isDesktop && styles.iconCircleMobile, { backgroundColor: iconInfo.bg }]}>
-                          <Feather name={iconInfo.name} size={!isDesktop ? 16 : 20} color={iconInfo.color} />
-                        </View>
-                        <Text style={[styles.optionCardText, isSelected && styles.optionCardTextSelected]}>{opt}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {selectedOptions.includes('Other...') && (
-                  <TextInput
-                    style={styles.textInput}
-                    placeholder="Type your own answer here..."
-                    placeholderTextColor={colors.textSecondary}
-                    value={draft}
-                    onChangeText={setDraft}
-                    multiline
-                    numberOfLines={3}
-                    autoFocus
-                  />
-                )}
-
-                <View style={styles.divider} />
-
-                {/* Card Actions */}
-                <View style={styles.actionRow}>
-                  <Pressable style={styles.skipBtn} onPress={() => handleNext(true)}>
-                    <Text style={styles.skipBtnText}>
-                      {responses.length === TOTAL_QUESTIONS - 1 ? 'Skip & Submit' : 'Skip Question'}
-                    </Text>
-                  </Pressable>
-                  <Pressable 
-                    style={[styles.nextBtn, (!selectedOptions.length) && styles.nextBtnDisabled]} 
-                    onPress={() => handleNext(false)}
-                    disabled={!selectedOptions.length}
-                  >
-                    <Text style={styles.nextBtnText}>
-                      {responses.length === TOTAL_QUESTIONS - 1 ? 'Finish & Submit' : 'Next'}
-                    </Text>
-                    <Feather 
-                      name={responses.length === TOTAL_QUESTIONS - 1 ? "check" : "arrow-right"} 
-                      size={18} 
-                      color={colors.onPrimary} 
-                      style={{ marginLeft: spacing.xs }} 
-                    />
-                  </Pressable>
-                </View>
-              </View>
+              <TopRightActions />
             )}
           </View>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <ScrollView 
+          style={{ flex: 1 }} 
+          contentContainerStyle={{ 
+            flexGrow: 1, 
+            paddingBottom: !isDesktop ? 140 : spacing.xxxl, // Generous scroll space for BottomNavBar
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View
+            style={[
+              styles.contentBody,
+              isDesktop ? styles.contentBodyDesktop : styles.contentBodyMobile,
+              { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' },
+            ]}
+          >
+            {/* Progress Header */}
+            <View style={styles.progressContainer}>
+              <View style={styles.progressTextRow}>
+                <Text style={styles.progressLabel}>Question {responses.length + 1} of {TOTAL_QUESTIONS}</Text>
+                <Text style={styles.progressPercent}>{Math.round(progressPercentage)}%</Text>
+              </View>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressFill, { width: `${progressPercentage}%` }]} />
+              </View>
+            </View>
+
+            {/* Main Question Card */}
+            <View style={[styles.card, !isDesktop && styles.cardMobile]}>
+              {loading || submitting || isFinished ? (
+                <View style={styles.loadingArea}>
+                  <ActivityIndicator size="large" color={colors.primary} />
+                  <Text style={styles.loadingText}>
+                    {submitting || isFinished ? "Analyzing your responses..." : "Mansakha is thinking..."}
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.questionArea}>
+                  {/* Header Row inside Card */}
+                  <View style={styles.cardHeaderRow}>
+                    <View style={styles.aiBadge}>
+                      <Feather name="sparkles" size={14} color={colors.primary} style={{ marginRight: spacing.xs }} />
+                      <Text style={styles.aiBadgeText}>AI COMPANION</Text>
+                    </View>
+
+                    <View style={styles.botGraphicContainer}>
+                      <View style={styles.botAvatarCircle}>
+                        <Feather name="cpu" size={22} color={colors.primaryDark} />
+                      </View>
+                    </View>
+                  </View>
+                  
+                  <Text style={styles.mainTitle}>
+                    {responses.length === 0 ? "Hello. I'm here to listen." : `Question ${responses.length + 1}`}
+                  </Text>
+                  <Text style={styles.subQuestionText}>{currentQuestion.text}</Text>
+
+                  {/* Dynamic Options Container */}
+                  <View style={[styles.optionsGrid, isLongOptions && styles.optionsColumn]}>
+                    {currentQuestion.options.map((opt, i) => {
+                      const isSelected = selectedOptions.includes(opt);
+                      const iconInfo = getOptionIcon(opt);
+                      return (
+                        <Pressable
+                          key={i}
+                          style={[
+                            styles.optionCard,
+                            isLongOptions && styles.optionCardFull,
+                            !isDesktop && styles.optionCardMobile,
+                            isSelected && styles.optionCardSelected
+                          ]}
+                          onPress={() => toggleOption(opt)}
+                        >
+                          <View style={[styles.iconCircle, { backgroundColor: iconInfo.bg }]}>
+                            <Feather name={iconInfo.name} size={18} color={iconInfo.color} />
+                          </View>
+                          <Text 
+                            style={[
+                              styles.optionCardText, 
+                              isSelected && styles.optionCardTextSelected
+                            ]}
+                          >
+                            {opt}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+
+                  {selectedOptions.includes('Other...') && (
+                    <TextInput
+                      style={styles.textInput}
+                      placeholder="Type your own answer here..."
+                      placeholderTextColor={colors.textSecondary}
+                      value={draft}
+                      onChangeText={setDraft}
+                      multiline
+                      numberOfLines={3}
+                      autoFocus
+                    />
+                  )}
+
+                  <View style={styles.divider} />
+
+                  {/* Card Actions */}
+                  <View style={styles.actionRow}>
+                    <Pressable style={styles.skipBtn} onPress={() => handleNext(true)}>
+                      <Text style={styles.skipBtnText}>
+                        {responses.length === TOTAL_QUESTIONS - 1 ? 'Skip & Submit' : 'Skip Question'}
+                      </Text>
+                    </Pressable>
+                    <Pressable 
+                      style={[styles.nextBtn, (!selectedOptions.length) && styles.nextBtnDisabled]} 
+                      onPress={() => handleNext(false)}
+                      disabled={!selectedOptions.length}
+                    >
+                      <Text style={styles.nextBtnText}>
+                        {responses.length === TOTAL_QUESTIONS - 1 ? 'Finish & Submit' : 'Next'}
+                      </Text>
+                      <Feather 
+                        name={responses.length === TOTAL_QUESTIONS - 1 ? "check" : "arrow-right"} 
+                        size={18} 
+                        color={colors.onPrimary} 
+                        style={{ marginLeft: spacing.xs }} 
+                      />
+                    </Pressable>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+      {!isDesktop && <BottomNavBar currentTab="CheckIn" navigation={navigation} />}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.background 
+  screen: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  container: {
+    flex: 1,
   },
   topHeader: {
     backgroundColor: colors.primaryLight,
-    paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: 36, // 1 cm horizontal gap
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   topHeaderDesktop: { 
     height: 64, 
-    paddingTop: 0, 
-    paddingBottom: 0, 
-    alignItems: 'center' 
+    paddingHorizontal: 36,
+  },
+  topHeaderMobile: {
+    paddingHorizontal: spacing.md,
   },
   headerIconDesktop: { 
     marginRight: spacing.sm 
@@ -350,13 +365,13 @@ const styles = StyleSheet.create({
     flex: 1 
   },
   avatarContainer: {
-    width: 42,
-    height: 42,
+    width: 36,
+    height: 36,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.md,
+    marginRight: spacing.sm,
   },
   headerInfo: { 
     flex: 1 
@@ -364,6 +379,7 @@ const styles = StyleSheet.create({
   pageTitle: {
     ...typography.h1,
     color: colors.primaryDark,
+    fontSize: 20,
   },
   headerRightRow: { 
     flexDirection: 'row', 
@@ -373,15 +389,18 @@ const styles = StyleSheet.create({
   
   contentBody: {
     flex: 1,
-    paddingHorizontal: 36, // 1 cm horizontal gap
-    paddingTop: spacing.xl,
   },
   contentBodyDesktop: { 
-    marginTop: 0 
+    paddingHorizontal: 36,
+    paddingTop: spacing.xl,
+  },
+  contentBodyMobile: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
   
   progressContainer: { 
-    marginBottom: spacing.xl 
+    marginBottom: spacing.md 
   },
   progressTextRow: { 
     flexDirection: 'row', 
@@ -417,19 +436,17 @@ const styles = StyleSheet.create({
     ...shadow.sm,
     minHeight: 440,
   },
-  // No fixed minHeight on mobile - a short question with few options
-  // shouldn't be forced to leave a huge blank area below it, and a long one
-  // with many options should be free to grow as tall as it needs to since
-  // the screen around it now actually scrolls (see the ScrollView above).
+  // Key Fix: Remove fixed minHeight on mobile so layout fits tightly naturally
   cardMobile: {
     minHeight: undefined,
-    padding: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radius.md,
   },
   loadingArea: { 
     flex: 1, 
     alignItems: 'center', 
     justifyContent: 'center', 
-    minHeight: 300 
+    minHeight: 250 
   },
   loadingText: { 
     ...typography.body, 
@@ -438,39 +455,40 @@ const styles = StyleSheet.create({
   },
 
   questionArea: { 
-    flex: 1 
+    // Key Fix: Allow layout to determine height strictly without forcing flex-grow distortion
   },
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    marginBottom: spacing.sm,
   },
   aiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primaryLight,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.pill,
   },
   aiBadgeText: { 
     ...typography.label, 
     color: colors.primaryDark, 
-    fontSize: 12 
+    fontSize: 11,
+    letterSpacing: 0.5,
   },
   botGraphicContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: -4,
-  },
-  botAvatarCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botAvatarCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -478,72 +496,63 @@ const styles = StyleSheet.create({
   mainTitle: {
     ...typography.h2,
     color: colors.textPrimary,
-    marginTop: spacing.sm,
-    marginBottom: 4,
+    fontSize: 18,
+    marginBottom: 2,
   },
   subQuestionText: {
     ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.xxl,
+    fontSize: 14,
+    marginBottom: spacing.md,
   },
   optionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
   optionsColumn: {
     flexDirection: 'column',
   },
+  // Key Fix: Strict width and height for 2x2 grid without stretching vertically
   optionCard: {
-    flex: 1,
-    minWidth: 140,
+    width: '48%',
     backgroundColor: colors.surface,
     borderWidth: 1.5,
     borderColor: colors.border,
     borderRadius: radius.md,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Smaller, tighter option cards on mobile - two per row still fit
-  // comfortably, and a screenful of long, single-column options (see
-  // optionCardFullMobile) no longer eats the whole viewport height.
   optionCardMobile: {
-    minWidth: 100,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.md,
+    minHeight: 90, // Concise height so elements fit nicely inside
   },
   optionCardFull: {
     width: '100%',
     flexDirection: 'row',
     justifyContent: 'flex-start',
-    paddingVertical: spacing.md,
-  },
-  optionCardFullMobile: {
-    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   optionCardSelected: {
     borderColor: colors.primary,
     backgroundColor: colors.primaryLight,
   },
   iconCircle: {
-    width: 40,
-    height: 40,
+    width: 34,
+    height: 34,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
-  },
-  iconCircleMobile: {
-    width: 30,
-    height: 30,
     marginBottom: spacing.xs,
   },
   optionCardText: {
     ...typography.bodyStrong,
     color: colors.textPrimary,
+    fontSize: 13,
     textAlign: 'center',
   },
   optionCardTextSelected: {
@@ -557,34 +566,35 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     backgroundColor: colors.background,
     padding: spacing.md,
-    minHeight: 100,
+    minHeight: 80,
     textAlignVertical: 'top',
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginVertical: spacing.lg,
+    marginVertical: spacing.sm,
   },
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingTop: spacing.xs,
   },
   skipBtn: { 
-    paddingVertical: spacing.sm 
+    paddingVertical: spacing.sm,
   },
   skipBtnText: { 
     ...typography.bodySmall, 
     color: colors.textSecondary, 
-    textDecorationLine: 'underline' 
+    textDecorationLine: 'underline',
   },
   nextBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.primary,
-    paddingHorizontal: spacing.xxl,
-    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radius.pill,
   },
   nextBtnDisabled: { 
@@ -592,6 +602,7 @@ const styles = StyleSheet.create({
   },
   nextBtnText: { 
     ...typography.bodyStrong, 
-    color: colors.onPrimary 
+    color: colors.onPrimary,
+    fontSize: 14,
   },
 });

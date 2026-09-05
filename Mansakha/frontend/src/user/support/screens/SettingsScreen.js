@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Switch, Image, ActivityIndicator, Alert, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { useAuth } from '../../shared/context/AuthContext';
 import { useToast } from '../../shared/context/ToastContext';
 import {
@@ -23,8 +24,8 @@ import Dropdown from '../../shared/components/Dropdown';
 import IconInput from '../../shared/components/IconInput';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
-import MenuButton from '../../shared/components/MenuButton';
 import LogoutButton from '../../shared/components/LogoutButton';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 
 const INDIAN_LANGUAGES = [
   { value: 'en', label: 'English' },
@@ -66,12 +67,71 @@ export default function SettingsScreen({ navigation }) {
   const insets = useSafeAreaInsets();
 
   const [localOptedForCounsellor, setLocalOptedForCounsellor] = useState(false);
+  const [profileImageUri, setProfileImageUri] = useState(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   React.useEffect(() => {
     if (dashboardQuery.data) {
       setLocalOptedForCounsellor(dashboardQuery.data.optedForManualCounsellor ?? false);
+      if (dashboardQuery.data.avatarUrl || dashboardQuery.data.profileImage) {
+        setProfileImageUri(dashboardQuery.data.avatarUrl || dashboardQuery.data.profileImage);
+      }
     }
   }, [dashboardQuery.data]);
+
+  const handlePickProfileImage = async () => {
+    try {
+      if (Platform.OS !== 'web') {
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert('Permission needed', 'Permission to access media library is required to upload a profile photo.');
+          return;
+        }
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const selectedAsset = result.assets[0];
+        setProfileImageUri(selectedAsset.uri);
+        setIsUploadingImage(true);
+
+        try {
+          const formData = new FormData();
+          if (Platform.OS === 'web') {
+            const fetchResponse = await fetch(selectedAsset.uri);
+            const blob = await fetchResponse.blob();
+            formData.append('profileImage', blob, 'profile.jpg');
+          } else {
+            formData.append('profileImage', {
+              uri: selectedAsset.uri,
+              name: 'profile.jpg',
+              type: 'image/jpeg',
+            });
+          }
+
+          await apiClient.post('/api/user/profile-picture', formData, session?.token, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+
+          await dashboardQuery.refetch();
+          toast.success('Profile picture updated successfully!');
+        } catch (uploadErr) {
+          toast.error(uploadErr.message || 'Updated locally. Failed to save to server.');
+        } finally {
+          setIsUploadingImage(false);
+        }
+      }
+    } catch (err) {
+      toast.error('Failed to select image.');
+      setIsUploadingImage(false);
+    }
+  };
 
   const handleToggleCounsellorPreference = async (value) => {
     setLocalOptedForCounsellor(value);
@@ -143,17 +203,20 @@ export default function SettingsScreen({ navigation }) {
           styles.topHeader,
           isDesktop && styles.topHeaderDesktop,
           !isDesktop && styles.topHeaderMobile,
-          !isDesktop && { paddingTop: insets.top + spacing.md },
+          !isDesktop && { paddingTop: insets.top + spacing.xs },
         ]}
       >
         <View style={styles.headerLeft}>
-          {!isDesktop && <MenuButton />}
           {isDesktop ? (
             <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop}/>
           ) : (
-            <View style={styles.avatarContainer}>
-              <Feather color={colors.primary} name="user" size={28}/>
-            </View>
+            <Pressable onPress={handlePickProfileImage} style={styles.avatarContainer}>
+              {profileImageUri ? (
+                <Image source={{ uri: profileImageUri }} style={styles.headerAvatarImage} />
+              ) : (
+                <Feather color={colors.primary} name="user" size={28}/>
+              )}
+            </Pressable>
           )}
 
           <View style={styles.headerInfo}>
@@ -183,9 +246,23 @@ export default function SettingsScreen({ navigation }) {
             {/* User Profile Hero Box */}
             <View style={styles.heroBox}>
               <View style={styles.userProfileLeft}>
-                <View style={styles.heroAvatar}>
-                  <Feather color={colors.primary} name="user" size={24}/>
-                </View>
+                <Pressable onPress={handlePickProfileImage} style={styles.heroAvatarContainer}>
+                  <View style={styles.heroAvatar}>
+                    {profileImageUri ? (
+                      <Image source={{ uri: profileImageUri }} style={styles.heroAvatarImage} />
+                    ) : (
+                      <Feather color={colors.primary} name="user" size={24}/>
+                    )}
+                    {isUploadingImage && (
+                      <View style={styles.avatarLoadingOverlay}>
+                        <ActivityIndicator color={colors.primary} size="small" />
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.editBadge}>
+                    <Feather color={colors.onPrimary} name="edit-2" size={10} />
+                  </View>
+                </Pressable>
                 <View>
                   <Text style={styles.heroTitle}>{userName}</Text>
                   <Text style={styles.heroSubtitle}>Registered User Profile</Text>
@@ -209,8 +286,6 @@ export default function SettingsScreen({ navigation }) {
                 const isRehab = caseStage.toLowerCase().includes('rehab');
                 const key = c.userId || c.caseNumber || index;
 
-                // Mobile: plain "Label : Value" text, no icons or colored
-                // stage pills - just the case's own three details, stacked.
                 if (!isDesktop) {
                   return (
                     <View key={key} style={styles.caseSimpleBlock}>
@@ -449,6 +524,8 @@ export default function SettingsScreen({ navigation }) {
           <LogoutButton style={{ marginBottom: spacing.lg }} variant="row"/>
         </View>
       </ScrollView>
+
+      {!isDesktop && <BottomNavBar currentTab="Profile" navigation={navigation} />}
     </View>
   );
 }
@@ -465,7 +542,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
     paddingBottom: spacing.lg,
-    paddingHorizontal: 36, // Exactly 1 cm horizontal gap on both sides (approx 36px)
+    paddingHorizontal: 36,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
@@ -477,12 +554,9 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     alignItems: 'center',
   },
-  // The desktop/tablet "1cm gap" of 36px either side eats too much of a
-  // narrow phone's width once combined with the rest of this screen's
-  // fixed-width elements (the language dropdowns, the case-details grid) -
-  // trimmed back down to the app's normal edge spacing on mobile only.
   topHeaderMobile: {
     paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.sm,
   },
   headerIconDesktop: { 
     marginRight: spacing.sm 
@@ -493,13 +567,18 @@ const styles = StyleSheet.create({
     flex: 1 
   },
   avatarContainer: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
+    overflow: 'hidden',
+  },
+  headerAvatarImage: {
+    width: '100%',
+    height: '100%',
   },
   headerInfo: { 
     flex: 1 
@@ -513,7 +592,7 @@ const styles = StyleSheet.create({
   },
   contentBody: {
     backgroundColor: colors.background,
-    paddingHorizontal: 36, // Exactly 1 cm horizontal gap on both left and right sides
+    paddingHorizontal: 36,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxxl,
     width: '100%',
@@ -523,6 +602,7 @@ const styles = StyleSheet.create({
   },
   contentBodyMobile: {
     paddingHorizontal: spacing.xl,
+    paddingBottom: 100,
   },
 
   /* Section Titles */
@@ -568,14 +648,41 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+  heroAvatarContainer: {
+    position: 'relative',
+    marginRight: spacing.sm,
+  },
   heroAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    overflow: 'hidden',
+  },
+  heroAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarLoadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.surface,
   },
   heroTitle: {
     ...typography.bodyStrong,
@@ -697,9 +804,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: spacing.xs,
   },
-  // The language name + its fixed-width dropdown no longer fit comfortably
-  // side by side on a phone - stacked instead (label/subtitle on top, the
-  // dropdown full-width below) so neither gets squeezed.
   preferenceRowMobile: {
     flexDirection: 'column',
     alignItems: 'stretch',
@@ -751,10 +855,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  // `alignItems: 'center'` against a fixed-width label was drifting the
-  // value text down into (and visually through) the label whenever the
-  // label itself had no room and wrapped - flex-start plus letting the
-  // value itself wrap (below) fixes both sides of that collision.
   systemRowMobile: {
     alignItems: 'flex-start',
   },
@@ -784,8 +884,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  // Sits on its own row below the label now (see preferenceRowMobile) - kept
-  // at its natural compact size rather than stretching full-width.
   outlineBtnMobile: {
     alignSelf: 'flex-start',
   },

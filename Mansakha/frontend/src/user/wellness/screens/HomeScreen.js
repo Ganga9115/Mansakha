@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Linking } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
@@ -9,11 +9,10 @@ import { typography } from '../../shared/theme/typography';
 import { shadow } from '../../shared/theme/shadow';
 import { dashboardContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
-import Card from '../../shared/components/Card';
 import RiskBadge from '../../shared/components/RiskBadge';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
-import MenuButton from '../../shared/components/MenuButton';
+import BottomNavBar from '../../shared/components/BottomNavBar';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor } from '../../shared/services/hooks';
 
@@ -45,11 +44,10 @@ export default function HomeScreen({ navigation }) {
                 style={[
                   styles.topHeader,
                   isDesktop && styles.topHeaderDesktop,
-                  !isDesktop && { paddingTop: insets.top + spacing.md },
+                  !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
                 ]}
               >
                 <View style={styles.headerLeft}>
-                  {!isDesktop && <MenuButton />}
                   {isDesktop ? (
                     <Feather name="home" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
                   ) : (
@@ -77,7 +75,12 @@ export default function HomeScreen({ navigation }) {
                 </View>
               </View>
 
-              <ScrollView style={styles.container} bounces={false} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={styles.container}
+                contentContainerStyle={!isDesktop ? styles.scrollContentMobile : null}
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+              >
                 {/* Main Body Area */}
                 <View style={[styles.contentBody, isDesktop && styles.contentBodyDesktop, { maxWidth: dashboardContentWidth[tier], width: '100%', alignSelf: 'center' }]}>
                   {/* Date Ticker */}
@@ -292,6 +295,11 @@ export default function HomeScreen({ navigation }) {
                   </View>
                 </View>
               </ScrollView>
+
+              {/* Integrated Bottom Navigation Bar for Mobile Views */}
+              {!isDesktop && (
+                <BottomNavBar currentTab="Home" navigation={navigation} />
+              )}
             </>
           );
         }}
@@ -303,6 +311,9 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.primaryLight },
   container: { flex: 1, backgroundColor: colors.background },
+  scrollContentMobile: {
+    paddingBottom: 100, // Clearance for floating bottom navbar
+  },
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
@@ -321,8 +332,8 @@ const styles = StyleSheet.create({
   headerIconDesktop: { marginRight: spacing.sm },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
-    width: 56,
-    height: 56,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -353,8 +364,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     paddingHorizontal: spacing.sm,
   },
-  // A little extra clearance below the header on mobile, where the ticker
-  // otherwise sits right up against it.
   dateTickerMobile: {
     marginTop: spacing.sm,
   },
