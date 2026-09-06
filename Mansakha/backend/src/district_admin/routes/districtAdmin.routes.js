@@ -110,8 +110,13 @@ async function computeTrendDirection(jurisdictionIds) {
 // authenticated official can call it, not just Ministry.
 router.get('/root-jurisdiction', verifyToken, generalApiLimiter, async (req, res) => {
   if (!req.auth || req.auth.type !== 'official') return fail(res, 'Staff account required', 403);
-  const { data, error } = await supabase.from('jurisdictions').select('jurisdiction_id, name').eq('level', 'national').limit(1).maybeSingle();
-  if (error || !data) return fail(res, 'No national jurisdiction configured', 404);
+  // Raw pg (see computeAverageScore's comment above for why) - this is
+  // called on every dashboard load to resolve Ministry's "home" jurisdiction.
+  const { rows: rootRows } = await pool.query(
+    `select jurisdiction_id, name from jurisdictions where level = 'national' limit 1`
+  );
+  const data = rootRows[0];
+  if (!data) return fail(res, 'No national jurisdiction configured', 404);
   return ok(res, { jurisdictionId: data.jurisdiction_id, name: data.name });
 });
 
@@ -335,12 +340,14 @@ router.get(
     const pageSize = 30;
     const offset = (Number(page) - 1) * pageSize;
 
-    const { data: jurisdiction, error: jError } = await supabase
-      .from('jurisdictions')
-      .select('level, name')
-      .eq('jurisdiction_id', jurisdictionId)
-      .single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg (see computeAverageScore's comment above for why) - this
+    // single-row lookup fires on every dashboard page load.
+    const { rows: jurisdictionRows } = await pool.query(
+      'select level, name from jurisdictions where jurisdiction_id = $1',
+      [jurisdictionId]
+    );
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'admin_dashboard', entityId: jurisdictionId });
 
@@ -577,12 +584,13 @@ router.get(
   async (req, res) => {
     const { jurisdictionId } = req.params;
 
-    const { data: jurisdiction, error: jError } = await supabase
-      .from('jurisdictions')
-      .select('level, name')
-      .eq('jurisdiction_id', jurisdictionId)
-      .single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg (see computeAverageScore's comment above for why).
+    const { rows: jurisdictionRows } = await pool.query(
+      'select level, name from jurisdictions where jurisdiction_id = $1',
+      [jurisdictionId]
+    );
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'export', entityType: 'admin_dashboard', entityId: jurisdictionId });
 
@@ -767,11 +775,16 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
   const { docketNumber } = req.query;
   if (!docketNumber) return fail(res, 'docketNumber is required', 400);
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('user_id, docket_number, case_type_id, jurisdiction_id, case_stage, status, linked_to_user_id')
-    .ilike('docket_number', String(docketNumber).trim().replace(/[%_\\]/g, '\\$&'))
-    .maybeSingle();
+  // Raw pg (see computeAverageScore's comment above for why). ilike here is
+  // a case-insensitive exact match, not a wildcard search - the escaping
+  // below neutralizes any %, _ or \ the caller's docket number happens to
+  // contain rather than adding wildcards of its own.
+  const { rows: userRows } = await pool.query(
+    `select user_id, docket_number, case_type_id, jurisdiction_id, case_stage, status, linked_to_user_id
+     from users where docket_number ilike $1`,
+    [String(docketNumber).trim().replace(/[%_\\]/g, '\\$&')]
+  );
+  const user = userRows[0];
   if (!user) return ok(res, { user: null });
 
   // Same parent-chain walk requireJurisdiction() does, applied to the FOUND
@@ -785,7 +798,8 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
     let allowed = false;
     while (currentId) {
       if (assignedIds.has(currentId)) { allowed = true; break; }
-      const { data: node } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', currentId).maybeSingle();
+      const { rows: nodeRows } = await pool.query('select parent_id from jurisdictions where jurisdiction_id = $1', [currentId]);
+      const node = nodeRows[0];
       currentId = node ? node.parent_id : null;
     }
     if (!allowed) return fail(res, 'Outside your assigned jurisdiction', 403);
@@ -796,7 +810,11 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
   // search would otherwise show blank name/contact/address for one - even
   // though a District Admin searching by that exact docket clearly expects
   // to find the person, not an empty identity.
-  const { data: identity } = await supabase.from('user_identity').select('full_name, contact_number, address').eq('user_id', user.linked_to_user_id || user.user_id).maybeSingle();
+  const { rows: identityRows } = await pool.query(
+    'select full_name, contact_number, address from user_identity where user_id = $1',
+    [user.linked_to_user_id || user.user_id]
+  );
+  const identity = identityRows[0];
 
   return ok(res, {
     user: {
@@ -850,8 +868,8 @@ router.patch(
   requireRole(['Administration', 'Ministry']),
   generalApiLimiter,
   requireJurisdiction(async (req) => {
-    const { data } = await supabase.from('users').select('jurisdiction_id').eq('user_id', req.params.userId).maybeSingle();
-    return data ? data.jurisdiction_id : null;
+    const { rows } = await pool.query('select jurisdiction_id from users where user_id = $1', [req.params.userId]);
+    return rows[0] ? rows[0].jurisdiction_id : null;
   }),
   async (req, res) => {
     const { userId } = req.params;
@@ -903,8 +921,10 @@ router.post(
     const { jurisdictionId, periodStart, periodEnd } = req.body;
     if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
 
-    const { data: jurisdiction, error: jError } = await supabase.from('jurisdictions').select('level, name').eq('jurisdiction_id', jurisdictionId).single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg (see computeAverageScore's comment above for why).
+    const { rows: jurisdictionRows } = await pool.query('select level, name from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     const end = periodEnd ? new Date(periodEnd) : new Date();
     const start = periodStart ? new Date(periodStart) : new Date(end.getTime() - TREND_PERIOD_DAYS * 86400000);
@@ -914,9 +934,11 @@ router.post(
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
     let users;
     try {
-      users = await selectInChunks(allDescendantIds, (chunk) =>
-        supabase.from('users').select('user_id').in('jurisdiction_id', chunk)
-      );
+      // Raw pg with = any($1::uuid[]) (see selectInChunks' own comment above
+      // for why this has no URL-length limit to chunk around) - one round
+      // trip instead of PostgREST's per-chunk overhead.
+      const { rows } = await pool.query('select user_id from users where jurisdiction_id = any($1::uuid[])', [allDescendantIds]);
+      users = rows;
     } catch (err) {
       return fail(res, `Could not load users: ${err.message}`, 500);
     }
@@ -926,39 +948,34 @@ router.post(
     let journalEntries = [];
     let caseNotes = [];
     if (userIds.length > 0) {
-      const [chatRes, journalRes, notesRes] = await Promise.all([
+      // Raw pg (see computeAverageScore's comment above for why) - three
+      // independent reads, still parallelized exactly as before.
+      const [{ rows: chatRows }, { rows: journalRows }, { rows: noteRows }] = await Promise.all([
         // sender: 'user' only - the AI's own canned supportive replies
         // (sender: 'ai') aren't a distress signal worth feeding back into
         // another AI analysis.
-        supabase
-          .from('chat_messages')
-          .select('body, sent_at')
-          .in('user_id', userIds)
-          .eq('sender', 'user')
-          .gte('sent_at', startIso)
-          .lte('sent_at', endIso)
-          .order('sent_at', { ascending: false })
-          .limit(ANALYTICS_PER_SOURCE_CAP),
-        supabase
-          .from('journal_entries')
-          .select('content, created_at')
-          .in('user_id', userIds)
-          .gte('created_at', startIso)
-          .lte('created_at', endIso)
-          .order('created_at', { ascending: false })
-          .limit(ANALYTICS_PER_SOURCE_CAP),
-        supabase
-          .from('case_notes')
-          .select('note_text, created_at')
-          .in('user_id', userIds)
-          .gte('created_at', startIso)
-          .lte('created_at', endIso)
-          .order('created_at', { ascending: false })
-          .limit(ANALYTICS_PER_SOURCE_CAP),
+        pool.query(
+          `select body, sent_at from chat_messages
+           where user_id = any($1::uuid[]) and sender = 'user' and sent_at >= $2 and sent_at <= $3
+           order by sent_at desc limit $4`,
+          [userIds, startIso, endIso, ANALYTICS_PER_SOURCE_CAP]
+        ),
+        pool.query(
+          `select content, created_at from journal_entries
+           where user_id = any($1::uuid[]) and created_at >= $2 and created_at <= $3
+           order by created_at desc limit $4`,
+          [userIds, startIso, endIso, ANALYTICS_PER_SOURCE_CAP]
+        ),
+        pool.query(
+          `select note_text, created_at from case_notes
+           where user_id = any($1::uuid[]) and created_at >= $2 and created_at <= $3
+           order by created_at desc limit $4`,
+          [userIds, startIso, endIso, ANALYTICS_PER_SOURCE_CAP]
+        ),
       ]);
-      chatMessages = chatRes.data || [];
-      journalEntries = journalRes.data || [];
-      caseNotes = notesRes.data || [];
+      chatMessages = chatRows;
+      journalEntries = journalRows;
+      caseNotes = noteRows;
     }
 
     const totalItems = chatMessages.length + journalEntries.length + caseNotes.length;
@@ -1044,9 +1061,13 @@ router.post(
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
     let activeUsers;
     try {
-      activeUsers = await selectInChunks(allDescendantIds, (chunk) =>
-        supabase.from('users').select('user_id').in('jurisdiction_id', chunk).eq('status', 'active')
+      // Raw pg with = any($1::uuid[]) - see the analogous users lookup in
+      // /analytics/generate above for why.
+      const { rows } = await pool.query(
+        `select user_id from users where jurisdiction_id = any($1::uuid[]) and status = 'active'`,
+        [allDescendantIds]
       );
+      activeUsers = rows;
     } catch (err) {
       return fail(res, `Could not load users: ${err.message}`, 500);
     }
@@ -1069,8 +1090,23 @@ router.post(
       rows.push({ kind: 'admin_broadcast_push', user_id: u.user_id, message, priority: normalizedPriority });
     }
 
-    const { error: insertError } = await supabase.from('dispatch_queue').insert(rows);
-    if (insertError) return fail(res, `Could not queue broadcast: ${insertError.message}`, 500);
+    // Raw pg, single multi-row INSERT - no generated/returned columns needed
+    // here (unlike the analytics-insight insert below, which stays on
+    // supabase-js for its .select().single() semantics), so this is the
+    // simple, low-risk write case safe to migrate.
+    try {
+      const values = [];
+      const placeholders = rows
+        .map((r, i) => {
+          const base = i * 4;
+          values.push(r.kind, r.user_id, r.message, r.priority);
+          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
+        })
+        .join(', ');
+      await pool.query(`insert into dispatch_queue (kind, user_id, message, priority) values ${placeholders}`, values);
+    } catch (err) {
+      return fail(res, `Could not queue broadcast: ${err.message}`, 500);
+    }
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'admin_broadcast', entityId: jurisdictionId });
 
@@ -1120,18 +1156,29 @@ router.get(
     // ambiguous-relationship case).
     let roleRows;
     try {
-      roleRows = await selectInChunks(jurisdictionIds, (chunk) =>
-        supabase.from('official_roles').select('official_id, roles(role_name)').in('jurisdiction_id', chunk).is('revoked_at', null)
+      // Raw pg, real join instead of the embed-hint (see the comment above
+      // for why an embed is ambiguous here anyway) - = any($1::uuid[]) drops
+      // selectInChunks' chunking entirely (see its own comment above).
+      const { rows } = await pool.query(
+        `select oro.official_id, r.role_name
+         from official_roles oro
+         join roles r on r.role_id = oro.role_id
+         where oro.jurisdiction_id = any($1::uuid[]) and oro.revoked_at is null`,
+        [jurisdictionIds]
       );
+      roleRows = rows;
     } catch (err) {
       return fail(res, `Could not load counsellors: ${err.message}`, 500);
     }
 
-    const counsellorIds = roleRows.filter((r) => r.roles.role_name === 'Counsellor').map((r) => r.official_id);
+    const counsellorIds = roleRows.filter((r) => r.role_name === 'Counsellor').map((r) => r.official_id);
     if (counsellorIds.length === 0) return ok(res, { counsellors: [] });
 
-    const { data: officialRows } = await supabase.from('officials').select('official_id, full_name').in('official_id', counsellorIds);
-    const fullNameById = new Map((officialRows || []).map((o) => [o.official_id, o.full_name]));
+    const { rows: officialRows } = await pool.query(
+      'select official_id, full_name from officials where official_id = any($1::uuid[])',
+      [counsellorIds]
+    );
+    const fullNameById = new Map(officialRows.map((o) => [o.official_id, o.full_name]));
 
     // One query for every counsellor's users, not one query PER counsellor -
     // the previous version awaited a separate supabase.from() inside this
@@ -1141,13 +1188,38 @@ router.get(
     // A single .in() call plus grouping in JS is both correct (identical
     // per-counsellor results) and a single round trip regardless of how many
     // counsellors there are.
-    const { data: allUsers } = await supabase
-      .from('users')
-      .select('assigned_counsellor_id, status, linked_to_user_id, distress_scores(score_value, computed_at)')
-      .in('assigned_counsellor_id', counsellorIds);
+    // Raw pg, two plain queries instead of an embed (same "avoid embed
+    // hints, do two queries and group in JS" convention as roleRows above) -
+    // distress_scores is only fetched for non-linked (anchor) users since
+    // the loop below skips every linked/dependent case anyway, same as the
+    // original embed effectively did (a dependent's own user_id never has a
+    // real distress_scores row - see the Multi-Case-Per-Person comments
+    // elsewhere in this file).
+    const { rows: userRows } = await pool.query(
+      `select user_id, assigned_counsellor_id, status, linked_to_user_id
+       from users where assigned_counsellor_id = any($1::uuid[])`,
+      [counsellorIds]
+    );
+    const anchorUserIds = userRows.filter((u) => !u.linked_to_user_id).map((u) => u.user_id);
+    const scoresByUserId = new Map();
+    if (anchorUserIds.length > 0) {
+      const { rows: scoreRows } = await pool.query(
+        'select user_id, score_value, computed_at from distress_scores where user_id = any($1::uuid[])',
+        [anchorUserIds]
+      );
+      for (const s of scoreRows) {
+        const list = scoresByUserId.get(s.user_id) || [];
+        // Number(): pg returns `numeric` columns as strings, unlike
+        // PostgREST's JSON numbers - cast here so downstream arithmetic
+        // (avgDistressPointDrop below) behaves identically either way.
+        list.push({ score_value: Number(s.score_value), computed_at: s.computed_at });
+        scoresByUserId.set(s.user_id, list);
+      }
+    }
+    const allUsers = userRows.map((u) => ({ ...u, distress_scores: scoresByUserId.get(u.user_id) || [] }));
 
     const usersByCounsellor = new Map(counsellorIds.map((id) => [id, []]));
-    for (const u of allUsers || []) {
+    for (const u of allUsers) {
       usersByCounsellor.get(u.assigned_counsellor_id)?.push(u);
     }
 
@@ -1251,16 +1323,21 @@ router.post(
     const { jurisdictionId, commentary, insightId, asDraft } = req.body;
     if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
 
-    const { data: jurisdiction, error: jError } = await supabase
-      .from('jurisdictions')
-      .select('level, name, parent_id')
-      .eq('jurisdiction_id', jurisdictionId)
-      .single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg (see computeAverageScore's comment above for why) - this is the
+    // jurisdiction-existence check that fires on every report generation.
+    const { rows: jurisdictionRows } = await pool.query(
+      'select level, name, parent_id from jurisdictions where jurisdiction_id = $1',
+      [jurisdictionId]
+    );
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     if (insightId) {
-      const { data: insightRow } = await supabase.from('jurisdiction_analytics_insights').select('insight_id').eq('insight_id', insightId).maybeSingle();
-      if (!insightRow) return fail(res, 'insightId not found', 404);
+      const { rows: insightRows } = await pool.query(
+        'select insight_id from jurisdiction_analytics_insights where insight_id = $1',
+        [insightId]
+      );
+      if (!insightRows[0]) return fail(res, 'insightId not found', 404);
     }
 
     const periodType = VALID_PERIOD_TYPES.includes(req.body.periodType) ? req.body.periodType : 'custom';

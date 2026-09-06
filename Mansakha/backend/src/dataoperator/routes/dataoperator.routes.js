@@ -1,5 +1,4 @@
 const express = require('express');
-const { supabase } = require('../../core/db/supabaseClient');
 const { pool } = require('../../core/db/pgPool');
 const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
@@ -56,8 +55,10 @@ router.post('/fetch-case', async (req, res) => {
   const seed = String(docketNumber).split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
   const stages = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
 
-  const [{ data: caseTypes }, { rows: districts }] = await Promise.all([
-    supabase.from('case_types').select('case_type_id, name').is('deleted_at', null).order('name'),
+  // Both raw pg (not Supabase REST) - same ~500-650ms-per-call PostgREST cost
+  // documented elsewhere this session, felt here on every "Fetch Case" click.
+  const [{ rows: caseTypes }, { rows: districts }] = await Promise.all([
+    pool.query('select case_type_id, name from case_types where deleted_at is null order by name'),
     pool.query(
       `select d.jurisdiction_id as district_id, d.name as district_name, s.jurisdiction_id as state_id, s.name as state_name
        from jurisdictions d
@@ -84,13 +85,20 @@ router.post('/fetch-case', async (req, res) => {
   // existing case, surface it immediately so the operator can link on the
   // spot instead of discovering the conflict only after submitting Register
   // User (which would 409 on the same constraint - see createUser()).
-  const { data: existingIdentity } = await supabase
-    .from('user_identity')
-    .select('user_id, full_name, users(docket_number)')
-    .eq('aadhaar_number', aadhaarNumber)
-    .maybeSingle();
-  const existingMatch = (existingIdentity && existingIdentity.users?.docket_number !== String(docketNumber).trim())
-    ? { userId: existingIdentity.user_id, docketNumber: existingIdentity.users?.docket_number || null, fullName: existingIdentity.full_name }
+  // Raw pg (not Supabase REST) - a real join instead of a users(docket_number)
+  // embed; user_identity.user_id -> users.user_id is a single, unambiguous FK
+  // (unlike official_roles' two-FKs-into-officials case documented elsewhere).
+  const { rows: existingIdentityRows } = await pool.query(
+    `select ui.user_id, ui.full_name, u.docket_number
+     from user_identity ui
+     join users u on u.user_id = ui.user_id
+     where ui.aadhaar_number = $1
+     limit 1`,
+    [aadhaarNumber]
+  );
+  const existingIdentity = existingIdentityRows[0];
+  const existingMatch = (existingIdentity && existingIdentity.docket_number !== String(docketNumber).trim())
+    ? { userId: existingIdentity.user_id, docketNumber: existingIdentity.docket_number || null, fullName: existingIdentity.full_name }
     : null;
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'simulated_case_fetch' });
@@ -205,45 +213,60 @@ router.get('/search-person', async (req, res) => {
   // there might land on a DEPENDENT case, which has no user_identity row of
   // its own - resolved to its anchor below); name/contact/aadhaar live on
   // `user_identity`, which only an anchor row ever has.
-  const [{ data: docketMatches }, { data: identityMatches }] = await Promise.all([
-    supabase.from('users').select('user_id, linked_to_user_id').ilike('docket_number', `%${escaped}%`).limit(25),
-    supabase
-      .from('user_identity')
-      .select('user_id')
-      .or(`full_name.ilike.%${escaped}%,contact_number.ilike.%${escaped}%,aadhaar_number.ilike.%${escaped}%`)
-      .limit(25),
+  //
+  // Raw pg (not Supabase REST) throughout this route - the explicit
+  // "Data Operator case-lookup" read path this codebase's raw-pg conversions
+  // target; same ~500-650ms-per-PostgREST-round-trip cost documented
+  // elsewhere this session, felt here on every keystroke of this search box.
+  const likeParam = `%${escaped}%`;
+  const [{ rows: docketMatches }, { rows: identityMatches }] = await Promise.all([
+    pool.query('select user_id, linked_to_user_id from users where docket_number ilike $1 limit 25', [likeParam]),
+    pool.query(
+      `select user_id from user_identity
+       where full_name ilike $1 or contact_number ilike $1 or aadhaar_number ilike $1
+       limit 25`,
+      [likeParam]
+    ),
   ]);
 
   const anchorIds = new Set();
-  for (const m of docketMatches || []) anchorIds.add(m.linked_to_user_id || m.user_id);
-  for (const m of identityMatches || []) anchorIds.add(m.user_id); // user_identity.user_id is always an anchor already
+  for (const m of docketMatches) anchorIds.add(m.linked_to_user_id || m.user_id);
+  for (const m of identityMatches) anchorIds.add(m.user_id); // user_identity.user_id is always an anchor already
   if (anchorIds.size === 0) return ok(res, { people: [] });
 
-  const orFilter = [...anchorIds].map((id) => `user_id.eq.${id},linked_to_user_id.eq.${id}`).join(',');
-  const [{ data: familyRows, error: familyError }, { data: identities }] = await Promise.all([
-    supabase
-      .from('users')
-      .select('user_id, linked_to_user_id, docket_number, case_stage, case_types(name), jurisdictions(name)')
-      .or(orFilter),
-    supabase.from('user_identity').select('user_id, full_name, contact_number, aadhaar_number').in('user_id', [...anchorIds]),
+  const anchorIdArray = [...anchorIds];
+  // Real joins instead of case_types(name)/jurisdictions(name) embeds -
+  // users.case_type_id -> case_types.case_type_id and users.jurisdiction_id
+  // -> jurisdictions.jurisdiction_id are both single, unambiguous FKs
+  // (unlike official_roles' two-FKs-into-officials case documented elsewhere).
+  const [{ rows: familyRows }, { rows: identities }] = await Promise.all([
+    pool.query(
+      `select u.user_id, u.linked_to_user_id, u.docket_number, u.case_stage,
+              ct.name as case_type_name, j.name as jurisdiction_name
+       from users u
+       left join case_types ct on ct.case_type_id = u.case_type_id
+       left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+       where u.user_id = any($1::uuid[]) or u.linked_to_user_id = any($1::uuid[])`,
+      [anchorIdArray]
+    ),
+    pool.query('select user_id, full_name, contact_number, aadhaar_number from user_identity where user_id = any($1::uuid[])', [anchorIdArray]),
   ]);
-  if (familyError) return fail(res, `Could not search: ${familyError.message}`, 500);
 
-  const identityByAnchor = new Map((identities || []).map((i) => [i.user_id, i]));
+  const identityByAnchor = new Map(identities.map((i) => [i.user_id, i]));
   const casesByAnchor = new Map();
-  for (const row of familyRows || []) {
+  for (const row of familyRows) {
     const anchorId = row.linked_to_user_id || row.user_id;
     if (!casesByAnchor.has(anchorId)) casesByAnchor.set(anchorId, []);
     casesByAnchor.get(anchorId).push({
       userId: row.user_id,
       docketNumber: row.docket_number,
       caseStage: row.case_stage,
-      caseType: row.case_types?.name || null,
-      jurisdictionName: row.jurisdictions?.name || null,
+      caseType: row.case_type_name || null,
+      jurisdictionName: row.jurisdiction_name || null,
     });
   }
 
-  const people = [...anchorIds]
+  const people = anchorIdArray
     .map((anchorId) => {
       const identity = identityByAnchor.get(anchorId);
       return {
