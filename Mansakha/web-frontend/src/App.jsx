@@ -24,6 +24,7 @@ import DistrictCaseDetail from './district_admin/pages/CaseDetail';
 import DistrictAdminAlerts from './district_admin/pages/AdminAlerts';
 import UserRegistration from './district_admin/pages/UserRegistration';
 import DistrictReports from './district_admin/pages/Reports';
+import DistrictInterventionRequests from './district_admin/pages/InterventionRequests';
 import DistrictSettings from './district_admin/pages/Settings';
 import DistrictMailInbox from './district_admin/pages/MailInbox';
 import DistrictMailSent from './district_admin/pages/MailSent';
@@ -114,6 +115,7 @@ export default function App() {
         <Route path="/districtadmin/analysis" element={<RequireAuth><DistrictAnalysis /></RequireAuth>} />
         <Route path="/districtadmin/case-detail/:id" element={<RequireAuth><DistrictCaseDetail /></RequireAuth>} />
         <Route path="/districtadmin/alerts" element={<RequireAuth><DistrictAdminAlerts /></RequireAuth>} />
+        <Route path="/districtadmin/intervention-requests" element={<RequireAuth><DistrictInterventionRequests /></RequireAuth>} />
         <Route path="/districtadmin/registration" element={<RequireAuth><UserRegistration /></RequireAuth>} />
         <Route path="/districtadmin/reports" element={<RequireAuth><DistrictReports /></RequireAuth>} />
         <Route path="/districtadmin/mail" element={<RequireAuth><DistrictMailInbox /></RequireAuth>} />

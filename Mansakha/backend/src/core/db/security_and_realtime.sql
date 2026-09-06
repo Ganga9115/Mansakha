@@ -95,3 +95,19 @@ alter table court_case_details enable row level security;
 -- every other table here; jurisdiction-scoping for who can see/review a
 -- given recipient row lives in the route handlers (requireJurisdiction).
 alter table report_recipients enable row level security;
+
+-- Victim-Initiated Intervention Requests (migration_027) - service_role
+-- bypasses RLS same as every other table here; the authorization check (a
+-- victim can only ever see/act on their own request; a District Admin only
+-- their own jurisdiction's) lives in the route handlers.
+alter table intervention_requests enable row level security;
+alter table intervention_request_documents enable row level security;
+
+-- NOT public, matching voice-messages/mail-attachments - proof documents
+-- (caste certificates, medical records, FIR copies) are as sensitive as
+-- anything in this system, so retrieval always goes through a short-lived
+-- signed URL (District Admin's GET /intervention-requests/:requestId),
+-- never a permanent public link.
+insert into storage.buckets (id, name, public)
+values ('intervention-proofs', 'intervention-proofs', false)
+on conflict (id) do nothing;

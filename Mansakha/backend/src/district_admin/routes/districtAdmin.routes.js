@@ -1772,4 +1772,197 @@ router.post(
   }
 );
 
+// ===== Victim-Initiated Intervention Requests =====
+// District Admin's own review side of the flow - see migration_027 and
+// user.routes.js's request-submission routes for the full picture. Never
+// exposes a victim's full_name/contact - docket-number identification only,
+// same privacy boundary the Reports feature already established.
+const INTERVENTION_REQUEST_STATUSES = ['Pending', 'Accepted', 'Rejected'];
+
+router.get(
+  '/intervention-requests',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.query.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId, status } = req.query;
+    if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
+    if (status && !INTERVENTION_REQUEST_STATUSES.includes(status)) {
+      return fail(res, `status must be one of: ${INTERVENTION_REQUEST_STATUSES.join(', ')}`, 400);
+    }
+
+    try {
+      const { rows } = await pool.query(
+        `select ir.request_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
+                u.docket_number, u.case_stage, ct.name as case_type_name,
+                it.name as intervention_type_name
+         from intervention_requests ir
+         join users u on u.user_id = ir.user_id
+         join case_types ct on ct.case_type_id = u.case_type_id
+         join intervention_types it on it.intervention_type_id = ir.intervention_type_id
+         where u.jurisdiction_id = $1 ${status ? 'and ir.status = $2' : ''}
+         order by ir.requested_at desc`,
+        status ? [jurisdictionId, status] : [jurisdictionId]
+      );
+
+      return ok(res, {
+        requests: rows.map((r) => ({
+          requestId: r.request_id,
+          docketNumber: r.docket_number,
+          caseStage: r.case_stage,
+          caseTypeName: r.case_type_name,
+          interventionTypeName: r.intervention_type_name,
+          description: r.description,
+          status: r.status,
+          decisionReason: r.decision_reason,
+          requestedAt: r.requested_at,
+          reviewedAt: r.reviewed_at,
+        })),
+      });
+    } catch (err) {
+      return fail(res, `Could not load intervention requests: ${err.message}`, 500);
+    }
+  }
+);
+
+router.get(
+  '/intervention-requests/:requestId',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  async (req, res) => {
+    const { requestId } = req.params;
+    try {
+      const { rows } = await pool.query(
+        `select ir.request_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
+                u.jurisdiction_id, u.docket_number, u.case_stage, ct.name as case_type_name,
+                it.name as intervention_type_name
+         from intervention_requests ir
+         join users u on u.user_id = ir.user_id
+         join case_types ct on ct.case_type_id = u.case_type_id
+         join intervention_types it on it.intervention_type_id = ir.intervention_type_id
+         where ir.request_id = $1`,
+        [requestId]
+      );
+      if (!rows[0]) return fail(res, 'Request not found', 404);
+
+      // Same OR-not-quite-shape check every other jurisdiction-scoped GET
+      // in this file uses - the case's own jurisdiction must be inside the
+      // caller's assigned subtree. Ministry bypasses via requireJurisdiction's
+      // own Ministry short-circuit, replicated inline here since this route
+      // resolves the target AFTER the initial DB read (the request row
+      // itself has to be fetched first to know which jurisdiction to check).
+      if (!req.auth.roles.some((r) => r.roleName === 'Ministry')) {
+        const assignedIds = new Set(req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean));
+        let currentId = rows[0].jurisdiction_id;
+        let inScope = false;
+        while (currentId) {
+          if (assignedIds.has(currentId)) { inScope = true; break; }
+          const { rows: jRows } = await pool.query('select parent_id from jurisdictions where jurisdiction_id = $1', [currentId]);
+          if (!jRows[0]) break;
+          currentId = jRows[0].parent_id;
+        }
+        if (!inScope) return fail(res, 'Outside your assigned jurisdiction', 403);
+      }
+
+      const { rows: docRows } = await pool.query(
+        'select document_id, document_label, storage_path from intervention_request_documents where request_id = $1',
+        [requestId]
+      );
+      const documents = await Promise.all(docRows.map(async (d) => {
+        const { data, error } = await supabase.storage.from('intervention-proofs').createSignedUrl(d.storage_path, 3600);
+        return { documentLabel: d.document_label, signedUrl: error ? null : data.signedUrl };
+      }));
+
+      const r = rows[0];
+      await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'intervention_request', entityId: requestId });
+
+      return ok(res, {
+        requestId: r.request_id,
+        docketNumber: r.docket_number,
+        caseStage: r.case_stage,
+        caseTypeName: r.case_type_name,
+        interventionTypeName: r.intervention_type_name,
+        description: r.description,
+        status: r.status,
+        decisionReason: r.decision_reason,
+        requestedAt: r.requested_at,
+        reviewedAt: r.reviewed_at,
+        documents,
+      });
+    } catch (err) {
+      return fail(res, `Could not load request: ${err.message}`, 500);
+    }
+  }
+);
+
+router.patch(
+  '/intervention-requests/:requestId/decision',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  async (req, res, next) => {
+    const { rows } = await pool.query(
+      `select ir.request_id, ir.status, ir.user_id, ir.intervention_type_id, ir.description, u.jurisdiction_id
+       from intervention_requests ir join users u on u.user_id = ir.user_id
+       where ir.request_id = $1`,
+      [req.params.requestId]
+    );
+    if (!rows[0]) return fail(res, 'Request not found', 404);
+    req._targetRequest = rows[0];
+    next();
+  },
+  requireJurisdiction((req) => req._targetRequest.jurisdiction_id),
+  async (req, res) => {
+    const { decision, reason } = req.body;
+    if (!['Accepted', 'Rejected'].includes(decision)) return fail(res, "decision must be 'Accepted' or 'Rejected'", 400);
+    if (decision === 'Rejected' && !(reason && String(reason).trim())) return fail(res, 'A reason is required to reject a request', 400);
+    if (req._targetRequest.status !== 'Pending') return fail(res, 'This request has already been decided', 400);
+
+    const target = req._targetRequest;
+
+    try {
+      let updated;
+      if (decision === 'Accepted') {
+        // Insert the real interventions row AND flip the request's own
+        // status together - either both happen or neither does, so the
+        // Reports feature's Intervention Summary section (reportSnapshot.js)
+        // never sees a request marked Accepted with no backing interventions
+        // row, or vice versa.
+        updated = await withTransaction(async (client) => {
+          const { rows: ivRows } = await client.query(
+            `insert into interventions (user_id, intervention_type_id, assigned_official_id, notes, recommended_at)
+             values ($1, $2, $3, $4, now()) returning intervention_id`,
+            [target.user_id, target.intervention_type_id, req.auth.officialId, target.description]
+          );
+          const { rows: reqRows } = await client.query(
+            `update intervention_requests
+             set status = 'Accepted', reviewed_by = $1, reviewed_at = now(), resulting_intervention_id = $2
+             where request_id = $3
+             returning request_id, status`,
+            [req.auth.officialId, ivRows[0].intervention_id, target.request_id]
+          );
+          return reqRows[0];
+        });
+      } else {
+        const { rows: reqRows } = await pool.query(
+          `update intervention_requests
+           set status = 'Rejected', reviewed_by = $1, reviewed_at = now(), decision_reason = $2
+           where request_id = $3
+           returning request_id, status`,
+          [req.auth.officialId, String(reason).trim(), target.request_id]
+        );
+        updated = reqRows[0];
+      }
+
+      await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'intervention_request', entityId: target.request_id });
+
+      return ok(res, { requestId: updated.request_id, status: updated.status }, `Request ${decision.toLowerCase()}`);
+    } catch (err) {
+      return fail(res, `Could not record decision: ${err.message}`, 500);
+    }
+  }
+);
+
 module.exports = router;

@@ -76,11 +76,23 @@ insert into alert_statuses (name) values ('Open'), ('Acknowledged'), ('Resolved'
 create table intervention_types (
   intervention_type_id  uuid primary key default gen_random_uuid(),
   name                   text not null unique,
-  deleted_at              timestamptz -- soft-delete, matches languages' pattern
+  deleted_at              timestamptz, -- soft-delete, matches languages' pattern
+  -- Victim-Initiated Intervention Requests (migration_027) - per-type
+  -- required-document list driving the request form, kept data-driven since
+  -- Ministry already has full CRUD on this table via System Configuration.
+  -- Counselling stays '[]' - deliberately excluded from that flow (no
+  -- real-world proof/eligibility gate; the app already has a simpler
+  -- self-service path via users.opted_for_manual_counsellor).
+  required_documents    jsonb not null default '[]'::jsonb
 );
-insert into intervention_types (name) values
-  ('Counselling'), ('Medical'), ('Witness Protection'), ('Relocation'),
-  ('Financial Assistance'), ('Legal Aid'), ('Rehabilitation');
+insert into intervention_types (name, required_documents) values
+  ('Counselling', '[]'::jsonb),
+  ('Medical', '[{"label":"Medical Certificate / Diagnosis Report","required":true},{"label":"Hospital Bill or Treatment Estimate","required":false}]'::jsonb),
+  ('Witness Protection', '[{"label":"FIR Copy / Case Reference","required":true},{"label":"Police Threat Assessment","required":false}]'::jsonb),
+  ('Relocation', '[{"label":"FIR Copy / Case Reference","required":true},{"label":"Police Threat Assessment or Recommendation","required":false},{"label":"Proof of Current Address","required":true}]'::jsonb),
+  ('Financial Assistance', '[{"label":"FIR Copy","required":true},{"label":"Caste Certificate (SC/ST Proof)","required":true},{"label":"Bank Passbook / Account Proof","required":true}]'::jsonb),
+  ('Legal Aid', '[{"label":"Caste Certificate (SC/ST Proof)","required":true},{"label":"FIR Copy / Case Reference","required":true},{"label":"Aadhaar or Photo ID","required":true}]'::jsonb),
+  ('Rehabilitation', '[{"label":"Caste Certificate (SC/ST Proof)","required":true},{"label":"Case Status Document (Chargesheet/Disposal)","required":false},{"label":"Bank Passbook / Account Proof","required":true}]'::jsonb);
 
 create table languages (
   language_id  uuid primary key default gen_random_uuid(),
@@ -356,6 +368,37 @@ create table interventions (
   completed_at                       timestamptz
 );
 
+-- Victim-Initiated Intervention Requests (migration_027) - see that
+-- migration's own comment for the full reasoning. A victim requests one of
+-- the 6 eligible types (Counselling excluded) with proof documents; their
+-- District Admin Accepts (inserting a real row into `interventions` above,
+-- assigned_official_id = the accepting admin) or Rejects (with a reason).
+-- Per literal case (`user_id`), not resolved via linked_to_user_id - same
+-- convention as case_notes/interventions themselves.
+create table intervention_requests (
+  request_id                uuid primary key default gen_random_uuid(),
+  user_id                   uuid not null references users(user_id),
+  intervention_type_id      uuid not null references intervention_types(intervention_type_id),
+  description               text,
+  status                    text not null default 'Pending' check (status in ('Pending', 'Accepted', 'Rejected')),
+  reviewed_by               uuid references officials(official_id),
+  reviewed_at               timestamptz,
+  decision_reason           text,
+  resulting_intervention_id uuid references interventions(intervention_id),
+  requested_at              timestamptz not null default now()
+);
+
+-- One row per uploaded proof document - document_label matches one of the
+-- request's own intervention_type's required_documents labels.
+create table intervention_request_documents (
+  document_id    uuid primary key default gen_random_uuid(),
+  request_id     uuid not null references intervention_requests(request_id),
+  document_label text not null,
+  storage_path   text not null,
+  content_type   text,
+  uploaded_at    timestamptz not null default now()
+);
+
 -- Free-text case notes a Counsellor leaves on a case - separate from
 -- interventions (a structured, typed action) and from audit_log (a record of
 -- reads/writes, not commentary).
@@ -613,6 +656,10 @@ create index idx_reports_target_jurisdiction on reports(target_jurisdiction_id, 
 create index idx_report_recipients_report on report_recipients(report_id);
 create index idx_report_recipients_jurisdiction on report_recipients(jurisdiction_id) where recipient_type = 'jurisdiction';
 create unique index idx_report_recipients_one_ministry on report_recipients(report_id) where recipient_type = 'ministry';
+-- migration_027_intervention_requests.sql
+create index idx_intervention_requests_user on intervention_requests(user_id, requested_at desc);
+create index idx_intervention_requests_status on intervention_requests(status);
+create index idx_intervention_request_documents_request on intervention_request_documents(request_id);
 -- migration_011_ollama_and_policies.sql
 -- Description: Adds tables for the Ollama 15-question dynamic Check-In flow and Ministry Policy deployment.
 

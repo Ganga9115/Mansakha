@@ -96,11 +96,6 @@ export function useLinkedCases(userId) {
   return useQuery(() => apiClient.get(`/api/counsellor/cases/${userId}/linked-cases`, token), [token, userId]);
 }
 
-export function useInterventionTypes() {
-  const token = getToken();
-  return useQuery(() => apiClient.get('/api/counsellor/intervention-types', token), [token]);
-}
-
 // True push (a Supabase Realtime subscription) needs an anon-key channel
 // scoped by RLS to just this counsellor's own alerts - that's a backend/RLS
 // change this pass can't safely make blind (a naive subscription risks
@@ -259,38 +254,11 @@ export function useAddCaseNote(userId) {
   return { mutate, loading };
 }
 
-// Was never called from anywhere in this app - useInterventionTypes()/
-// useCompleteIntervention() below both existed, but no UI ever created the
-// intervention those act on, so "Intervention Phase Breakdown" was always
-// empty and alerts never left "Open" (only this route's success path
-// acknowledges the case's open alert - see backend counsellor.routes.js).
-export function useLogIntervention(userId) {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async ({ interventionTypeId, notes }) => {
-    setLoading(true);
-    try {
-      return await apiClient.post(`/api/counsellor/cases/${userId}/intervention`, { interventionTypeId, notes }, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
-export function useCompleteIntervention(userId) {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (interventionId) => {
-    setLoading(true);
-    try {
-      return await apiClient.patch(`/api/counsellor/cases/${userId}/intervention/${interventionId}/complete`, {}, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
+// useLogIntervention/useCompleteIntervention removed - interventions are
+// now victim-initiated (Request Assistance in the mobile app) and reviewed
+// by District Admin, not created/completed by Counsellor. The read-only
+// interventionStatus/suggestedInterventionType fields on useCaseDetail's own
+// response still work unchanged - only the create/complete actions moved.
 
 // ===== Mansakha Mail =====
 // Internal staff mail (backend/src/mail/routes/mail.routes.js) - role-agnostic
