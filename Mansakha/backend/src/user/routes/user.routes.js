@@ -1428,4 +1428,167 @@ router.get('/court-case/:userId', async (req, res) => {
   });
 });
 
+// ===== Victim-Initiated Intervention Requests =====
+// Flips the direction of the old Counsellor-recommended `interventions` flow:
+// a victim now REQUESTS one of the 6 eligible types (Counselling is excluded
+// - see migration_027's own comment - it has no real proof/eligibility gate
+// and already has a simpler self-service path via opted_for_manual_counsellor
+// above), attaches proof documents, and their District Admin Accepts or
+// Rejects it (districtAdmin.routes.js). See migration_027_intervention_
+// requests.sql for the full schema/reasoning.
+
+const interventionDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // matches mail.routes.js's ATTACHMENT_MAX_BYTES
+  fileFilter: (req, file, cb) => {
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg'];
+    if (!allowed.includes(file.mimetype)) return cb(new Error('Only PDF, PNG, or JPEG files are allowed for proof documents'));
+    cb(null, true);
+  },
+});
+
+function sanitizeDocumentFileName(name) {
+  return String(name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 120);
+}
+
+// The 6 eligible types (Counselling deliberately excluded) + their
+// required_documents, for the request form's type picker.
+router.get('/intervention-types', async (req, res) => {
+  const { rows } = await pool.query(
+    `select intervention_type_id, name, required_documents
+     from intervention_types
+     where deleted_at is null and name != 'Counselling'
+     order by name`
+  );
+  return ok(res, {
+    interventionTypes: rows.map((r) => ({
+      interventionTypeId: r.intervention_type_id,
+      name: r.name,
+      requiredDocuments: r.required_documents,
+    })),
+  });
+});
+
+router.post('/intervention-requests', async (req, res) => {
+  const { interventionTypeId, description } = req.body;
+  if (!interventionTypeId) return fail(res, 'interventionTypeId is required', 400);
+
+  const { rows: typeRows } = await pool.query(
+    "select 1 from intervention_types where intervention_type_id = $1 and deleted_at is null and name != 'Counselling'",
+    [interventionTypeId]
+  );
+  if (typeRows.length === 0) return fail(res, 'Invalid or ineligible interventionTypeId', 400);
+
+  const { rows } = await pool.query(
+    `insert into intervention_requests (user_id, intervention_type_id, description)
+     values ($1, $2, $3) returning request_id, status, requested_at`,
+    [req.auth.userId, interventionTypeId, description ? String(description).trim() || null : null]
+  );
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'intervention_request', entityId: rows[0].request_id });
+
+  return ok(res, { requestId: rows[0].request_id, status: rows[0].status, requestedAt: rows[0].requested_at }, 'Request submitted', 201);
+});
+
+// Multiple documents are uploaded one at a time (one required_documents slot
+// per call) rather than a single multi-file submission - matches mail's own
+// one-attachment-per-request convention and keeps each upload independently
+// retryable if one fails.
+router.post('/intervention-requests/:requestId/documents', interventionDocumentUpload.single('file'), async (req, res) => {
+  const { requestId } = req.params;
+  const { documentLabel } = req.body;
+  if (!req.file) return fail(res, 'file is required', 400);
+  if (!documentLabel) return fail(res, 'documentLabel is required', 400);
+
+  const { rows } = await pool.query('select user_id, status from intervention_requests where request_id = $1', [requestId]);
+  if (!rows[0]) return fail(res, 'Request not found', 404);
+  if (rows[0].user_id !== req.auth.userId) return fail(res, 'Not your request', 403);
+  if (rows[0].status !== 'Pending') return fail(res, 'Cannot attach a document to a request that has already been decided', 400);
+
+  const documentId = crypto.randomUUID();
+  const storagePath = `${req.auth.userId}/${requestId}/${documentId}-${sanitizeDocumentFileName(req.file.originalname)}`;
+
+  const { error: uploadError } = await supabase.storage.from('intervention-proofs').upload(storagePath, req.file.buffer, { contentType: req.file.mimetype });
+  if (uploadError) return fail(res, `Could not upload document: ${uploadError.message}`, 500);
+
+  await pool.query(
+    `insert into intervention_request_documents (document_id, request_id, document_label, storage_path, content_type)
+     values ($1, $2, $3, $4, $5)`,
+    [documentId, requestId, documentLabel, storagePath, req.file.mimetype]
+  );
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'intervention_request_document', entityId: documentId });
+
+  return ok(res, { documentId }, 'Document uploaded', 201);
+});
+
+// The caller's own requests only - a dependent/linked case's own requests
+// stay separate, same "per literal case, not resolved through the anchor"
+// convention as case_notes/interventions themselves (migration_027's own
+// comment explains why).
+router.get('/intervention-requests', async (req, res) => {
+  const { rows } = await pool.query(
+    `select ir.request_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
+            it.name as intervention_type_name
+     from intervention_requests ir
+     join intervention_types it on it.intervention_type_id = ir.intervention_type_id
+     where ir.user_id = $1
+     order by ir.requested_at desc`,
+    [req.auth.userId]
+  );
+  const requestIds = rows.map((r) => r.request_id);
+  const { rows: docRows } = requestIds.length > 0
+    ? await pool.query('select request_id, document_label from intervention_request_documents where request_id = any($1::uuid[])', [requestIds])
+    : { rows: [] };
+  const docsByRequest = new Map();
+  for (const d of docRows) {
+    if (!docsByRequest.has(d.request_id)) docsByRequest.set(d.request_id, []);
+    docsByRequest.get(d.request_id).push({ documentLabel: d.document_label });
+  }
+
+  return ok(res, {
+    requests: rows.map((r) => ({
+      requestId: r.request_id,
+      interventionTypeName: r.intervention_type_name,
+      description: r.description,
+      status: r.status,
+      decisionReason: r.decision_reason,
+      requestedAt: r.requested_at,
+      reviewedAt: r.reviewed_at,
+      documents: docsByRequest.get(r.request_id) || [],
+    })),
+  });
+});
+
+router.get('/intervention-requests/:requestId', async (req, res) => {
+  const { requestId } = req.params;
+  const { rows } = await pool.query(
+    `select ir.request_id, ir.user_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
+            it.name as intervention_type_name
+     from intervention_requests ir
+     join intervention_types it on it.intervention_type_id = ir.intervention_type_id
+     where ir.request_id = $1`,
+    [requestId]
+  );
+  if (!rows[0]) return fail(res, 'Request not found', 404);
+  if (rows[0].user_id !== req.auth.userId) return fail(res, 'Not your request', 403);
+
+  const { rows: docRows } = await pool.query(
+    'select document_label from intervention_request_documents where request_id = $1',
+    [requestId]
+  );
+
+  const r = rows[0];
+  return ok(res, {
+    requestId: r.request_id,
+    interventionTypeName: r.intervention_type_name,
+    description: r.description,
+    status: r.status,
+    decisionReason: r.decision_reason,
+    requestedAt: r.requested_at,
+    reviewedAt: r.reviewed_at,
+    documents: docRows.map((d) => ({ documentLabel: d.document_label })),
+  });
+});
+
 module.exports = router;

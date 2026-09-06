@@ -362,3 +362,40 @@ export function useMailActions() {
     deleteThread: (threadId) => apiClient.delete(`/api/mail/threads/${threadId}`, token),
   };
 }
+
+// ===== Victim-Initiated Intervention Requests =====
+// District Admin's own review side - a victim requests one of 6 eligible
+// intervention types (Counselling excluded) with proof documents, and this
+// role Accepts or Rejects it. See migration_027_intervention_requests.sql.
+
+export function useInterventionRequestsList(jurisdictionId, status) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve(null);
+    const params = new URLSearchParams({ jurisdictionId });
+    if (status) params.set('status', status);
+    return apiClient.get(`/api/admin/district/intervention-requests?${params.toString()}`, token);
+  }, [token, jurisdictionId, status]);
+}
+
+export function useInterventionRequestDetail(requestId) {
+  const token = getToken();
+  return useQuery(
+    () => (requestId ? apiClient.get(`/api/admin/district/intervention-requests/${requestId}`, token) : Promise.resolve(null)),
+    [token, requestId]
+  );
+}
+
+export function useReviewInterventionRequest() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (requestId, decision, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/district/intervention-requests/${requestId}/decision`, { decision, reason }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}

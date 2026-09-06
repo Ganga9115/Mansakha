@@ -5,9 +5,6 @@ import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, Chevr
 import {
   useCaseDetail,
   useScheduleSession,
-  useInterventionTypes,
-  useLogIntervention,
-  useCompleteIntervention,
   useLinkedCases,
 } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
@@ -129,12 +126,6 @@ export default function CaseDetail() {
   const [scheduleDate, setScheduleDate] = useState('');
   const toast = useToast();
 
-  const interventionTypesQuery = useInterventionTypes();
-  const logIntervention = useLogIntervention(userId);
-  const completeIntervention = useCompleteIntervention(userId);
-  const [interventionTypeId, setInterventionTypeId] = useState('');
-  const [interventionNotes, setInterventionNotes] = useState('');
-
   const handleSchedule = async () => {
     if (!scheduleDate) return;
     try {
@@ -143,30 +134,6 @@ export default function CaseDetail() {
       setScheduleDate('');
     } catch (err) {
       toast.error(err.message || 'Could not schedule this session.');
-    }
-  };
-
-  const handleLogIntervention = async () => {
-    if (!interventionTypeId) return;
-    try {
-      await logIntervention.mutate({ interventionTypeId, notes: interventionNotes.trim() || undefined });
-      toast.success('Intervention logged.');
-      setInterventionTypeId('');
-      setInterventionNotes('');
-      refetch();
-    } catch (err) {
-      toast.error(err.message || 'Could not log this intervention.');
-    }
-  };
-
-  const handleCompleteIntervention = async () => {
-    if (!data?.interventionId) return;
-    try {
-      await completeIntervention.mutate(data.interventionId);
-      toast.success('Intervention marked complete.');
-      refetch();
-    } catch (err) {
-      toast.error(err.message || 'Could not update this intervention.');
     }
   };
 
@@ -323,57 +290,6 @@ export default function CaseDetail() {
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
               <h3 className="font-bold text-sm text-gray-800 mb-4">Distress Score Trend</h3>
               <CaseTrendChart history={data.scoreHistory || []} />
-            </div>
-
-            {/* Log Intervention - the only thing that (a) ever populates the
-                Reports page's "Intervention Phase Breakdown" donut and (b)
-                acknowledges this case's open alert (see the backend route -
-                an alert only ever leaves "Open" once an intervention is
-                logged against it). Neither had a UI entry point before this. */}
-            <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-sm text-gray-800">Intervention</h3>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wide bg-gray-100 text-gray-600">
-                  {data.interventionStatus === 'none' ? 'None logged' : data.interventionStatus}
-                </span>
-              </div>
-
-              {data.interventionStatus === 'pending' ? (
-                <button
-                  onClick={handleCompleteIntervention}
-                  disabled={completeIntervention.loading}
-                  className="w-full px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
-                >
-                  {completeIntervention.loading ? 'Updating...' : 'Mark Intervention Complete'}
-                </button>
-              ) : (
-                <>
-                  <select
-                    value={interventionTypeId}
-                    onChange={(e) => setInterventionTypeId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-                  >
-                    <option value="">Select an intervention type...</option>
-                    {(interventionTypesQuery.data?.interventionTypes || []).map((t) => (
-                      <option key={t.intervention_type_id} value={t.intervention_type_id}>{t.name}</option>
-                    ))}
-                  </select>
-                  <textarea
-                    value={interventionNotes}
-                    onChange={(e) => setInterventionNotes(e.target.value)}
-                    placeholder="Notes for this intervention (optional)"
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs resize-none"
-                  />
-                  <button
-                    onClick={handleLogIntervention}
-                    disabled={logIntervention.loading || !interventionTypeId}
-                    className="w-full px-3 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
-                  >
-                    {logIntervention.loading ? 'Logging...' : 'Log Intervention'}
-                  </button>
-                </>
-              )}
             </div>
 
           </div>

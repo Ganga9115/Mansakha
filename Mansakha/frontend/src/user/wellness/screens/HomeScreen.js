@@ -205,6 +205,24 @@ export default function HomeScreen({ navigation }) {
                         <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                       </Pressable>
                     )}
+
+                    {/* Request Assistance - victim-initiated intervention
+                        requests (User -> District Admin), replacing the old
+                        Counsellor-recommended flow entirely. See
+                        RequestInterventionScreen.js. */}
+                    <Pressable
+                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                      onPress={() => navigation?.navigate('RequestIntervention')}
+                    >
+                      <View style={styles.gridIconSquare}>
+                        <Feather name="life-buoy" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.gridTitle}>Request Assistance</Text>
+                        <Text style={styles.gridSub}>Medical, legal aid & more</Text>
+                      </View>
+                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                    </Pressable>
                   </View>
 
                   {/* Two Column Layout for Upcoming Sessions and Recent Activity */}

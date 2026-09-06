@@ -27,7 +27,13 @@
         }
       ],
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Mansakha uses your photos to attach proof documents to an assistance request."
+        }
+      ]
     ]
   }
 }

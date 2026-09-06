@@ -80,6 +80,69 @@ export function useCourtCaseDetails(userId) {
   });
 }
 
+// --- Victim-Initiated Intervention Requests (User -> District Admin; see
+// migration_027_intervention_requests.sql) - replaces the old Counsellor-
+// recommended intervention feature entirely. Counselling is deliberately
+// excluded from the type list the backend returns here (it has its own
+// simpler opt-in path, see useUpdateCounsellorPreference above). ---
+
+// The 6 eligible types (Medical, Witness Protection, Relocation, Financial
+// Assistance, Legal Aid, Rehabilitation) with their requiredDocuments -
+// drives the request form's type picker and per-type document checklist.
+export function useInterventionTypes() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'intervention-types'],
+    queryFn: () => apiClient.get('/api/user/intervention-types', token),
+    enabled: !!token,
+  });
+}
+
+export function useMyInterventionRequests() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'intervention-requests'],
+    queryFn: () => apiClient.get('/api/user/intervention-requests', token),
+    enabled: !!token,
+  });
+}
+
+export function useSubmitInterventionRequest() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ interventionTypeId, description }) =>
+      apiClient.post('/api/user/intervention-requests', { interventionTypeId, description }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'intervention-requests'] }),
+  });
+}
+
+// `uri` is whatever expo-image-picker returned (a photo of the physical
+// document - the realistic path for most of these proofs, e.g. a caste
+// certificate or FIR copy someone only holds on paper). Mirrors
+// useSendCounsellorVoiceMessage's exact platform-branch for turning a
+// picked file into the right FormData shape on web vs native.
+export function useUploadInterventionDocument() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ requestId, documentLabel, uri, mimeType }) => {
+      const formData = new FormData();
+      const type = mimeType || 'image/jpeg';
+      const ext = type.includes('png') ? 'png' : type.includes('pdf') ? 'pdf' : 'jpg';
+      if (Platform.OS === 'web') {
+        const blob = await fetch(uri).then((r) => r.blob());
+        formData.append('file', blob, `proof.${ext}`);
+      } else {
+        formData.append('file', { uri, name: `proof.${ext}`, type });
+      }
+      formData.append('documentLabel', documentLabel);
+      return apiClient.uploadFile(`/api/user/intervention-requests/${requestId}/documents`, formData, token);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'intervention-requests'] }),
+  });
+}
+
 export function useConsentStatus() {
   const token = useToken();
   return useQuery({ queryKey: ['user', 'consent-status'], queryFn: () => apiClient.get('/api/user/consent-status', token), enabled: !!token });

@@ -94,13 +94,13 @@ async function resolveActivityUserId(userId) {
 
 router.use(verifyToken);
 
-// The Log Intervention screen needs real intervention_type_id values to submit a
-// valid intervention (not just the fixed names) - this is that lookup.
-router.get('/intervention-types', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  // Raw pg (not Supabase REST) - page-load lookup for the Log Intervention screen.
-  const { rows } = await pool.query('select intervention_type_id, name from intervention_types order by name');
-  return ok(res, { interventionTypes: rows });
-});
+// Log Intervention (create/complete an intervention as Counsellor) was
+// removed - interventions are now victim-initiated (Request Assistance in
+// the mobile app) and District-Admin-reviewed (districtAdmin.routes.js's
+// GET/PATCH /intervention-requests...), see migration_027 and its own
+// design doc. Counsellor keeps read-only visibility into a case's current
+// interventionStatus/suggestedInterventionType below (GET /cases/:userId) -
+// only the ability to create/complete one moved elsewhere.
 
 // Dashboard counts computed server-side (not tallied from one paginated /cases
 // page client-side, which would be wrong once a jurisdiction has more cases than
@@ -517,70 +517,10 @@ router.get('/cases/:userId/linked-cases', requireRole(['Counsellor', 'Administra
   });
 });
 
-router.post('/cases/:userId/intervention', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
-  const { userId } = req.params;
-  const { interventionTypeId, notes } = req.body;
-  if (!interventionTypeId) return fail(res, 'interventionTypeId is required', 400);
-
-  // An alert's user_id is always the anchor's (alerts are generated from
-  // distress_scores under applyStressResponse, which always runs against the
-  // anchor) - looking this up by the literal :userId would never find a
-  // dependent case's real open alert, silently failing to link/acknowledge it.
-  const activityUserId = await resolveActivityUserId(userId);
-  const { data: openAlert } = await supabase
-    .from('alerts')
-    .select('alert_id, alert_status_id, alert_statuses(name)')
-    .eq('user_id', activityUserId)
-    .order('triggered_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  const { data: intervention, error } = await supabase
-    .from('interventions')
-    .insert({
-      user_id: userId,
-      alert_id: openAlert ? openAlert.alert_id : null,
-      intervention_type_id: interventionTypeId,
-      assigned_official_id: req.auth.officialId,
-      notes: notes || null,
-    })
-    .select('intervention_id')
-    .single();
-  if (error) return fail(res, 'Could not log intervention', 500);
-
-  if (openAlert && openAlert.alert_statuses.name === 'Open') {
-    const { data: acknowledgedStatus } = await supabase.from('alert_statuses').select('alert_status_id').eq('name', 'Acknowledged').single();
-    await supabase.from('alerts').update({ alert_status_id: acknowledgedStatus.alert_status_id }).eq('alert_id', openAlert.alert_id);
-  }
-
-  await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'intervention', entityId: intervention.intervention_id });
-
-  return ok(res, { interventionId: intervention.intervention_id }, null, 201);
-});
-
-// interventions.completed_at existed in the schema with no code path that
-// ever set it - "AI follow-up tracking" (Section 4.4) had no real mechanism
-// behind it until this.
-router.patch('/cases/:userId/intervention/:interventionId/complete', requireRole(['Counsellor']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
-  const { userId, interventionId } = req.params;
-
-  const { data, error } = await supabase
-    .from('interventions')
-    .update({ completed_at: new Date().toISOString() })
-    .eq('intervention_id', interventionId)
-    .eq('user_id', userId)
-    .select('intervention_id')
-    .maybeSingle();
-  if (error) return fail(res, 'Could not mark intervention complete', 500);
-  if (!data) return fail(res, 'Intervention not found for this case', 404);
-
-  await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'update', entityType: 'intervention', entityId: interventionId });
-
-  return ok(res, null, 'Intervention marked complete');
-});
-
 // Case notes - free-text commentary, separate from the structured
-// interventions above and from audit_log's read/write record.
+// interventions (now victim-initiated, see the comment near the top of this
+// file where the old Log Intervention routes used to live) and from
+// audit_log's read/write record.
 router.get('/cases/:userId/notes', requireRole(['Counsellor', 'Administration']), generalApiLimiter, requireJurisdiction(resolveUserJurisdiction), async (req, res) => {
   const { userId } = req.params;
   const { rows } = await pool.query(
@@ -791,10 +731,12 @@ router.patch(
   }
 );
 
-// The only existing write path for a distress_score-sourced alert
-// (POST /cases/:userId/intervention) only ever moves Open -> Acknowledged,
-// as a side effect of logging an intervention - there was no way to move
-// Acknowledged (or Open, if no intervention was ever needed) -> Resolved.
+// Historical note: the old Counsellor "Log Intervention" route used to be
+// the only write path that ever moved a distress_score-sourced alert from
+// Open -> Acknowledged (as a side effect of logging one) - there was no way
+// to move Acknowledged (or Open, if no intervention was ever needed) ->
+// Resolved. That route is gone (interventions are victim-initiated now, see
+// migration_027), so this alert-status write path below stands on its own.
 async function resolveAlertJurisdiction(req) {
   // Raw pg (not Supabase REST) - hot helper, runs before every alert
   // acknowledge/resolve action.
