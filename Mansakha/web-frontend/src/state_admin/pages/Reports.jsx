@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
-import { Download, FilePlus, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { Download, FilePlus, ChevronDown, ChevronUp, CheckCircle2, Forward } from 'lucide-react';
 import {
-  useMyJurisdiction, useReportsList, useUpdateReportStatus, useDownloadReportPdf,
+  useMyJurisdiction, useReportsList, useUpdateReportStatus, useDownloadReportPdf, useForwardReport, useJurisdictionOptions,
 } from '../services/hooks';
 import GenerateReportModal from '../components/GenerateReportModal';
 import ReportSnapshotView, { RecipientPills } from '../components/ReportSnapshotView';
@@ -21,9 +21,22 @@ const REPORT_STATUS_BADGE = {
   Reviewed: 'bg-emerald-100 text-emerald-700',
 };
 
-function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingId }) {
+// Where an INBOX row can be forwarded on to - State's own optional set at
+// generation time is National and/or Ministry (forwarding to National makes
+// sense when the District that sent this didn't already cc National itself).
+// Plain derivation, not a hook, despite the naming convention elsewhere.
+function getForwardTargets(nationalJurisdictionId) {
+  const targets = [];
+  if (nationalJurisdictionId) targets.push({ label: 'National Admin', type: 'jurisdiction', jurisdictionId: nationalJurisdictionId });
+  targets.push({ label: 'Ministry', type: 'ministry' });
+  return targets;
+}
+
+function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingId, forwardTargets, onForward, forwardingId }) {
   const [expanded, setExpanded] = useState(false);
+  const [showForwardMenu, setShowForwardMenu] = useState(false);
   const canReview = box === 'inbox' && r.myStatus !== 'Reviewed';
+  const canForward = box === 'inbox';
 
   return (
     <div>
@@ -64,6 +77,36 @@ function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingI
               {markingId === r.reportId ? 'Marking...' : 'Mark Reviewed'}
             </span>
           )}
+          {canForward && forwardTargets.length > 0 && (
+            <div className="relative">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setShowForwardMenu((v) => !v); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setShowForwardMenu((v) => !v); } }}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-md text-[11px] font-semibold transition"
+              >
+                <Forward size={13} />
+                {forwardingId === r.reportId ? 'Forwarding...' : 'Forward'}
+              </span>
+              {showForwardMenu && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10 min-w-[160px]"
+                >
+                  {forwardTargets.map((t) => (
+                    <button
+                      key={t.label}
+                      onClick={() => { setShowForwardMenu(false); onForward(r.reportId, t); }}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {expanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
         </div>
       </button>
@@ -95,12 +138,17 @@ export default function Reports() {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [markingId, setMarkingId] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [forwardingId, setForwardingId] = useState(null);
   const [reportsActionError, setReportsActionError] = useState(null);
 
   const inboxQuery = useReportsList(jurisdictionId, 'inbox');
   const outboxQuery = useReportsList(jurisdictionId, 'outbox');
   const updateReportStatus = useUpdateReportStatus();
   const downloadReportPdf = useDownloadReportPdf();
+  const forwardReport = useForwardReport();
+  const nationalOptions = useJurisdictionOptions('national');
+  const nationalJurisdictionId = nationalOptions.data?.jurisdictions?.[0]?.jurisdictionId;
+  const forwardTargets = getForwardTargets(nationalJurisdictionId);
 
   const inboxReports = inboxQuery.data?.reports || [];
   const outboxReports = outboxQuery.data?.reports || [];
@@ -134,6 +182,19 @@ export default function Reports() {
       setReportsActionError(err.message || 'Could not download PDF.');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleForward = async (reportId, target) => {
+    setReportsActionError(null);
+    setForwardingId(reportId);
+    try {
+      await forwardReport.mutate(reportId, target);
+      inboxQuery.refetch();
+    } catch (err) {
+      setReportsActionError(err.message || 'Could not forward report.');
+    } finally {
+      setForwardingId(null);
     }
   };
 
@@ -200,6 +261,9 @@ export default function Reports() {
                     markingId={markingId}
                     onDownload={handleDownloadPdf}
                     downloadingId={downloadingId}
+                    forwardTargets={forwardTargets}
+                    onForward={handleForward}
+                    forwardingId={forwardingId}
                   />
                 ))}
               </div>

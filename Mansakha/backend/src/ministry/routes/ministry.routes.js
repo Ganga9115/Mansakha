@@ -784,17 +784,24 @@ router.get('/ivrs-log', async (req, res) => {
 //
 // LEAK FIX (Detailed PDF Reports): this route had NO where clause at all -
 // every District/State report ever generated, Draft or not, was visible to
-// Ministry regardless of who it was actually routed to. A Ministry recipient
-// is only ever meaningful for a NATIONAL-tier report (District/State reports
-// go to their own parent tier by default, per reportSnapshot.js/the admin
-// routes' POST /reports/generate - Ministry only ever receives one via an
-// explicit optional cc, which is itself only ever added to a National
-// report) that has actually been sent (status in Submitted/Reviewed, never
+// Ministry regardless of who it was actually routed to.
+//
+// FIX #2 (Forward After Review): an EARLIER version of this fix filtered by
+// `origin.level = 'national'`, reasoning that Ministry only ever receives a
+// report as an explicit optional cc on National's own report. That's no
+// longer true now that ANY recipient (District/State/National-tier) can
+// FORWARD a report they received on to Ministry after reviewing it - a
+// District-tier report a State forwards to Ministry is a real, intended
+// case a tier-based filter would wrongly hide. The correct filter is
+// RECIPIENT-based, not tier-based - exactly the same pattern the District/
+// State/National tiers' own inbox routes already use (join through
+// report_recipients, not through the report's own origin jurisdiction):
+// a report is visible here whenever a report_recipients row exists with
+// recipient_type='ministry' and status in ('Submitted','Reviewed') (never
 // Draft - a Draft has zero report_recipients rows and was never meant to be
-// visible here). report_recipients is attached per report (batched, not
-// N+1) so Ministry can see/act on its own review status - the ministry-type
-// row is unconditionally "mine" here, unlike the admin tiers' inbox route
-// which has to pick its own row out of several possible recipients.
+// visible here). origin/jurisdictionLevel/tier fields are still carried on
+// every row so a future frontend pass can group Ministry's inbox by
+// District/State/National reports.
 router.get('/reports', async (req, res) => {
   const { jurisdictionLevel } = req.query;
   const pageSize = 30;
@@ -812,7 +819,10 @@ router.get('/reports', async (req, res) => {
      left join jurisdictions origin on origin.jurisdiction_id = r.jurisdiction_id
      left join jurisdictions target on target.jurisdiction_id = r.target_jurisdiction_id
      left join officials o on o.official_id = r.generated_by
-     where origin.level = 'national' and r.status in ('Submitted', 'Reviewed')
+     where exists (
+       select 1 from report_recipients rr
+       where rr.report_id = r.report_id and rr.recipient_type = 'ministry' and rr.status in ('Submitted', 'Reviewed')
+     )
      order by r.generated_at desc
      limit $1 offset $2`,
     [pageSize, offset]
@@ -820,12 +830,18 @@ router.get('/reports', async (req, res) => {
   const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
 
   // Batched, not N+1 - one query for every report's Ministry recipient row
-  // at once, same convention the admin tiers' GET /reports uses.
+  // at once, same convention the admin tiers' GET /reports uses. Joins
+  // officials for the forwarder's name (Forward After Review) so
+  // isForwarded/forwardedByName/forwardedAt can be surfaced the same way
+  // the admin tiers' own inbox route does.
   const reportIds = rows.map((r) => r.report_id);
   let ministryRowByReportId = new Map();
   if (reportIds.length > 0) {
     const { rows: recipientRows } = await pool.query(
-      `select report_id, recipient_id, status from report_recipients where report_id = any($1::uuid[]) and recipient_type = 'ministry'`,
+      `select rr.report_id, rr.recipient_id, rr.status, rr.forwarded_at, fwd.full_name as forwarded_by_name
+       from report_recipients rr
+       left join officials fwd on fwd.official_id = rr.forwarded_by
+       where rr.report_id = any($1::uuid[]) and rr.recipient_type = 'ministry'`,
       [reportIds]
     );
     ministryRowByReportId = new Map(recipientRows.map((r) => [r.report_id, r]));
@@ -856,6 +872,9 @@ router.get('/reports', async (req, res) => {
       insightId: r.insight_id,
       myRecipientId: myRow ? myRow.recipient_id : null,
       myStatus: myRow ? myRow.status : null,
+      isForwarded: myRow ? !!myRow.forwarded_at : false,
+      forwardedByName: myRow && myRow.forwarded_at ? myRow.forwarded_by_name || null : null,
+      forwardedAt: myRow ? myRow.forwarded_at : null,
     };
   });
   if (jurisdictionLevel) reports = reports.filter((r) => r.jurisdictionLevel === jurisdictionLevel);
@@ -883,9 +902,12 @@ router.get('/reports/:reportId/pdf', async (req, res) => {
   if (!report) return fail(res, 'Report not found', 404);
 
   const { rows: recipientRows } = await pool.query(
-    `select rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at, j.name as jurisdiction_name
+    `select rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at,
+            rr.forwarded_at, fwd.full_name as forwarded_by_name,
+            j.name as jurisdiction_name
      from report_recipients rr
      left join jurisdictions j on j.jurisdiction_id = rr.jurisdiction_id
+     left join officials fwd on fwd.official_id = rr.forwarded_by
      where rr.report_id = $1`,
     [reportId]
   );
@@ -906,6 +928,9 @@ router.get('/reports/:reportId/pdf', async (req, res) => {
       isPrimary: r.is_primary,
       status: r.status,
       reviewedAt: r.reviewed_at,
+      isForwarded: !!r.forwarded_at,
+      forwardedByName: r.forwarded_at ? r.forwarded_by_name || null : null,
+      forwardedAt: r.forwarded_at,
     })),
   };
 
@@ -922,6 +947,34 @@ router.get('/reports/:reportId/pdf', async (req, res) => {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${report.jurisdiction_name}-report-${reportId}.pdf"`);
   return res.send(buffer);
+});
+
+// ===== Detailed PDF Reports - Forward After Review =====
+// Same route/logic as the 3 admin tiers' own POST .../reports/:reportId/forward
+// (this router's own verifyToken/requireRole(['Ministry'])/generalApiLimiter
+// are already applied file-wide via router.use() above, so no per-route
+// middleware here) - included for API completeness/consistency, but a
+// Ministry caller always matches the report_recipients row via
+// recipient_type='ministry', and Ministry has nothing above it, so this
+// always rejects for a real Ministry caller. Ministry has no other
+// jurisdiction to forward from in practice; this exists so the route shape
+// is symmetric across all 4 files rather than silently 404ing here.
+router.post('/reports/:reportId/forward', async (req, res) => {
+  const { reportId } = req.params;
+
+  const { rows: reportRows } = await pool.query('select report_id from reports where report_id = $1', [reportId]);
+  if (!reportRows[0]) return fail(res, 'Report not found', 404);
+
+  const { rows: recipientRows } = await pool.query(
+    'select recipient_id, recipient_type, jurisdiction_id from report_recipients where report_id = $1',
+    [reportId]
+  );
+
+  const myRow = recipientRows.find((r) => r.recipient_type === 'ministry');
+  if (!myRow) return fail(res, 'You are not a recipient of this report', 404);
+
+  // Ministry has nothing above it - nothing to forward to.
+  return fail(res, 'Ministry has no recipient above it to forward a report to', 400);
 });
 
 module.exports = router;

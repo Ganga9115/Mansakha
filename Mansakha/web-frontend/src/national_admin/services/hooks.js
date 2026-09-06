@@ -168,6 +168,23 @@ export function useUpdateReportStatus() {
   return { mutate, loading };
 }
 
+// Forward an already-received report onward (Ministry only, for National) -
+// only a real RECIPIENT of a report can forward it (enforced server-side),
+// so this only ever makes sense from the Inbox tab, never Outbox.
+export function useForwardReport() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, target) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/admin/national/reports/${reportId}/forward`, target, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 // Mirrors useExportReportCsv's exact raw-fetch-to-blob-download pattern,
 // just against the PDF route/content-type instead of the CSV export one.
 export function useDownloadReportPdf() {

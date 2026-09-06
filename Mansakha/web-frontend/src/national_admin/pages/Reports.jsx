@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
-import { Download, FilePlus, ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react';
+import { Download, FilePlus, ChevronDown, ChevronUp, CheckCircle2, Forward } from 'lucide-react';
 import {
-  useMyJurisdiction, useReportsList, useUpdateReportStatus, useDownloadReportPdf,
+  useMyJurisdiction, useReportsList, useUpdateReportStatus, useDownloadReportPdf, useForwardReport,
 } from '../services/hooks';
 import GenerateReportModal from '../components/GenerateReportModal';
 import ReportSnapshotView, { RecipientPills } from '../components/ReportSnapshotView';
@@ -21,9 +21,26 @@ const REPORT_STATUS_BADGE = {
   Reviewed: 'bg-emerald-100 text-emerald-700',
 };
 
-function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingId }) {
+// National has nothing to forward TO except Ministry - it's the top of the
+// jurisdiction chain, Ministry is the only tier above it.
+const FORWARD_TARGETS = [{ label: 'Ministry', type: 'ministry' }];
+
+// Inbox can hold BOTH District-tier reports (cc'd or forwarded directly,
+// bypassing State) and State-tier reports (the normal primary-recipient
+// flow) at once - grouping by origin tier, not one flat list, is what makes
+// that legible (mirrors Ministry's own equivalent grouping).
+const TIER_GROUP_LABELS = {
+  district: 'From Districts (Direct)',
+  state: 'From States',
+  national: 'From National',
+};
+const TIER_GROUP_ORDER = ['state', 'district', 'national'];
+
+function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingId, forwardTargets, onForward, forwardingId }) {
   const [expanded, setExpanded] = useState(false);
+  const [showForwardMenu, setShowForwardMenu] = useState(false);
   const canReview = box === 'inbox' && r.myStatus !== 'Reviewed';
+  const canForward = box === 'inbox';
 
   return (
     <div>
@@ -64,6 +81,36 @@ function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingI
               {markingId === r.reportId ? 'Marking...' : 'Mark Reviewed'}
             </span>
           )}
+          {canForward && forwardTargets.length > 0 && (
+            <div className="relative">
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => { e.stopPropagation(); setShowForwardMenu((v) => !v); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); setShowForwardMenu((v) => !v); } }}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-md text-[11px] font-semibold transition"
+              >
+                <Forward size={13} />
+                {forwardingId === r.reportId ? 'Forwarding...' : 'Forward'}
+              </span>
+              {showForwardMenu && (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10 min-w-[160px]"
+                >
+                  {forwardTargets.map((t) => (
+                    <button
+                      key={t.label}
+                      onClick={() => { setShowForwardMenu(false); onForward(r.reportId, t); }}
+                      className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 transition"
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {expanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
         </div>
       </button>
@@ -95,17 +142,36 @@ export default function Reports() {
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [markingId, setMarkingId] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
+  const [forwardingId, setForwardingId] = useState(null);
   const [reportsActionError, setReportsActionError] = useState(null);
 
   const inboxQuery = useReportsList(jurisdictionId, 'inbox');
   const outboxQuery = useReportsList(jurisdictionId, 'outbox');
   const updateReportStatus = useUpdateReportStatus();
   const downloadReportPdf = useDownloadReportPdf();
+  const forwardReport = useForwardReport();
 
   const inboxReports = inboxQuery.data?.reports || [];
   const outboxReports = outboxQuery.data?.reports || [];
   const activeReportsQuery = reportsTab === 'inbox' ? inboxQuery : outboxQuery;
   const visibleReports = reportsTab === 'inbox' ? inboxReports : outboxReports;
+
+  // Group the Inbox by origin tier (District-direct vs State, the normal
+  // flow) - a flat list mixing case-wise-origin and district-wise-origin
+  // reports together reads as a jumble; Outbox is always all-one-tier
+  // (National's own generated reports), so it stays a plain list.
+  const groupedInbox = useMemo(() => {
+    if (reportsTab !== 'inbox') return null;
+    const byTier = new Map();
+    for (const r of inboxReports) {
+      const tier = r.tier || 'state';
+      if (!byTier.has(tier)) byTier.set(tier, []);
+      byTier.get(tier).push(r);
+    }
+    return TIER_GROUP_ORDER
+      .filter((tier) => byTier.has(tier))
+      .map((tier) => ({ tier, label: TIER_GROUP_LABELS[tier] || tier, reports: byTier.get(tier) }));
+  }, [reportsTab, inboxReports]);
 
   const handleReportGenerated = () => {
     inboxQuery.refetch();
@@ -134,6 +200,19 @@ export default function Reports() {
       setReportsActionError(err.message || 'Could not download PDF.');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleForward = async (reportId, target) => {
+    setReportsActionError(null);
+    setForwardingId(reportId);
+    try {
+      await forwardReport.mutate(reportId, target);
+      inboxQuery.refetch();
+    } catch (err) {
+      setReportsActionError(err.message || 'Could not forward report.');
+    } finally {
+      setForwardingId(null);
     }
   };
 
@@ -189,6 +268,30 @@ export default function Reports() {
               <p className="text-sm text-gray-400 p-6">
                 {reportsTab === 'inbox' ? 'No reports received yet.' : 'No reports generated yet.'}
               </p>
+            ) : groupedInbox ? (
+              <div className="divide-y divide-gray-200">
+                {groupedInbox.map((group) => (
+                  <div key={group.tier}>
+                    <p className="px-6 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 bg-gray-50/60">{group.label}</p>
+                    <div className="divide-y divide-gray-100">
+                      {group.reports.map((r) => (
+                        <ReportRow
+                          key={r.reportId}
+                          r={r}
+                          box={reportsTab}
+                          onMarkReviewed={handleMarkReviewed}
+                          markingId={markingId}
+                          onDownload={handleDownloadPdf}
+                          downloadingId={downloadingId}
+                          forwardTargets={FORWARD_TARGETS}
+                          onForward={handleForward}
+                          forwardingId={forwardingId}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : (
               <div className="divide-y divide-gray-100">
                 {visibleReports.map((r) => (
@@ -200,6 +303,9 @@ export default function Reports() {
                     markingId={markingId}
                     onDownload={handleDownloadPdf}
                     downloadingId={downloadingId}
+                    forwardTargets={FORWARD_TARGETS}
+                    onForward={handleForward}
+                    forwardingId={forwardingId}
                   />
                 ))}
               </div>
