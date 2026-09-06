@@ -110,8 +110,12 @@ async function computeTrendDirection(jurisdictionIds) {
 // authenticated official can call it, not just Ministry.
 router.get('/root-jurisdiction', verifyToken, generalApiLimiter, async (req, res) => {
   if (!req.auth || req.auth.type !== 'official') return fail(res, 'Staff account required', 403);
-  const { data, error } = await supabase.from('jurisdictions').select('jurisdiction_id, name').eq('level', 'national').limit(1).maybeSingle();
-  if (error || !data) return fail(res, 'No national jurisdiction configured', 404);
+  // Raw pg, not Supabase REST - a single-row-by-level lookup with no reason
+  // to pay PostgREST's ~500-650ms round trip, and this is called on every
+  // Ministry session bootstrap (see comment above).
+  const { rows } = await pool.query(`select jurisdiction_id, name from jurisdictions where level = 'national' limit 1`);
+  const data = rows[0];
+  if (!data) return fail(res, 'No national jurisdiction configured', 404);
   return ok(res, { jurisdictionId: data.jurisdiction_id, name: data.name });
 });
 
@@ -334,12 +338,12 @@ router.get(
     const pageSize = 30;
     const offset = (Number(page) - 1) * pageSize;
 
-    const { data: jurisdiction, error: jError } = await supabase
-      .from('jurisdictions')
-      .select('level, name')
-      .eq('jurisdiction_id', jurisdictionId)
-      .single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg, not Supabase REST - this dashboard load's own jurisdiction
+    // lookup was paying a full ~500-650ms PostgREST round trip on every
+    // single page load before this fix.
+    const { rows: jurisdictionRows } = await pool.query('select level, name from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'admin_dashboard', entityId: jurisdictionId });
 
@@ -576,12 +580,10 @@ router.get(
   async (req, res) => {
     const { jurisdictionId } = req.params;
 
-    const { data: jurisdiction, error: jError } = await supabase
-      .from('jurisdictions')
-      .select('level, name')
-      .eq('jurisdiction_id', jurisdictionId)
-      .single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg, not Supabase REST - same fix as GET /dashboard/:jurisdictionId above.
+    const { rows: jurisdictionRows } = await pool.query('select level, name from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'export', entityType: 'admin_dashboard', entityId: jurisdictionId });
 
@@ -766,11 +768,15 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
   const { docketNumber } = req.query;
   if (!docketNumber) return fail(res, 'docketNumber is required', 400);
 
-  const { data: user } = await supabase
-    .from('users')
-    .select('user_id, docket_number, case_type_id, jurisdiction_id, case_stage, status, linked_to_user_id')
-    .ilike('docket_number', String(docketNumber).trim().replace(/[%_\\]/g, '\\$&'))
-    .maybeSingle();
+  // Raw pg, not Supabase REST - ilike search plus the parent-chain walk
+  // below could otherwise be several sequential ~500-650ms PostgREST round
+  // trips for one docket-number search.
+  const { rows: userRows } = await pool.query(
+    `select user_id, docket_number, case_type_id, jurisdiction_id, case_stage, status, linked_to_user_id
+     from users where docket_number ilike $1 limit 1`,
+    [String(docketNumber).trim().replace(/[%_\\]/g, '\\$&')]
+  );
+  const user = userRows[0];
   if (!user) return ok(res, { user: null });
 
   // Same parent-chain walk requireJurisdiction() does, applied to the FOUND
@@ -784,8 +790,10 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
     let allowed = false;
     while (currentId) {
       if (assignedIds.has(currentId)) { allowed = true; break; }
-      const { data: node } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', currentId).maybeSingle();
-      currentId = node ? node.parent_id : null;
+      // Raw pg - this loop can run once per level of the jurisdiction tree,
+      // so each hop paying PostgREST's round trip was the worst case here.
+      const { rows: nodeRows } = await pool.query('select parent_id from jurisdictions where jurisdiction_id = $1', [currentId]);
+      currentId = nodeRows[0] ? nodeRows[0].parent_id : null;
     }
     if (!allowed) return fail(res, 'Outside your assigned jurisdiction', 403);
   }
@@ -795,7 +803,11 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
   // search would otherwise show blank name/contact/address for one - even
   // though an admin searching by that exact docket clearly expects to find
   // the person, not an empty identity.
-  const { data: identity } = await supabase.from('user_identity').select('full_name, contact_number, address').eq('user_id', user.linked_to_user_id || user.user_id).maybeSingle();
+  const { rows: identityRows } = await pool.query(
+    'select full_name, contact_number, address from user_identity where user_id = $1',
+    [user.linked_to_user_id || user.user_id]
+  );
+  const identity = identityRows[0];
 
   return ok(res, {
     user: {
@@ -849,8 +861,10 @@ router.patch(
   requireRole(['Administration', 'Ministry']),
   generalApiLimiter,
   requireJurisdiction(async (req) => {
-    const { data } = await supabase.from('users').select('jurisdiction_id').eq('user_id', req.params.userId).maybeSingle();
-    return data ? data.jurisdiction_id : null;
+    // Raw pg - runs on every PATCH to this route as part of the jurisdiction
+    // check, no reason to pay PostgREST's round trip for a single-row lookup.
+    const { rows } = await pool.query('select jurisdiction_id from users where user_id = $1', [req.params.userId]);
+    return rows[0] ? rows[0].jurisdiction_id : null;
   }),
   async (req, res) => {
     const { userId } = req.params;
@@ -902,8 +916,11 @@ router.post(
     const { jurisdictionId, periodStart, periodEnd } = req.body;
     if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
 
-    const { data: jurisdiction, error: jError } = await supabase.from('jurisdictions').select('level, name').eq('jurisdiction_id', jurisdictionId).single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg, not Supabase REST - single-row jurisdiction lookup, same fix
+    // as GET /dashboard/:jurisdictionId above.
+    const { rows: jurisdictionRows } = await pool.query('select level, name from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     const end = periodEnd ? new Date(periodEnd) : new Date();
     const start = periodStart ? new Date(periodStart) : new Date(end.getTime() - TREND_PERIOD_DAYS * 86400000);
@@ -911,11 +928,13 @@ router.post(
     const endIso = end.toISOString();
 
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
+    // Raw pg with `= any($1::uuid[])`, not selectInChunks/Supabase REST - a
+    // single parameterized array bound over the wire isn't subject to
+    // PostgREST's URL-length limit ID_CHUNK_SIZE exists to work around, so
+    // this needs no chunking at all once it's off REST.
     let users;
     try {
-      users = await selectInChunks(allDescendantIds, (chunk) =>
-        supabase.from('users').select('user_id').in('jurisdiction_id', chunk)
-      );
+      ({ rows: users } = await pool.query('select user_id from users where jurisdiction_id = any($1::uuid[])', [allDescendantIds]));
     } catch (err) {
       return fail(res, `Could not load users: ${err.message}`, 500);
     }
@@ -925,39 +944,38 @@ router.post(
     let journalEntries = [];
     let caseNotes = [];
     if (userIds.length > 0) {
+      // Raw pg, not Supabase REST - these previously ran an UNCHUNKED
+      // `.in('user_id', userIds)` against a list that can be the same size
+      // as the whole descendant-subtree user count, i.e. exactly the
+      // PostgREST URL-length failure mode ID_CHUNK_SIZE/selectInChunks
+      // exists to guard against elsewhere in this file. `= any($1::uuid[])`
+      // has no such limit.
       const [chatRes, journalRes, notesRes] = await Promise.all([
         // sender: 'user' only - the AI's own canned supportive replies
         // (sender: 'ai') aren't a distress signal worth feeding back into
         // another AI analysis.
-        supabase
-          .from('chat_messages')
-          .select('body, sent_at')
-          .in('user_id', userIds)
-          .eq('sender', 'user')
-          .gte('sent_at', startIso)
-          .lte('sent_at', endIso)
-          .order('sent_at', { ascending: false })
-          .limit(ANALYTICS_PER_SOURCE_CAP),
-        supabase
-          .from('journal_entries')
-          .select('content, created_at')
-          .in('user_id', userIds)
-          .gte('created_at', startIso)
-          .lte('created_at', endIso)
-          .order('created_at', { ascending: false })
-          .limit(ANALYTICS_PER_SOURCE_CAP),
-        supabase
-          .from('case_notes')
-          .select('note_text, created_at')
-          .in('user_id', userIds)
-          .gte('created_at', startIso)
-          .lte('created_at', endIso)
-          .order('created_at', { ascending: false })
-          .limit(ANALYTICS_PER_SOURCE_CAP),
+        pool.query(
+          `select body, sent_at from chat_messages
+           where user_id = any($1::uuid[]) and sender = 'user' and sent_at >= $2 and sent_at <= $3
+           order by sent_at desc limit $4`,
+          [userIds, startIso, endIso, ANALYTICS_PER_SOURCE_CAP]
+        ),
+        pool.query(
+          `select content, created_at from journal_entries
+           where user_id = any($1::uuid[]) and created_at >= $2 and created_at <= $3
+           order by created_at desc limit $4`,
+          [userIds, startIso, endIso, ANALYTICS_PER_SOURCE_CAP]
+        ),
+        pool.query(
+          `select note_text, created_at from case_notes
+           where user_id = any($1::uuid[]) and created_at >= $2 and created_at <= $3
+           order by created_at desc limit $4`,
+          [userIds, startIso, endIso, ANALYTICS_PER_SOURCE_CAP]
+        ),
       ]);
-      chatMessages = chatRes.data || [];
-      journalEntries = journalRes.data || [];
-      caseNotes = notesRes.data || [];
+      chatMessages = chatRes.rows || [];
+      journalEntries = journalRes.rows || [];
+      caseNotes = notesRes.rows || [];
     }
 
     const totalItems = chatMessages.length + journalEntries.length + caseNotes.length;
@@ -1041,11 +1059,14 @@ router.post(
     const normalizedPriority = priority === 'urgent' ? 'urgent' : 'normal';
 
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
+    // Raw pg with `= any($1::uuid[])`, not selectInChunks/Supabase REST -
+    // same reasoning as POST /analytics/generate above.
     let activeUsers;
     try {
-      activeUsers = await selectInChunks(allDescendantIds, (chunk) =>
-        supabase.from('users').select('user_id').in('jurisdiction_id', chunk).eq('status', 'active')
-      );
+      ({ rows: activeUsers } = await pool.query(
+        `select user_id from users where jurisdiction_id = any($1::uuid[]) and status = 'active'`,
+        [allDescendantIds]
+      ));
     } catch (err) {
       return fail(res, `Could not load users: ${err.message}`, 500);
     }
@@ -1110,26 +1131,30 @@ router.get(
     // working for 'district'.
     const jurisdictionIds = await getDescendantJurisdictionIds(jurisdictionId);
 
-    // official_roles has TWO FKs into officials (official_id AND
-    // assigned_by), so a plain `officials(full_name)` embed here is
-    // ambiguous to PostgREST ("more than one relationship was found") -
-    // confirmed live, not hypothetical. Sidestepped with a second plain
-    // query instead of an embed-hint (routes/lookups.js documents the same
-    // "avoid embed hints, do two queries" convention for a different
-    // ambiguous-relationship case).
+    // Raw pg join, not Supabase REST's embed syntax - official_roles has TWO
+    // FKs into officials (official_id AND assigned_by), so a plain
+    // `officials(full_name)` embed here was ambiguous to PostgREST ("more
+    // than one relationship was found") - confirmed live, not hypothetical.
+    // A real SQL join on official_id specifically (not assigned_by) has no
+    // such ambiguity, and `= any($1::uuid[])` needs no chunking (see
+    // selectInChunks's own comment on why REST's .in() did).
     let roleRows;
     try {
-      roleRows = await selectInChunks(jurisdictionIds, (chunk) =>
-        supabase.from('official_roles').select('official_id, roles(role_name)').in('jurisdiction_id', chunk).is('revoked_at', null)
-      );
+      ({ rows: roleRows } = await pool.query(
+        `select orl.official_id, r.role_name
+         from official_roles orl
+         join roles r on r.role_id = orl.role_id
+         where orl.jurisdiction_id = any($1::uuid[]) and orl.revoked_at is null`,
+        [jurisdictionIds]
+      ));
     } catch (err) {
       return fail(res, `Could not load counsellors: ${err.message}`, 500);
     }
 
-    const counsellorIds = roleRows.filter((r) => r.roles.role_name === 'Counsellor').map((r) => r.official_id);
+    const counsellorIds = roleRows.filter((r) => r.role_name === 'Counsellor').map((r) => r.official_id);
     if (counsellorIds.length === 0) return ok(res, { counsellors: [] });
 
-    const { data: officialRows } = await supabase.from('officials').select('official_id, full_name').in('official_id', counsellorIds);
+    const { rows: officialRows } = await pool.query('select official_id, full_name from officials where official_id = any($1::uuid[])', [counsellorIds]);
     const fullNameById = new Map((officialRows || []).map((o) => [o.official_id, o.full_name]));
 
     // One query for every counsellor's users, not one query PER counsellor -
@@ -1137,13 +1162,34 @@ router.get(
     // loop (only ever silenced with an eslint-disable, never actually
     // fixed), which meant a jurisdiction with 20 counsellors made 20
     // sequential ~1-2s PostgREST round trips (20-40s) to load this one page.
-    // A single .in() call plus grouping in JS is both correct (identical
+    // A single raw pg join plus grouping in JS is both correct (identical
     // per-counsellor results) and a single round trip regardless of how many
-    // counsellors there are.
-    const { data: allUsers } = await supabase
-      .from('users')
-      .select('assigned_counsellor_id, status, linked_to_user_id, distress_scores(score_value, computed_at)')
-      .in('assigned_counsellor_id', counsellorIds);
+    // counsellors there are. LEFT JOIN (not an inner join) so a counsellor's
+    // user with zero distress_scores rows still comes back (with a null
+    // score_value/computed_at, filtered out below when building the
+    // per-user distress_scores array) - an inner join would silently drop
+    // that user entirely, undercounting activeCaseCount.
+    const { rows: userScoreRows } = await pool.query(
+      `select u.user_id, u.assigned_counsellor_id, u.status, u.linked_to_user_id, ds.score_value, ds.computed_at
+       from users u
+       left join distress_scores ds on ds.user_id = u.user_id
+       where u.assigned_counsellor_id = any($1::uuid[])`,
+      [counsellorIds]
+    );
+    // Regroups the flat join rows back into the same per-user shape the old
+    // `distress_scores(score_value, computed_at)` embed produced (one user
+    // object with a distress_scores array), since the code below (avgDistress-
+    // PointDrop etc.) expects exactly that shape.
+    const usersByUserId = new Map();
+    for (const r of userScoreRows) {
+      let u = usersByUserId.get(r.user_id);
+      if (!u) {
+        u = { assigned_counsellor_id: r.assigned_counsellor_id, status: r.status, linked_to_user_id: r.linked_to_user_id, distress_scores: [] };
+        usersByUserId.set(r.user_id, u);
+      }
+      if (r.computed_at) u.distress_scores.push({ score_value: r.score_value, computed_at: r.computed_at });
+    }
+    const allUsers = [...usersByUserId.values()];
 
     const usersByCounsellor = new Map(counsellorIds.map((id) => [id, []]));
     for (const u of allUsers || []) {
@@ -1234,16 +1280,15 @@ router.post(
     const { jurisdictionId, commentary, insightId, asDraft } = req.body;
     if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
 
-    const { data: jurisdiction, error: jError } = await supabase
-      .from('jurisdictions')
-      .select('level, name, parent_id')
-      .eq('jurisdiction_id', jurisdictionId)
-      .single();
-    if (jError || !jurisdiction) return fail(res, 'Jurisdiction not found', 404);
+    // Raw pg, not Supabase REST - same fix as the other single-row
+    // jurisdiction lookups above.
+    const { rows: jurisdictionRows } = await pool.query('select level, name, parent_id from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+    const jurisdiction = jurisdictionRows[0];
+    if (!jurisdiction) return fail(res, 'Jurisdiction not found', 404);
 
     if (insightId) {
-      const { data: insightRow } = await supabase.from('jurisdiction_analytics_insights').select('insight_id').eq('insight_id', insightId).maybeSingle();
-      if (!insightRow) return fail(res, 'insightId not found', 404);
+      const { rows: insightRows } = await pool.query('select insight_id from jurisdiction_analytics_insights where insight_id = $1', [insightId]);
+      if (!insightRows[0]) return fail(res, 'insightId not found', 404);
     }
 
     const periodType = VALID_PERIOD_TYPES.includes(req.body.periodType) ? req.body.periodType : 'custom';

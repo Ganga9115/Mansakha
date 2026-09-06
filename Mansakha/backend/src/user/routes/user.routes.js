@@ -107,61 +107,72 @@ router.use(verifyToken, requireUser, generalApiLimiter);
 router.get('/dashboard', async (req, res) => {
   const userId = req.auth.userId;
 
-  // These 5 reads are all keyed on userId alone - none depends on another's
+  // These 6 reads are all keyed on userId alone - none depends on another's
   // result - but ran one after another, each paying Supabase REST's own
-  // ~1-2s round-trip on top of the last. Confirmed live as the cause of the
-  // Home screen sitting on its loading skeleton for several seconds; running
-  // them concurrently is a straightforward fix (see admin.js's dashboard/
-  // heatmap routes for the same pattern applied to their own N+1 loops).
+  // ~500-650ms round-trip on top of the last. Confirmed live as the cause of
+  // the Home screen sitting on its loading skeleton for several seconds; now
+  // raw pg (~224ms/round trip) run concurrently via Promise.all, matching
+  // districtAdmin.routes.js's own dashboard/heatmap routes for the same
+  // pattern applied to their own N+1 loops.
   const [
-    { data: user, error: userError },
-    { data: identity },
-    { data: latestScore },
-    { data: openAlerts },
-    { data: lastInteraction },
-    { data: caseFamily },
+    userResult,
+    identityResult,
+    latestScoreResult,
+    openAlertsResult,
+    lastInteractionResult,
+    caseFamilyResult,
   ] = await Promise.all([
-    supabase
-      .from('users')
-      .select('status, case_stage, preferred_language, docket_number, opted_for_manual_counsellor, sms_checkin_enabled, assigned_counsellor_id')
-      .eq('user_id', userId)
-      .single(),
-    supabase.from('user_identity').select('full_name').eq('user_id', userId).maybeSingle(),
-    supabase
-      .from('distress_scores')
-      .select('score_value, risk_level_id, computed_at, risk_levels(name)')
-      .eq('user_id', userId)
-      .order('computed_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from('alerts')
-      .select('alert_id, triggered_at, alert_statuses(name)')
-      .eq('user_id', userId)
-      .order('triggered_at', { ascending: false }),
-    supabase
-      .from('interactions')
-      .select('occurred_at')
-      .eq('user_id', userId)
-      .order('occurred_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    pool.query(
+      `select status, case_stage, preferred_language, docket_number, opted_for_manual_counsellor, sms_checkin_enabled, assigned_counsellor_id
+       from users where user_id = $1 limit 1`,
+      [userId]
+    ),
+    pool.query(`select full_name from user_identity where user_id = $1 limit 1`, [userId]),
+    pool.query(
+      `select ds.score_value, ds.risk_level_id, ds.computed_at, rl.name as risk_level_name
+       from distress_scores ds
+       join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where ds.user_id = $1
+       order by ds.computed_at desc
+       limit 1`,
+      [userId]
+    ),
+    pool.query(
+      `select a.alert_id, a.triggered_at, ast.name as alert_status_name
+       from alerts a
+       join alert_statuses ast on ast.alert_status_id = a.alert_status_id
+       where a.user_id = $1
+       order by a.triggered_at desc`,
+      [userId]
+    ),
+    pool.query(`select occurred_at from interactions where user_id = $1 order by occurred_at desc limit 1`, [userId]),
     // Multi-case support: userId here is always the anchor (see
     // auth.user.routes.js's login), so every row sharing it - including the
     // anchor's own case - is this person's full set of cases.
-    supabase
-      .from('users')
-      .select('user_id, docket_number, case_stage, case_types(name), jurisdictions(name)')
-      .or(`user_id.eq.${userId},linked_to_user_id.eq.${userId}`),
+    pool.query(
+      `select u.user_id, u.docket_number, u.case_stage, ct.name as case_type_name, j.name as jurisdiction_name
+       from users u
+       left join case_types ct on ct.case_type_id = u.case_type_id
+       left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+       where u.user_id = $1 or u.linked_to_user_id = $1`,
+      [userId]
+    ),
   ]);
-  if (userError || !user) return fail(res, 'User record not found', 404);
+
+  const user = userResult.rows[0];
+  if (!user) return fail(res, 'User record not found', 404);
+  const identity = identityResult.rows[0];
+  const latestScore = latestScoreResult.rows[0];
+  const openAlerts = openAlertsResult.rows;
+  const lastInteraction = lastInteractionResult.rows[0];
+  const caseFamily = caseFamilyResult.rows;
 
   const linkedCases = (caseFamily || []).map((c) => ({
     userId: c.user_id,
     docketNumber: c.docket_number,
     caseStage: c.case_stage,
-    caseType: c.case_types?.name || null,
-    jurisdictionName: c.jurisdictions?.name || null,
+    caseType: c.case_type_name || null,
+    jurisdictionName: c.jurisdiction_name || null,
   }));
 
   // Red-dot indicator for the "Chat with counsellor" Home tile - a separate
@@ -169,14 +180,11 @@ router.get('/dashboard', async (req, res) => {
   // user.assigned_counsellor_id, which that batch itself is fetching.
   let hasUnreadCounsellorMessage = false;
   if (user.assigned_counsellor_id) {
-    const { count } = await supabase
-      .from('messages')
-      .select('message_id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .eq('official_id', user.assigned_counsellor_id)
-      .eq('sender_type', 'official')
-      .is('read_at', null);
-    hasUnreadCounsellorMessage = (count || 0) > 0;
+    const { rows: unreadRows } = await pool.query(
+      `select count(*) as count from messages where user_id = $1 and official_id = $2 and sender_type = 'official' and read_at is null`,
+      [userId, user.assigned_counsellor_id]
+    );
+    hasUnreadCounsellorMessage = Number(unreadRows[0]?.count || 0) > 0;
   }
 
   // Placeholder cadence rule - there's no scheduler built yet (Section 4.2's
@@ -197,11 +205,11 @@ router.get('/dashboard', async (req, res) => {
     smsCheckinEnabled: user.sms_checkin_enabled,
     hasUnreadCounsellorMessage,
     currentDistressLevel: latestScore
-      ? { score: latestScore.score_value, riskLevel: latestScore.risk_levels.name }
+      ? { score: Number(latestScore.score_value), riskLevel: latestScore.risk_level_name }
       : null,
-    recommendation: buildRecommendation(latestScore?.risk_levels?.name || null, user.opted_for_manual_counsellor),
+    recommendation: buildRecommendation(latestScore?.risk_level_name || null, user.opted_for_manual_counsellor),
     nextCheckIn,
-    alerts: (openAlerts || []).map((a) => ({ alertId: a.alert_id, triggeredAt: a.triggered_at, status: a.alert_statuses.name })),
+    alerts: (openAlerts || []).map((a) => ({ alertId: a.alert_id, triggeredAt: a.triggered_at, status: a.alert_status_name })),
     supportLinks: SUPPORT_LINKS,
     linkedCases,
   });
@@ -458,17 +466,19 @@ router.post('/urgent-help', async (req, res) => {
   // from `user`/`identity` first (it only needs userId, already known from
   // the auth token) - running them concurrently instead of one after
   // another matters most exactly here, the single most time-critical action
-  // in the app.
-  const [
-    { data: user, error: userError },
-    { data: identity },
-    { data: sosEvent, error: sosError },
-  ] = await Promise.all([
-    supabase.from('users').select('jurisdiction_id, assigned_counsellor_id').eq('user_id', userId).single(),
-    supabase.from('user_identity').select('contact_number').eq('user_id', userId).maybeSingle(),
+  // in the app. The two reads go through raw pg (~224ms) instead of
+  // Supabase REST (~500-650ms); the sos_events insert stays on supabase -
+  // it's a write into the alert pipeline, left alone per this migration's
+  // own write-safety rule.
+  const [userResult, identityResult, sosResult] = await Promise.all([
+    pool.query(`select jurisdiction_id, assigned_counsellor_id from users where user_id = $1 limit 1`, [userId]),
+    pool.query(`select contact_number from user_identity where user_id = $1 limit 1`, [userId]),
     supabase.from('sos_events').insert({ user_id: userId }).select('sos_event_id, triggered_at').single(),
   ]);
-  if (userError || !user) return fail(res, 'User record not found', 404);
+  const user = userResult.rows[0];
+  const identity = identityResult.rows[0];
+  const { data: sosEvent, error: sosError } = sosResult;
+  if (!user) return fail(res, 'User record not found', 404);
   if (sosError) return fail(res, `Could not record urgent-help request: ${sosError.message}`, 500);
 
   let counsellorId = user.assigned_counsellor_id;
@@ -500,20 +510,24 @@ router.post('/urgent-help', async (req, res) => {
     // Walk the jurisdiction tree up from this district to find its parent
     // state - State Administration is scoped to that state row, not the
     // district itself, so this can't be a simple eq() on jid alone.
-    const { data: districtRow } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', jid).maybeSingle();
+    const { rows: districtRows } = await pool.query(`select parent_id from jurisdictions where jurisdiction_id = $1 limit 1`, [jid]);
+    const districtRow = districtRows[0];
     let stateJurisdictionId = null;
     if (districtRow?.parent_id) {
-      const { data: parentRow } = await supabase.from('jurisdictions').select('jurisdiction_id, level').eq('jurisdiction_id', districtRow.parent_id).maybeSingle();
+      const { rows: parentRows } = await pool.query(`select jurisdiction_id, level from jurisdictions where jurisdiction_id = $1 limit 1`, [districtRow.parent_id]);
+      const parentRow = parentRows[0];
       if (parentRow?.level === 'state') stateJurisdictionId = parentRow.jurisdiction_id;
     }
 
     const idsToCheck = stateJurisdictionId ? [jid, stateJurisdictionId] : [jid];
-    const { data: adminRoles } = await supabase
-      .from('official_roles')
-      .select('official_id, roles(role_name)')
-      .in('jurisdiction_id', idsToCheck)
-      .is('revoked_at', null);
-    return (adminRoles || []).filter((r) => r.roles?.role_name === 'Administration').map((r) => r.official_id);
+    const { rows: adminRoles } = await pool.query(
+      `select orr.official_id, r.role_name
+       from official_roles orr
+       join roles r on r.role_id = orr.role_id
+       where orr.jurisdiction_id = any($1::uuid[]) and orr.revoked_at is null`,
+      [idsToCheck]
+    );
+    return (adminRoles || []).filter((r) => r.role_name === 'Administration').map((r) => r.official_id);
   }));
   for (const ids of adminIdsPerJurisdiction) {
     for (const id of ids) adminIdSet.add(id);
@@ -559,8 +573,11 @@ router.patch('/sms-preference', async (req, res) => {
   const { enabled } = req.body;
   if (typeof enabled !== 'boolean') return fail(res, 'enabled (boolean) is required', 400);
 
-  const { error } = await supabase.from('users').update({ sms_checkin_enabled: enabled }).eq('user_id', req.auth.userId);
-  if (error) return fail(res, `Could not update SMS preference: ${error.message}`, 500);
+  try {
+    await pool.query(`update users set sms_checkin_enabled = $2 where user_id = $1`, [req.auth.userId, enabled]);
+  } catch (err) {
+    return fail(res, `Could not update SMS preference: ${err.message}`, 500);
+  }
   return ok(res, null, 'SMS check-in preference updated');
 });
 
@@ -578,11 +595,11 @@ router.patch('/counsellor-preference', async (req, res) => {
   // only computed when opting in with no counsellor yet.
   let counsellorId;
   if (optedIn) {
-    const { data: user } = await supabase
-      .from('users')
-      .select('jurisdiction_id, assigned_counsellor_id')
-      .eq('user_id', req.auth.userId)
-      .maybeSingle();
+    const { rows: userRows } = await pool.query(
+      `select jurisdiction_id, assigned_counsellor_id from users where user_id = $1 limit 1`,
+      [req.auth.userId]
+    );
+    const user = userRows[0];
     if (!user) return fail(res, 'User record not found', 404);
     counsellorId = user.assigned_counsellor_id || await selectLeastLoadedCounsellor(user.jurisdiction_id);
   }
@@ -600,11 +617,11 @@ router.patch('/counsellor-preference', async (req, res) => {
 
   let assignedCounsellor = null;
   if (optedIn && counsellorId) {
-    const { data: official } = await supabase
-      .from('officials')
-      .select('full_name, phone, whatsapp_number')
-      .eq('official_id', counsellorId)
-      .maybeSingle();
+    const { rows: officialRows } = await pool.query(
+      `select full_name, phone, whatsapp_number from officials where official_id = $1 limit 1`,
+      [counsellorId]
+    );
+    const official = officialRows[0];
     if (official) {
       assignedCounsellor = {
         fullName: official.full_name,
@@ -679,11 +696,11 @@ router.get('/assigned-counsellor', async (req, res) => {
       // req.auth.userId is always the anchor - propagates to every case in
       // the family, not just this one.
       await propagateCounsellorAssignment(req.auth.userId, { counsellorId: chosenCounsellorId });
-      const { data: official } = await supabase
-        .from('officials')
-        .select('full_name, phone, whatsapp_number')
-        .eq('official_id', chosenCounsellorId)
-        .maybeSingle();
+      const { rows: officialRows } = await pool.query(
+        `select full_name, phone, whatsapp_number from officials where official_id = $1 limit 1`,
+        [chosenCounsellorId]
+      );
+      const official = officialRows[0];
       if (official) {
         counsellorName = official.full_name;
         counsellorPhone = official.phone;
@@ -853,10 +870,20 @@ router.post('/messages/typing', async (req, res) => {
   const officialId = await requireCounsellorOptIn(req, res);
   if (!officialId) return;
 
-  const { error } = await supabase
-    .from('typing_status')
-    .upsert({ user_id: req.auth.userId, official_id: officialId, sender_type: 'user', updated_at: new Date().toISOString() }, { onConflict: 'user_id,official_id,sender_type' });
-  if (error) return fail(res, `Could not update typing status: ${error.message}`, 500);
+  // Trivially simple upsert on a typing indicator only (no scoring/alert
+  // pipeline involved) - migrated despite being a write because the composer
+  // pings this roughly every 2s while actively typing, making it one of the
+  // highest-frequency calls in this file.
+  try {
+    await pool.query(
+      `insert into typing_status (user_id, official_id, sender_type, updated_at)
+       values ($1, $2, 'user', now())
+       on conflict (user_id, official_id, sender_type) do update set updated_at = excluded.updated_at`,
+      [req.auth.userId, officialId]
+    );
+  } catch (err) {
+    return fail(res, `Could not update typing status: ${err.message}`, 500);
+  }
 
   return ok(res, null);
 });
@@ -1077,8 +1104,11 @@ router.patch('/language', async (req, res) => {
   const { languageId } = req.body;
   if (!languageId) return fail(res, 'languageId is required', 400);
 
-  const { error } = await supabase.from('users').update({ preferred_language: languageId }).eq('user_id', req.auth.userId);
-  if (error) return fail(res, `Could not update language: ${error.message}`, 500);
+  try {
+    await pool.query(`update users set preferred_language = $2 where user_id = $1`, [req.auth.userId, languageId]);
+  } catch (err) {
+    return fail(res, `Could not update language: ${err.message}`, 500);
+  }
 
   return ok(res, null, 'Language updated');
 });
@@ -1243,31 +1273,59 @@ router.get('/court-case/:userId', async (req, res) => {
   const { userId } = req.params;
   const callerId = req.auth.userId;
 
-  const { data: caseRow, error: caseError } = await supabase
-    .from('users')
-    .select('user_id, docket_number, case_stage, cnr_number, enrolled_at, linked_to_user_id, case_types(name), jurisdictions(name)')
-    .eq('user_id', userId)
-    .or(`user_id.eq.${callerId},linked_to_user_id.eq.${callerId}`)
-    .maybeSingle();
-  if (caseError || !caseRow) return fail(res, 'Case not found', 404);
+  // Auth check preserved exactly: user_id = :userId AND (user_id = :callerId
+  // OR linked_to_user_id = :callerId) - a docket that belongs to someone
+  // else's case family never matches, matching the original .eq().or() chain.
+  const { rows: caseRows } = await pool.query(
+    `select u.user_id, u.docket_number, u.case_stage, u.cnr_number, u.enrolled_at, u.linked_to_user_id,
+            ct.name as case_type_name, j.name as jurisdiction_name
+     from users u
+     left join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.user_id = $1 and (u.user_id = $2 or u.linked_to_user_id = $2)
+     limit 1`,
+    [userId, callerId]
+  );
+  const caseRow = caseRows[0];
+  if (!caseRow) return fail(res, 'Case not found', 404);
 
   if (!isCourtCaseEligible(caseRow.case_stage)) {
     return ok(res, { available: false, reason: 'Court case details become available once this case reaches Trial stage.' });
   }
 
-  const { data: existing } = await supabase.from('court_case_details').select('*').eq('user_id', userId).maybeSingle();
+  // Date columns are cast to text - pg's default date parser applies local
+  // server-timezone math and can shift the calendar day when re-serialized
+  // (confirmed live: 2026-09-15 came back as 2026-09-14T18:30:00.000Z) -
+  // casting keeps the exact YYYY-MM-DD string PostgREST always returned.
+  const { rows: existingRows } = await pool.query(
+    `select detail_id, user_id, cnr_number, case_type, case_category, case_sub_category,
+            filing_number, filing_date::text as filing_date, registration_number, registration_date::text as registration_date,
+            court_complex, court_establishment, court_number, coram, case_stage_label,
+            first_hearing_date::text as first_hearing_date, next_hearing_date::text as next_hearing_date, next_hearing_purpose,
+            case_status, decision_date::text as decision_date, disposal_nature,
+            petitioner_names, respondent_names, advocate_names, acts_sections,
+            fir_police_station, fir_number, fir_year, ia_details, hearing_history, orders,
+            connected_cases, originating_case_number, transfer_history, objections, hearing_mode,
+            sync_source, last_synced_at
+     from court_case_details
+     where user_id = $1
+     limit 1`,
+    [userId]
+  );
+  const existing = existingRows[0];
   const isStale = !existing || (Date.now() - new Date(existing.last_synced_at).getTime()) / 3600000 > COURT_CASE_STALE_HOURS;
 
   let row = existing;
   if (isStale) {
-    const { data: identity } = await supabase.from('user_identity').select('full_name').eq('user_id', callerId).maybeSingle();
-    const cnrNumber = caseRow.cnr_number || generateCnrNumber(caseRow.docket_number, caseRow.jurisdictions?.name);
+    const { rows: identityRows } = await pool.query(`select full_name from user_identity where user_id = $1 limit 1`, [callerId]);
+    const identity = identityRows[0];
+    const cnrNumber = caseRow.cnr_number || generateCnrNumber(caseRow.docket_number, caseRow.jurisdiction_name);
 
     const generated = generateSimulatedCourtCaseDetails({
       docketNumber: caseRow.docket_number,
       cnrNumber,
-      caseTypeName: caseRow.case_types?.name || null,
-      jurisdictionName: caseRow.jurisdictions?.name || null,
+      caseTypeName: caseRow.case_type_name || null,
+      jurisdictionName: caseRow.jurisdiction_name || null,
       caseStage: caseRow.case_stage,
       enrolledAt: caseRow.enrolled_at,
       victimFullName: identity?.full_name || null,

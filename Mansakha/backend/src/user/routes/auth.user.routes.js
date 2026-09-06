@@ -173,7 +173,7 @@ router.post('/gps-lookup', gpsLookupLimiter, async (req, res) => {
   const osmDistrict = address.state_district || address.county || address.district;
   if (!osmState) return ok(res, { stateName: null, jurisdictionId: null });
 
-  const { data: states } = await supabase.from('jurisdictions').select('jurisdiction_id, name').eq('level', 'state');
+  const { rows: states } = await pool.query(`select jurisdiction_id, name from jurisdictions where level = 'state'`);
   const matchedState = (states || []).find((s) => namesLooselyMatch(s.name, osmState));
   if (!matchedState) {
     console.warn(`GPS lookup: no seeded state matched OSM state "${osmState}"`);
@@ -182,11 +182,10 @@ router.post('/gps-lookup', gpsLookupLimiter, async (req, res) => {
 
   let matchedJurisdictionId = null;
   if (osmDistrict) {
-    const { data: districts } = await supabase
-      .from('jurisdictions')
-      .select('jurisdiction_id, name')
-      .eq('level', 'district')
-      .eq('parent_id', matchedState.jurisdiction_id);
+    const { rows: districts } = await pool.query(
+      `select jurisdiction_id, name from jurisdictions where level = 'district' and parent_id = $1`,
+      [matchedState.jurisdiction_id]
+    );
     const matchedDistrict = (districts || []).find((d) => namesLooselyMatch(d.name, osmDistrict));
     matchedJurisdictionId = matchedDistrict ? matchedDistrict.jurisdiction_id : null;
   }

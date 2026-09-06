@@ -25,16 +25,25 @@ const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Se
 async function checkJurisdictionLimit(roleName, jurisdictionId) {
   if (roleName !== 'Administration' || !jurisdictionId) return null;
 
-  const { data: level } = await supabase.from('jurisdictions').select('level').eq('jurisdiction_id', jurisdictionId).maybeSingle();
+  // Raw pg, not Supabase REST - this read-only check runs on every account
+  // creation/role-grant call, no reason to pay PostgREST's ~500-650ms round
+  // trip for it.
+  const { rows: levelRows } = await pool.query('select level from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+  const level = levelRows[0];
   if (!level || !JURISDICTION_LIMITED_LEVELS.includes(level.level)) return null;
 
-  const { data: existing } = await supabase
-    .from('official_roles')
-    .select('official_role_id, roles(role_name)')
-    .eq('jurisdiction_id', jurisdictionId)
-    .is('revoked_at', null);
+  // Raw pg join, not Supabase REST's embed syntax - official_roles ->
+  // roles is unambiguous (unlike official_roles -> officials elsewhere in
+  // this file), so a plain join works directly.
+  const { rows: existing } = await pool.query(
+    `select orl.official_role_id, r.role_name
+     from official_roles orl
+     join roles r on r.role_id = orl.role_id
+     where orl.jurisdiction_id = $1 and orl.revoked_at is null`,
+    [jurisdictionId]
+  );
 
-  const alreadyHasAdmin = (existing || []).some((r) => r.roles.role_name === 'Administration');
+  const alreadyHasAdmin = (existing || []).some((r) => r.role_name === 'Administration');
   if (alreadyHasAdmin) return `This ${level.level} already has an active Administration account - delete it (via Edit) before assigning a new one`;
   return null;
 }
@@ -192,7 +201,10 @@ router.post('/staff', async (req, res) => {
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
   if (limitError) return fail(res, limitError, 409);
 
-  const { data: roleRow } = await supabase.from('roles').select('role_id').eq('role_name', roleName).single();
+  // Raw pg, not Supabase REST - single-row lookup by name, no reason to pay
+  // PostgREST's round trip on every account creation.
+  const { rows: roleRows } = await pool.query('select role_id from roles where role_name = $1', [roleName]);
+  const roleRow = roleRows[0];
 
   const passwordHash = await bcrypt.hash(password, 12);
 
@@ -250,12 +262,15 @@ router.patch('/staff/:officialId', async (req, res) => {
   // login credential; staff login is email + password only
   // (core/routes/auth.staff.routes.js).
   if (phone === '' || phone === null) {
-    const { data: roleRows } = await supabase
-      .from('official_roles')
-      .select('roles(role_name)')
-      .eq('official_id', officialId)
-      .is('revoked_at', null);
-    const isCounsellor = (roleRows || []).some((r) => r.roles.role_name === 'Counsellor');
+    // Raw pg join, not Supabase REST's embed syntax - same unambiguous
+    // official_roles -> roles join as checkJurisdictionLimit above.
+    const { rows: roleRows } = await pool.query(
+      `select r.role_name from official_roles orl
+       join roles r on r.role_id = orl.role_id
+       where orl.official_id = $1 and orl.revoked_at is null`,
+      [officialId]
+    );
+    const isCounsellor = (roleRows || []).some((r) => r.role_name === 'Counsellor');
     if (isCounsellor) return fail(res, 'phone cannot be cleared for a Counsellor account - it is required for the Call/WhatsApp contact feature', 400);
   }
 
@@ -347,10 +362,14 @@ router.post('/staff/:officialId/roles', async (req, res) => {
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
   if (limitError) return fail(res, limitError, 409);
 
-  const { data: official } = await supabase.from('officials').select('official_id').eq('official_id', officialId).maybeSingle();
+  // Raw pg, not Supabase REST - both single-row lookups below run on every
+  // role-grant call.
+  const { rows: officialRows } = await pool.query('select official_id from officials where official_id = $1', [officialId]);
+  const official = officialRows[0];
   if (!official) return fail(res, 'Account not found', 404);
 
-  const { data: roleRow } = await supabase.from('roles').select('role_id').eq('role_name', roleName).single();
+  const { rows: roleRowsForGrant } = await pool.query('select role_id from roles where role_name = $1', [roleName]);
+  const roleRow = roleRowsForGrant[0];
 
   const { data, error } = await supabase
     .from('official_roles')
@@ -419,22 +438,36 @@ router.get('/audit-log', async (req, res) => {
   });
 });
 
+// Raw pg, not Supabase REST, for this whole GET/POST/PATCH/DELETE lookup-table
+// group (languages/case-types/intervention-types/channels below) - each of
+// these was paying a full ~500-650ms PostgREST round trip per call, and the
+// GET routes especially are dropdown data loaded on many admin screens.
+// Single-table, single-row-by-id writes throughout, so the conversion is a
+// direct 1:1 translation with no chaining/transaction concerns.
 router.get('/languages', async (req, res) => {
-  const { data, error } = await supabase.from('languages').select('language_id, code, name').is('deleted_at', null).order('name');
-  if (error) return fail(res, 'Could not load languages', 500);
-  return ok(res, { languages: data || [] });
+  try {
+    const { rows } = await pool.query('select language_id, code, name from languages where deleted_at is null order by name');
+    return ok(res, { languages: rows });
+  } catch (err) {
+    return fail(res, 'Could not load languages', 500);
+  }
 });
 
 router.post('/languages', async (req, res) => {
   const { code, name } = req.body;
   if (!code || !name) return fail(res, 'code and name are required', 400);
 
-  const { data, error } = await supabase.from('languages').insert({ code, name }).select('language_id').single();
-  if (error) return fail(res, `Could not add language: ${error.message}`, 500);
+  let languageId;
+  try {
+    const { rows } = await pool.query('insert into languages (code, name) values ($1, $2) returning language_id', [code, name]);
+    languageId = rows[0].language_id;
+  } catch (err) {
+    return fail(res, `Could not add language: ${err.message}`, 500);
+  }
 
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'language', entityId: data.language_id });
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'language', entityId: languageId });
 
-  return ok(res, { languageId: data.language_id }, 'Language added', 201);
+  return ok(res, { languageId }, 'Language added', 201);
 });
 
 router.patch('/languages/:languageId', async (req, res) => {
@@ -442,12 +475,17 @@ router.patch('/languages/:languageId', async (req, res) => {
   const { code, name } = req.body;
   if (!code && !name) return fail(res, 'code or name is required', 400);
 
-  const patch = {};
-  if (code) patch.code = code;
-  if (name) patch.name = name;
-
-  const { error } = await supabase.from('languages').update(patch).eq('language_id', languageId);
-  if (error) return fail(res, `Could not update language: ${error.message}`, 500);
+  try {
+    if (code && name) {
+      await pool.query('update languages set code = $1, name = $2 where language_id = $3', [code, name, languageId]);
+    } else if (code) {
+      await pool.query('update languages set code = $1 where language_id = $2', [code, languageId]);
+    } else {
+      await pool.query('update languages set name = $1 where language_id = $2', [name, languageId]);
+    }
+  } catch (err) {
+    return fail(res, `Could not update language: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'language', entityId: languageId });
 
@@ -460,8 +498,11 @@ router.patch('/languages/:languageId', async (req, res) => {
 router.delete('/languages/:languageId', async (req, res) => {
   const { languageId } = req.params;
 
-  const { error } = await supabase.from('languages').update({ deleted_at: new Date().toISOString() }).eq('language_id', languageId);
-  if (error) return fail(res, `Could not remove language: ${error.message}`, 500);
+  try {
+    await pool.query('update languages set deleted_at = $1 where language_id = $2', [new Date().toISOString(), languageId]);
+  } catch (err) {
+    return fail(res, `Could not remove language: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'delete', entityType: 'language', entityId: languageId });
 
@@ -478,20 +519,28 @@ router.delete('/languages/:languageId', async (req, res) => {
 // same reasoning as languages. =====
 
 router.get('/case-types', async (req, res) => {
-  const { data, error } = await supabase.from('case_types').select('case_type_id, name').is('deleted_at', null).order('name');
-  if (error) return fail(res, 'Could not load case types', 500);
-  return ok(res, { caseTypes: data || [] });
+  try {
+    const { rows } = await pool.query('select case_type_id, name from case_types where deleted_at is null order by name');
+    return ok(res, { caseTypes: rows });
+  } catch (err) {
+    return fail(res, 'Could not load case types', 500);
+  }
 });
 
 router.post('/case-types', async (req, res) => {
   const { name } = req.body;
   if (!name) return fail(res, 'name is required', 400);
 
-  const { data, error } = await supabase.from('case_types').insert({ name }).select('case_type_id').single();
-  if (error) return fail(res, `Could not add case type: ${error.message}`, 500);
+  let caseTypeId;
+  try {
+    const { rows } = await pool.query('insert into case_types (name) values ($1) returning case_type_id', [name]);
+    caseTypeId = rows[0].case_type_id;
+  } catch (err) {
+    return fail(res, `Could not add case type: ${err.message}`, 500);
+  }
 
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'case_type', entityId: data.case_type_id });
-  return ok(res, { caseTypeId: data.case_type_id }, 'Case type added', 201);
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'case_type', entityId: caseTypeId });
+  return ok(res, { caseTypeId }, 'Case type added', 201);
 });
 
 router.patch('/case-types/:caseTypeId', async (req, res) => {
@@ -499,8 +548,11 @@ router.patch('/case-types/:caseTypeId', async (req, res) => {
   const { name } = req.body;
   if (!name) return fail(res, 'name is required', 400);
 
-  const { error } = await supabase.from('case_types').update({ name }).eq('case_type_id', caseTypeId);
-  if (error) return fail(res, `Could not update case type: ${error.message}`, 500);
+  try {
+    await pool.query('update case_types set name = $1 where case_type_id = $2', [name, caseTypeId]);
+  } catch (err) {
+    return fail(res, `Could not update case type: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'case_type', entityId: caseTypeId });
   return ok(res, null, 'Case type updated');
@@ -509,28 +561,39 @@ router.patch('/case-types/:caseTypeId', async (req, res) => {
 router.delete('/case-types/:caseTypeId', async (req, res) => {
   const { caseTypeId } = req.params;
 
-  const { error } = await supabase.from('case_types').update({ deleted_at: new Date().toISOString() }).eq('case_type_id', caseTypeId);
-  if (error) return fail(res, `Could not remove case type: ${error.message}`, 500);
+  try {
+    await pool.query('update case_types set deleted_at = $1 where case_type_id = $2', [new Date().toISOString(), caseTypeId]);
+  } catch (err) {
+    return fail(res, `Could not remove case type: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'delete', entityType: 'case_type', entityId: caseTypeId });
   return ok(res, null, 'Case type removed');
 });
 
 router.get('/intervention-types', async (req, res) => {
-  const { data, error } = await supabase.from('intervention_types').select('intervention_type_id, name').is('deleted_at', null).order('name');
-  if (error) return fail(res, 'Could not load intervention types', 500);
-  return ok(res, { interventionTypes: data || [] });
+  try {
+    const { rows } = await pool.query('select intervention_type_id, name from intervention_types where deleted_at is null order by name');
+    return ok(res, { interventionTypes: rows });
+  } catch (err) {
+    return fail(res, 'Could not load intervention types', 500);
+  }
 });
 
 router.post('/intervention-types', async (req, res) => {
   const { name } = req.body;
   if (!name) return fail(res, 'name is required', 400);
 
-  const { data, error } = await supabase.from('intervention_types').insert({ name }).select('intervention_type_id').single();
-  if (error) return fail(res, `Could not add intervention type: ${error.message}`, 500);
+  let interventionTypeId;
+  try {
+    const { rows } = await pool.query('insert into intervention_types (name) values ($1) returning intervention_type_id', [name]);
+    interventionTypeId = rows[0].intervention_type_id;
+  } catch (err) {
+    return fail(res, `Could not add intervention type: ${err.message}`, 500);
+  }
 
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'intervention_type', entityId: data.intervention_type_id });
-  return ok(res, { interventionTypeId: data.intervention_type_id }, 'Intervention type added', 201);
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'intervention_type', entityId: interventionTypeId });
+  return ok(res, { interventionTypeId }, 'Intervention type added', 201);
 });
 
 router.patch('/intervention-types/:interventionTypeId', async (req, res) => {
@@ -538,8 +601,11 @@ router.patch('/intervention-types/:interventionTypeId', async (req, res) => {
   const { name } = req.body;
   if (!name) return fail(res, 'name is required', 400);
 
-  const { error } = await supabase.from('intervention_types').update({ name }).eq('intervention_type_id', interventionTypeId);
-  if (error) return fail(res, `Could not update intervention type: ${error.message}`, 500);
+  try {
+    await pool.query('update intervention_types set name = $1 where intervention_type_id = $2', [name, interventionTypeId]);
+  } catch (err) {
+    return fail(res, `Could not update intervention type: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'intervention_type', entityId: interventionTypeId });
   return ok(res, null, 'Intervention type updated');
@@ -548,28 +614,39 @@ router.patch('/intervention-types/:interventionTypeId', async (req, res) => {
 router.delete('/intervention-types/:interventionTypeId', async (req, res) => {
   const { interventionTypeId } = req.params;
 
-  const { error } = await supabase.from('intervention_types').update({ deleted_at: new Date().toISOString() }).eq('intervention_type_id', interventionTypeId);
-  if (error) return fail(res, `Could not remove intervention type: ${error.message}`, 500);
+  try {
+    await pool.query('update intervention_types set deleted_at = $1 where intervention_type_id = $2', [new Date().toISOString(), interventionTypeId]);
+  } catch (err) {
+    return fail(res, `Could not remove intervention type: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'delete', entityType: 'intervention_type', entityId: interventionTypeId });
   return ok(res, null, 'Intervention type removed');
 });
 
 router.get('/channels', async (req, res) => {
-  const { data, error } = await supabase.from('channels').select('channel_id, channel_name').is('deleted_at', null).order('channel_name');
-  if (error) return fail(res, 'Could not load channels', 500);
-  return ok(res, { channels: data || [] });
+  try {
+    const { rows } = await pool.query('select channel_id, channel_name from channels where deleted_at is null order by channel_name');
+    return ok(res, { channels: rows });
+  } catch (err) {
+    return fail(res, 'Could not load channels', 500);
+  }
 });
 
 router.post('/channels', async (req, res) => {
   const { channelName } = req.body;
   if (!channelName) return fail(res, 'channelName is required', 400);
 
-  const { data, error } = await supabase.from('channels').insert({ channel_name: channelName }).select('channel_id').single();
-  if (error) return fail(res, `Could not add channel: ${error.message}`, 500);
+  let channelId;
+  try {
+    const { rows } = await pool.query('insert into channels (channel_name) values ($1) returning channel_id', [channelName]);
+    channelId = rows[0].channel_id;
+  } catch (err) {
+    return fail(res, `Could not add channel: ${err.message}`, 500);
+  }
 
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'channel', entityId: data.channel_id });
-  return ok(res, { channelId: data.channel_id }, 'Channel added', 201);
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'channel', entityId: channelId });
+  return ok(res, { channelId }, 'Channel added', 201);
 });
 
 router.patch('/channels/:channelId', async (req, res) => {
@@ -577,8 +654,11 @@ router.patch('/channels/:channelId', async (req, res) => {
   const { channelName } = req.body;
   if (!channelName) return fail(res, 'channelName is required', 400);
 
-  const { error } = await supabase.from('channels').update({ channel_name: channelName }).eq('channel_id', channelId);
-  if (error) return fail(res, `Could not update channel: ${error.message}`, 500);
+  try {
+    await pool.query('update channels set channel_name = $1 where channel_id = $2', [channelName, channelId]);
+  } catch (err) {
+    return fail(res, `Could not update channel: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'channel', entityId: channelId });
   return ok(res, null, 'Channel updated');
@@ -587,8 +667,11 @@ router.patch('/channels/:channelId', async (req, res) => {
 router.delete('/channels/:channelId', async (req, res) => {
   const { channelId } = req.params;
 
-  const { error } = await supabase.from('channels').update({ deleted_at: new Date().toISOString() }).eq('channel_id', channelId);
-  if (error) return fail(res, `Could not remove channel: ${error.message}`, 500);
+  try {
+    await pool.query('update channels set deleted_at = $1 where channel_id = $2', [new Date().toISOString(), channelId]);
+  } catch (err) {
+    return fail(res, `Could not remove channel: ${err.message}`, 500);
+  }
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'delete', entityType: 'channel', entityId: channelId });
   return ok(res, null, 'Channel removed');
@@ -650,23 +733,32 @@ router.get('/ivrs-log', async (req, res) => {
   const pageSize = 50;
   const offset = (page - 1) * pageSize;
 
-  const { data, count, error } = await supabase
-    .from('dispatch_queue')
-    .select('dispatch_id, user_id, attempt_count, delivered_at, created_at', { count: 'exact' })
-    .eq('kind', 'ivrs_call')
-    .order('created_at', { ascending: false })
-    .range(offset, offset + pageSize - 1);
-  if (error) return fail(res, 'Could not load IVRS log', 500);
+  // Raw pg, not Supabase REST - `count(*) over()` gets the exact total in
+  // the same round trip, same convention as GET /audit-log and GET /users
+  // above, instead of REST's separate `{ count: 'exact' }` request.
+  let rows;
+  try {
+    ({ rows } = await pool.query(
+      `select dispatch_id, user_id, attempt_count, delivered_at, created_at, count(*) over() as total_count
+       from dispatch_queue
+       where kind = 'ivrs_call'
+       order by created_at desc
+       limit $1 offset $2`,
+      [pageSize, offset]
+    ));
+  } catch (err) {
+    return fail(res, 'Could not load IVRS log', 500);
+  }
 
   return ok(res, {
-    entries: (data || []).map((d) => ({
+    entries: rows.map((d) => ({
       dispatchId: d.dispatch_id,
       userId: d.user_id,
       status: d.delivered_at ? 'delivered' : d.attempt_count > 0 ? 'attempted' : 'queued',
       attemptCount: d.attempt_count,
       queuedAt: d.created_at,
     })),
-    total: count || 0,
+    total: rows.length > 0 ? Number(rows[0].total_count) : 0,
     note: 'Reflects queued/attempted IVRS dispatches, not a live call-monitoring feed.',
   });
 });

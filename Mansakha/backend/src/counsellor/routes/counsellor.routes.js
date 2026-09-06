@@ -61,7 +61,11 @@ const router = express.Router();
 // Administration's read-only access to this same route, which SHOULD stay
 // jurisdiction-gated).
 async function resolveUserJurisdiction(req) {
-  const { data } = await supabase.from('users').select('jurisdiction_id, assigned_counsellor_id').eq('user_id', req.params.userId).maybeSingle();
+  // Raw pg (not Supabase REST) - this helper runs on nearly every route in
+  // this file via requireJurisdiction below, so its own latency is felt
+  // everywhere, same as verifyToken.js's own conversion for the same reason.
+  const { rows } = await pool.query('select jurisdiction_id, assigned_counsellor_id from users where user_id = $1', [req.params.userId]);
+  const data = rows[0];
   if (!data) return null;
   if (req.auth.type === 'official' && data.assigned_counsellor_id === req.auth.officialId) {
     const ownJurisdictionId = req.auth.roles.find((r) => r.jurisdictionId)?.jurisdictionId;
@@ -82,8 +86,10 @@ async function resolveUserJurisdiction(req) {
 // applied to case_notes/interventions/counselling_sessions - those track
 // THIS case's own legal-proceeding progress and correctly stay per-case.
 async function resolveActivityUserId(userId) {
-  const { data } = await supabase.from('users').select('linked_to_user_id').eq('user_id', userId).maybeSingle();
-  return data?.linked_to_user_id || userId;
+  // Raw pg (not Supabase REST) - hot helper, called on nearly every
+  // case-detail/messages/intervention route in this file.
+  const { rows } = await pool.query('select linked_to_user_id from users where user_id = $1', [userId]);
+  return rows[0]?.linked_to_user_id || userId;
 }
 
 router.use(verifyToken);
@@ -91,9 +97,9 @@ router.use(verifyToken);
 // The Log Intervention screen needs real intervention_type_id values to submit a
 // valid intervention (not just the fixed names) - this is that lookup.
 router.get('/intervention-types', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
-  const { data, error } = await supabase.from('intervention_types').select('intervention_type_id, name').order('name');
-  if (error) return fail(res, 'Could not load intervention types', 500);
-  return ok(res, { interventionTypes: data || [] });
+  // Raw pg (not Supabase REST) - page-load lookup for the Log Intervention screen.
+  const { rows } = await pool.query('select intervention_type_id, name from intervention_types order by name');
+  return ok(res, { interventionTypes: rows });
 });
 
 // Dashboard counts computed server-side (not tallied from one paginated /cases
@@ -364,7 +370,7 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   if (!userRow) return fail(res, 'Case not found', 404);
   const activityUserId = userRow.linked_to_user_id || userId;
 
-  const [{ rows: scoreRows }, { rows: unreadRows }, { data: identity }] = await Promise.all([
+  const [{ rows: scoreRows }, { rows: unreadRows }, { rows: identityRows }] = await Promise.all([
     // 12, not 3 - the extra rows feed the per-case longitudinal trend chart
     // below (Section 2.2/FR-3.3's "weekly distress score to help counsellors
     // analyse trends": the computation already existed via the weekly
@@ -394,8 +400,10 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
       `select 1 from messages where user_id = $1 and official_id = $2 and sender_type = 'user' and read_at is null limit 1`,
       [activityUserId, req.auth.officialId]
     ),
-    supabase.from('user_identity').select('contact_number').eq('user_id', activityUserId).maybeSingle(),
+    // Raw pg (not Supabase REST), same fix as the two queries above.
+    pool.query('select contact_number from user_identity where user_id = $1', [activityUserId]),
   ]);
+  const identity = identityRows[0];
   const hasUnreadMessage = unreadRows.length > 0;
 
   if (scoreRows.length === 0) return fail(res, 'No check-ins recorded for this case yet', 404);
@@ -644,33 +652,50 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
   // effect of the jurisdiction lookup below silently no-op'ing on a null
   // `n.alerts`, which was fragile (and outright crashed the equivalent
   // Admin-tier query - see districtAdmin.routes.js).
-  const { data, error } = await supabase
-    .from('alert_notifications')
-    .select('notified_at, source, priority, auto_assigned, alerts(alert_id, user_id, triggered_at, alert_statuses(name), users(jurisdiction_id)), sos_events(sos_event_id, user_id, triggered_at, acknowledged_at, resolved_at)')
-    .eq('official_id', req.auth.officialId)
-    .in('source', ['distress_score', 'sos'])
-    .order('notified_at', { ascending: false })
-    .limit(100); // Increased limit slightly to account for filtered items
-  if (error) return fail(res, 'Could not load alerts', 500);
+  // Raw pg (not Supabase REST) - real joins instead of the
+  // alerts(..., alert_statuses(name), users(jurisdiction_id))/sos_events(...)
+  // embed. This feed is polled every 15s (web-frontend/src/services/hooks.js),
+  // so a ~500-650ms-per-call PostgREST round trip was felt on every poll for
+  // every open Counsellor session; same joins the openCountRows query just
+  // below already uses. Every FK walked here (alert_notifications.alert_id ->
+  // alerts, alerts.alert_status_id -> alert_statuses, alerts.user_id ->
+  // users, alert_notifications.sos_event_id -> sos_events) is single and
+  // unambiguous - not the official_roles-into-officials double-FK case
+  // documented elsewhere.
+  const { rows } = await pool.query(
+    `select an.notified_at, an.source, an.priority, an.auto_assigned,
+            al.alert_id, al.user_id as alert_user_id, al.triggered_at as alert_triggered_at,
+            ast.name as alert_status_name, u.jurisdiction_id as alert_jurisdiction_id,
+            se.sos_event_id, se.user_id as sos_user_id, se.triggered_at as sos_triggered_at,
+            se.acknowledged_at as sos_acknowledged_at, se.resolved_at as sos_resolved_at
+     from alert_notifications an
+     left join alerts al on al.alert_id = an.alert_id
+     left join alert_statuses ast on ast.alert_status_id = al.alert_status_id
+     left join users u on u.user_id = al.user_id
+     left join sos_events se on se.sos_event_id = an.sos_event_id
+     where an.official_id = $1 and an.source = any($2::text[])
+     order by an.notified_at desc
+     limit 100`,
+    [req.auth.officialId, ['distress_score', 'sos']]
+  );
 
   const alerts = [];
-  for (const n of data || []) {
+  for (const n of rows) {
     const isUrgentHelp = n.source === 'sos';
     if (!isUrgentHelp) {
-      const jId = n.alerts?.users?.jurisdiction_id;
-      if (!jurisdictionIds.includes(jId)) continue;
+      if (!jurisdictionIds.includes(n.alert_jurisdiction_id)) continue;
     }
 
     alerts.push({
-      alertId: isUrgentHelp ? n.sos_events.sos_event_id : n.alerts.alert_id,
+      alertId: isUrgentHelp ? n.sos_event_id : n.alert_id,
       source: n.source,
       priority: n.priority,
       autoAssigned: n.auto_assigned,
-      userId: isUrgentHelp ? n.sos_events.user_id : n.alerts.user_id,
-      triggeredAt: isUrgentHelp ? n.sos_events.triggered_at : n.alerts.triggered_at,
+      userId: isUrgentHelp ? n.sos_user_id : n.alert_user_id,
+      triggeredAt: isUrgentHelp ? n.sos_triggered_at : n.alert_triggered_at,
       status: isUrgentHelp
-        ? (n.sos_events.resolved_at ? 'Resolved' : n.sos_events.acknowledged_at ? 'Acknowledged' : 'Open')
-        : n.alerts.alert_statuses.name,
+        ? (n.sos_resolved_at ? 'Resolved' : n.sos_acknowledged_at ? 'Acknowledged' : 'Open')
+        : n.alert_status_name,
       notifiedAt: n.notified_at,
     });
   }
@@ -711,7 +736,10 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
 // jurisdiction when they're that user's assigned counsellor (the
 // nationwide-fallback-assignment case).
 async function resolveSosEventJurisdiction(req) {
-  const { data: sosEvent } = await supabase.from('sos_events').select('user_id').eq('sos_event_id', req.params.sosEventId).maybeSingle();
+  // Raw pg (not Supabase REST) - hot helper, runs before every SOS
+  // resolve/acknowledge action.
+  const { rows } = await pool.query('select user_id from sos_events where sos_event_id = $1', [req.params.sosEventId]);
+  const sosEvent = rows[0];
   if (!sosEvent) return null;
   return resolveUserJurisdiction({ ...req, params: { userId: sosEvent.user_id } });
 }
@@ -768,7 +796,10 @@ router.patch(
 // as a side effect of logging an intervention - there was no way to move
 // Acknowledged (or Open, if no intervention was ever needed) -> Resolved.
 async function resolveAlertJurisdiction(req) {
-  const { data: alert } = await supabase.from('alerts').select('user_id').eq('alert_id', req.params.alertId).maybeSingle();
+  // Raw pg (not Supabase REST) - hot helper, runs before every alert
+  // acknowledge/resolve action.
+  const { rows } = await pool.query('select user_id from alerts where alert_id = $1', [req.params.alertId]);
+  const alert = rows[0];
   if (!alert) return null;
   return resolveUserJurisdiction({ ...req, params: { userId: alert.user_id } });
 }
@@ -780,8 +811,12 @@ router.patch(
   requireJurisdiction(resolveAlertJurisdiction),
   async (req, res) => {
     const { alertId } = req.params;
-    const { data: ackStatus, error: statusError } = await supabase.from('alert_statuses').select('alert_status_id').eq('name', 'Acknowledged').single();
-    if (statusError || !ackStatus) return fail(res, 'Could not resolve "Acknowledged" status', 500);
+    // Raw pg (not Supabase REST) for this lookup only - a plain read, unlike
+    // the alerts UPDATE just below which stays on Supabase (see
+    // dataoperator.routes.js/userProvisioning.js's note on leaving writes alone).
+    const { rows: ackStatusRows } = await pool.query('select alert_status_id from alert_statuses where name = $1', ['Acknowledged']);
+    const ackStatus = ackStatusRows[0];
+    if (!ackStatus) return fail(res, 'Could not resolve "Acknowledged" status', 500);
 
     const { data, error } = await supabase
       .from('alerts')
@@ -804,8 +839,11 @@ router.patch(
   requireJurisdiction(resolveAlertJurisdiction),
   async (req, res) => {
     const { alertId } = req.params;
-    const { data: resolvedStatus, error: statusError } = await supabase.from('alert_statuses').select('alert_status_id').eq('name', 'Resolved').single();
-    if (statusError || !resolvedStatus) return fail(res, 'Could not resolve "Resolved" status', 500);
+    // Raw pg (not Supabase REST) for this lookup only - same as the
+    // acknowledge route above; the alerts UPDATE just below stays on Supabase.
+    const { rows: resolvedStatusRows } = await pool.query('select alert_status_id from alert_statuses where name = $1', ['Resolved']);
+    const resolvedStatus = resolvedStatusRows[0];
+    if (!resolvedStatus) return fail(res, 'Could not resolve "Resolved" status', 500);
 
     const { data, error } = await supabase
       .from('alerts')
@@ -856,11 +894,10 @@ router.post('/cases/:userId/schedule', requireRole(['Counsellor']), generalApiLi
 // via the user's own row, not just trusted from the URL).
 async function requireOptedInUser(req, res) {
   const { userId } = req.params;
-  const { data: user } = await supabase
-    .from('users')
-    .select('opted_for_manual_counsellor, assigned_counsellor_id')
-    .eq('user_id', userId)
-    .maybeSingle();
+  // Raw pg (not Supabase REST) - this guard runs on every hit of the
+  // messages GET route below, which CaseChat.jsx polls every 3s while open.
+  const { rows } = await pool.query('select opted_for_manual_counsellor, assigned_counsellor_id from users where user_id = $1', [userId]);
+  const user = rows[0];
   if (!user || !user.opted_for_manual_counsellor || user.assigned_counsellor_id !== req.auth.officialId) {
     fail(res, 'This user has not opted in for chat with you', 403);
     return false;
@@ -910,13 +947,14 @@ router.get('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLim
   // ongoing conversation is happening under its anchor.
   const activityUserId = await resolveActivityUserId(userId);
 
-  const { data, error } = await supabase
-    .from('messages')
-    .select('message_id, sender_type, body, sent_at, message_type, audio_path, duration_seconds')
-    .eq('user_id', activityUserId)
-    .eq('official_id', req.auth.officialId)
-    .order('sent_at', { ascending: true });
-  if (error) return fail(res, 'Could not load messages', 500);
+  // Raw pg (not Supabase REST) - this is the payload of a route polled every
+  // 3s while a chat window is open (see the comment further below), so its
+  // own latency is felt on every poll.
+  const { rows: messageRows } = await pool.query(
+    `select message_id, sender_type, body, sent_at, message_type, audio_path, duration_seconds
+     from messages where user_id = $1 and official_id = $2 order by sent_at asc`,
+    [activityUserId, req.auth.officialId]
+  );
 
   // Opening/polling this thread is what marks the user's messages read -
   // matches ordinary chat-app semantics, no separate "mark read" call needed.
@@ -931,7 +969,7 @@ router.get('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLim
   );
   const otherPartyTyping = !!typingRows[0] && (Date.now() - new Date(typingRows[0].updated_at).getTime()) < TYPING_ACTIVE_MS;
 
-  const messages = await Promise.all((data || []).map(async (m) => ({
+  const messages = await Promise.all(messageRows.map(async (m) => ({
     messageId: m.message_id,
     senderType: m.sender_type,
     messageType: m.message_type,
@@ -948,7 +986,8 @@ router.get('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLim
   // per-user lookup on an already-polled endpoint, so a single-row
   // user_identity read here is effectively free and removes the need for
   // that second, much heavier request entirely.
-  const { data: identity } = await supabase.from('user_identity').select('contact_number').eq('user_id', activityUserId).maybeSingle();
+  const { rows: identityRows } = await pool.query('select contact_number from user_identity where user_id = $1', [activityUserId]);
+  const identity = identityRows[0];
 
   return ok(res, { messages, otherPartyTyping, phone: identity?.contact_number || null });
 });
@@ -973,7 +1012,10 @@ router.post('/cases/:userId/messages', requireRole(['Counsellor']), generalApiLi
 
   // Sending implies typing has stopped - clears the indicator on the user's
   // side immediately rather than waiting out TYPING_ACTIVE_MS.
-  await supabase.from('typing_status').delete().eq('user_id', activityUserId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
+  // Raw pg (not Supabase REST) - trivially simple delete by the table's full
+  // primary key (user_id, official_id, sender_type), unlike the messages
+  // INSERT just above which stays on Supabase.
+  await pool.query('delete from typing_status where user_id = $1 and official_id = $2 and sender_type = $3', [activityUserId, req.auth.officialId, 'official']);
 
   return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
 });
@@ -999,7 +1041,9 @@ router.post('/cases/:userId/messages/voice', requireRole(['Counsellor']), genera
     .single();
   if (error) return fail(res, `Could not send voice message: ${error.message}`, 500);
 
-  await supabase.from('typing_status').delete().eq('user_id', activityUserId).eq('official_id', req.auth.officialId).eq('sender_type', 'official');
+  // Raw pg (not Supabase REST) - same trivially-simple full-primary-key
+  // delete as the text-message route above.
+  await pool.query('delete from typing_status where user_id = $1 and official_id = $2 and sender_type = $3', [activityUserId, req.auth.officialId, 'official']);
 
   return ok(res, { messageId: data.message_id, sentAt: data.sent_at }, null, 201);
 });
