@@ -151,8 +151,13 @@ function buildComparisonSection(title, description, items, itemLabel) {
     `<span style="color:${RISK_COLORS.High.fg};font-weight:600;">${it.highRiskCases}</span>`,
     `<span style="color:${RISK_COLORS.Moderate.fg};font-weight:600;">${it.moderateCases}</span>`,
     trendGlyph(it.trendDirection),
+    it.avgScore === null || it.avgScore === undefined ? '&mdash;' : String(it.avgScore),
+    it.topCaseType ? escapeHtml(it.topCaseType.name) : '&mdash;',
   ]);
-  return `${sectionBanner(title, description)}${stats}${table([itemLabel, 'Total Cases', 'Critical', 'High', 'Moderate', '30d Trend'], rows)}`;
+  return `${sectionBanner(title, description)}${stats}${table(
+    [itemLabel, 'Total Cases', 'Critical', 'High', 'Moderate', '30d Trend', 'Avg Score', 'Top Case Type'],
+    rows
+  )}`;
 }
 
 function buildDistressTrendSection(distressTrend) {
@@ -161,7 +166,34 @@ function buildDistressTrendSection(distressTrend) {
   return `${sectionBanner('Distress Trend', 'Average distress score over time across this report’s own sub-periods.')}<div class="chart-wrap">${chart}</div>${table(['Period', 'Average Distress Score'], rows)}`;
 }
 
-function buildCounsellorsSection(counsellors) {
+// District: one row per individual counsellor. State/National: every kind
+// of data belongs at every tier, so this is instead one row per CHILD
+// district/state (aggregated across that child's own counsellors -
+// counsellorCount/totalActiveCases plus an efficacy average WEIGHTED by
+// usersConsideredForEfficacy, not a plain mean of means - see
+// aggregateCounsellorRollup in reportSnapshot.js).
+function buildCounsellorsSection(counsellors, tier) {
+  const isChildRollup = counsellors.length > 0 && counsellors[0].jurisdictionId !== undefined;
+  if (isChildRollup) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `Counsellor caseload and observed impact, aggregated per ${childLabel.toLowerCase()} (earliest vs. most recent distress score per assigned case).`;
+    const nonZero = counsellors.filter((c) => c.counsellorCount > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Counsellor Workload', desc)}<p class="empty-note">No counsellors are currently assigned anywhere in this ${tier === 'state' ? 'state' : 'nation'}.</p>`;
+    }
+    const rows = counsellors.map((c) => [
+      escapeHtml(c.name),
+      String(c.counsellorCount),
+      String(c.totalActiveCases),
+      c.avgDistressPointDrop === null ? '&mdash;' : String(c.avgDistressPointDrop),
+      String(c.usersConsideredForEfficacy),
+    ]);
+    return `${sectionBanner('Counsellor Workload', desc)}${table(
+      [childLabel, 'Counsellors', 'Active Cases', 'Avg. Distress Point Drop', 'Cases Considered'],
+      rows
+    )}`;
+  }
+
   const desc = 'Each counsellor’s current caseload and observed impact (earliest vs. most recent distress score per assigned case).';
   if (counsellors.length === 0) {
     return `${sectionBanner('Counsellor Workload', desc)}<p class="empty-note">No counsellors are currently assigned to this district.</p>`;
@@ -178,7 +210,29 @@ function buildCounsellorsSection(counsellors) {
   )}`;
 }
 
-function buildResponseTimesSection(rt) {
+// District: a single object for that one district - unchanged. State/
+// National: a PER-CHILD rollup array, computed from a single grouped query
+// over raw sos_events rows (not an average of District-level averages) so
+// the acknowledge/resolve averages stay true weighted aggregates - see
+// countResponseTimesByGroup in reportSnapshot.js.
+function buildResponseTimesSection(rt, tier) {
+  if (Array.isArray(rt)) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `SOS event volume and response times per ${childLabel.toLowerCase()} during this period (separate from the automatic Critical-score alerts covered under Alert Volume & Status).`;
+    const nonZero = rt.filter((r) => r.totalSosCount > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Alert & SOS Response Times', desc)}<p class="empty-note">No SOS events were triggered anywhere during this period.</p>`;
+    }
+    const rows = rt.map((r) => [
+      escapeHtml(r.name),
+      String(r.totalSosCount),
+      String(r.openSosCount),
+      formatMinutes(r.avgAcknowledgeMinutes),
+      formatMinutes(r.avgResolveMinutes),
+    ]);
+    return `${sectionBanner('Alert & SOS Response Times', desc)}${table([childLabel, 'Total SOS', 'Open SOS', 'Avg. Acknowledge', 'Avg. Resolve'], rows)}`;
+  }
+
   const rows = [
     ['Total SOS Events', String(rt.totalSosCount)],
     ['Open SOS Events', String(rt.openSosCount)],
@@ -188,14 +242,19 @@ function buildResponseTimesSection(rt) {
   return `${sectionBanner('Alert & SOS Response Times', 'User-initiated SOS events (separate from the automatic Critical-score alerts covered under Alert Volume & Status) and how quickly this district responded.')}${table(['Metric', 'Value'], rows)}`;
 }
 
+// A forwarded recipient row (Forward After Review) shows distinctly from an
+// original Primary/Cc row - "Forwarded" in the Role column plus a separate
+// column naming who forwarded it and when, instead of blending in as just
+// another Cc.
 function buildRecipientsSection(recipients) {
   const rows = (recipients || []).map((r) => [
     escapeHtml(r.recipientType === 'ministry' ? 'Ministry' : r.jurisdictionName || 'Unknown jurisdiction'),
-    r.isPrimary ? 'Primary' : 'Cc',
+    r.isForwarded ? 'Forwarded' : r.isPrimary ? 'Primary' : 'Cc',
     `<span class="badge" style="${r.status === 'Reviewed' ? `color:#1a7f45;background:#e3f6ea;` : `color:${NAVY};background:${PANEL_BG};`}">${escapeHtml(r.status)}</span>`,
     r.reviewedAt ? formatDate(r.reviewedAt) : '&mdash;',
+    r.isForwarded ? `Forwarded by ${escapeHtml(r.forwardedByName || 'Unknown')} on ${formatDate(r.forwardedAt)}` : '&mdash;',
   ]);
-  return `${sectionBanner('Submission & Review Trail', 'Who this report was sent to and whether each recipient has reviewed it.')}${table(['Recipient', 'Role', 'Status', 'Reviewed On'], rows)}`;
+  return `${sectionBanner('Submission & Review Trail', 'Who this report was sent to and whether each recipient has reviewed it.')}${table(['Recipient', 'Role', 'Status', 'Reviewed On', 'Forwarded'], rows)}`;
 }
 
 // ===== "Looks empty" fixes - new sections =====
@@ -214,17 +273,56 @@ function buildCaseTypeDistributionSection(caseTypeDistribution, scopeLabel) {
   return `${sectionBanner('Case Type Distribution', desc)}<div class="chart-wrap">${chart}</div>${table(['Case Type', 'Count'], rows)}`;
 }
 
-function buildCaseStageDistributionSection(caseStageDistribution) {
-  const desc = 'Where each of this district’s cases currently stands in the judicial/rehabilitation process (a current snapshot, not scoped to this reporting period).';
-  if (!caseStageDistribution || caseStageDistribution.length === 0) {
-    return `${sectionBanner('Case Stage Distribution', desc)}<p class="empty-note">No cases recorded.</p>`;
+// District: caseStageDistribution is an array of {caseStage, count} (a
+// current-state aggregate for that one district) - unchanged. State/
+// National: every kind of data belongs at every tier, so this is instead a
+// PER-CHILD rollup array (one row per district/state, columns = stage
+// counts) - detected by row shape (`caseStage` key vs `jurisdictionId` key)
+// rather than tier, since both branches are arrays.
+function buildCaseStageDistributionSection(caseStageDistribution, tier) {
+  if (!caseStageDistribution || caseStageDistribution.length === 0 || caseStageDistribution[0].jurisdictionId === undefined) {
+    const desc = 'Where each of this district’s cases currently stands in the judicial/rehabilitation process (a current snapshot, not scoped to this reporting period).';
+    if (!caseStageDistribution || caseStageDistribution.length === 0) {
+      return `${sectionBanner('Case Stage Distribution', desc)}<p class="empty-note">No cases recorded.</p>`;
+    }
+    const chart = buildBarChartSvg(caseStageDistribution, { valueKey: 'count', labelKey: 'caseStage' });
+    const rows = caseStageDistribution.map((c) => [escapeHtml(c.caseStage), String(c.count)]);
+    return `${sectionBanner('Case Stage Distribution', desc)}<div class="chart-wrap">${chart}</div>${table(['Case Stage', 'Count'], rows)}`;
   }
-  const chart = buildBarChartSvg(caseStageDistribution, { valueKey: 'count', labelKey: 'caseStage' });
-  const rows = caseStageDistribution.map((c) => [escapeHtml(c.caseStage), String(c.count)]);
-  return `${sectionBanner('Case Stage Distribution', desc)}<div class="chart-wrap">${chart}</div>${table(['Case Stage', 'Count'], rows)}`;
+
+  const childLabel = tier === 'state' ? 'District' : 'State';
+  const desc = `Where each ${childLabel.toLowerCase()}’s cases currently stand in the judicial/rehabilitation process (a current snapshot, not scoped to this reporting period).`;
+  const rows = caseStageDistribution.map((c) => [
+    escapeHtml(c.name),
+    String(c.investigation),
+    String(c.trial),
+    String(c.rehabilitation),
+    String(c.compensation),
+    String(c.caseClosed),
+  ]);
+  return `${sectionBanner('Case Stage Distribution', desc)}${table(
+    [childLabel, 'Investigation', 'Trial', 'Rehabilitation', 'Compensation', 'Case Closed'],
+    rows
+  )}`;
 }
 
-function buildNewEnrollmentsSection(newEnrollments) {
+// District: newEnrollments is {count, cases: [...]} with the full case list
+// (docket-level detail) - unchanged. State/National: a per-child COUNT
+// rollup array (one row per district/state) - same "a count is the right
+// granularity for a rollup" reasoning districts/states already use.
+function buildNewEnrollmentsSection(newEnrollments, tier) {
+  if (Array.isArray(newEnrollments)) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `New cases registered per ${childLabel.toLowerCase()} during this reporting period.`;
+    const nonZero = newEnrollments.filter((c) => c.newEnrollmentCount > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('New Enrollments', desc)}<p class="empty-note">No new cases were registered anywhere during this period.</p>`;
+    }
+    const chart = buildBarChartSvg(nonZero.slice(0, 8), { valueKey: 'newEnrollmentCount', labelKey: 'name', maxLabelChars: 14 });
+    const rows = newEnrollments.map((c) => [escapeHtml(c.name), String(c.newEnrollmentCount)]);
+    return `${sectionBanner('New Enrollments', desc)}<div class="chart-wrap">${chart}</div>${table([childLabel, 'New Cases'], rows)}`;
+  }
+
   const desc = 'Cases newly registered in this district during this reporting period.';
   if (newEnrollments.count === 0) {
     return `${sectionBanner('New Enrollments', desc)}<p class="empty-note">No new cases were registered during this period.</p>`;
@@ -239,7 +337,30 @@ function buildNewEnrollmentsSection(newEnrollments) {
 // share, and a small exact-numbers table underneath (same "chart always
 // paired with its table" rule as the rest of the document, just with a
 // tile+bar pairing here instead of the usual bar-chart-above-table).
-function buildAlertVolumeSection(alertVolume) {
+// District: {open, acknowledged, resolved, total} for that one district -
+// the distinct tile+stacked-bar+table treatment (unchanged). State/
+// National: an ARRAY (one row per district/state) - a per-child tile grid
+// isn't practical at 36+ rows, so this is a plain table instead, still
+// using the same Open/Acknowledged/Resolved color tokens per cell for
+// visual continuity with the District-tier tiles.
+function buildAlertVolumeSection(alertVolume, tier) {
+  if (Array.isArray(alertVolume)) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `Critical-score-triggered alerts raised per ${childLabel.toLowerCase()} during this period (separate from the user-initiated SOS events covered under Alert & SOS Response Times).`;
+    const nonZero = alertVolume.filter((a) => a.total > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Alert Volume & Status', desc)}<p class="empty-note">No alerts were triggered anywhere during this period.</p>`;
+    }
+    const rows = alertVolume.map((a) => [
+      escapeHtml(a.name),
+      `<span style="color:${RISK_COLORS.High.fg};font-weight:600;">${a.open}</span>`,
+      `<span style="color:${RISK_COLORS.Moderate.fg};font-weight:600;">${a.acknowledged}</span>`,
+      `<span style="color:#1a7f45;font-weight:600;">${a.resolved}</span>`,
+      String(a.total),
+    ]);
+    return `${sectionBanner('Alert Volume & Status', desc)}${table([childLabel, 'Open', 'Acknowledged', 'Resolved', 'Total'], rows)}`;
+  }
+
   const desc = 'Critical-score-triggered alerts raised for this district’s cases during this period (separate from the user-initiated SOS events covered under Alert & SOS Response Times), and where each currently stands.';
   const { open, acknowledged, resolved, total } = alertVolume;
   if (total === 0) {
@@ -261,20 +382,49 @@ function buildAlertVolumeSection(alertVolume) {
 }
 
 // Distinct layout per explicit user request: one row per intervention type,
-// each a compact split-bar (completed vs. not-yet-completed share) with the
-// exact counts as inline badges - reads as "status of interventions" at a
-// glance rather than a generic count table, without a second table repeating
-// the same two numbers (already fully explicit inline on each row).
-function buildInterventionSummarySection(interventionSummary) {
-  const desc = 'Interventions (counselling, medical, legal aid, etc.) recommended for this district’s cases during this period, and how many have been completed.';
+// each row stating plainly WHAT was provided and to HOW MANY users - a bare
+// completed/in-progress count with no type name doesn't answer either
+// question. District: one row per INTERVENTION TYPE for this one district,
+// with its own completed-share split-bar. State/National: every kind of
+// data belongs at every tier, so this is one row per CHILD district/state,
+// each listing its OWN type breakdown as a set of small chips underneath
+// (not a full child x type MATRIX, which would be unreadably wide - just as
+// many chips as that child actually has types for).
+function buildInterventionSummarySection(interventionSummary, tier) {
+  const isChildRollup = interventionSummary && interventionSummary.length > 0 && interventionSummary[0].jurisdictionId !== undefined;
+  const desc = isChildRollup
+    ? `Interventions (counselling, medical, legal aid, etc.) provided per ${tier === 'state' ? 'district' : 'state'} during this period - what was provided, and to how many cases.`
+    : 'Interventions (counselling, medical, legal aid, etc.) provided for this district’s cases during this period - what was provided, and to how many cases.';
+
+  // A State/National array is always children.map(...), so it's never
+  // actually empty (a real state/national always has at least one child) -
+  // an empty array here can only ever be District's own "zero interventions
+  // this period" case, so this branch always uses the District-tier message.
   if (!interventionSummary || interventionSummary.length === 0) {
     return `${sectionBanner('Intervention Summary', desc)}<p class="empty-note">No interventions were recommended for this district’s cases during this period.</p>`;
   }
+
+  if (isChildRollup) {
+    const rows = interventionSummary
+      .map((child) => {
+        const typeChips = (child.types || []).length > 0
+          ? child.types.map((t) => `<span class="intervention-type-chip">${escapeHtml(t.typeName)}: ${t.totalCount} user${t.totalCount === 1 ? '' : 's'} (${t.completedCount} completed)</span>`).join('')
+          : '<span class="intervention-type-chip">No interventions this period</span>';
+        return `<div class="intervention-row-rollup">
+          <div class="intervention-label">${escapeHtml(child.name)} <span class="intervention-total">- ${child.totalCount} total this period</span></div>
+          <div class="intervention-type-list">${typeChips}</div>
+        </div>`;
+      })
+      .join('');
+    return `${sectionBanner('Intervention Summary', desc)}<div class="intervention-grid">${rows}</div>`;
+  }
+
+  // District: one row per intervention type actually recommended this period.
   const rows = interventionSummary
     .map((it) => {
       const pct = it.totalCount > 0 ? (it.completedCount / it.totalCount) * 100 : 0;
       return `<div class="intervention-row">
-        <div class="intervention-label">${escapeHtml(it.interventionTypeName)}</div>
+        <div class="intervention-label">${escapeHtml(it.interventionTypeName)}<br/><span class="intervention-total">${it.totalCount} user${it.totalCount === 1 ? '' : 's'}</span></div>
         <div class="intervention-bar"><div class="intervention-bar-fill" style="width:${pct.toFixed(1)}%"></div></div>
         <div class="intervention-counts"><span class="badge-completed">${it.completedCount} completed</span><span class="badge-pending">${it.notCompletedCount} in progress</span></div>
       </div>`;
@@ -283,7 +433,39 @@ function buildInterventionSummarySection(interventionSummary) {
   return `${sectionBanner('Intervention Summary', desc)}<div class="intervention-grid">${rows}</div>`;
 }
 
-function buildLegalProceedingsSection(legalProceedings) {
+// District: a single object with pending/disposed counts, top Acts/
+// Sections, upcoming hearings, and pendency aging - unchanged. State/
+// National: every kind of data belongs at every tier, so this is instead a
+// PER-CHILD rollup array (one row per district/state, pending/disposed +
+// the 4 aging-bucket counts as columns) - a real zero row for a child with
+// no court records, not omitted, since per-child rollups always zero-fill
+// (a different rule than District's own single-jurisdiction honesty gate,
+// which suppresses an all-zero breakdown when there's genuinely nothing to
+// show at THAT granularity).
+function buildLegalProceedingsSection(legalProceedings, tier) {
+  if (Array.isArray(legalProceedings)) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `Court case records synced per ${childLabel.toLowerCase()} (via the eCourts-style simulation) – pending/disposed counts and pendency aging.`;
+    const nonZero = legalProceedings.filter((l) => l.casesWithRecord > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Legal Proceedings', desc)}<p class="empty-note">No court case records have been generated yet anywhere in this ${tier === 'state' ? 'state' : 'nation'}.</p>`;
+    }
+    const rows = legalProceedings.map((l) => [
+      escapeHtml(l.name),
+      String(l.casesWithRecord),
+      `<span style="color:${RISK_COLORS.High.fg};font-weight:600;">${l.pendingCount}</span>`,
+      `<span style="color:#1a7f45;font-weight:600;">${l.disposedCount}</span>`,
+      String(l.agingLt3),
+      String(l.aging3to6),
+      String(l.aging6to12),
+      String(l.agingGt1y),
+    ]);
+    return `${sectionBanner('Legal Proceedings', desc)}${table(
+      [childLabel, 'Cases w/ Record', 'Pending', 'Disposed', '<3mo', '3-6mo', '6-12mo', '>1yr'],
+      rows
+    )}`;
+  }
+
   const desc = 'Court case records synced for this district’s cases (via the eCourts-style simulation) – filing status, key Acts/Sections, and hearings scheduled this period.';
   if (legalProceedings.casesWithRecord === 0) {
     return `${sectionBanner('Legal Proceedings', desc)}<p class="empty-note">${escapeHtml(legalProceedings.message)}.</p>`;
@@ -293,6 +475,9 @@ function buildLegalProceedingsSection(legalProceedings) {
     <div class="stat"><span class="stat-value" style="color:${RISK_COLORS.High.fg}">${legalProceedings.pendingCount}</span><span class="stat-label">Pending</span></div>
     <div class="stat"><span class="stat-value" style="color:#1a7f45">${legalProceedings.disposedCount}</span><span class="stat-label">Disposed</span></div>
   </div>`;
+  const agingSection = legalProceedings.pendencyAging && legalProceedings.pendencyAging.length
+    ? `<p class="subheading">Pendency Aging (Pending Cases)</p>${table(['Age', 'Cases'], legalProceedings.pendencyAging.map((a) => [escapeHtml(a.bucket), String(a.count)]))}`
+    : '';
   const actsSection = legalProceedings.topActsSections.length
     ? `<p class="subheading">Most Common Acts &amp; Sections</p>${table(['Act / Section', 'Cases'], legalProceedings.topActsSections.map((a) => [escapeHtml(a.label), String(a.count)]))}`
     : '';
@@ -300,7 +485,7 @@ function buildLegalProceedingsSection(legalProceedings) {
     ['Docket Number', 'Hearing Date', 'Purpose'],
     legalProceedings.upcomingHearings.map((h) => [escapeHtml(h.docketNumber), formatDate(h.nextHearingDate), escapeHtml(h.nextHearingPurpose || '—')])
   )}`;
-  return `${sectionBanner('Legal Proceedings', desc)}${stats}${actsSection}${hearingsSection}`;
+  return `${sectionBanner('Legal Proceedings', desc)}${stats}${agingSection}${actsSection}${hearingsSection}`;
 }
 
 function buildReportingComplianceSection(reportingCompliance, tier) {
@@ -319,6 +504,56 @@ function buildReportingComplianceSection(reportingCompliance, tier) {
   return `${sectionBanner('Reporting Compliance', desc)}${statLine}${table([childLabel, 'Status'], rows)}`;
 }
 
+// All 3 tiers, same shape - a current snapshot (not period-scoped).
+function buildLanguagePreferencesSection(languagePreferences) {
+  const desc = 'Current language preference and communication opt-in snapshot across these cases (a current snapshot, not scoped to this reporting period).';
+  const { languageDistribution, optedForManualCounsellorCount, totalCases } = languagePreferences;
+  if (totalCases === 0) {
+    return `${sectionBanner('Language & Preferences', desc)}<p class="empty-note">No cases recorded.</p>`;
+  }
+  const chart = buildBarChartSvg(languageDistribution, { valueKey: 'count', labelKey: 'languageName' });
+  const rows = languageDistribution.map((l) => [escapeHtml(l.languageName), String(l.count)]);
+  const prefLine = `<p class="stat-line"><span class="stat-line-value">${optedForManualCounsellorCount}</span> of ${totalCases} opted for manual counsellor contact.</p>`;
+  return `${sectionBanner('Language & Preferences', desc)}<div class="chart-wrap">${chart}</div>${table(['Preferred Language', 'Count'], rows)}${prefLine}`;
+}
+
+// All 3 tiers, same shape - a current snapshot (not period-scoped).
+function buildConsentComplianceSection(consentCompliance) {
+  const desc = 'How many of these cases have an on-file consent record (for a communication channel) versus none at all - a current snapshot, not scoped to this reporting period.';
+  const { totalCases, withConsent, withoutConsent, compliancePct } = consentCompliance;
+  if (totalCases === 0) {
+    return `${sectionBanner('Consent Compliance', desc)}<p class="empty-note">No cases recorded.</p>`;
+  }
+  const stats = `<div class="stat-strip">
+    <div class="stat"><span class="stat-value" style="color:#1a7f45">${withConsent}</span><span class="stat-label">With Consent</span></div>
+    <div class="stat"><span class="stat-value" style="color:${RISK_COLORS.High.fg}">${withoutConsent}</span><span class="stat-label">Without Consent</span></div>
+    <div class="stat"><span class="stat-value">${compliancePct}%</span><span class="stat-label">Compliance</span></div>
+  </div>`;
+  return `${sectionBanner('Consent Compliance', desc)}${stats}`;
+}
+
+// Rendered right after the cover page (before the TOC), NOT as a numbered
+// section at the end - the "read this first" callout a busy official should
+// see before the routine tables, per explicit request. Omitted entirely
+// when there's nothing to flag (an empty highlighted box would read as
+// noise, not signal).
+function buildSpikeAlertsCallout(spikeAlerts, jurisdictionName) {
+  if (!spikeAlerts || spikeAlerts.length === 0) return '';
+  const items = spikeAlerts
+    .map((a) => {
+      const changeText = a.percentChange === null
+        ? `${a.currentCount} new case(s) this period (previously none)`
+        : `rose from ${a.previousCount} to ${a.currentCount} this period (+${a.percentChange}%)`;
+      const drivenBy = a.drivingJurisdictionName ? `, driven mainly by ${escapeHtml(a.drivingJurisdictionName)}` : '';
+      return `<li><strong>${escapeHtml(a.caseTypeName)}</strong> cases in ${escapeHtml(jurisdictionName)} ${changeText}${drivenBy}.</li>`;
+    })
+    .join('');
+  return `<div class="spike-callout">
+    <div class="spike-callout-title">&#9888; Case Type Spike Alert</div>
+    <ul class="spike-callout-list">${items}</ul>
+  </div>`;
+}
+
 function statusBadgeColor(status) {
   if (status === 'Reviewed') return { fg: '#1a7f45', bg: '#e3f6ea' };
   if (status === 'Submitted') return { fg: NAVY, bg: PANEL_BG };
@@ -334,9 +569,10 @@ function renderReportHtml(report) {
   const statusColor = statusBadgeColor(status);
 
   // Build the section list dynamically from which snapshot keys are
-  // actually present - District has Counsellor Workload/Response Times/etc,
-  // State/National don't, so the TOC (and the sections themselves) must
-  // never be a hardcoded fixed list across all 3 tiers.
+  // actually present - every kind of data belongs at every tier now, but a
+  // key can still legitimately be absent (e.g. reportingCompliance only
+  // exists for State/National, which have children to report on), so this
+  // stays a presence check, not a hardcoded fixed list.
   const sections = [];
   if (snapshot.cases) sections.push({ title: 'Case Load & Risk Distribution', html: buildCasesSection(snapshot.cases, snapshot.summary) });
   if (snapshot.districts) sections.push({ title: 'District Load Comparison', html: buildComparisonSection('District Load Comparison', 'Each of this state’s districts, side by side, with its own 30-day distress-score trend.', snapshot.districts, 'District') });
@@ -345,16 +581,20 @@ function renderReportHtml(report) {
     const scopeLabel = snapshot.cases ? 'this district’s cases' : snapshot.districts ? 'this state’s cases' : 'this nation’s cases';
     sections.push({ title: 'Case Type Distribution', html: buildCaseTypeDistributionSection(snapshot.caseTypeDistribution, scopeLabel) });
   }
-  if (snapshot.caseStageDistribution) sections.push({ title: 'Case Stage Distribution', html: buildCaseStageDistributionSection(snapshot.caseStageDistribution) });
-  if (snapshot.newEnrollments) sections.push({ title: 'New Enrollments', html: buildNewEnrollmentsSection(snapshot.newEnrollments) });
+  if (snapshot.caseStageDistribution) sections.push({ title: 'Case Stage Distribution', html: buildCaseStageDistributionSection(snapshot.caseStageDistribution, tier) });
+  if (snapshot.newEnrollments) sections.push({ title: 'New Enrollments', html: buildNewEnrollmentsSection(snapshot.newEnrollments, tier) });
   if (snapshot.distressTrend) sections.push({ title: 'Distress Trend', html: buildDistressTrendSection(snapshot.distressTrend) });
-  if (snapshot.alertVolume) sections.push({ title: 'Alert Volume & Status', html: buildAlertVolumeSection(snapshot.alertVolume) });
-  if (snapshot.interventionSummary) sections.push({ title: 'Intervention Summary', html: buildInterventionSummarySection(snapshot.interventionSummary) });
-  if (snapshot.legalProceedings) sections.push({ title: 'Legal Proceedings', html: buildLegalProceedingsSection(snapshot.legalProceedings) });
-  if (snapshot.counsellors) sections.push({ title: 'Counsellor Workload', html: buildCounsellorsSection(snapshot.counsellors) });
-  if (snapshot.responseTimes) sections.push({ title: 'Alert & SOS Response Times', html: buildResponseTimesSection(snapshot.responseTimes) });
+  if (snapshot.alertVolume) sections.push({ title: 'Alert Volume & Status', html: buildAlertVolumeSection(snapshot.alertVolume, tier) });
+  if (snapshot.interventionSummary) sections.push({ title: 'Intervention Summary', html: buildInterventionSummarySection(snapshot.interventionSummary, tier) });
+  if (snapshot.legalProceedings) sections.push({ title: 'Legal Proceedings', html: buildLegalProceedingsSection(snapshot.legalProceedings, tier) });
+  if (snapshot.languagePreferences) sections.push({ title: 'Language & Preferences', html: buildLanguagePreferencesSection(snapshot.languagePreferences) });
+  if (snapshot.consentCompliance) sections.push({ title: 'Consent Compliance', html: buildConsentComplianceSection(snapshot.consentCompliance) });
+  if (snapshot.counsellors) sections.push({ title: 'Counsellor Workload', html: buildCounsellorsSection(snapshot.counsellors, tier) });
+  if (snapshot.responseTimes) sections.push({ title: 'Alert & SOS Response Times', html: buildResponseTimesSection(snapshot.responseTimes, tier) });
   if (snapshot.reportingCompliance) sections.push({ title: 'Reporting Compliance', html: buildReportingComplianceSection(snapshot.reportingCompliance, snapshot.tier) });
   sections.push({ title: 'Submission & Review Trail', html: buildRecipientsSection(recipients) });
+
+  const spikeCallout = buildSpikeAlertsCallout(snapshot.spikeAlerts, jurisdictionName);
 
   // No live page-number column - Puppeteer only exposes the running
   // pageNumber/totalPages counters inside the fixed header/footer template,
@@ -388,7 +628,14 @@ function renderReportHtml(report) {
   .toc-page li { display: flex; align-items: baseline; font-size: 13px; padding: 8px 0; }
   .toc-title { white-space: nowrap; color: #263; font-weight: 600; }
   .dots { flex: 1; border-bottom: 1px dotted #aab; margin: 0 8px; height: 1px; }
-  .section { padding: 0 30px 26px; }
+  /* Every major section starts at the top of its own fresh page - same
+     page-break-before mechanism the cover/TOC pages already use (as
+     page-break-after on themselves, which Chromium's print engine
+     coalesces with this page-break-before into a single break, not a
+     stray blank page) - matches how a real bureaucratic report is
+     typically paginated (one section per page for scanability), not an
+     accident of where content happens to fall. */
+  .section { padding: 0 30px 26px; page-break-before: always; }
   .section-banner { background: ${PANEL_BG}; border-radius: 6px; padding: 8px 14px; margin-bottom: 6px; }
   .section-banner h3 { color: ${NAVY}; font-size: 14px; }
   .section-desc { font-size: 10.5px; color: #5a6570; margin: 0 0 12px; line-height: 1.4; }
@@ -436,8 +683,17 @@ function renderReportHtml(report) {
   .intervention-bar { flex: 1; height: 10px; border-radius: 5px; background: ${RISK_COLORS.Moderate.bg}; overflow: hidden; }
   .intervention-bar-fill { height: 100%; background: #1a7f45; }
   .intervention-counts { flex: 0 0 190px; text-align: right; font-size: 9.5px; white-space: nowrap; }
+  .intervention-row-rollup { display: flex; flex-direction: column; gap: 5px; padding: 8px 0; border-bottom: 1px solid #f0f2f4; }
+  .intervention-total { font-weight: 400; color: #6b7885; font-size: 9.5px; }
+  .intervention-type-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .intervention-type-chip { font-size: 9px; background: ${RISK_COLORS.Moderate.bg}; color: #263; border-radius: 999px; padding: 3px 9px; white-space: nowrap; }
   .badge-completed { display: inline-block; padding: 2px 7px; border-radius: 9px; background: #e3f6ea; color: #1a7f45; font-weight: 600; margin-right: 4px; }
   .badge-pending { display: inline-block; padding: 2px 7px; border-radius: 9px; background: ${RISK_COLORS.Moderate.bg}; color: ${RISK_COLORS.Moderate.fg}; font-weight: 600; }
+  /* Case-Type Spike Alert - rendered right after the cover page (before the
+     TOC), the "read this first" callout, not a numbered section at the end. */
+  .spike-callout { background: ${RISK_COLORS.High.bg}; border: 1px solid ${RISK_COLORS.High.fg}; border-radius: 8px; padding: 12px 16px; margin: 20px 30px 0; }
+  .spike-callout-title { font-weight: 700; color: ${RISK_COLORS.High.fg}; font-size: 13px; margin-bottom: 6px; }
+  .spike-callout-list { margin: 0; padding-left: 18px; font-size: 11.5px; color: #5c1414; line-height: 1.6; }
 </style>
 <div class="cover">
   <div class="cover-inner">
@@ -447,6 +703,7 @@ function renderReportHtml(report) {
     <div class="status-badge">${escapeHtml(status)}</div>
   </div>
 </div>
+${spikeCallout}
 <div class="toc-page">
   <h2>Table of Contents</h2>
   <ul>${tocItems}</ul>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import MinistryLayout from '../layouts/MinistryLayout';
 import { ChevronDown, ChevronUp, FilePlus, CheckCircle2, Download } from 'lucide-react';
 import { useReportsInbox, useUpdateReportStatus, useJurisdictionOptions, useDownloadReportPdf } from '../services/hooks';
@@ -10,6 +10,16 @@ const STATUS_BADGE = {
   Submitted: 'bg-amber-100 text-amber-700',
   Reviewed: 'bg-emerald-100 text-emerald-700',
 };
+
+// Ministry's inbox can hold District-, State-, AND National-tier reports at
+// once (direct cc at generation, or forwarded later by any recipient) -
+// grouping by origin tier, not one flat list, is what makes that legible.
+const TIER_GROUP_LABELS = {
+  district: 'From Districts (Direct)',
+  state: 'From States (Direct)',
+  national: 'From National',
+};
+const TIER_GROUP_ORDER = ['national', 'state', 'district'];
 
 function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload, downloadingId }) {
   const [expanded, setExpanded] = useState(false);
@@ -25,11 +35,14 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload,
             {r.status && (
               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
             )}
-            {r.targetJurisdictionName && (
-              <span className="text-[10px] text-gray-400">to {r.targetJurisdictionName}</span>
-            )}
+            {r.periodLabel && <span className="text-[10px] text-gray-400">{r.periodLabel}</span>}
           </div>
-          <p className="text-xs text-gray-500">Submitted by {r.generatedByName || 'Unknown'} - {new Date(r.generatedAt).toLocaleString()}</p>
+          <p className="text-xs text-gray-500">
+            Submitted by {r.generatedByName || 'Unknown'} - {new Date(r.generatedAt).toLocaleString()}
+            {r.isForwarded && r.forwardedByName && (
+              <span className="ml-1.5 text-[#3D5A80] font-semibold">- Forwarded by {r.forwardedByName}{r.forwardedAt ? ` on ${new Date(r.forwardedAt).toLocaleDateString()}` : ''}</span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <span
@@ -72,14 +85,25 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload,
   );
 }
 
-// Ministry Analytics & Workflow Task 4D - Inbox/Outbox split of the same
-// underlying GET /api/ministry/reports list (client-side filtering, per the
-// task's own guidance - the endpoint has no server-side Inbox/Outbox
-// filter). Ministry's role is jurisdiction-unrestricted (jurisdiction_id:
-// null), so "the current admin's own jurisdiction" resolves to the national
-// jurisdiction - the exact same useJurisdictionOptions('national') ->
-// [0].jurisdictionId pattern MinistryDashboard.jsx already uses as
-// Ministry's "home" jurisdiction.
+// Ministry Analytics & Workflow Task 4D - Inbox/Outbox split.
+//
+// GET /api/ministry/reports is now scoped server-side to exactly Ministry's
+// real inbox (a report_recipients row with recipient_type='ministry' and
+// status in Submitted/Reviewed - fixed alongside the multi-recipient/forward
+// feature, which is also why "targetJurisdictionId === my own jurisdiction"
+// is no longer the right client-side filter here: that single-target column
+// is a legacy field from before a report could have several independent
+// recipients, and isn't reliably set for reports routed the new way. Trust
+// the backend's own filtering for Inbox entirely - no client-side re-filter.
+//
+// Outbox (reports Ministry itself generated via the builder below, for any
+// jurisdiction it chose) is a SEPARATE, still-legacy flow this endpoint
+// doesn't return (Ministry generating a report makes it the SENDER of that
+// report, not a "recipient" of it) - kept as its own best-effort filter
+// against whatever this same list happens to include, but this is a known
+// gap: a report Ministry generates for, say, a district doesn't show up in
+// its own Outbox under the current backend. Flagged for a follow-up, not
+// silently "fixed" here since that needs a new backend query.
 export default function ReportsInbox() {
   const { data, loading, error, refetch } = useReportsInbox();
   const updateStatus = useUpdateReportStatus();
@@ -94,11 +118,26 @@ export default function ReportsInbox() {
   const [actionError, setActionError] = useState(null);
 
   const reports = data?.reports || [];
-  // Inbox: reports sent TO Ministry/National from a lower tier.
-  const inboxReports = reports.filter((r) => r.targetJurisdictionId && r.targetJurisdictionId === nationalJurisdictionId);
-  // Outbox: reports Ministry/National itself generated, regardless of target.
+  // Inbox: everything this endpoint returns IS the inbox now (server-side
+  // recipient-based filtering already applied) - no re-filtering here.
+  const inboxReports = reports;
+  // Outbox: best-effort - Ministry's own generated reports that happen to
+  // still appear in this list (see the gap noted above).
   const outboxReports = reports.filter((r) => r.jurisdictionId && r.jurisdictionId === nationalJurisdictionId);
   const visibleReports = tab === 'inbox' ? inboxReports : outboxReports;
+
+  const groupedInbox = useMemo(() => {
+    if (tab !== 'inbox') return null;
+    const byTier = new Map();
+    for (const r of inboxReports) {
+      const level = r.jurisdictionLevel || 'national';
+      if (!byTier.has(level)) byTier.set(level, []);
+      byTier.get(level).push(r);
+    }
+    return TIER_GROUP_ORDER
+      .filter((level) => byTier.has(level))
+      .map((level) => ({ level, label: TIER_GROUP_LABELS[level] || level, reports: byTier.get(level) }));
+  }, [tab, inboxReports]);
 
   const handleMarkReviewed = async (reportId) => {
     setActionError(null);
@@ -168,6 +207,27 @@ export default function ReportsInbox() {
             <p className="text-sm text-gray-400 p-6">
               {tab === 'inbox' ? 'No reports received yet.' : 'No reports sent yet.'}
             </p>
+          ) : groupedInbox ? (
+            <div className="divide-y divide-gray-200">
+              {groupedInbox.map((group) => (
+                <div key={group.level}>
+                  <p className="px-6 pt-3 pb-1 text-[10px] font-bold uppercase tracking-wide text-gray-400 bg-gray-50/60">{group.label}</p>
+                  <div className="divide-y divide-gray-100">
+                    {group.reports.map((r) => (
+                      <ReportRow
+                        key={r.reportId}
+                        r={r}
+                        showReviewAction={tab === 'inbox'}
+                        onMarkReviewed={handleMarkReviewed}
+                        markingId={markingId}
+                        onDownload={handleDownloadPdf}
+                        downloadingId={downloadingId}
+                      />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <div className="divide-y divide-gray-100">
               {visibleReports.map((r) => (

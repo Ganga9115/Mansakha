@@ -1494,22 +1494,34 @@ router.get(
           [jurisdictionId]
         ));
       } else {
+        // fwd: joined so the CALLER's own recipient row can tell an
+        // original recipient apart from a forwarded one (Detailed PDF
+        // Reports - Forward After Review) without a second round trip.
         const { rows } = await pool.query(
           `select r.report_id, r.jurisdiction_id, r.generated_by, r.generated_at, r.period_start, r.period_end, r.snapshot,
                   r.status, r.commentary, r.period_type,
                   origin.name as jurisdiction_name, origin.level as tier,
                   o.full_name as generated_by_name,
-                  rr.recipient_id as my_recipient_id, rr.status as my_status, rr.is_primary as my_is_primary
+                  rr.recipient_id as my_recipient_id, rr.status as my_status, rr.is_primary as my_is_primary,
+                  rr.forwarded_at as my_forwarded_at, fwd.full_name as my_forwarded_by_name
            from report_recipients rr
            join reports r on r.report_id = rr.report_id
            join jurisdictions origin on origin.jurisdiction_id = r.jurisdiction_id
            left join officials o on o.official_id = r.generated_by
+           left join officials fwd on fwd.official_id = rr.forwarded_by
            where rr.recipient_type = 'jurisdiction' and rr.jurisdiction_id = $1
            order by r.generated_at desc`,
           [jurisdictionId]
         );
         reportRows = rows;
-        myRowByReportId = new Map(rows.map((r) => [r.report_id, { myRecipientId: r.my_recipient_id, myStatus: r.my_status, myIsPrimary: r.my_is_primary }]));
+        myRowByReportId = new Map(rows.map((r) => [r.report_id, {
+          myRecipientId: r.my_recipient_id,
+          myStatus: r.my_status,
+          myIsPrimary: r.my_is_primary,
+          isForwarded: !!r.my_forwarded_at,
+          forwardedByName: r.my_forwarded_at ? r.my_forwarded_by_name || null : null,
+          forwardedAt: r.my_forwarded_at,
+        }]));
       }
 
       // Batched, not N+1 - one query for every report's recipients at once,
@@ -1520,9 +1532,11 @@ router.get(
       if (reportIds.length > 0) {
         const { rows: recipientRows } = await pool.query(
           `select rr.report_id, rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at,
+                  rr.forwarded_at, fwd.full_name as forwarded_by_name,
                   j.name as jurisdiction_name
            from report_recipients rr
            left join jurisdictions j on j.jurisdiction_id = rr.jurisdiction_id
+           left join officials fwd on fwd.official_id = rr.forwarded_by
            where rr.report_id = any($1::uuid[])`,
           [reportIds]
         );
@@ -1537,6 +1551,9 @@ router.get(
             isPrimary: r.is_primary,
             status: r.status,
             reviewedAt: r.reviewed_at,
+            isForwarded: !!r.forwarded_at,
+            forwardedByName: r.forwarded_at ? r.forwarded_by_name || null : null,
+            forwardedAt: r.forwarded_at,
           });
           recipientsByReportId.set(r.report_id, list);
         }
@@ -1594,9 +1611,12 @@ router.get(
     if (!report) return fail(res, 'Report not found', 404);
 
     const { rows: recipientRows } = await pool.query(
-      `select rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at, j.name as jurisdiction_name
+      `select rr.recipient_id, rr.recipient_type, rr.jurisdiction_id, rr.is_primary, rr.status, rr.reviewed_at,
+              rr.forwarded_at, fwd.full_name as forwarded_by_name,
+              j.name as jurisdiction_name
        from report_recipients rr
        left join jurisdictions j on j.jurisdiction_id = rr.jurisdiction_id
+       left join officials fwd on fwd.official_id = rr.forwarded_by
        where rr.report_id = $1`,
       [reportId]
     );
@@ -1625,6 +1645,12 @@ router.get(
         isPrimary: r.is_primary,
         status: r.status,
         reviewedAt: r.reviewed_at,
+        // Forward After Review - a forwarded recipient row shows distinctly
+        // in the PDF trail ("Forwarded by X on Y") instead of the plain
+        // Primary/Cc label.
+        isForwarded: !!r.forwarded_at,
+        forwardedByName: r.forwarded_at ? r.forwarded_by_name || null : null,
+        forwardedAt: r.forwarded_at,
       })),
     };
 
@@ -1644,5 +1670,100 @@ router.get(
   }
 );
 
+
+// ===== Detailed PDF Reports - Forward After Review =====
+// An EXISTING recipient of an already-submitted report can forward it to
+// someone else after reviewing it, without the original sender
+// regenerating the report. Reuses the exact same "find my own recipient
+// row" logic PATCH .../status already has - a caller who was never sent
+// this report can't forward something they never received.
+router.post(
+  '/reports/:reportId/forward',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  async (req, res) => {
+    const { reportId } = req.params;
+    const { type, jurisdictionId } = req.body;
+
+    const { rows: reportRows } = await pool.query('select report_id from reports where report_id = $1', [reportId]);
+    if (!reportRows[0]) return fail(res, 'Report not found', 404);
+
+    const { rows: recipientRows } = await pool.query(
+      'select recipient_id, recipient_type, jurisdiction_id from report_recipients where report_id = $1',
+      [reportId]
+    );
+
+    const isMinistry = req.auth.roles.some((r) => r.roleName === 'Ministry');
+    // Exact match only, same set requireJurisdiction() itself builds
+    // internally - same "find my own recipient row" logic as PATCH .../status.
+    const assignedIds = new Set(req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean));
+    const myRow = isMinistry
+      ? recipientRows.find((r) => r.recipient_type === 'ministry')
+      : recipientRows.find((r) => r.recipient_type === 'jurisdiction' && assignedIds.has(r.jurisdiction_id));
+    if (!myRow) return fail(res, 'You are not a recipient of this report', 404);
+
+    // Ministry has nothing above it - nothing to forward to.
+    if (myRow.recipient_type === 'ministry') {
+      return fail(res, 'Ministry has no recipient above it to forward a report to', 400);
+    }
+
+    // Allowed forward targets depend on the CALLER's OWN tier (the level of
+    // the jurisdiction their own matched recipient row belongs to), not the
+    // report's own origin tier or which of the 3 admin route files happened
+    // to receive this request - a State-tier official could in principle
+    // call any of the 3 files, and the correct rule is always "what level is
+    // THIS recipient row." Mirrors the same "compute allowed recipients"
+    // judgment call POST /reports/generate already makes for the ORIGINAL
+    // send, just re-applied at forward time for whoever currently holds this
+    // report as a reviewed recipient: District/State-tier -> may forward to
+    // the national jurisdiction and/or Ministry; National-tier -> Ministry only.
+    const { rows: myJurisdictionRows } = await pool.query('select level from jurisdictions where jurisdiction_id = $1', [myRow.jurisdiction_id]);
+    const myLevel = myJurisdictionRows[0]?.level;
+
+    let target;
+    if (type === 'ministry') {
+      target = { recipientType: 'ministry', jurisdictionId: null };
+    } else if (type === 'jurisdiction') {
+      if (myLevel === 'national') {
+        return fail(res, 'A national-tier recipient can only forward to Ministry', 400);
+      }
+      if (!jurisdictionId) return fail(res, 'jurisdictionId is required when type is "jurisdiction"', 400);
+      const { rows: targetRows } = await pool.query('select level from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+      if (!targetRows[0] || targetRows[0].level !== 'national') {
+        return fail(res, 'A jurisdiction forward target must be the national jurisdiction', 400);
+      }
+      target = { recipientType: 'jurisdiction', jurisdictionId };
+    } else {
+      return fail(res, "type must be 'jurisdiction' or 'ministry'", 400);
+    }
+
+    let inserted;
+    try {
+      const { rows } = await pool.query(
+        `insert into report_recipients (report_id, recipient_type, jurisdiction_id, is_primary, status, forwarded_by, forwarded_at)
+         values ($1, $2, $3, false, 'Submitted', $4, now())
+         returning recipient_id, recipient_type, jurisdiction_id, status, forwarded_at`,
+        [reportId, target.recipientType, target.jurisdictionId, req.auth.officialId]
+      );
+      inserted = rows[0];
+    } catch (err) {
+      // unique (report_id, recipient_type, jurisdiction_id), or the partial
+      // unique index capping a report to one ministry recipient - either
+      // way this means the target is already a recipient of this report.
+      if (err.code === '23505') return fail(res, 'This report has already been sent to that recipient', 409);
+      return fail(res, `Could not forward report: ${err.message}`, 500);
+    }
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'report_recipient', entityId: inserted.recipient_id });
+
+    return ok(
+      res,
+      { recipientId: inserted.recipient_id, recipientType: inserted.recipient_type, jurisdictionId: inserted.jurisdiction_id, status: inserted.status },
+      'Report forwarded',
+      201
+    );
+  }
+);
 
 module.exports = router;

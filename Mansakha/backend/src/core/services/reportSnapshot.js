@@ -54,10 +54,14 @@ async function computeDistressTrendSection(jurisdictionIds, periodStart, periodE
 }
 
 // Condensed version of /counsellors/performance/:jurisdictionId's logic
-// (districtAdmin.routes.js) - District-tier report section only, so no
-// descendant-subtree walk (a counsellor is always assigned to a single
-// district-level jurisdiction, exact match here).
-async function computeCounsellorSection(districtJurisdictionId) {
+// (districtAdmin.routes.js). Takes a jurisdictionIds ARRAY (not a single
+// district id) so the same function serves both District's own per-
+// counsellor detail ([districtJurisdictionId]) and State/National's
+// per-child rollup below (a single child district's id, or a whole child
+// state's descendant district set) - a counsellor is always assigned to a
+// single district-level jurisdiction, so this is still an exact-match
+// lookup, just over however many district ids the caller passes.
+async function computeCounsellorSection(jurisdictionIds) {
   // Two FKs from official_roles into officials (official_id AND assigned_by)
   // make a bare officials(full_name) embed ambiguous to PostgREST - same
   // reasoning as the existing /counsellors/performance route, sidestepped
@@ -65,7 +69,7 @@ async function computeCounsellorSection(districtJurisdictionId) {
   const { data: roleRows, error: roleErr } = await supabase
     .from('official_roles')
     .select('official_id, roles(role_name)')
-    .eq('jurisdiction_id', districtJurisdictionId)
+    .in('jurisdiction_id', jurisdictionIds)
     .is('revoked_at', null);
   if (roleErr) throw new Error(roleErr.message);
 
@@ -113,6 +117,33 @@ async function computeCounsellorSection(districtJurisdictionId) {
       usersConsideredForEfficacy: consideredCount,
     };
   });
+}
+
+// Reduces computeCounsellorSection's per-counsellor array down to one
+// aggregate row, for State/National's per-child rollup (Every kind of data
+// belongs at every tier - District shows individual counsellors, State/
+// National show one summary row per child district/state). The efficacy
+// average is weighted by usersConsideredForEfficacy (not a plain mean of
+// means) - a counsellor considered over 5 cases should count 5x as much as
+// one considered over 1, same reasoning a straight per-counsellor average
+// would get wrong.
+function aggregateCounsellorRollup(counsellors) {
+  let totalActiveCases = 0;
+  let dropSum = 0;
+  let consideredCount = 0;
+  for (const c of counsellors) {
+    totalActiveCases += c.activeCaseCount;
+    if (c.avgDistressPointDrop !== null) {
+      dropSum += c.avgDistressPointDrop * c.usersConsideredForEfficacy;
+      consideredCount += c.usersConsideredForEfficacy;
+    }
+  }
+  return {
+    counsellorCount: counsellors.length,
+    totalActiveCases,
+    avgDistressPointDrop: consideredCount > 0 ? Math.round((dropSum / consideredCount) * 10) / 10 : null,
+    usersConsideredForEfficacy: consideredCount,
+  };
 }
 
 // District-tier report section only. There is no historical alert-
@@ -319,9 +350,24 @@ const NO_COURT_RECORDS_MESSAGE = "No court case records generated yet for this d
 //
 // Identifies cases by docketNumber only in upcomingHearings - never joins
 // user_identity, same privacy boundary as computeNewEnrollments above.
+// Fixed ladder (not data-driven) - reads better in a fixed order even when
+// some buckets are empty, same reasoning caseStageDistribution's own fixed
+// enum already relies on. Only ever populated when there's at least one
+// real Pending case, per the "don't show 4 zero-rows as if they mean
+// something" rule - see computeLegalProceedings below.
+const AGING_BUCKET_ORDER = ['<3 months', '3-6 months', '6-12 months', '>1 year'];
+function agingBucketFor(filingDate) {
+  const ageMs = Date.now() - new Date(filingDate).getTime();
+  const ageMonths = ageMs / (1000 * 60 * 60 * 24 * 30.44); // average month length - fine for a bucket boundary, not a billing calc
+  if (ageMonths < 3) return '<3 months';
+  if (ageMonths < 6) return '3-6 months';
+  if (ageMonths < 12) return '6-12 months';
+  return '>1 year';
+}
+
 async function computeLegalProceedings(districtJurisdictionId, periodStart, periodEnd) {
   const { rows } = await pool.query(
-    `select u.docket_number, ccd.case_status, ccd.acts_sections, ccd.next_hearing_date, ccd.next_hearing_purpose
+    `select u.docket_number, ccd.case_status, ccd.acts_sections, ccd.next_hearing_date, ccd.next_hearing_purpose, ccd.filing_date
      from court_case_details ccd
      join users u on u.user_id = ccd.user_id
      where u.jurisdiction_id = $1`,
@@ -329,19 +375,29 @@ async function computeLegalProceedings(districtJurisdictionId, periodStart, peri
   );
 
   if (rows.length === 0) {
-    return { casesWithRecord: 0, pendingCount: 0, disposedCount: 0, topActsSections: [], upcomingHearings: [], message: NO_COURT_RECORDS_MESSAGE };
+    return { casesWithRecord: 0, pendingCount: 0, disposedCount: 0, topActsSections: [], upcomingHearings: [], pendencyAging: [], message: NO_COURT_RECORDS_MESSAGE };
   }
 
   let pendingCount = 0;
   let disposedCount = 0;
   const actsSectionCounts = new Map();
   const upcomingHearings = [];
+  const agingCounts = new Map(AGING_BUCKET_ORDER.map((b) => [b, 0]));
   const periodStartMs = periodStart.getTime();
   const periodEndMs = periodEnd.getTime();
 
   for (const r of rows) {
-    if (r.case_status === 'Pending') pendingCount += 1;
-    else if (r.case_status === 'Disposed') disposedCount += 1;
+    if (r.case_status === 'Pending') {
+      pendingCount += 1;
+      // filing_date can be null on a not-yet-fully-synced record - skip
+      // aging for those rather than mis-bucketing on a missing date.
+      if (r.filing_date) {
+        const bucket = agingBucketFor(r.filing_date);
+        agingCounts.set(bucket, agingCounts.get(bucket) + 1);
+      }
+    } else if (r.case_status === 'Disposed') {
+      disposedCount += 1;
+    }
 
     // acts_sections is a jsonb array of plain strings (see
     // courtCaseSimulation.js's actsFor) - defensively guarded against any
@@ -369,7 +425,13 @@ async function computeLegalProceedings(districtJurisdictionId, periodStart, peri
 
   upcomingHearings.sort((a, b) => new Date(a.nextHearingDate).getTime() - new Date(b.nextHearingDate).getTime());
 
-  return { casesWithRecord: rows.length, pendingCount, disposedCount, topActsSections, upcomingHearings, message: null };
+  // Zero-filled buckets ONLY when there's at least one real Pending case to
+  // bucket - with zero Pending cases (all Disposed, say), 4 zero-rows would
+  // read as meaningful data when there's genuinely nothing to show; the
+  // parent section's own pendingCount: 0 already communicates that case.
+  const pendencyAging = pendingCount > 0 ? AGING_BUCKET_ORDER.map((bucket) => ({ bucket, count: agingCounts.get(bucket) })) : [];
+
+  return { casesWithRecord: rows.length, pendingCount, disposedCount, topActsSections, upcomingHearings, pendencyAging, message: null };
 }
 
 // ===== Trend direction (State/National rollup rows) =====
@@ -445,6 +507,512 @@ async function computeReportingCompliance(parentJurisdictionId, periodStart, per
   }));
 }
 
+// ===== Additional real data categories (comprehensive coverage pass) =====
+// Each verified against schema.sql/live data before being built - see this
+// file's own module comment history. wellness_content engagement was
+// explicitly investigated and skipped (no per-user usage/view-tracking
+// column or table exists anywhere in this codebase - wellness_content is
+// only ever read as a static catalog, never logged as "viewed" by a user -
+// confirmed via grep across every route before deciding not to build it).
+
+// All 3 tiers via the same function - a current-state snapshot (not
+// period-scoped, same reasoning as caseTypeDistribution). Single aggregate
+// across the given jurisdictionIds, not per-child (a 6-language breakdown
+// per child district would be unreadable clutter at State/National scale).
+async function computeLanguagePreferences(jurisdictionIds) {
+  const [{ rows: langRows }, { rows: prefRows }] = await Promise.all([
+    pool.query(
+      `select l.name as language_name, count(*) as count
+       from users u
+       left join languages l on l.language_id = u.preferred_language
+       where u.jurisdiction_id = any($1::uuid[])
+       group by l.name
+       order by count(*) desc`,
+      [jurisdictionIds]
+    ),
+    pool.query(
+      `select count(*) filter (where opted_for_manual_counsellor) as manual_count,
+              count(*) as total
+       from users
+       where jurisdiction_id = any($1::uuid[])`,
+      [jurisdictionIds]
+    ),
+  ]);
+  const languageDistribution = langRows.map((r) => ({ languageName: r.language_name || 'Not Set', count: Number(r.count) }));
+  const p = prefRows[0];
+  return {
+    languageDistribution,
+    optedForManualCounsellorCount: Number(p.manual_count),
+    totalCases: Number(p.total),
+  };
+}
+
+// All 3 tiers via the same function - a current-state compliance snapshot.
+// consent_records is per (user, channel), so "has consent on file" means at
+// least one non-revoked row for that user; joined directly on u.user_id
+// (not coalesced through linked_to_user_id) - consent is a channel-specific
+// grant simulated data hasn't needed to model at the anchor level, and the
+// base `cases` table already lists a dependent case as its own row the same
+// direct way.
+async function computeConsentCompliance(jurisdictionIds) {
+  const { rows } = await pool.query(
+    `select count(distinct u.user_id) as total,
+            count(distinct cr.user_id) as with_consent
+     from users u
+     left join consent_records cr on cr.user_id = u.user_id and cr.revoked_at is null
+     where u.jurisdiction_id = any($1::uuid[])`,
+    [jurisdictionIds]
+  );
+  const total = Number(rows[0].total);
+  const withConsent = Number(rows[0].with_consent);
+  return {
+    totalCases: total,
+    withConsent,
+    withoutConsent: total - withConsent,
+    compliancePct: total > 0 ? Math.round((withConsent / total) * 100) : null,
+  };
+}
+
+// ===== Case-Type Spike Alert (all 3 tiers) =====
+// Compares THIS report's new-enrollment count per case type against the
+// immediately-preceding period of equal length, for the same jurisdiction
+// set - reuses the exact same users.enrolled_at/case_type_id shape as
+// computeNewEnrollments/computeCaseTypeDistribution, just for one
+// additional prior-period query. Meant to be the "read this first" section
+// (rendered as a callout right after the cover page, not buried at the
+// end) - a busy official should see an anomaly before the routine tables.
+//
+// Threshold (documented judgment call, same spirit as TREND_FLAT_THRESHOLD
+// above): flagged only when a case type grew by at least +50% AND by at
+// least 2 more actual cases, so "1 case became 2" (a mathematically
+// enormous +100%) doesn't read as a dramatic spike on noise-level counts. A
+// brand-new case type this period (0 -> N, N >= 2) is flagged with
+// percentChange: null (a percentage off a zero base isn't meaningful) -
+// the PDF renders that case as "N new case(s) (previously none)" instead of
+// a percentage.
+const SPIKE_MIN_PERCENT = 50;
+const SPIKE_MIN_ABSOLUTE_INCREASE = 2;
+
+// childContext (State/National only): { children, groupByParent } - when
+// given, also identifies WHICH child jurisdiction drove each flagged spike
+// (the child with the largest INCREASE for that case type), so the callout
+// reads as "...driven mainly by Pune" rather than just a subtree-wide
+// number - what actually makes an alert actionable for policy. Two extra
+// grouped queries (current/prior per-child-per-type), only run when
+// childContext is passed (District has no children, so it never pays this
+// cost).
+async function computeSpikeAlerts(jurisdictionIds, periodStart, periodEnd, childContext = null) {
+  const periodMs = periodEnd.getTime() - periodStart.getTime();
+  const priorEnd = new Date(periodStart.getTime());
+  const priorStart = new Date(periodStart.getTime() - periodMs);
+
+  const [{ rows: currentRows }, { rows: priorRows }] = await Promise.all([
+    pool.query(
+      `select ct.name, count(*) as count
+       from users u join case_types ct on ct.case_type_id = u.case_type_id
+       where u.jurisdiction_id = any($1::uuid[]) and u.enrolled_at >= $2 and u.enrolled_at <= $3
+       group by ct.name`,
+      [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+    ),
+    // Half-open [priorStart, priorEnd) so a case enrolled exactly at
+    // periodStart is never double-counted into both windows.
+    pool.query(
+      `select ct.name, count(*) as count
+       from users u join case_types ct on ct.case_type_id = u.case_type_id
+       where u.jurisdiction_id = any($1::uuid[]) and u.enrolled_at >= $2 and u.enrolled_at < $3
+       group by ct.name`,
+      [jurisdictionIds, priorStart.toISOString(), priorEnd.toISOString()]
+    ),
+  ]);
+
+  const currentByType = new Map(currentRows.map((r) => [r.name, Number(r.count)]));
+  const priorByType = new Map(priorRows.map((r) => [r.name, Number(r.count)]));
+
+  const alerts = [];
+  for (const [caseTypeName, currentCount] of currentByType.entries()) {
+    const previousCount = priorByType.get(caseTypeName) || 0;
+    const increase = currentCount - previousCount;
+    if (increase < SPIKE_MIN_ABSOLUTE_INCREASE) continue;
+
+    if (previousCount === 0) {
+      alerts.push({ caseTypeName, previousCount, currentCount, percentChange: null });
+      continue;
+    }
+    const percentChange = Math.round((increase / previousCount) * 100);
+    if (percentChange >= SPIKE_MIN_PERCENT) {
+      alerts.push({ caseTypeName, previousCount, currentCount, percentChange });
+    }
+  }
+
+  alerts.sort((a, b) => b.currentCount - a.currentCount);
+
+  if (alerts.length > 0 && childContext) {
+    const { children, groupByParent } = childContext;
+    const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+    const [{ rows: currentByChild }, { rows: priorByChild }] = await Promise.all([
+      pool.query(
+        `select ${groupExpr} as group_id, ct.name as case_type_name, count(*) as count
+         from users u join case_types ct on ct.case_type_id = u.case_type_id
+         join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+         where u.jurisdiction_id = any($1::uuid[]) and u.enrolled_at >= $2 and u.enrolled_at <= $3
+         group by ${groupExpr}, ct.name`,
+        [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+      ),
+      pool.query(
+        `select ${groupExpr} as group_id, ct.name as case_type_name, count(*) as count
+         from users u join case_types ct on ct.case_type_id = u.case_type_id
+         join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+         where u.jurisdiction_id = any($1::uuid[]) and u.enrolled_at >= $2 and u.enrolled_at < $3
+         group by ${groupExpr}, ct.name`,
+        [jurisdictionIds, priorStart.toISOString(), priorEnd.toISOString()]
+      ),
+    ]);
+
+    const nameByChildId = new Map(children.map((c) => [c.jurisdiction_id, c.name]));
+    // key: `${childId}::${caseTypeName}` -> count
+    const currentByChildType = new Map(currentByChild.map((r) => [`${r.group_id}::${r.case_type_name}`, Number(r.count)]));
+    const priorByChildType = new Map(priorByChild.map((r) => [`${r.group_id}::${r.case_type_name}`, Number(r.count)]));
+
+    for (const alert of alerts) {
+      let drivingChildId = null;
+      let drivingIncrease = -Infinity;
+      for (const child of children) {
+        const key = `${child.jurisdiction_id}::${alert.caseTypeName}`;
+        const childIncrease = (currentByChildType.get(key) || 0) - (priorByChildType.get(key) || 0);
+        if (childIncrease > drivingIncrease) {
+          drivingIncrease = childIncrease;
+          drivingChildId = child.jurisdiction_id;
+        }
+      }
+      // Only attribute a driving child when it actually contributed a real
+      // increase (>0) - a flat/negative "max" (every child unchanged) means
+      // no single child explains the spike, so leave it unattributed rather
+      // than naming an arbitrary child that didn't actually grow.
+      alert.drivingJurisdictionName = drivingIncrease > 0 ? nameByChildId.get(drivingChildId) || null : null;
+    }
+  }
+
+  return alerts;
+}
+
+// ===== Per-child rollup helpers (State: one row per child district;
+// National: one row per child state) =====
+// User direction: every kind of data belongs at EVERY tier - only the
+// GRANULARITY changes (District = its own case-level/current-state detail;
+// State/National = one row per child, same groupByParent trick
+// countRiskByGroup already established). Each of these mirrors a District-
+// tier section 1:1, just grouped by child instead of scoped to one district.
+
+// Case Stage Distribution rollup - case_stage is a fixed 5-value enum, so a
+// per-child column-per-stage table is bounded/readable (unlike a per-child
+// column-per-CASE-TYPE table, which is 9 columns and growing - see
+// countTopCaseTypeByGroup below for why that one takes a different shape).
+async function countCaseStageByGroup(jurisdictionIds, groupByParent) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            count(*) filter (where u.case_stage = 'Investigation') as investigation,
+            count(*) filter (where u.case_stage = 'Trial') as trial,
+            count(*) filter (where u.case_stage = 'Rehabilitation') as rehabilitation,
+            count(*) filter (where u.case_stage = 'Compensation') as compensation,
+            count(*) filter (where u.case_stage = 'Case Closed') as case_closed
+     from users u
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[])
+     group by ${groupExpr}`,
+    [jurisdictionIds]
+  );
+  return new Map(rows.map((r) => [r.group_id, r]));
+}
+
+// New Enrollments rollup - a COUNT per child, not the full case list (same
+// "a count is the right granularity for a rollup" reasoning districts/
+// states already use).
+async function countNewEnrollmentsByGroup(jurisdictionIds, groupByParent, periodStart, periodEnd) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id, count(*) as count
+     from users u
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[]) and u.enrolled_at >= $2 and u.enrolled_at <= $3
+     group by ${groupExpr}`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  return new Map(rows.map((r) => [r.group_id, Number(r.count)]));
+}
+
+// Alert Volume rollup - same 3-state breakdown as District's own
+// computeAlertVolume, one row per child instead of one object for a single
+// district.
+async function countAlertVolumeByGroup(jurisdictionIds, groupByParent, periodStart, periodEnd) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            count(*) filter (where ast.name = 'Open') as open_count,
+            count(*) filter (where ast.name = 'Acknowledged') as ack_count,
+            count(*) filter (where ast.name = 'Resolved') as resolved_count
+     from alerts a
+     join users u on u.user_id = a.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     join alert_statuses ast on ast.alert_status_id = a.alert_status_id
+     where u.jurisdiction_id = any($1::uuid[]) and a.triggered_at >= $2 and a.triggered_at <= $3
+     group by ${groupExpr}`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  return new Map(rows.map((r) => [r.group_id, r]));
+}
+
+// Intervention Summary rollup - grouped by child AND type (a real, if
+// slightly bigger, breakdown - "what was provided, and to how many users" is
+// the whole point of this section, so collapsing type away at State/National
+// would report a plain instance count as if it meant something on its own).
+// Each child's row card holds its own type list, so this doesn't render as
+// a full child x type MATRIX - just as many lines as that child actually has
+// intervention types for.
+async function countInterventionSummaryByGroup(jurisdictionIds, groupByParent, periodStart, periodEnd) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            it.name as type_name,
+            count(*) as total_count,
+            count(*) filter (where i.completed_at is not null) as completed_count
+     from interventions i
+     join users u on u.user_id = i.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     join intervention_types it on it.intervention_type_id = i.intervention_type_id
+     where u.jurisdiction_id = any($1::uuid[]) and i.recommended_at >= $2 and i.recommended_at <= $3
+     group by ${groupExpr}, it.name
+     order by ${groupExpr}, count(*) desc`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  const byGroup = new Map();
+  for (const r of rows) {
+    if (!byGroup.has(r.group_id)) byGroup.set(r.group_id, []);
+    const totalCount = Number(r.total_count);
+    const completedCount = Number(r.completed_count);
+    byGroup.get(r.group_id).push({ typeName: r.type_name, totalCount, completedCount, notCompletedCount: totalCount - completedCount });
+  }
+  return byGroup;
+}
+
+// Legal Proceedings (incl. pendency aging) rollup - the aging buckets are
+// computed directly in SQL via interval comparisons against now(), grouped
+// per child, rather than post-processed in JS (which is how District's own
+// version does it per-row) - this avoids fetching every court_case_details
+// row across a whole subtree just to bucket them in JS. A child genuinely
+// showing 0 here is a real zero (not omitted) - per-CHILD rollup rows are
+// always zero-filled, unlike District's own single-jurisdiction section
+// which suppresses an all-zero aging breakdown when there's truly nothing
+// to bucket (a different rule for a different granularity).
+async function countLegalProceedingsByGroup(jurisdictionIds, groupByParent) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            count(*) as cases_with_record,
+            count(*) filter (where ccd.case_status = 'Pending') as pending_count,
+            count(*) filter (where ccd.case_status = 'Disposed') as disposed_count,
+            count(*) filter (where ccd.case_status = 'Pending' and ccd.filing_date is not null and (now() - ccd.filing_date) < interval '3 months') as aging_lt_3,
+            count(*) filter (where ccd.case_status = 'Pending' and ccd.filing_date is not null and (now() - ccd.filing_date) >= interval '3 months' and (now() - ccd.filing_date) < interval '6 months') as aging_3_6,
+            count(*) filter (where ccd.case_status = 'Pending' and ccd.filing_date is not null and (now() - ccd.filing_date) >= interval '6 months' and (now() - ccd.filing_date) < interval '1 year') as aging_6_12,
+            count(*) filter (where ccd.case_status = 'Pending' and ccd.filing_date is not null and (now() - ccd.filing_date) >= interval '1 year') as aging_gt_1y
+     from court_case_details ccd
+     join users u on u.user_id = ccd.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[])
+     group by ${groupExpr}`,
+    [jurisdictionIds]
+  );
+  return new Map(rows.map((r) => [r.group_id, r]));
+}
+
+// Alert & SOS Response Times rollup - a single grouped query over raw
+// sos_events rows (not an average-of-averages of District-level results) so
+// AVG()/count() are true weighted aggregates even when a state's group rolls
+// up many districts' worth of individual SOS events at once.
+async function countResponseTimesByGroup(jurisdictionIds, groupByParent, periodStart, periodEnd) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            count(*) as total,
+            count(*) filter (where se.resolved_at is null) as open_count,
+            avg(extract(epoch from (se.acknowledged_at - se.triggered_at)) / 60) filter (where se.acknowledged_at is not null) as avg_ack_minutes,
+            avg(extract(epoch from (se.resolved_at - se.triggered_at)) / 60) filter (where se.resolved_at is not null) as avg_resolve_minutes
+     from sos_events se
+     join users u on u.user_id = se.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[]) and se.triggered_at >= $2 and se.triggered_at <= $3
+     group by ${groupExpr}`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  return new Map(rows.map((r) => [r.group_id, r]));
+}
+
+// Extends Case Type Distribution (already a whole-subtree aggregate table)
+// with the single most common case type PER CHILD, attached to the
+// districts/states comparison row - a full child x case-type matrix (9+
+// columns and growing) would be unreadable at State/National scale, so this
+// is the "extend it without a huge redesign" version: one extra column
+// naming each child's own top case type, not a whole second wide table.
+async function countTopCaseTypeByGroup(jurisdictionIds, groupByParent) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id, ct.name as case_type_name, count(*) as count
+     from users u
+     join case_types ct on ct.case_type_id = u.case_type_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[])
+     group by ${groupExpr}, ct.name`,
+    [jurisdictionIds]
+  );
+  const byGroup = new Map();
+  for (const r of rows) {
+    const current = byGroup.get(r.group_id);
+    const count = Number(r.count);
+    if (!current || count > current.count) byGroup.set(r.group_id, { name: r.case_type_name, count });
+  }
+  return byGroup;
+}
+
+// Distress Trend's per-child companion - a single current-period average
+// score per child, attached to the districts/states comparison row (a full
+// per-child trend LINE would need a multi-line/small-multiples chart, real
+// added complexity the user explicitly said isn't needed - this single
+// number is the cheap, high-value version of "see each child's current
+// distress level at a glance").
+async function computeAvgScoreForPeriod(jurisdictionIds, periodStart, periodEnd) {
+  const { rows } = await pool.query(
+    `select avg(ds.score_value) as avg_score
+     from distress_scores ds
+     join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
+     where u.jurisdiction_id = any($1::uuid[]) and ds.computed_at >= $2 and ds.computed_at <= $3`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  const avg = rows[0].avg_score;
+  return avg !== null ? Math.round(Number(avg) * 10) / 10 : null;
+}
+
+// Shared by computeDistrictWiseSnapshot (State) and computeStateWiseSnapshot
+// (National) - builds every per-child rollup section at once (one shared
+// function, not duplicated per tier, same "reportSnapshot.js is shared code"
+// reasoning as the rest of this file). `zeroFilledBaseRows` is the
+// already-built totalCases/riskLevel row per child (from zeroFillRow) -
+// this attaches trendDirection/avgScore/topCaseType onto THOSE rows and
+// returns every OTHER section as its own separate per-child array, same key
+// names as their District-tier counterparts (the PDF builder tells the two
+// shapes apart via `tier`/Array.isArray).
+async function computePerChildRollups(children, allDescendantIds, groupByParent, periodStart, periodEnd, zeroFilledBaseRows) {
+  const [
+    caseStageByGroup,
+    newEnrollmentsByGroup,
+    alertVolumeByGroup,
+    interventionSummaryByGroup,
+    legalProceedingsByGroup,
+    responseTimesByGroup,
+    topCaseTypeByGroup,
+    perChildExtras,
+  ] = await Promise.all([
+    countCaseStageByGroup(allDescendantIds, groupByParent),
+    countNewEnrollmentsByGroup(allDescendantIds, groupByParent, periodStart, periodEnd),
+    countAlertVolumeByGroup(allDescendantIds, groupByParent, periodStart, periodEnd),
+    countInterventionSummaryByGroup(allDescendantIds, groupByParent, periodStart, periodEnd),
+    countLegalProceedingsByGroup(allDescendantIds, groupByParent),
+    countResponseTimesByGroup(allDescendantIds, groupByParent, periodStart, periodEnd),
+    countTopCaseTypeByGroup(allDescendantIds, groupByParent),
+    // Per-child sub-calls that need each child's OWN descendant subtree walk
+    // (trend direction, current avg score, counsellor rollup) - can't be
+    // expressed as a single SQL group-by the way the others above are.
+    // Parallelized ACROSS children (not sequential) - same pattern the old
+    // trend-direction-only pass already used, just now also carrying
+    // avgScore/counsellors in the same per-child round trip.
+    Promise.all(children.map(async (c) => {
+      const childDescendants = await getDescendantJurisdictionIds(c.jurisdiction_id);
+      const [trendDirection, avgScore, counsellorsRaw] = await Promise.all([
+        computeTrendDirection(childDescendants),
+        computeAvgScoreForPeriod(childDescendants, periodStart, periodEnd),
+        computeCounsellorSection(childDescendants),
+      ]);
+      return { jurisdictionId: c.jurisdiction_id, trendDirection, avgScore, counsellorRollup: aggregateCounsellorRollup(counsellorsRaw) };
+    })),
+  ]);
+
+  const extrasById = new Map(perChildExtras.map((e) => [e.jurisdictionId, e]));
+
+  const rows = zeroFilledBaseRows.map((row) => {
+    const extra = extrasById.get(row.jurisdictionId);
+    const topCaseType = topCaseTypeByGroup.get(row.jurisdictionId) || null;
+    return { ...row, trendDirection: extra.trendDirection, avgScore: extra.avgScore, topCaseType };
+  });
+
+  const caseStageDistribution = children.map((c) => {
+    const r = caseStageByGroup.get(c.jurisdiction_id);
+    return {
+      jurisdictionId: c.jurisdiction_id,
+      name: c.name,
+      investigation: r ? Number(r.investigation) : 0,
+      trial: r ? Number(r.trial) : 0,
+      rehabilitation: r ? Number(r.rehabilitation) : 0,
+      compensation: r ? Number(r.compensation) : 0,
+      caseClosed: r ? Number(r.case_closed) : 0,
+    };
+  });
+
+  const newEnrollments = children.map((c) => ({
+    jurisdictionId: c.jurisdiction_id,
+    name: c.name,
+    newEnrollmentCount: newEnrollmentsByGroup.get(c.jurisdiction_id) || 0,
+  }));
+
+  const alertVolume = children.map((c) => {
+    const r = alertVolumeByGroup.get(c.jurisdiction_id);
+    const open = r ? Number(r.open_count) : 0;
+    const acknowledged = r ? Number(r.ack_count) : 0;
+    const resolved = r ? Number(r.resolved_count) : 0;
+    return { jurisdictionId: c.jurisdiction_id, name: c.name, open, acknowledged, resolved, total: open + acknowledged + resolved };
+  });
+
+  const interventionSummary = children.map((c) => {
+    const types = interventionSummaryByGroup.get(c.jurisdiction_id) || [];
+    const totalCount = types.reduce((sum, t) => sum + t.totalCount, 0);
+    const completedCount = types.reduce((sum, t) => sum + t.completedCount, 0);
+    return { jurisdictionId: c.jurisdiction_id, name: c.name, types, totalCount, completedCount, notCompletedCount: totalCount - completedCount };
+  });
+
+  const legalProceedings = children.map((c) => {
+    const r = legalProceedingsByGroup.get(c.jurisdiction_id);
+    return {
+      jurisdictionId: c.jurisdiction_id,
+      name: c.name,
+      casesWithRecord: r ? Number(r.cases_with_record) : 0,
+      pendingCount: r ? Number(r.pending_count) : 0,
+      disposedCount: r ? Number(r.disposed_count) : 0,
+      agingLt3: r ? Number(r.aging_lt_3) : 0,
+      aging3to6: r ? Number(r.aging_3_6) : 0,
+      aging6to12: r ? Number(r.aging_6_12) : 0,
+      agingGt1y: r ? Number(r.aging_gt_1y) : 0,
+    };
+  });
+
+  const responseTimes = children.map((c) => {
+    const r = responseTimesByGroup.get(c.jurisdiction_id);
+    return {
+      jurisdictionId: c.jurisdiction_id,
+      name: c.name,
+      totalSosCount: r ? Number(r.total) : 0,
+      openSosCount: r ? Number(r.open_count) : 0,
+      avgAcknowledgeMinutes: r && r.avg_ack_minutes !== null ? Math.round(Number(r.avg_ack_minutes) * 10) / 10 : null,
+      avgResolveMinutes: r && r.avg_resolve_minutes !== null ? Math.round(Number(r.avg_resolve_minutes) * 10) / 10 : null,
+    };
+  });
+
+  const counsellors = children.map((c) => ({
+    jurisdictionId: c.jurisdiction_id,
+    name: c.name,
+    ...extrasById.get(c.jurisdiction_id).counsellorRollup,
+  }));
+
+  return { rows, caseStageDistribution, newEnrollments, alertVolume, interventionSummary, legalProceedings, responseTimes, counsellors };
+}
+
 // ===== Top-level tier snapshots =====
 
 // District's own report - every one of the district's own cases as its own
@@ -501,9 +1069,12 @@ async function computeCaseWiseSnapshot(districtJurisdictionId, periodStart, peri
     alertVolume,
     interventionSummary,
     legalProceedings,
+    languagePreferences,
+    consentCompliance,
+    spikeAlerts,
   ] = await Promise.all([
     computeDistressTrendSection([districtJurisdictionId], periodStart, periodEnd, periodType),
-    computeCounsellorSection(districtJurisdictionId),
+    computeCounsellorSection([districtJurisdictionId]),
     computeResponseTimeSection([districtJurisdictionId], periodStart, periodEnd),
     computeCaseTypeDistribution([districtJurisdictionId]),
     computeCaseStageDistribution(districtJurisdictionId),
@@ -511,11 +1082,15 @@ async function computeCaseWiseSnapshot(districtJurisdictionId, periodStart, peri
     computeAlertVolume(districtJurisdictionId, periodStart, periodEnd),
     computeInterventionSummary(districtJurisdictionId, periodStart, periodEnd),
     computeLegalProceedings(districtJurisdictionId, periodStart, periodEnd),
+    computeLanguagePreferences([districtJurisdictionId]),
+    computeConsentCompliance([districtJurisdictionId]),
+    computeSpikeAlerts([districtJurisdictionId], periodStart, periodEnd),
   ]);
 
   return {
     tier: 'district',
     summary,
+    spikeAlerts,
     cases,
     caseTypeDistribution,
     caseStageDistribution,
@@ -524,6 +1099,8 @@ async function computeCaseWiseSnapshot(districtJurisdictionId, periodStart, peri
     alertVolume,
     interventionSummary,
     legalProceedings,
+    languagePreferences,
+    consentCompliance,
     counsellors,
     responseTimes,
   };
@@ -544,23 +1121,47 @@ async function computeDistrictWiseSnapshot(stateJurisdictionId, periodStart, per
   const zeroFilledDistricts = children.map((child) => zeroFillRow(child.jurisdiction_id, child.name, byGroupId.get(child.jurisdiction_id)));
   const summary = sumRows(zeroFilledDistricts);
 
-  // Trend direction per child - one (smaller, parallelized) pass per child,
-  // exact same pattern as GET /dashboard/:jurisdictionId's own breakdown in
-  // districtAdmin.routes.js: a child's own trend is computed over ITS OWN
-  // descendant subtree (a no-op walk for an already-leaf district), not the
-  // whole state's.
-  const [districts, distressTrend, caseTypeDistribution, reportingCompliance] = await Promise.all([
-    Promise.all(zeroFilledDistricts.map(async (d) => {
-      const childDescendants = await getDescendantJurisdictionIds(d.jurisdictionId);
-      const trendDirection = await computeTrendDirection(childDescendants);
-      return { ...d, trendDirection };
-    })),
+  const [
+    perChildRollups,
+    distressTrend,
+    caseTypeDistribution,
+    reportingCompliance,
+    languagePreferences,
+    consentCompliance,
+    spikeAlerts,
+  ] = await Promise.all([
+    // Every kind of data belongs at every tier - District's own case-level/
+    // current-state sections all get a per-child (one row per district)
+    // rollup here, same groupByParent trick countRiskByGroup already uses.
+    computePerChildRollups(children, allDescendantIds, false, periodStart, periodEnd, zeroFilledDistricts),
     computeDistressTrendSection(allDescendantIds, periodStart, periodEnd, periodType),
     computeCaseTypeDistribution(allDescendantIds),
     computeReportingCompliance(stateJurisdictionId, periodStart, periodEnd, children),
+    computeLanguagePreferences(allDescendantIds),
+    computeConsentCompliance(allDescendantIds),
+    // Identifies which child district drove each flagged spike, per the
+    // "make it actionable for policy" direction.
+    computeSpikeAlerts(allDescendantIds, periodStart, periodEnd, { children, groupByParent: false }),
   ]);
 
-  return { tier: 'state', summary, districts, caseTypeDistribution, distressTrend, reportingCompliance };
+  return {
+    tier: 'state',
+    summary,
+    spikeAlerts,
+    districts: perChildRollups.rows,
+    caseTypeDistribution,
+    caseStageDistribution: perChildRollups.caseStageDistribution,
+    newEnrollments: perChildRollups.newEnrollments,
+    distressTrend,
+    alertVolume: perChildRollups.alertVolume,
+    interventionSummary: perChildRollups.interventionSummary,
+    legalProceedings: perChildRollups.legalProceedings,
+    languagePreferences,
+    consentCompliance,
+    counsellors: perChildRollups.counsellors,
+    responseTimes: perChildRollups.responseTimes,
+    reportingCompliance,
+  };
 }
 
 // National's own report - one row per child STATE, same shape one level up.
@@ -577,21 +1178,44 @@ async function computeStateWiseSnapshot(nationalJurisdictionId, periodStart, per
   const zeroFilledStates = children.map((child) => zeroFillRow(child.jurisdiction_id, child.name, byGroupId.get(child.jurisdiction_id)));
   const summary = sumRows(zeroFilledStates);
 
-  // Trend direction per child state - same per-child parallelized pattern as
-  // computeDistrictWiseSnapshot above, one level up (each state's own trend
-  // over ITS OWN descendant district subtree).
-  const [states, distressTrend, caseTypeDistribution, reportingCompliance] = await Promise.all([
-    Promise.all(zeroFilledStates.map(async (s) => {
-      const childDescendants = await getDescendantJurisdictionIds(s.jurisdictionId);
-      const trendDirection = await computeTrendDirection(childDescendants);
-      return { ...s, trendDirection };
-    })),
+  const [
+    perChildRollups,
+    distressTrend,
+    caseTypeDistribution,
+    reportingCompliance,
+    languagePreferences,
+    consentCompliance,
+    spikeAlerts,
+  ] = await Promise.all([
+    // Same per-child rollup one level up - National's children are states,
+    // so groupByParent: true rolls each district up into its own state.
+    computePerChildRollups(children, allDescendantIds, true, periodStart, periodEnd, zeroFilledStates),
     computeDistressTrendSection(allDescendantIds, periodStart, periodEnd, periodType),
     computeCaseTypeDistribution(allDescendantIds),
     computeReportingCompliance(nationalJurisdictionId, periodStart, periodEnd, children),
+    computeLanguagePreferences(allDescendantIds),
+    computeConsentCompliance(allDescendantIds),
+    computeSpikeAlerts(allDescendantIds, periodStart, periodEnd, { children, groupByParent: true }),
   ]);
 
-  return { tier: 'national', summary, states, caseTypeDistribution, distressTrend, reportingCompliance };
+  return {
+    tier: 'national',
+    summary,
+    spikeAlerts,
+    states: perChildRollups.rows,
+    caseTypeDistribution,
+    caseStageDistribution: perChildRollups.caseStageDistribution,
+    newEnrollments: perChildRollups.newEnrollments,
+    distressTrend,
+    alertVolume: perChildRollups.alertVolume,
+    interventionSummary: perChildRollups.interventionSummary,
+    legalProceedings: perChildRollups.legalProceedings,
+    languagePreferences,
+    consentCompliance,
+    counsellors: perChildRollups.counsellors,
+    responseTimes: perChildRollups.responseTimes,
+    reportingCompliance,
+  };
 }
 
 module.exports = {
@@ -611,4 +1235,17 @@ module.exports = {
   computeLegalProceedings,
   computeTrendDirection,
   computeReportingCompliance,
+  computeLanguagePreferences,
+  computeConsentCompliance,
+  computeSpikeAlerts,
+  aggregateCounsellorRollup,
+  countCaseStageByGroup,
+  countNewEnrollmentsByGroup,
+  countAlertVolumeByGroup,
+  countInterventionSummaryByGroup,
+  countLegalProceedingsByGroup,
+  countResponseTimesByGroup,
+  countTopCaseTypeByGroup,
+  computeAvgScoreForPeriod,
+  computePerChildRollups,
 };

@@ -576,6 +576,14 @@ create table report_recipients (
   status           text not null default 'Submitted' check (status in ('Submitted', 'Reviewed')),
   reviewed_by      uuid references officials(official_id),
   reviewed_at      timestamptz,
+  -- "Forward after review" (migration_026) - both null for a recipient row
+  -- created at ORIGINAL generation time (the primary/optional-cc rows POST
+  -- .../reports/generate inserts); both set for a row created via
+  -- POST .../reports/:reportId/forward, so the PDF trail and plain
+  -- GET /reports list responses can tell an original recipient apart from a
+  -- forwarded one.
+  forwarded_by     uuid references officials(official_id),
+  forwarded_at     timestamptz,
   unique (report_id, recipient_type, jurisdiction_id)
 );
 
