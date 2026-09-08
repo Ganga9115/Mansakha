@@ -60,6 +60,22 @@ export function useAddReferralNote() {
   return { mutate, loading };
 }
 
+// Sets relief type/amount and optionally marks it sanctioned - the real
+// structured action behind DWO's Relief & Compliance card.
+export function useSetRelief() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (referralId, { reliefType, reliefAmount, sanctioned }) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/dwo/referrals/${referralId}/relief`, { reliefType, reliefAmount, sanctioned }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 export function useResolveReferral() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

@@ -6,21 +6,33 @@ import { useReferralsList } from '../services/hooks';
 
 // Special Public Prosecutor's Trial Docket - a clean, scannable list only.
 // Every action (notes, hearing request, outcome, task assignment) now lives
-// on the dedicated Referral Detail page (see ReferralDetail.jsx), matching
-// the list -> detail convention set by dwo/pages/ReferralQueue.jsx, rather
-// than cramming every action into an inline accordion within the list
-// itself.
+// on the dedicated Referral Overview/Log/Tasks pages, matching the
+// list -> detail convention set by dwo/pages/ReferralQueue.jsx. Sorted by
+// Case Priority (not just referral date) - the real "Special Court Docket
+// prioritized by victim distress level and case age" feature, so the
+// prosecutor sees what needs attention first, not just what came in first.
 
-const STATUS_BADGE = {
-  Open: 'bg-amber-100 text-amber-700',
-  Resolved: 'bg-emerald-100 text-emerald-700',
+const STAGE_BADGE = {
+  'Docket Received': 'bg-gray-100 text-gray-600',
+  'Hearing Scheduled': 'bg-indigo-100 text-indigo-700',
+  'Verdict Delivered': 'bg-emerald-100 text-emerald-700',
 };
+
+const PRIORITY_BADGE = {
+  Standard: 'bg-gray-100 text-gray-600',
+  Elevated: 'bg-amber-100 text-amber-700',
+  High: 'bg-rose-100 text-rose-700',
+};
+
+const PRIORITY_RANK = { High: 0, Elevated: 1, Standard: 2 };
 
 export default function TrialDocket() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('Open');
   const query = useReferralsList(tab);
-  const referrals = query.data?.referrals || [];
+  const referrals = [...(query.data?.referrals || [])].sort(
+    (a, b) => (PRIORITY_RANK[a.casePriority] ?? 9) - (PRIORITY_RANK[b.casePriority] ?? 9)
+  );
 
   return (
     <StaffLayout title="Trial Docket">
@@ -28,7 +40,7 @@ export default function TrialDocket() {
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
             <h3 className="font-bold text-sm text-gray-800">Prosecution Docket</h3>
-            <p className="text-[11px] text-gray-400">Cases handed off from DLSA once marked trial-ready.</p>
+            <p className="text-[11px] text-gray-400">Cases handed off from DLSA once marked trial-ready. Sorted by priority - older cases with higher victim distress surface first.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -53,13 +65,14 @@ export default function TrialDocket() {
             ) : referrals.length === 0 ? (
               <p className="text-sm text-gray-400 p-6">No {tab.toLowerCase()} referrals.</p>
             ) : (
-              <table className="w-full text-left min-w-[640px]">
+              <table className="w-full text-left min-w-[720px]">
                 <thead>
                   <tr className="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase">
                     <th className="px-6 py-3">Docket Number</th>
                     <th className="px-6 py-3">Case Type</th>
-                    <th className="px-6 py-3">Referred On</th>
-                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3">Case Age</th>
+                    <th className="px-6 py-3">Priority</th>
+                    <th className="px-6 py-3">Stage</th>
                     <th className="px-6 py-3 text-right">Action</th>
                   </tr>
                 </thead>
@@ -68,16 +81,12 @@ export default function TrialDocket() {
                     <tr key={r.referralId} className="hover:bg-gray-50/70 transition">
                       <td className="px-6 py-3.5 text-sm font-bold text-gray-800">{r.docketNumber}</td>
                       <td className="px-6 py-3.5 text-xs text-gray-500">{r.caseTypeName}</td>
-                      <td className="px-6 py-3.5 text-xs text-gray-500">
-                        {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      <td className="px-6 py-3.5 text-xs text-gray-500">{r.caseAgeDays} day{r.caseAgeDays === 1 ? '' : 's'}</td>
+                      <td className="px-6 py-3.5">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${PRIORITY_BADGE[r.casePriority] || 'bg-gray-100 text-gray-600'}`}>{r.casePriority}</span>
                       </td>
                       <td className="px-6 py-3.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
-                          {r.metadata?.hearingRequested && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">Hearing filed</span>
-                          )}
-                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STAGE_BADGE[r.stage] || 'bg-gray-100 text-gray-600'}`}>{r.stage}</span>
                       </td>
                       <td className="px-6 py-3.5 text-right">
                         <button

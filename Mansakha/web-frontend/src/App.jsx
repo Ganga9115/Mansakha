@@ -88,6 +88,8 @@ import DataOperatorMailThread from './dataoperator/pages/MailThread';
 // group of 7 signs in through.
 import DwoReferralQueue from './dwo/pages/ReferralQueue';
 import DwoReferralDetail from './dwo/pages/ReferralDetail';
+import DwoReferralLog from './dwo/pages/ReferralLog';
+import DwoReferralTasks from './dwo/pages/ReferralTasks';
 import DwoMyTasks from './dwo/pages/MyTasks';
 import DwoProfile from './dwo/pages/Profile';
 import IoCaseStatusFeed from './io/pages/CaseStatusFeed';
@@ -103,6 +105,8 @@ import DlsaReferralDetail from './dlsa/pages/ReferralDetail';
 import DlsaMyTasks from './dlsa/pages/MyTasks';
 import DlsaProfile from './dlsa/pages/Profile';
 import SppTrialDocket from './spp/pages/TrialDocket';
+import SppReferralLog from './spp/pages/ReferralLog';
+import SppReferralTasks from './spp/pages/ReferralTasks';
 import SppReferralDetail from './spp/pages/ReferralDetail';
 import SppMyTasks from './spp/pages/MyTasks';
 import SppProfile from './spp/pages/Profile';
@@ -227,6 +231,8 @@ export default function App() {
 
         <Route path="/dwo" element={<RequireAuth loginPath="/signin"><DwoReferralQueue /></RequireAuth>} />
         <Route path="/dwo/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DwoReferralDetail /></RequireAuth>} />
+        <Route path="/dwo/referrals/:referralId/log" element={<RequireAuth loginPath="/signin"><DwoReferralLog /></RequireAuth>} />
+        <Route path="/dwo/referrals/:referralId/tasks" element={<RequireAuth loginPath="/signin"><DwoReferralTasks /></RequireAuth>} />
         <Route path="/dwo/tasks" element={<RequireAuth loginPath="/signin"><DwoMyTasks /></RequireAuth>} />
         <Route path="/dwo/profile" element={<RequireAuth loginPath="/signin"><DwoProfile /></RequireAuth>} />
         <Route path="/io" element={<RequireAuth loginPath="/signin"><IoCaseStatusFeed /></RequireAuth>} />
@@ -243,6 +249,8 @@ export default function App() {
         <Route path="/dlsa/profile" element={<RequireAuth loginPath="/signin"><DlsaProfile /></RequireAuth>} />
         <Route path="/spp" element={<RequireAuth loginPath="/signin"><SppTrialDocket /></RequireAuth>} />
         <Route path="/spp/referrals/:referralId" element={<RequireAuth loginPath="/signin"><SppReferralDetail /></RequireAuth>} />
+        <Route path="/spp/referrals/:referralId/log" element={<RequireAuth loginPath="/signin"><SppReferralLog /></RequireAuth>} />
+        <Route path="/spp/referrals/:referralId/tasks" element={<RequireAuth loginPath="/signin"><SppReferralTasks /></RequireAuth>} />
         <Route path="/spp/tasks" element={<RequireAuth loginPath="/signin"><SppMyTasks /></RequireAuth>} />
         <Route path="/spp/profile" element={<RequireAuth loginPath="/signin"><SppProfile /></RequireAuth>} />
         <Route path="/districtcollector" element={<RequireAuth loginPath="/signin"><DistrictCollectorCommitteeReview /></RequireAuth>} />

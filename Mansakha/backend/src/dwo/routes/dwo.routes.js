@@ -22,6 +22,21 @@ const router = express.Router();
 // only, same privacy boundary as every existing officials-side route.
 const ROLE_NAME = 'District Welfare Officer';
 
+// Relief & Compliance - real structured fields (not a free-text guess) for
+// DWO's actual statutory function: relief type, sanctioned amount, and a
+// 7-day statutory compliance flag (relief not yet sanctioned within 7 days
+// of registration). Computed fresh on every read, same discipline as
+// core/services/threatAssessment.js's Threat Tier - never stored as a
+// stale label.
+const RELIEF_TYPES = ['Interim Relief', 'Final Relief', 'Rehabilitation Grant'];
+const STATUTORY_COMPLIANCE_DAYS = 7;
+
+function computeCompliance(metadata, createdAt) {
+  if (metadata?.sanctionedAt) return 'Sanctioned';
+  const daysOpen = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
+  return daysOpen > STATUTORY_COMPLIANCE_DAYS ? 'Overdue' : 'On Track';
+}
+
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
 
 router.get('/referrals', async (req, res) => {
@@ -50,6 +65,9 @@ router.get('/referrals', async (req, res) => {
       metadata: r.metadata,
       createdAt: r.created_at,
       resolvedAt: r.resolved_at,
+      reliefType: r.metadata?.reliefType || null,
+      reliefAmount: r.metadata?.reliefAmount || null,
+      complianceStatus: computeCompliance(r.metadata, r.created_at),
     })),
   });
 });
@@ -57,7 +75,7 @@ router.get('/referrals', async (req, res) => {
 async function loadOwnReferral(referralId, res) {
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
-            u.docket_number, ct.name as case_type_name
+            u.docket_number, u.case_stage, ct.name as case_type_name
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
@@ -95,6 +113,83 @@ router.get('/referrals/:referralId', async (req, res) => {
     createdAt: referral.created_at,
     resolvedAt: referral.resolved_at,
     notes: notes.map((n) => ({ noteId: n.note_id, noteText: n.note_text, createdAt: n.created_at, authorName: n.author_name })),
+    reliefType: referral.metadata?.reliefType || null,
+    reliefAmount: referral.metadata?.reliefAmount || null,
+    sanctionedAt: referral.metadata?.sanctionedAt || null,
+    complianceStatus: computeCompliance(referral.metadata, referral.created_at),
+    // Rehabilitation Officer's mandate only begins after case closure (see
+    // hand-off-rehabilitation below) - exposed so the Assign Task form can
+    // hide that option as a target until then, rather than offering a
+    // directive the officer has no case access to yet.
+    rehabilitationEligible: referral.case_stage === 'Case Closed',
+  });
+});
+
+// Sets/updates the relief type and amount, and can mark it sanctioned (the
+// event that resolves the statutory-compliance flag). A real structured
+// action, not a note - DWO's actual "Fast-Track Approval Workflow".
+router.patch('/referrals/:referralId/relief', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const { reliefType, reliefAmount, sanctioned } = req.body;
+  if (reliefType !== undefined && !RELIEF_TYPES.includes(reliefType)) {
+    return fail(res, `reliefType must be one of: ${RELIEF_TYPES.join(', ')}`, 400);
+  }
+  if (reliefAmount !== undefined && (typeof reliefAmount !== 'number' || reliefAmount <= 0)) {
+    return fail(res, 'reliefAmount must be a positive number', 400);
+  }
+
+  const nextMetadata = { ...referral.metadata };
+  if (reliefType !== undefined) nextMetadata.reliefType = reliefType;
+  if (reliefAmount !== undefined) nextMetadata.reliefAmount = reliefAmount;
+  if (sanctioned === true && !nextMetadata.sanctionedAt) nextMetadata.sanctionedAt = new Date().toISOString();
+
+  const { error } = await supabase
+    .from('agency_referrals')
+    .update({ metadata: nextMetadata })
+    .eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not update relief details: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, { referralId: referral.referral_id, metadata: nextMetadata }, 'Relief details updated');
+});
+
+// Every task raised against this case, regardless of which role created it
+// or which role it's assigned to - so a case's Tasks page shows the whole
+// directive picture, not just this role's own. Scoped by loadOwnReferral
+// (only reachable for a referral this role can already see), so this
+// doesn't open up any new access - it's the same case-level visibility
+// District Collector's cross-agency view already establishes as normal
+// practice here, just for tasks instead of referrals.
+router.get('/referrals/:referralId/tasks', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const { rows } = await pool.query(
+    `select t.task_id, t.assigned_to_role, t.action, t.due_at, t.status, t.completed_at,
+            t.auto_generated, t.created_at, o.full_name as created_by_name
+     from agency_tasks t
+     left join officials o on o.official_id = t.created_by_official_id
+     where t.source_referral_id = $1
+     order by (t.due_at is null), t.due_at asc, t.created_at desc`,
+    [referral.referral_id]
+  );
+
+  return ok(res, {
+    tasks: rows.map((t) => ({
+      taskId: t.task_id,
+      assignedToRole: t.assigned_to_role,
+      action: t.action,
+      dueAt: t.due_at,
+      status: t.status,
+      completedAt: t.completed_at,
+      autoGenerated: t.auto_generated,
+      createdByName: t.created_by_name || 'System (auto-escalated)',
+      createdAt: t.created_at,
+      overdue: t.status === 'Pending' && !!t.due_at && new Date(t.due_at) < new Date(),
+    })),
   });
 });
 
@@ -235,8 +330,15 @@ router.post('/tasks', async (req, res) => {
     return fail(res, `assignedToRole must be one of: ${TASK_ASSIGNABLE_ROLES.join(', ')}`, 400);
   }
 
-  const { rows: userRows } = await pool.query('select user_id from users where user_id = $1', [userId]);
+  const { rows: userRows } = await pool.query('select user_id, case_stage from users where user_id = $1', [userId]);
   if (!userRows[0]) return fail(res, 'Case not found', 404);
+  // Rehabilitation Officer's mandate only begins after case closure (same
+  // rule as hand-off-rehabilitation above and the victim's own opt-in
+  // route) - a task raised before that would sit in the officer's queue
+  // for a case they have no referral or case access to yet.
+  if (assignedToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Case Closed') {
+    return fail(res, "Rehabilitation Officer's role begins only once the case is closed. Kindly assign this to a different office, or raise it again after closure.", 400);
+  }
 
   const { data, error } = await supabase
     .from('agency_tasks')

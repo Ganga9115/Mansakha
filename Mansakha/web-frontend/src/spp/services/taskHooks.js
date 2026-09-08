@@ -48,6 +48,16 @@ export function useCreateTask() {
   return { mutate, loading };
 }
 
+// Every task raised against one specific case (across any role), for that
+// case's own Tasks page - not this role's global My Tasks queue.
+export function useReferralTasks(referralId) {
+  const token = getToken();
+  return useQuery(
+    () => (referralId ? apiClient.get(`/api/spp/referrals/${referralId}/tasks`, token) : Promise.resolve(null)),
+    [token, referralId]
+  );
+}
+
 export function useCompleteTask() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

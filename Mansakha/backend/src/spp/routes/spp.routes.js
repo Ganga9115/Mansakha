@@ -15,6 +15,45 @@ const router = express.Router();
 // jsonb, same data-driven pattern as DLSA's assign-lawyer).
 const ROLE_NAME = 'Special Public Prosecutor';
 
+// Real docket stages (Docket Received -> Hearing Scheduled -> Verdict
+// Delivered), derived from existing signals rather than stored separately -
+// same discipline as DWO's complianceStatus and core/services/
+// threatAssessment.js's Threat Tier. Never recomputed into `status`, which
+// stays the plain Open/Resolved gate the escalation checker and District
+// Collector's cross-agency view already rely on.
+function computeStage(metadata) {
+  if (metadata?.caseOutcome) return 'Verdict Delivered';
+  if (metadata?.hearingRequested) return 'Hearing Scheduled';
+  return 'Docket Received';
+}
+
+// Case Priority - the real "Special Court Docket... prioritized by victim
+// distress level and case age (older cases flagged red)" feature. Distress
+// thresholds match the live scoring pipeline's own bands (ai/scoring.js:
+// 30/55/80), not invented ones.
+const OLD_CASE_DAYS = 30;
+const AGING_CASE_DAYS = 14;
+const HIGH_DISTRESS_THRESHOLD = 55;
+
+function computeCasePriority(caseAgeDays, distressScore) {
+  const highDistress = distressScore != null && distressScore >= HIGH_DISTRESS_THRESHOLD;
+  if (caseAgeDays > OLD_CASE_DAYS && highDistress) return 'High';
+  if (caseAgeDays > AGING_CASE_DAYS || highDistress) return 'Elevated';
+  return 'Standard';
+}
+
+async function getLatestDistressScores(userIds) {
+  if (!userIds || userIds.length === 0) return {};
+  const { rows } = await pool.query(
+    `select distinct on (user_id) user_id, score_value
+     from distress_scores
+     where user_id = any($1)
+     order by user_id, computed_at desc`,
+    [userIds]
+  );
+  return rows.reduce((acc, r) => { acc[r.user_id] = Number(r.score_value); return acc; }, {});
+}
+
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
 
 router.get('/referrals', async (req, res) => {
@@ -32,18 +71,28 @@ router.get('/referrals', async (req, res) => {
     status ? [ROLE_NAME, status] : [ROLE_NAME]
   );
 
+  const distressByUser = await getLatestDistressScores(rows.map((r) => r.user_id));
+
   return ok(res, {
-    referrals: rows.map((r) => ({
-      referralId: r.referral_id,
-      userId: r.user_id, // needed so this case's referral rows can raise a structured task (agency_tasks) targeting any concerned office
-      docketNumber: r.docket_number,
-      caseTypeName: r.case_type_name,
-      reason: r.reason,
-      status: r.status,
-      metadata: r.metadata,
-      createdAt: r.created_at,
-      resolvedAt: r.resolved_at,
-    })),
+    referrals: rows.map((r) => {
+      const caseAgeDays = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86400000);
+      const distressScore = distressByUser[r.user_id] ?? null;
+      return {
+        referralId: r.referral_id,
+        userId: r.user_id, // needed so this case's referral rows can raise a structured task (agency_tasks) targeting any concerned office
+        docketNumber: r.docket_number,
+        caseTypeName: r.case_type_name,
+        reason: r.reason,
+        status: r.status,
+        metadata: r.metadata,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at,
+        stage: computeStage(r.metadata),
+        caseAgeDays,
+        distressScore,
+        casePriority: computeCasePriority(caseAgeDays, distressScore),
+      };
+    }),
   });
 });
 
@@ -77,6 +126,10 @@ router.get('/referrals/:referralId', async (req, res) => {
     [referral.referral_id]
   );
 
+  const caseAgeDays = Math.floor((Date.now() - new Date(referral.created_at).getTime()) / 86400000);
+  const distressByUser = await getLatestDistressScores([referral.user_id]);
+  const distressScore = distressByUser[referral.user_id] ?? null;
+
   return ok(res, {
     referralId: referral.referral_id,
     userId: referral.user_id, // needed so this case's referral rows can raise a structured task (agency_tasks) targeting any concerned office
@@ -88,6 +141,102 @@ router.get('/referrals/:referralId', async (req, res) => {
     createdAt: referral.created_at,
     resolvedAt: referral.resolved_at,
     notes: notes.map((n) => ({ noteId: n.note_id, noteText: n.note_text, createdAt: n.created_at, authorName: n.author_name })),
+    stage: computeStage(referral.metadata),
+    caseAgeDays,
+    distressScore,
+    casePriority: computeCasePriority(caseAgeDays, distressScore),
+    testimonyAccommodation: referral.metadata?.testimonyAccommodation || 'None',
+    caseOutcome: referral.metadata?.caseOutcome || null,
+  });
+});
+
+// Victim Testimony Coordination - a real structured request instead of a
+// free-text note, per the PS's own "requests video-conferencing or screen
+// barriers for traumatized victims" feature.
+const TESTIMONY_ACCOMMODATIONS = ['None', 'Video Conferencing', 'Screen Barrier'];
+
+router.patch('/referrals/:referralId/testimony-accommodation', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const { testimonyAccommodation } = req.body;
+  if (!TESTIMONY_ACCOMMODATIONS.includes(testimonyAccommodation)) {
+    return fail(res, `testimonyAccommodation must be one of: ${TESTIMONY_ACCOMMODATIONS.join(', ')}`, 400);
+  }
+
+  const newMetadata = { ...referral.metadata, testimonyAccommodation };
+  const { error } = await supabase.from('agency_referrals').update({ metadata: newMetadata }).eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not update testimony accommodation: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, { referralId: referral.referral_id, testimonyAccommodation }, 'Testimony accommodation updated');
+});
+
+// Structured Case Outcome - verdict, sentence, compensation, AND a property
+// forfeiture flag (SC/ST PoA Act Chapter provision: on conviction, the
+// Special Court may declare property used in the offence forfeited to
+// Government). Kept as a new metadata.caseOutcome object rather than
+// overloading the existing metadata.outcome string, so no existing data's
+// shape changes - that route/field is left exactly as it was.
+const VERDICTS = ['Conviction', 'Acquittal'];
+
+router.patch('/referrals/:referralId/case-outcome', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const { verdict, sentence, compensationAwarded, forfeitureOrdered } = req.body;
+  if (!VERDICTS.includes(verdict)) return fail(res, `verdict must be one of: ${VERDICTS.join(', ')}`, 400);
+  if (compensationAwarded !== undefined && compensationAwarded !== null && (typeof compensationAwarded !== 'number' || compensationAwarded < 0)) {
+    return fail(res, 'compensationAwarded must be a non-negative number', 400);
+  }
+
+  const caseOutcome = {
+    verdict,
+    sentence: sentence ? String(sentence).trim() : null,
+    compensationAwarded: compensationAwarded ?? null,
+    forfeitureOrdered: forfeitureOrdered === true,
+    recordedAt: new Date().toISOString(),
+  };
+  const newMetadata = { ...referral.metadata, caseOutcome };
+  const { error } = await supabase.from('agency_referrals').update({ metadata: newMetadata }).eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not record case outcome: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, { referralId: referral.referral_id, caseOutcome }, 'Case outcome recorded - the justice loop is now closed for this case');
+});
+
+// Every task raised against this case, regardless of which role created it
+// or which role it's assigned to - so a case's Tasks page shows the whole
+// directive picture, not just this role's own. Mirrors dwo.routes.js.
+router.get('/referrals/:referralId/tasks', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const { rows } = await pool.query(
+    `select t.task_id, t.assigned_to_role, t.action, t.due_at, t.status, t.completed_at,
+            t.auto_generated, t.created_at, o.full_name as created_by_name
+     from agency_tasks t
+     left join officials o on o.official_id = t.created_by_official_id
+     where t.source_referral_id = $1
+     order by (t.due_at is null), t.due_at asc, t.created_at desc`,
+    [referral.referral_id]
+  );
+
+  return ok(res, {
+    tasks: rows.map((t) => ({
+      taskId: t.task_id,
+      assignedToRole: t.assigned_to_role,
+      action: t.action,
+      dueAt: t.due_at,
+      status: t.status,
+      completedAt: t.completed_at,
+      autoGenerated: t.auto_generated,
+      createdByName: t.created_by_name || 'System (auto-escalated)',
+      createdAt: t.created_at,
+      overdue: t.status === 'Pending' && !!t.due_at && new Date(t.due_at) < new Date(),
+    })),
   });
 });
 
@@ -218,8 +367,14 @@ router.post('/tasks', async (req, res) => {
     return fail(res, `assignedToRole must be one of: ${TASK_ASSIGNABLE_ROLES.join(', ')}`, 400);
   }
 
-  const { rows: userRows } = await pool.query('select user_id from users where user_id = $1', [userId]);
+  const { rows: userRows } = await pool.query('select user_id, case_stage from users where user_id = $1', [userId]);
   if (!userRows[0]) return fail(res, 'Case not found', 404);
+  // Rehabilitation Officer's mandate only begins after case closure (same
+  // rule as dwo.routes.js's hand-off-rehabilitation) - a task raised before
+  // that would sit in the officer's queue for a case they have no access to.
+  if (assignedToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Case Closed') {
+    return fail(res, "Rehabilitation Officer's role begins only once the case is closed. Kindly assign this to a different office, or raise it again after closure.", 400);
+  }
 
   const { data, error } = await supabase
     .from('agency_tasks')

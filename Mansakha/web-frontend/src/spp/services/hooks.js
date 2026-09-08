@@ -88,6 +88,38 @@ export function useRecordOutcome() {
   return { mutate, loading };
 }
 
+// Victim Testimony Coordination - requests video-conferencing or a screen
+// barrier so a traumatized victim need not face the accused in person.
+export function useSetTestimonyAccommodation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (referralId, testimonyAccommodation) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/spp/referrals/${referralId}/testimony-accommodation`, { testimonyAccommodation }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Structured Case Outcome - verdict, sentence, compensation, and a property
+// forfeiture flag (SC/ST PoA Act Chapter provision on conviction).
+export function useRecordCaseOutcome() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (referralId, { verdict, sentence, compensationAwarded, forfeitureOrdered }) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/spp/referrals/${referralId}/case-outcome`, { verdict, sentence, compensationAwarded, forfeitureOrdered }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 export function useResolveReferral() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
