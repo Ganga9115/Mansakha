@@ -14,6 +14,7 @@ const { enqueueAlertDispatch } = require('../../core/services/dispatchWorker');
 const { propagateCounsellorAssignment } = require('../services/userProvisioning');
 const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = require('../../ai/ollama');
 const { isCourtCaseEligible, generateCnrNumber, generateSimulatedCourtCaseDetails } = require('../../core/services/courtCaseSimulation');
+const { getCompensationSchedule, withLiveCompensationView } = require('../../core/services/compensationSchedule');
 
 // Case Details (Quick Access) - how stale a simulated snapshot can get
 // before being silently regenerated on next read. No real eCourts source
@@ -1917,6 +1918,128 @@ router.get('/threat-status', async (req, res) => {
     createdAt: referral.created_at,
     resolvedAt: referral.resolved_at,
     updates: notes.map((n) => ({ noteText: n.note_text, createdAt: n.created_at })),
+  });
+});
+
+// ===== DWO Financial Aid (Immediate Relief) =====
+// Victim-initiated, same self-referral pattern as legal aid/threat - no
+// case_stage gate, urgent need can arise at any point in the case. Routed
+// to District Welfare Officer, whose own routes carry the
+// approve/mark-provided actions (dwo.routes.js).
+router.post('/financial-aid-request', async (req, res) => {
+  const { reason } = req.body;
+  if (!reason || !String(reason).trim()) return fail(res, 'reason is required - kindly state what assistance is needed', 400);
+
+  const { rows: existing } = await pool.query(
+    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'District Welfare Officer' and status = 'Open'`,
+    [req.auth.userId]
+  );
+  if (existing.length > 0) return fail(res, 'You already have an open financial aid request.', 400);
+
+  const { data, error } = await supabase
+    .from('agency_referrals')
+    .insert({
+      user_id: req.auth.userId,
+      referred_to_role: 'District Welfare Officer',
+      referred_by_user_id: req.auth.userId,
+      reason: String(reason).trim(),
+    })
+    .select('referral_id')
+    .single();
+  if (error) return fail(res, `Could not submit financial aid request: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
+
+  return ok(res, { referralId: data.referral_id }, 'Financial aid request submitted', 201);
+});
+
+// Read-only status the victim's own app polls - what DWO has approved (if
+// anything) and whether it has actually been provided yet.
+router.get('/financial-aid-status', async (req, res) => {
+  const { rows } = await pool.query(
+    `select referral_id, status, metadata, created_at, resolved_at
+     from agency_referrals
+     where user_id = $1 and referred_to_role = 'District Welfare Officer'
+     order by created_at desc limit 1`,
+    [req.auth.userId]
+  );
+  const referral = rows[0];
+  if (!referral) return ok(res, { hasRequest: false });
+
+  return ok(res, {
+    hasRequest: true,
+    referralId: referral.referral_id,
+    status: referral.status,
+    immediateRelief: referral.metadata?.immediateRelief || null,
+    createdAt: referral.created_at,
+    resolvedAt: referral.resolved_at,
+  });
+});
+
+// Victim's own confirmation that relief marked "Provided" was actually
+// received - the flow's final "victim confirms" step. Deliberately does
+// NOT resolve the whole referral (Compensation tracking on the same
+// referral may still be ongoing for years after immediate relief is
+// settled) - DWO resolves the referral itself, separately, once satisfied.
+router.post('/financial-aid-confirm', async (req, res) => {
+  const { rows } = await pool.query(
+    `select referral_id, metadata from agency_referrals where user_id = $1 and referred_to_role = 'District Welfare Officer' order by created_at desc limit 1`,
+    [req.auth.userId]
+  );
+  const referral = rows[0];
+  if (!referral) return fail(res, 'No financial aid request found', 404);
+
+  const relief = referral.metadata?.immediateRelief;
+  if (!relief || relief.status !== 'Provided') {
+    return fail(res, 'There is no provided relief awaiting your confirmation.', 400);
+  }
+
+  const nextMetadata = { ...referral.metadata, immediateRelief: { ...relief, status: 'Confirmed', confirmedAt: new Date().toISOString() } };
+  const { error } = await supabase.from('agency_referrals').update({ metadata: nextMetadata }).eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not confirm receipt: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, null, 'Thank you for confirming. Your relief record has been closed.');
+});
+
+// ===== Compensation Module (read-only for the victim) =====
+// "Case Registered -> Compensation Module auto-identifies applicable
+// statutory category, shows applicable amount & payment" - available the
+// moment a case exists, independent of any DWO referral or action. Once
+// DWO has verified an exact amount (dwo.routes.js's compensation/verify),
+// that verified figure and live stage tracker take over from the
+// auto-suggested one.
+router.get('/compensation-status', async (req, res) => {
+  const { rows: userRows } = await pool.query(
+    `select u.case_stage, ct.name as case_type_name
+     from users u
+     join case_types ct on ct.case_type_id = u.case_type_id
+     where u.user_id = $1`,
+    [req.auth.userId]
+  );
+  const user = userRows[0];
+  if (!user) return fail(res, 'Case not found', 404);
+
+  const { rows: referralRows } = await pool.query(
+    `select metadata from agency_referrals where user_id = $1 and referred_to_role = 'District Welfare Officer' order by created_at desc limit 1`,
+    [req.auth.userId]
+  );
+  const compensation = referralRows[0]?.metadata?.compensation || null;
+
+  if (!compensation) {
+    const suggested = getCompensationSchedule(user.case_type_name);
+    return ok(res, { verified: false, statutoryCategory: suggested.statutoryCategory, suggestedAmount: suggested.suggestedAmount, stages: null });
+  }
+
+  const live = withLiveCompensationView(compensation, user.case_stage);
+  return ok(res, {
+    verified: true,
+    statutoryCategory: live.statutoryCategory,
+    suggestedAmount: live.suggestedAmount,
+    verifiedAmount: live.verifiedAmount,
+    verifiedAt: live.verifiedAt,
+    stages: live.stages,
   });
 });
 

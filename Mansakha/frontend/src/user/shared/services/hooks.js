@@ -178,6 +178,48 @@ export function useReportThreat() {
   });
 }
 
+// DWO Financial Aid (Immediate Relief) - victim-initiated, no case_stage
+// gate, urgent need can arise at any point in the case.
+export function useFinancialAidStatus() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'financial-aid-status'],
+    queryFn: () => apiClient.get('/api/user/financial-aid-status', token),
+    enabled: !!token,
+  });
+}
+
+export function useRequestFinancialAid() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reason) => apiClient.post('/api/user/financial-aid-request', { reason }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'financial-aid-status'] }),
+  });
+}
+
+export function useConfirmFinancialAid() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiClient.post('/api/user/financial-aid-confirm', {}, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'financial-aid-status'] }),
+  });
+}
+
+// Compensation Module - read-only for the victim. Available the moment a
+// case is registered (auto-suggested category/amount), independent of any
+// DWO referral - once DWO verifies an exact figure, this reflects that
+// instead, with the live 3-stage payment tracker.
+export function useCompensationStatus() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'compensation-status'],
+    queryFn: () => apiClient.get('/api/user/compensation-status', token),
+    enabled: !!token,
+  });
+}
+
 // --- Victim-Initiated Intervention Requests (User -> District Admin; see
 // migration_027_intervention_requests.sql) - replaces the old Counsellor-
 // recommended intervention feature entirely. Counselling is deliberately

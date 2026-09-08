@@ -16,6 +16,19 @@ const STATUS_BADGE = {
   Resolved: 'bg-emerald-100 text-emerald-700',
 };
 
+// Compact, scannable summary of both DWO tracks - full detail lives on the
+// Referral Overview page, this is just enough to triage the queue at a glance.
+function reliefSummary(r) {
+  const parts = [];
+  const reliefStatus = r.immediateRelief?.status;
+  if (reliefStatus) parts.push(`Relief: ${reliefStatus}`);
+  if (r.compensation) {
+    const paidCount = r.compensation.stages.filter((s) => s.status === 'Paid').length;
+    parts.push(`Compensation: ${paidCount}/${r.compensation.stages.length} paid`);
+  }
+  return parts.length > 0 ? parts.join(' • ') : '—';
+}
+
 export default function ReferralQueue() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('Open');
@@ -59,6 +72,7 @@ export default function ReferralQueue() {
                     <th className="px-6 py-3">Docket Number</th>
                     <th className="px-6 py-3">Case Type</th>
                     <th className="px-6 py-3">Referred On</th>
+                    <th className="px-6 py-3">Relief / Compensation</th>
                     <th className="px-6 py-3">Status</th>
                     <th className="px-6 py-3 text-right">Action</th>
                   </tr>
@@ -71,6 +85,7 @@ export default function ReferralQueue() {
                       <td className="px-6 py-3.5 text-xs text-gray-500">
                         {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </td>
+                      <td className="px-6 py-3.5 text-[11px] text-gray-500 whitespace-nowrap">{reliefSummary(r)}</td>
                       <td className="px-6 py-3.5">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
                       </td>

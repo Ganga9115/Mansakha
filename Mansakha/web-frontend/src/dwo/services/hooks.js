@@ -60,15 +60,57 @@ export function useAddReferralNote() {
   return { mutate, loading };
 }
 
-// Sets relief type/amount and optionally marks it sanctioned - the real
-// structured action behind DWO's Relief & Compliance card.
-export function useSetRelief() {
+// ===== Immediate Relief =====
+export function useApproveImmediateRelief() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (referralId, { reliefType, reliefAmount, sanctioned }) => {
+  const mutate = async (referralId, { assistanceTypes, financialAmount, essentialSupportNotes }) => {
     setLoading(true);
     try {
-      return await apiClient.patch(`/api/dwo/referrals/${referralId}/relief`, { reliefType, reliefAmount, sanctioned }, token);
+      return await apiClient.patch(`/api/dwo/referrals/${referralId}/immediate-relief/approve`, { assistanceTypes, financialAmount, essentialSupportNotes }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useMarkReliefProvided() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (referralId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/dwo/referrals/${referralId}/immediate-relief/mark-provided`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// ===== Compensation Module =====
+export function useVerifyCompensation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (referralId, verifiedAmount) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/dwo/referrals/${referralId}/compensation/verify`, verifiedAmount !== undefined ? { verifiedAmount } : {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useMarkCompensationStagePaid() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (referralId, stageIndex) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/dwo/referrals/${referralId}/compensation/stages/${stageIndex}/mark-paid`, {}, token);
     } finally {
       setLoading(false);
     }

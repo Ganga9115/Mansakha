@@ -1,5 +1,6 @@
 const { pool } = require('../db/pgPool');
 const { supabase } = require('../db/supabaseClient');
+const { isCompensationStageUnlocked, COMPENSATION_ESCALATION_DAYS } = require('./compensationSchedule');
 
 // Automatic escalation to District Collector - genuinely new, separate from
 // dispatchWorker.js's existing check-in/disengagement pipeline (which stays
@@ -83,6 +84,53 @@ async function escalateMissedSlas() {
   return missed.length;
 }
 
+// DWO's compensation payment stages - "DWO monitors payment flow -> pending
+// -> DWO follows up -> still unresolved -> DM escalation". A stage counts
+// as "still unresolved" once it has been both unlocked (the case reached
+// the milestone the stage is tied to) and verified for longer than the
+// threshold, and is still sitting Pending. Scanned in JS rather than pure
+// SQL - compensation.stages is a jsonb array, and the unlock check itself
+// already exists as the shared isCompensationStageUnlocked function, so
+// reusing it here keeps this in lockstep with dwo.routes.js's own live view
+// instead of re-deriving the same rule twice in two different languages.
+async function escalateUnpaidCompensation() {
+  const { rows: candidates } = await pool.query(
+    `select ar.referral_id, ar.user_id, ar.metadata, u.case_stage
+     from agency_referrals ar
+     join users u on u.user_id = ar.user_id
+     where ar.referred_to_role = 'District Welfare Officer'
+       and ar.metadata ? 'compensation'
+       and (ar.metadata->'compensation'->>'verifiedAt')::timestamptz < now() - ($1 || ' days')::interval
+       and not exists (
+         select 1 from agency_tasks t where t.source_referral_id = ar.referral_id and t.auto_generated = true
+       )`,
+    [COMPENSATION_ESCALATION_DAYS]
+  );
+
+  let escalatedCount = 0;
+  for (const referral of candidates) {
+    const stages = referral.metadata?.compensation?.stages || [];
+    const unresolvedStage = stages.find(
+      (s) => s.status === 'Pending' && isCompensationStageUnlocked(s.unlocksAtCaseStage, referral.case_stage)
+    );
+    if (!unresolvedStage) continue;
+
+    const { error } = await supabase.from('agency_tasks').insert({
+      user_id: referral.user_id,
+      source_referral_id: referral.referral_id,
+      assigned_to_role: 'District Collector',
+      created_by_official_id: null,
+      action: `Compensation payment for "${unresolvedStage.stage}" (Rs ${unresolvedStage.amount.toLocaleString('en-IN')}) has been pending for over ${COMPENSATION_ESCALATION_DAYS} days since verification - review and issue a directive if needed.`,
+      due_at: new Date(Date.now() + ESCALATION_TASK_DUE_DAYS * 86400000).toISOString(),
+      auto_generated: true,
+    });
+    if (error) console.error('escalateUnpaidCompensation: could not create task', error.message, { referralId: referral.referral_id });
+    else escalatedCount += 1;
+  }
+
+  return escalatedCount;
+}
+
 // Same setInterval-based pattern as dispatchWorker.js's startDispatchWorker -
 // a separate, independently-started worker, not a change to that one.
 function startAgencyEscalationChecker(intervalMs = 60 * 60 * 1000) {
@@ -90,8 +138,9 @@ function startAgencyEscalationChecker(intervalMs = 60 * 60 * 1000) {
     try {
       const staleCount = await escalateStaleReferrals();
       const slaCount = await escalateMissedSlas();
-      if (staleCount || slaCount) {
-        console.log(`Agency escalation checker: ${staleCount} stale referral(s), ${slaCount} missed-SLA case(s) escalated to District Collector.`);
+      const compensationCount = await escalateUnpaidCompensation();
+      if (staleCount || slaCount || compensationCount) {
+        console.log(`Agency escalation checker: ${staleCount} stale referral(s), ${slaCount} missed-SLA case(s), ${compensationCount} unpaid compensation stage(s) escalated to District Collector.`);
       }
     } catch (err) {
       console.error('Agency escalation checker tick failed:', err.message);
@@ -101,4 +150,4 @@ function startAgencyEscalationChecker(intervalMs = 60 * 60 * 1000) {
   return setInterval(tick, intervalMs);
 }
 
-module.exports = { escalateStaleReferrals, escalateMissedSlas, startAgencyEscalationChecker };
+module.exports = { escalateStaleReferrals, escalateMissedSlas, escalateUnpaidCompensation, startAgencyEscalationChecker };
