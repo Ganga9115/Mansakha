@@ -323,7 +323,8 @@ create table sos_events (
   acknowledged_at   timestamptz,
   acknowledged_by     uuid references officials(official_id),
   resolved_at       timestamptz,
-  resolved_by         uuid references officials(official_id)
+  resolved_by         uuid references officials(official_id),
+  location           jsonb -- migration_032: best-effort {lat,lng,capturedAt} captured when "Get Help Now" is tapped
 );
 
 -- Per Build Prompt Section 4.4: written for the assigned Counsellor AND every

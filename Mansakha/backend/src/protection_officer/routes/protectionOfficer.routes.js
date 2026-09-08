@@ -7,6 +7,7 @@ const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { ACCUSED_STATUSES, computeThreatTier, getSosEventCounts, getSosEventCount } = require('../../core/services/threatAssessment');
+const { mountInterventionReviewRoutes } = require('../../core/services/interventionRequestReview');
 
 const router = express.Router();
 
@@ -29,6 +30,12 @@ function getOwnJurisdictionId(req) {
 }
 
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
+
+// Witness Protection and Relocation requests (Request Assistance, proof
+// verified - FIR copy, police threat assessment) are the Protection
+// Officer's own to review. Jurisdiction-scoped, matching this role's own
+// existing scoped referral queue below - "nearby officer" reviews it too.
+mountInterventionReviewRoutes(router, { roleName: ROLE_NAME, interventionTypeNames: ['Witness Protection', 'Relocation'], jurisdictionScoped: true });
 
 router.get('/referrals', async (req, res) => {
   const { status } = req.query;

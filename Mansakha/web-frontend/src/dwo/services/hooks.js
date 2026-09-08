@@ -152,3 +152,38 @@ export function useRehabilitationProviders() {
   const token = getToken();
   return useQuery(() => apiClient.get('/api/lookups/rehabilitation-providers', token), [token]);
 }
+
+// Financial Assistance and Medical Request Assistance submissions - DWO's
+// own proof-verified review queue (see interventionRequestReview.js). Not
+// jurisdiction-scoped, so no jurisdictionId param needed (unlike District
+// Admin's own equivalent).
+export function useInterventionRequestsList(status) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    return apiClient.get(`/api/dwo/intervention-requests?${params.toString()}`, token);
+  }, [token, status]);
+}
+
+export function useInterventionRequestDetail(requestId) {
+  const token = getToken();
+  return useQuery(
+    () => (requestId ? apiClient.get(`/api/dwo/intervention-requests/${requestId}`, token) : Promise.resolve(null)),
+    [token, requestId]
+  );
+}
+
+export function useReviewInterventionRequest() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (requestId, decision, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/dwo/intervention-requests/${requestId}/decision`, { decision, reason }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}

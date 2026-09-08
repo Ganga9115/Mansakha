@@ -425,7 +425,7 @@ export function useTriggerIvrsCall() {
 // actually place calls.
 export function useTriggerUrgentHelp() {
   const token = useToken();
-  return useMutation({ mutationFn: () => apiClient.post('/api/user/urgent-help', {}, token) });
+  return useMutation({ mutationFn: (location) => apiClient.post('/api/user/urgent-help', { location }, token) });
 }
 
 // --- Wellness & Self-Care ---

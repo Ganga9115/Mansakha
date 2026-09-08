@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, Modal, StyleSheet, Platform, Linking } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
@@ -9,6 +10,20 @@ import { shadow } from '../theme/shadow';
 import { useToast } from '../context/ToastContext';
 import { useTriggerUrgentHelp } from '../services/hooks';
 import { useResponsive } from '../hooks/useResponsive';
+
+// Best-effort only (same as ThreatReportScreen.js's captureLocation) - a
+// denied permission, no GPS (desktop web), or any failure never blocks the
+// alert itself; the backend already treats location as optional.
+async function captureLocation() {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const position = await Location.getCurrentPositionAsync({});
+    return { lat: position.coords.latitude, lng: position.coords.longitude };
+  } catch {
+    return null;
+  }
+}
 
 // Fixed India police emergency number - only used if the backend response is
 // somehow missing pcrNumber (it always sends "100" today; see
@@ -37,7 +52,8 @@ export default function GetHelpButton({ asHeaderIcon = false }) {
 
   const handleConfirm = async () => {
     try {
-      const data = await triggerUrgentHelp.mutateAsync();
+      const location = await captureLocation();
+      const data = await triggerUrgentHelp.mutateAsync(location);
       setConfirmOpen(false);
       toast.success('Help is on the way. Connecting you to the Police Control Room...');
       const pcrNumber = data?.pcrNumber || FALLBACK_PCR_NUMBER;
@@ -82,8 +98,9 @@ export default function GetHelpButton({ asHeaderIcon = false }) {
             </View>
             <Text style={styles.confirmTitle}>Get Help Now?</Text>
             <Text style={styles.confirmBody}>
-              This will immediately notify your counsellor, your district administration, and your state
-              administration that you need urgent help, and will help connect you to the Police Control Room.
+              This will immediately notify your counsellor, your Protection Officer, your district administration,
+              and your state administration that you need urgent help, share your current location if permitted,
+              and will help connect you to the Police Control Room.
             </Text>
             <Pressable style={styles.confirmDeleteBtn} onPress={handleConfirm} disabled={triggerUrgentHelp.isPending}>
               <Text style={styles.confirmDeleteBtnText}>{triggerUrgentHelp.isPending ? 'Sending...' : 'Yes, Get Help Now'}</Text>

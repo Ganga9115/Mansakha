@@ -6,6 +6,7 @@ const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
+const { mountInterventionReviewRoutes } = require('../../core/services/interventionRequestReview');
 
 const router = express.Router();
 
@@ -17,6 +18,13 @@ const router = express.Router();
 const ROLE_NAME = 'DLSA Coordinator';
 
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
+
+// Legal Aid requests (Request Assistance, proof verified - caste
+// certificate, FIR copy, photo ID) are DLSA's own to review, not District
+// Admin's - this is exactly DLSA's real statutory function. Not
+// jurisdiction-scoped, matching this role's own existing (unscoped)
+// referral queue below.
+mountInterventionReviewRoutes(router, { roleName: ROLE_NAME, interventionTypeNames: ['Legal Aid'] });
 
 router.get('/referrals', async (req, res) => {
   const { status } = req.query;

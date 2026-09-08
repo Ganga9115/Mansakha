@@ -1897,6 +1897,16 @@ router.get(
   }
 );
 
+// Financial Assistance, Medical, Legal Aid, Witness Protection and
+// Relocation are now reviewed by the specialist role they actually concern
+// (see interventionRequestReview.js, mounted on dwo/dlsa/protection_officer's
+// own routers) - District Admin keeps full GET visibility above for
+// oversight, but can no longer decide on these 5 types itself. Only
+// Rehabilitation remains decided here (its dedicated post-case-closure
+// Rehabilitation Officer flow is a separate, already-gated lifecycle that
+// doesn't go through proof-verified Request Assistance at all today).
+const DISTRICT_ADMIN_DECIDABLE_TYPES = ['Rehabilitation'];
+
 router.patch(
   '/intervention-requests/:requestId/decision',
   verifyToken,
@@ -1904,8 +1914,11 @@ router.patch(
   generalApiLimiter,
   async (req, res, next) => {
     const { rows } = await pool.query(
-      `select ir.request_id, ir.status, ir.user_id, ir.intervention_type_id, ir.description, u.jurisdiction_id
-       from intervention_requests ir join users u on u.user_id = ir.user_id
+      `select ir.request_id, ir.status, ir.user_id, ir.intervention_type_id, ir.description, u.jurisdiction_id,
+              it.name as intervention_type_name
+       from intervention_requests ir
+       join users u on u.user_id = ir.user_id
+       join intervention_types it on it.intervention_type_id = ir.intervention_type_id
        where ir.request_id = $1`,
       [req.params.requestId]
     );
@@ -1915,6 +1928,10 @@ router.patch(
   },
   requireJurisdiction((req) => req._targetRequest.jurisdiction_id),
   async (req, res) => {
+    if (!DISTRICT_ADMIN_DECIDABLE_TYPES.includes(req._targetRequest.intervention_type_name)) {
+      return fail(res, `${req._targetRequest.intervention_type_name} requests are reviewed by the assigned specialist role, not District Administration.`, 403);
+    }
+
     const { decision, reason } = req.body;
     if (!['Accepted', 'Rejected'].includes(decision)) return fail(res, "decision must be 'Accepted' or 'Rejected'", 400);
     if (decision === 'Rejected' && !(reason && String(reason).trim())) return fail(res, 'A reason is required to reject a request', 400);
@@ -1972,12 +1989,14 @@ router.patch(
 // Requests flow above - this never intercepts or reroutes that decision.
 // Case lookup for the coordination page reuses the existing GET /users
 // docket-search route above; no new lookup route needed.
+// Investigating Officer and Special Public Prosecutor were retired as
+// separate logins (their real functions absorbed into Protection Officer
+// and DLSA Coordinator respectively) - trimmed here too, so this manual
+// escalation picker can no longer target a queue nobody can see.
 const AGENCY_REFERRAL_ROLES = [
   'District Welfare Officer',
-  'Investigating Officer',
   'Protection Officer',
   'DLSA Coordinator',
-  'Special Public Prosecutor',
   'District Collector',
   'Rehabilitation Officer',
 ];

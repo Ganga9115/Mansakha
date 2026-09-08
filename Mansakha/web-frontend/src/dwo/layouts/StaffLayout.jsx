@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { HeartHandshake, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
+import { HeartHandshake, ClipboardList, FileCheck2, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
@@ -13,6 +13,7 @@ import { useMe } from '../services/hooks';
 // see ReferralQueue.jsx.
 const NAV_ITEMS = [
   { name: 'Referral Queue', icon: HeartHandshake, path: '/dwo' },
+  { name: 'Intervention Requests', icon: FileCheck2, path: '/dwo/intervention-requests' },
   { name: 'My Tasks', icon: ClipboardList, path: '/dwo/tasks' },
   { name: 'Profile', icon: User, path: '/dwo/profile' },
 ];

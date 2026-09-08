@@ -191,8 +191,24 @@ function NewRequestForm({ types }) {
   );
 }
 
-function RequestHistoryItem({ r }) {
+// Once a proof-verified request is Accepted, the specialist role's own
+// screen (already built for its own referral-tracking purpose) becomes the
+// real place to follow progress - assigned lawyer for Legal Aid, relief
+// status for Financial Assistance/Medical, protection updates for Witness
+// Protection/Relocation. Both routes read the exact same underlying
+// agency_referral this Accept just created, so no new screen is needed.
+const STATUS_SCREEN_BY_TYPE = {
+  'Legal Aid': 'LegalAid',
+  'Financial Assistance': 'FinancialAid',
+  Medical: 'FinancialAid',
+  'Witness Protection': 'ThreatReport',
+  Relocation: 'ThreatReport',
+};
+
+function RequestHistoryItem({ r, navigation }) {
   const meta = STATUS_META[r.status] || STATUS_META.Pending;
+  const statusScreen = r.status === 'Accepted' ? STATUS_SCREEN_BY_TYPE[r.interventionTypeName] : null;
+
   return (
     <View style={styles.historyItem}>
       <View style={styles.historyTopRow}>
@@ -214,6 +230,12 @@ function RequestHistoryItem({ r }) {
           <Text style={styles.rejectionLabel}>Reason</Text>
           <Text style={styles.rejectionText}>{r.decisionReason}</Text>
         </View>
+      )}
+      {statusScreen && (
+        <Pressable style={styles.viewStatusBtn} onPress={() => navigation?.navigate(statusScreen)}>
+          <Text style={styles.viewStatusBtnText}>View Status</Text>
+          <Feather name="arrow-right" size={13} color={colors.primaryDark} />
+        </Pressable>
       )}
     </View>
   );
@@ -271,7 +293,7 @@ export default function RequestInterventionScreen({ navigation }) {
                 <Card>
                   {requests.map((r, i) => (
                     <View key={r.requestId} style={i > 0 ? styles.historyDivider : null}>
-                      <RequestHistoryItem r={r} />
+                      <RequestHistoryItem r={r} navigation={navigation} />
                     </View>
                   ))}
                 </Card>
@@ -280,7 +302,9 @@ export default function RequestInterventionScreen({ navigation }) {
           </QueryBoundary>
 
           <Text style={styles.disclaimer}>
-            Requests are reviewed by your District Administration after verifying the proof you provide.
+            Requests are reviewed by the office best placed to verify your proof - the District Welfare Officer
+            for Financial Assistance and Medical, DLSA for Legal Aid, your Protection Officer for Witness
+            Protection and Relocation, and District Administration for Rehabilitation.
           </Text>
         </View>
       </ScrollView>
@@ -365,6 +389,8 @@ const styles = StyleSheet.create({
   rejectionBox: { backgroundColor: colors.dangerLight, borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.sm },
   rejectionLabel: { ...typography.label, color: colors.danger, fontSize: 10 },
   rejectionText: { ...typography.bodySmall, color: colors.textPrimary, marginTop: 2 },
+  viewStatusBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm, alignSelf: 'flex-start' },
+  viewStatusBtnText: { ...typography.bodySmall, color: colors.primaryDark, fontWeight: '700' },
 
   disclaimer: { ...typography.caption, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', marginTop: spacing.lg, marginBottom: spacing.xxxl },
 });

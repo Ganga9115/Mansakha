@@ -11,12 +11,13 @@ import { useSearchUserByDocket, useCaseAgencyReferrals, useCreateAgencyReferral 
 // only decision-maker there - a referral here is a follow-up action AFTER
 // a decision has already been made, not a competing approval chain.
 
+// Investigating Officer and Special Public Prosecutor were retired as
+// separate logins - trimmed here too so this picker can't target a queue
+// nobody can see.
 const REFERRAL_ROLES = [
   'District Welfare Officer',
-  'Investigating Officer',
   'Protection Officer',
   'DLSA Coordinator',
-  'Special Public Prosecutor',
   'District Collector',
   'Rehabilitation Officer',
 ];

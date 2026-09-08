@@ -101,3 +101,37 @@ export function useResolveReferral() {
   };
   return { mutate, loading };
 }
+
+// Legal Aid Request Assistance submissions - DLSA's own proof-verified
+// review queue (see interventionRequestReview.js). Not jurisdiction-scoped,
+// same as this role's own referral queue.
+export function useInterventionRequestsList(status) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    return apiClient.get(`/api/dlsa/intervention-requests?${params.toString()}`, token);
+  }, [token, status]);
+}
+
+export function useInterventionRequestDetail(requestId) {
+  const token = getToken();
+  return useQuery(
+    () => (requestId ? apiClient.get(`/api/dlsa/intervention-requests/${requestId}`, token) : Promise.resolve(null)),
+    [token, requestId]
+  );
+}
+
+export function useReviewInterventionRequest() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (requestId, decision, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/dlsa/intervention-requests/${requestId}/decision`, { decision, reason }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
