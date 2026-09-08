@@ -2,7 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const crypto = require('crypto');
 const { supabase } = require('../../core/db/supabaseClient');
-const { pool } = require('../../core/db/pgPool');
+const { pool, withTransaction } = require('../../core/db/pgPool');
 const { analyzeInteraction, analyzeChatMessage, analyzeInteractionFromClientAi } = require('../../ai/ai');
 const { writeAuditLog } = require('../../core/services/auditLog');
 const { verifyToken } = require('../../core/middleware/verifyToken');
@@ -1589,6 +1589,140 @@ router.get('/intervention-requests/:requestId', async (req, res) => {
     reviewedAt: r.reviewed_at,
     documents: docRows.map((d) => ({ documentLabel: d.document_label })),
   });
+});
+
+// ===== Rehabilitation Progress (read-only) =====
+// Post-case-closure phase run by a government rehabilitation center or NGO
+// (see rehabilitation_officer/routes/rehabilitationOfficer.routes.js) -
+// referrals routed to that role are visible here as a plain-language
+// progress feed, own-case-scoped, no officials/roles concept leaked into
+// the victim-facing response (no referredByName, no other agencies' data -
+// see district_collector's own routes for where that cross-agency view
+// belongs instead). Read-only: nothing here writes to agency_referrals.
+router.get('/rehabilitation-progress', async (req, res) => {
+  const { rows } = await pool.query(
+    `select referral_id, status, reason, created_at, resolved_at
+     from agency_referrals
+     where user_id = $1 and referred_to_role = 'Rehabilitation Officer'
+     order by created_at desc`,
+    [req.auth.userId]
+  );
+
+  if (rows.length === 0) {
+    return ok(res, { inRehabilitation: false, phases: [] });
+  }
+
+  const referralIds = rows.map((r) => r.referral_id);
+  const { rows: noteRows } = await pool.query(
+    `select referral_id, note_text, created_at
+     from agency_referral_notes
+     where referral_id = any($1)
+     order by created_at asc`,
+    [referralIds]
+  );
+  const notesByReferral = noteRows.reduce((acc, n) => {
+    (acc[n.referral_id] = acc[n.referral_id] || []).push({ noteText: n.note_text, createdAt: n.created_at });
+    return acc;
+  }, {});
+
+  return ok(res, {
+    inRehabilitation: rows.some((r) => r.status === 'Open'),
+    phases: rows.map((r) => ({
+      referralId: r.referral_id,
+      status: r.status,
+      startedAt: r.created_at,
+      completedAt: r.resolved_at,
+      updates: notesByReferral[r.referral_id] || [],
+    })),
+  });
+});
+
+// Rehabilitation is a post-case-closure phase, victim-initiated (migration_029) -
+// only reachable once case_stage = 'Case Closed', and only after the victim
+// themselves picks a real provider. Never automatic, never official-triggered
+// alone (DWO's own hand-off route enforces the same case_stage gate - see
+// dwo/routes/dwo.routes.js).
+router.get('/rehabilitation-eligibility', async (req, res) => {
+  const { rows: userRows } = await pool.query('select case_stage, jurisdiction_id from users where user_id = $1', [req.auth.userId]);
+  const user = userRows[0];
+  if (!user) return fail(res, 'Case not found', 404);
+
+  const { rows: existing } = await pool.query(
+    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Rehabilitation Officer'`,
+    [req.auth.userId]
+  );
+
+  if (existing.length > 0) {
+    return ok(res, { eligible: false, alreadyOptedIn: true, reason: 'You have already opted in to rehabilitation.', providers: [] });
+  }
+  if (user.case_stage !== 'Case Closed') {
+    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'Rehabilitation becomes available once your case is closed.', providers: [] });
+  }
+
+  const { rows: providers } = await pool.query(
+    `select provider_id, name, provider_type, contact_info
+     from rehabilitation_providers
+     where deleted_at is null and (jurisdiction_id is null or jurisdiction_id = $1)
+     order by provider_type, name`,
+    [user.jurisdiction_id]
+  );
+
+  return ok(res, {
+    eligible: true,
+    alreadyOptedIn: false,
+    reason: null,
+    providers: providers.map((p) => ({ providerId: p.provider_id, name: p.name, providerType: p.provider_type, contactInfo: p.contact_info })),
+  });
+});
+
+router.post('/rehabilitation-opt-in', async (req, res) => {
+  const { providerId } = req.body;
+  if (!providerId) return fail(res, 'providerId is required', 400);
+
+  const { rows: userRows } = await pool.query('select case_stage from users where user_id = $1', [req.auth.userId]);
+  const user = userRows[0];
+  if (!user) return fail(res, 'Case not found', 404);
+
+  // Checked before the case_stage gate below - once opted in, case_stage is
+  // already 'Rehabilitation' (not 'Case Closed' any more), so checking
+  // case_stage first would misreport a duplicate attempt as "case not
+  // closed" instead of "already opted in".
+  const { rows: existing } = await pool.query(
+    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Rehabilitation Officer'`,
+    [req.auth.userId]
+  );
+  if (existing.length > 0) return fail(res, 'You have already opted in to rehabilitation.', 400);
+
+  if (user.case_stage !== 'Case Closed') {
+    return fail(res, 'Rehabilitation is only available once your case is closed.', 400);
+  }
+
+  const { rows: providerRows } = await pool.query(
+    'select provider_id, name from rehabilitation_providers where provider_id = $1 and deleted_at is null',
+    [providerId]
+  );
+  const provider = providerRows[0];
+  if (!provider) return fail(res, 'Selected provider not found', 404);
+
+  let referralId;
+  try {
+    referralId = await withTransaction(async (client) => {
+      await client.query(`update users set case_stage = 'Rehabilitation' where user_id = $1`, [req.auth.userId]);
+      const { rows } = await client.query(
+        `insert into agency_referrals (user_id, referred_to_role, referred_by_user_id, reason, metadata)
+         values ($1, 'Rehabilitation Officer', $1, $2, $3)
+         returning referral_id`,
+        [req.auth.userId, `Victim opted in to rehabilitation with ${provider.name}.`, JSON.stringify({ providerId: provider.provider_id, providerName: provider.name })]
+      );
+      return rows[0].referral_id;
+    });
+  } catch (err) {
+    return fail(res, `Could not opt in: ${err.message}`, 500);
+  }
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: referralId });
+
+  return ok(res, { referralId }, 'Opted in to rehabilitation', 201);
 });
 
 module.exports = router;

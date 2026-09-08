@@ -120,7 +120,7 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
   // is a few hundred ms at most.
   const [{ rows }, { rows: recentScoreRows }] = await Promise.all([
     pool.query(
-      // case_stage != 'Case Closed' - a closed case previously stayed in
+      // case_stage not in (Case Closed, Rehabilitation) - a closed/rehabilitating case previously stayed in
       // this count forever (Dashboard's "Total Cases" only ever went up),
       // even though the counsellor-assignment algorithm (stressResponse.js)
       // already treats a closed case as zero active load. Same filter now
@@ -137,7 +137,7 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
          select risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed' and u.status = 'active'`,
+       where u.assigned_counsellor_id = $1 and u.case_stage not in ('Case Closed', 'Rehabilitation') and u.status = 'active'`,
       [req.auth.officialId]
     ),
     // Feeds predictEscalationRiskBatch below - the forward-looking sibling of
@@ -152,7 +152,7 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
        from distress_scores ds
        join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
        where u.assigned_counsellor_id = $1
-         and u.case_stage != 'Case Closed' and u.status = 'active'
+         and u.case_stage not in ('Case Closed', 'Rehabilitation') and u.status = 'active'
          and ds.computed_at > now() - ($2 || ' days')::interval`,
       [req.auth.officialId, PREDICTION_LOOKBACK_DAYS]
     ),
@@ -277,7 +277,7 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
   // Porbandar assigned to a Central Delhi counsellor never showed up here).
   const [{ rows }, { rows: unreadRows }] = await Promise.all([
     pool.query(
-      // case_stage != 'Case Closed' and status = 'active' - see /dashboard above for why.
+      // case_stage not in (Case Closed, Rehabilitation) and status = 'active' - see /dashboard above for why.
       // linked_to_user_id selected so hasUnreadMessage below can check the
       // shared messages thread via this case's anchor - messages are only
       // ever written under the anchor's user_id (see auth.user.routes.js's
@@ -295,7 +295,7 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
        left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
-       where u.assigned_counsellor_id = $1 and u.case_stage != 'Case Closed' and u.status = 'active'`,
+       where u.assigned_counsellor_id = $1 and u.case_stage not in ('Case Closed', 'Rehabilitation') and u.status = 'active'`,
       [req.auth.officialId]
     ),
     pool.query(

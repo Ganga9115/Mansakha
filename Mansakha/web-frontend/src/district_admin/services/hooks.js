@@ -399,3 +399,30 @@ export function useReviewInterventionRequest() {
   };
   return { mutate, loading };
 }
+
+// --- Agency Coordination (new coordination roles) ---
+// District Admin optionally creates a referral into one of the 6 new
+// coordination-role queues AFTER already deciding a case through the
+// existing Intervention Requests flow above - never instead of it.
+
+export function useCaseAgencyReferrals(userId) {
+  const token = getToken();
+  return useQuery(
+    () => (userId ? apiClient.get(`/api/admin/district/agency-referrals?userId=${userId}`, token) : Promise.resolve(null)),
+    [token, userId]
+  );
+}
+
+export function useCreateAgencyReferral() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId, referredToRole, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/district/agency-referrals', { userId, referredToRole, reason }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}

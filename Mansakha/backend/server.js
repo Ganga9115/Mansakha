@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { ok } = require('./src/core/services/responseEnvelope');
 const { startDispatchWorker } = require('./src/core/services/dispatchWorker');
+const { startAgencyEscalationChecker } = require('./src/core/services/agencyEscalationChecker');
 
 // Defense-in-depth, not a substitute for fixing individual routes: Express 4
 // doesn't await async route handlers or catch their rejected promises, so an
@@ -69,6 +70,22 @@ app.use('/api/dataoperator', require('./src/dataoperator/routes/dataoperator.rou
 // rather than belonging to one, so it mounts flat like lookups/me.
 app.use('/api/mail', require('./src/mail/routes/mail.routes'));
 
+// "Signin" - the second deliberate shared-login exception, for the 6 new
+// coordination roles (see auth.signin.routes.js's own header comment for why
+// this is its own file rather than widening auth.staff.routes.js).
+app.use('/api/auth/signin', require('./src/core/routes/auth.signin.routes'));
+
+// New coordination roles - each works its own agency_referrals queue
+// (migration_028_agency_referrals.sql), entirely independent of the
+// Intervention Requests flow above.
+app.use('/api/dwo', require('./src/dwo/routes/dwo.routes'));
+app.use('/api/io', require('./src/io/routes/io.routes'));
+app.use('/api/protectionofficer', require('./src/protection_officer/routes/protectionOfficer.routes'));
+app.use('/api/dlsa', require('./src/dlsa/routes/dlsa.routes'));
+app.use('/api/spp', require('./src/spp/routes/spp.routes'));
+app.use('/api/districtcollector', require('./src/district_collector/routes/districtCollector.routes'));
+app.use('/api/rehabilitationofficer', require('./src/rehabilitation_officer/routes/rehabilitationOfficer.routes'));
+
 app.use((req, res) => {
   res.status(404).json({ success: false, data: null, message: 'Not found' });
 });
@@ -83,4 +100,5 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mansakha backend listening on port ${PORT}`);
   startDispatchWorker();
+  startAgencyEscalationChecker();
 });

@@ -80,6 +80,44 @@ export function useCourtCaseDetails(userId) {
   });
 }
 
+// Rehabilitation Progress - long-term post-case-closure support (livelihood,
+// housing, schooling) run by a Rehabilitation Officer, always for the
+// caller's own docket (unlike useCourtCaseDetails, which supports switching
+// between multi-case linked dockets), so this takes no userId param.
+export function useRehabilitationProgress() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'rehabilitation-progress'],
+    queryFn: () => apiClient.get('/api/user/rehabilitation-progress', token),
+    enabled: !!token,
+  });
+}
+
+// Rehabilitation eligibility/opt-in gate (migration_029) - rehabilitation is
+// only reachable once the case is Closed, and only after the victim picks a
+// real provider (government center or NGO) themselves. See
+// RehabilitationOptInScreen.js.
+export function useRehabilitationEligibility() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'rehabilitation-eligibility'],
+    queryFn: () => apiClient.get('/api/user/rehabilitation-eligibility', token),
+    enabled: !!token,
+  });
+}
+
+export function useOptInRehabilitation() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (providerId) => apiClient.post('/api/user/rehabilitation-opt-in', { providerId }, token),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'rehabilitation-eligibility'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'rehabilitation-progress'] });
+    },
+  });
+}
+
 // --- Victim-Initiated Intervention Requests (User -> District Admin; see
 // migration_027_intervention_requests.sql) - replaces the old Counsellor-
 // recommended intervention feature entirely. Counselling is deliberately

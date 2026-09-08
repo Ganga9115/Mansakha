@@ -15,7 +15,9 @@ const router = express.Router();
 
 router.use(verifyToken, requireRole(['Ministry']), generalApiLimiter);
 
-const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator'];
+const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator',
+  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
+  'DLSA Coordinator', 'Special Public Prosecutor', 'District Collector', 'Rehabilitation Officer'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
 // Section 6.2's new validation - an Administration account at district or

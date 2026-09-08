@@ -2,22 +2,32 @@ const bcrypt = require('bcrypt');
 const { supabase } = require('../../core/db/supabaseClient');
 const { withTransaction } = require('../../core/db/pgPool');
 
-// 'Case Closed' is terminal, settable only by Data Operator (dataoperator/routes/dataoperator.routes.js) -
-// District Admin's case_stage edits (district_admin/routes/districtAdmin.routes.js) stay restricted to the
-// original 4, enforced below via updateUser's `canCloseCase` flag.
-const CASE_STAGES_OPEN = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
-const VALID_CASE_STAGES = [...CASE_STAGES_OPEN, 'Case Closed'];
+// 'Case Closed' is terminal-for-the-legal-case, settable only by Data
+// Operator (dataoperator/routes/dataoperator.routes.js) - District Admin's
+// case_stage edits (district_admin/routes/districtAdmin.routes.js) stay
+// restricted to the open 3, enforced below via updateUser's `canCloseCase`
+// flag. 'Rehabilitation' is deliberately NOT in CASE_STAGES_OPEN (migration_029) -
+// it's a post-closure phase reachable only via the victim's own opt-in
+// (user.routes.js's POST /rehabilitation-opt-in), not a normal mid-case
+// stage anyone can set - still included in VALID_CASE_STAGES so Data
+// Operator's canCloseCase override and direct createUser calls (e.g. seed
+// data) can still set it directly if needed.
+const CASE_STAGES_OPEN = ['Investigation', 'Trial', 'Compensation'];
+const VALID_CASE_STAGES = [...CASE_STAGES_OPEN, 'Case Closed', 'Rehabilitation'];
 const VALID_STATUSES = ['active', 'inactive'];
 
 // Automated counsellor-assignment scoring (services/stressResponse.js) - each
-// case stage's point value. 'Case Closed' scores 0 so a closed case never
-// distorts the tie-break sum, and doesn't need excluding from it separately.
+// case stage's point value. 'Case Closed' and 'Rehabilitation' both score 0
+// so neither distorts the tie-break sum - a case past closure (including
+// into its post-closure rehabilitation phase) is no longer part of a
+// Counsellor's active caseload either way, see stressResponse.js's own
+// activeCountByOfficial check.
 const CASE_STAGE_SCORES = {
   Investigation: 1,
   Trial: 2,
-  Rehabilitation: 3,
-  Compensation: 4,
+  Compensation: 3,
   'Case Closed': 0,
+  Rehabilitation: 0,
 };
 // Every user's password on creation - fixed, not admin-chosen, per explicit
 // request. must_change_password (default true) forces a real one on first

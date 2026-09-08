@@ -1965,4 +1965,120 @@ router.patch(
   }
 );
 
+// ===== Agency Coordination (new coordination roles) =====
+// District Admin optionally creates a referral into one of the 6 new
+// coordination-role queues (migration_028_agency_referrals.sql) AFTER
+// already deciding a case through the existing, unmodified Intervention
+// Requests flow above - this never intercepts or reroutes that decision.
+// Case lookup for the coordination page reuses the existing GET /users
+// docket-search route above; no new lookup route needed.
+const AGENCY_REFERRAL_ROLES = [
+  'District Welfare Officer',
+  'Investigating Officer',
+  'Protection Officer',
+  'DLSA Coordinator',
+  'Special Public Prosecutor',
+  'District Collector',
+  'Rehabilitation Officer',
+];
+
+router.get(
+  '/agency-referrals',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  async (req, res) => {
+    const { userId } = req.query;
+    if (!userId) return fail(res, 'userId is required', 400);
+
+    const { rows: userRows } = await pool.query('select jurisdiction_id from users where user_id = $1', [userId]);
+    if (!userRows[0]) return fail(res, 'Case not found', 404);
+
+    const jurisdictionCheck = await requireJurisdictionInline(req, userRows[0].jurisdiction_id);
+    if (jurisdictionCheck) return fail(res, jurisdictionCheck, 403);
+
+    // LEFT JOIN, not JOIN - a referral can now be victim-initiated (no
+    // referred_by_official_id at all, see migration_029's rehabilitation
+    // opt-in flow), which an inner join would silently drop from this list.
+    const { rows } = await pool.query(
+      `select ar.referral_id, ar.referred_to_role, ar.reason, ar.status, ar.created_at, ar.resolved_at,
+              o.full_name as referred_by_name
+       from agency_referrals ar
+       left join officials o on o.official_id = ar.referred_by_official_id
+       where ar.user_id = $1
+       order by ar.created_at desc`,
+      [userId]
+    );
+
+    return ok(res, {
+      referrals: rows.map((r) => ({
+        referralId: r.referral_id,
+        referredToRole: r.referred_to_role,
+        reason: r.reason,
+        status: r.status,
+        createdAt: r.created_at,
+        resolvedAt: r.resolved_at,
+        referredByName: r.referred_by_name || 'Victim (self opt-in)',
+      })),
+    });
+  }
+);
+
+router.post(
+  '/agency-referrals',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  async (req, res) => {
+    const { userId, referredToRole, reason } = req.body;
+    if (!userId || !referredToRole) return fail(res, 'userId and referredToRole are required', 400);
+    if (!AGENCY_REFERRAL_ROLES.includes(referredToRole)) {
+      return fail(res, `referredToRole must be one of: ${AGENCY_REFERRAL_ROLES.join(', ')}`, 400);
+    }
+
+    const { rows: userRows } = await pool.query('select jurisdiction_id, case_stage from users where user_id = $1', [userId]);
+    if (!userRows[0]) return fail(res, 'Case not found', 404);
+
+    const jurisdictionCheck = await requireJurisdictionInline(req, userRows[0].jurisdiction_id);
+    if (jurisdictionCheck) return fail(res, jurisdictionCheck, 403);
+
+    // Rehabilitation is a post-case-closure phase (migration_029) - same
+    // gate as DWO's own hand-off route and the victim's opt-in route.
+    if (referredToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Case Closed') {
+      return fail(res, 'Rehabilitation referrals are only available once the case is closed.', 400);
+    }
+
+    const { data, error } = await supabase
+      .from('agency_referrals')
+      .insert({ user_id: userId, referred_to_role: referredToRole, referred_by_official_id: req.auth.officialId, reason: reason || null })
+      .select('referral_id')
+      .single();
+    if (error) return fail(res, `Could not create referral: ${error.message}`, 500);
+
+    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
+
+    return ok(res, { referralId: data.referral_id }, 'Referral created', 201);
+  }
+);
+
+// Inline jurisdiction-scope check, same reasoning as the intervention-request
+// decision route above: the target case's jurisdiction is only known after
+// an initial DB read, so the requireJurisdiction middleware (which resolves
+// its target BEFORE the handler runs) doesn't fit directly here. Returns an
+// error message string on failure, null on success - mirrors
+// requireJurisdiction's own chain-walk logic exactly.
+async function requireJurisdictionInline(req, targetJurisdictionId) {
+  if (req.auth.roles.some((r) => r.roleName === 'Ministry')) return null;
+
+  const assignedIds = new Set(req.auth.roles.map((r) => r.jurisdictionId).filter(Boolean));
+  let currentId = targetJurisdictionId;
+  while (currentId) {
+    if (assignedIds.has(currentId)) return null;
+    const { data: node, error } = await supabase.from('jurisdictions').select('parent_id').eq('jurisdiction_id', currentId).single();
+    if (error || !node) break;
+    currentId = node.parent_id;
+  }
+  return 'Outside your assigned jurisdiction';
+}
+
 module.exports = router;

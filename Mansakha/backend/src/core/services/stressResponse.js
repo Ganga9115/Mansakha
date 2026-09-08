@@ -62,7 +62,10 @@ async function selectLeastLoadedCounsellor(jurisdictionId) {
       u.assigned_counsellor_id,
       stageScoreSumByOfficial.get(u.assigned_counsellor_id) + (CASE_STAGE_SCORES[u.case_stage] ?? 0)
     );
-    if (u.case_stage !== 'Case Closed') {
+    // 'Rehabilitation' is now a post-Case-Closed phase (migration_029) run
+    // by a Rehabilitation Officer, not the assigned Counsellor - excluded
+    // from active caseload the same way Case Closed already is.
+    if (!['Case Closed', 'Rehabilitation'].includes(u.case_stage)) {
       activeCountByOfficial.set(u.assigned_counsellor_id, activeCountByOfficial.get(u.assigned_counsellor_id) + 1);
     }
   }
