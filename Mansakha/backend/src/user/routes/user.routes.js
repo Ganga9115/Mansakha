@@ -1846,4 +1846,78 @@ router.post('/legal-aid-feedback', async (req, res) => {
   return ok(res, null, 'Feedback submitted. Kindly note that if you rate your counsel poorly, DLSA may reassign your case to a different lawyer.');
 });
 
+// ===== Threat (consolidated Protection Officer flow) =====
+// Victim-initiated, same self-referral pattern as legal aid - no case_stage
+// gate, a threat can arise at any point. Routed to Protection Officer,
+// jurisdiction-scoped ("nearby officer" = the officer assigned to the
+// victim's own district - see protectionOfficer.routes.js).
+router.post('/threat-report', async (req, res) => {
+  const { reason, location } = req.body;
+  if (!reason || !String(reason).trim()) return fail(res, 'reason is required - kindly describe the threat', 400);
+
+  const { rows: existing } = await pool.query(
+    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Protection Officer' and status = 'Open'`,
+    [req.auth.userId]
+  );
+  if (existing.length > 0) return fail(res, 'You already have an open protection request.', 400);
+
+  // Location is best-effort (the victim's device may not have granted
+  // permission, or may be a desktop with no GPS at all) - never blocks the
+  // report itself, since reporting the threat matters more than pinpointing it.
+  const metadata = {};
+  if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
+    metadata.location = { lat: location.lat, lng: location.lng, capturedAt: new Date().toISOString() };
+  }
+
+  const { data, error } = await supabase
+    .from('agency_referrals')
+    .insert({
+      user_id: req.auth.userId,
+      referred_to_role: 'Protection Officer',
+      referred_by_user_id: req.auth.userId,
+      reason: String(reason).trim(),
+      metadata,
+    })
+    .select('referral_id')
+    .single();
+  if (error) return fail(res, `Could not submit threat report: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
+
+  return ok(res, { referralId: data.referral_id }, 'Threat report submitted - the Protection Officer assigned to your district has been notified', 201);
+});
+
+// Read-only status the victim's own app polls - whether protection is
+// active, and the Protection Officer's own logged updates (weekly
+// verification notes), surfaced the same way Rehabilitation Officer's
+// notes already surface on the victim's rehabilitation dashboard.
+router.get('/threat-status', async (req, res) => {
+  const { rows } = await pool.query(
+    `select referral_id, status, metadata, created_at, resolved_at
+     from agency_referrals
+     where user_id = $1 and referred_to_role = 'Protection Officer'
+     order by created_at desc limit 1`,
+    [req.auth.userId]
+  );
+  const referral = rows[0];
+  if (!referral) return ok(res, { hasReport: false });
+
+  const { rows: notes } = await pool.query(
+    `select n.note_text, n.created_at
+     from agency_referral_notes n
+     where n.referral_id = $1
+     order by n.created_at desc`,
+    [referral.referral_id]
+  );
+
+  return ok(res, {
+    hasReport: true,
+    referralId: referral.referral_id,
+    status: referral.status,
+    createdAt: referral.created_at,
+    resolvedAt: referral.resolved_at,
+    updates: notes.map((n) => ({ noteText: n.note_text, createdAt: n.created_at })),
+  });
+});
+
 module.exports = router;

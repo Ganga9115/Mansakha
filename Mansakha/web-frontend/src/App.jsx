@@ -92,10 +92,6 @@ import DwoReferralLog from './dwo/pages/ReferralLog';
 import DwoReferralTasks from './dwo/pages/ReferralTasks';
 import DwoMyTasks from './dwo/pages/MyTasks';
 import DwoProfile from './dwo/pages/Profile';
-import IoCaseStatusFeed from './io/pages/CaseStatusFeed';
-import IoReferralDetail from './io/pages/ReferralDetail';
-import IoMyTasks from './io/pages/MyTasks';
-import IoProfile from './io/pages/Profile';
 import ProtectionOfficerRegistry from './protection_officer/pages/ProtectionRegistry';
 import ProtectionOfficerReferralDetail from './protection_officer/pages/ReferralDetail';
 import ProtectionOfficerMyTasks from './protection_officer/pages/MyTasks';
@@ -104,12 +100,6 @@ import DlsaLegalAidQueue from './dlsa/pages/LegalAidQueue';
 import DlsaReferralDetail from './dlsa/pages/ReferralDetail';
 import DlsaMyTasks from './dlsa/pages/MyTasks';
 import DlsaProfile from './dlsa/pages/Profile';
-import SppTrialDocket from './spp/pages/TrialDocket';
-import SppReferralLog from './spp/pages/ReferralLog';
-import SppReferralTasks from './spp/pages/ReferralTasks';
-import SppReferralDetail from './spp/pages/ReferralDetail';
-import SppMyTasks from './spp/pages/MyTasks';
-import SppProfile from './spp/pages/Profile';
 import DistrictCollectorCommitteeReview from './district_collector/pages/CommitteeReview';
 import DistrictCollectorReviewDetail from './district_collector/pages/ReviewDetail';
 import DistrictCollectorMyTasks from './district_collector/pages/MyTasks';
@@ -235,10 +225,6 @@ export default function App() {
         <Route path="/dwo/referrals/:referralId/tasks" element={<RequireAuth loginPath="/signin"><DwoReferralTasks /></RequireAuth>} />
         <Route path="/dwo/tasks" element={<RequireAuth loginPath="/signin"><DwoMyTasks /></RequireAuth>} />
         <Route path="/dwo/profile" element={<RequireAuth loginPath="/signin"><DwoProfile /></RequireAuth>} />
-        <Route path="/io" element={<RequireAuth loginPath="/signin"><IoCaseStatusFeed /></RequireAuth>} />
-        <Route path="/io/referrals/:referralId" element={<RequireAuth loginPath="/signin"><IoReferralDetail /></RequireAuth>} />
-        <Route path="/io/tasks" element={<RequireAuth loginPath="/signin"><IoMyTasks /></RequireAuth>} />
-        <Route path="/io/profile" element={<RequireAuth loginPath="/signin"><IoProfile /></RequireAuth>} />
         <Route path="/protectionofficer" element={<RequireAuth loginPath="/signin"><ProtectionOfficerRegistry /></RequireAuth>} />
         <Route path="/protectionofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><ProtectionOfficerReferralDetail /></RequireAuth>} />
         <Route path="/protectionofficer/tasks" element={<RequireAuth loginPath="/signin"><ProtectionOfficerMyTasks /></RequireAuth>} />
@@ -247,12 +233,6 @@ export default function App() {
         <Route path="/dlsa/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DlsaReferralDetail /></RequireAuth>} />
         <Route path="/dlsa/tasks" element={<RequireAuth loginPath="/signin"><DlsaMyTasks /></RequireAuth>} />
         <Route path="/dlsa/profile" element={<RequireAuth loginPath="/signin"><DlsaProfile /></RequireAuth>} />
-        <Route path="/spp" element={<RequireAuth loginPath="/signin"><SppTrialDocket /></RequireAuth>} />
-        <Route path="/spp/referrals/:referralId" element={<RequireAuth loginPath="/signin"><SppReferralDetail /></RequireAuth>} />
-        <Route path="/spp/referrals/:referralId/log" element={<RequireAuth loginPath="/signin"><SppReferralLog /></RequireAuth>} />
-        <Route path="/spp/referrals/:referralId/tasks" element={<RequireAuth loginPath="/signin"><SppReferralTasks /></RequireAuth>} />
-        <Route path="/spp/tasks" element={<RequireAuth loginPath="/signin"><SppMyTasks /></RequireAuth>} />
-        <Route path="/spp/profile" element={<RequireAuth loginPath="/signin"><SppProfile /></RequireAuth>} />
         <Route path="/districtcollector" element={<RequireAuth loginPath="/signin"><DistrictCollectorCommitteeReview /></RequireAuth>} />
         <Route path="/districtcollector/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DistrictCollectorReviewDetail /></RequireAuth>} />
         <Route path="/districtcollector/tasks" element={<RequireAuth loginPath="/signin"><DistrictCollectorMyTasks /></RequireAuth>} />

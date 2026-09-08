@@ -6,36 +6,26 @@ const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
-const { computeThreatTier, getSosEventCounts, getSosEventCount } = require('../../core/services/threatAssessment');
+const { ACCUSED_STATUSES, computeThreatTier, getSosEventCounts, getSosEventCount } = require('../../core/services/threatAssessment');
 
 const router = express.Router();
 
-// Protection Officer - copied from dwo/routes/dwo.routes.js (the template);
-// only ROLE_NAME differs. Weekly safety-verification log as notes - the
-// frontend surfaces the most recent note's createdAt as "last verified".
-// Also reads (never sets) the Threat Tier Investigating Officer assessed on
-// this same case - a read-only cross-referral lookup, same pattern as
-// District Collector's otherAgencyReferrals, just scoped to one role and
-// one field instead of everything. Protection Officer picks its own
-// protection type based on this, rather than guessing a number itself.
+// Protection Officer - the consolidated Threat flow. Investigating Officer
+// is retired as a separate login (see the Legal Aid/Threat flow redesign) -
+// its one piece of real value, Accused Status -> Threat Tier, is absorbed
+// here rather than lost, since Protection Officer is now the sole handler
+// of everything threat-related end to end. Weekly safety-verification log
+// stays as notes - the frontend surfaces the most recent note's createdAt
+// as "last verified".
+//
+// Jurisdiction-scoped (migration_031's provider_id pattern, but reusing the
+// jurisdiction_id column officials already have via official_roles, since
+// "nearby officer" in the Threat flow means "assigned to the victim's own
+// district" - no new column needed here).
 const ROLE_NAME = 'Protection Officer';
 
-// Looks up the latest Investigating Officer referral for this same case (if
-// any) and returns the resulting Threat Tier - null accusedStatus/tier when
-// IO has not yet logged an assessment, so the frontend can say so plainly
-// rather than showing a misleading default.
-async function getThreatAssessment(userId, caseTypeName) {
-  const { rows } = await pool.query(
-    `select metadata from agency_referrals
-     where user_id = $1 and referred_to_role = 'Investigating Officer'
-     order by created_at desc limit 1`,
-    [userId]
-  );
-  if (!rows[0]) return { accusedStatus: null, threatTier: null };
-  const accusedStatus = rows[0].metadata?.accusedStatus || null;
-  if (!accusedStatus) return { accusedStatus: null, threatTier: null };
-  const sosEventCount7d = await getSosEventCount(userId, 7);
-  return { accusedStatus, threatTier: computeThreatTier({ accusedStatus, caseTypeName, sosEventCount7d }) };
+function getOwnJurisdictionId(req) {
+  return req.auth.roles.find((r) => r.roleName === ROLE_NAME)?.jurisdictionId || null;
 }
 
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
@@ -44,36 +34,29 @@ router.get('/referrals', async (req, res) => {
   const { status } = req.query;
   if (status && !['Open', 'Resolved'].includes(status)) return fail(res, "status must be 'Open' or 'Resolved'", 400);
 
+  const jurisdictionId = getOwnJurisdictionId(req);
+  if (!jurisdictionId) {
+    return ok(res, { referrals: [], jurisdictionAssigned: false });
+  }
+
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
             u.docket_number, ct.name as case_type_name
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
-     where ar.referred_to_role = $1 ${status ? 'and ar.status = $2' : ''}
+     where ar.referred_to_role = $1 and u.jurisdiction_id = $2 ${status ? 'and ar.status = $3' : ''}
      order by ar.created_at desc`,
-    status ? [ROLE_NAME, status] : [ROLE_NAME]
+    status ? [ROLE_NAME, jurisdictionId, status] : [ROLE_NAME, jurisdictionId]
   );
 
-  // One batched query for every case's latest IO referral, instead of one
-  // query per row - same discipline as getSosEventCounts below.
   const userIds = rows.map((r) => r.user_id);
-  let ioMetadataByUser = {};
-  if (userIds.length > 0) {
-    const { rows: ioRows } = await pool.query(
-      `select distinct on (user_id) user_id, metadata
-       from agency_referrals
-       where user_id = any($1) and referred_to_role = 'Investigating Officer'
-       order by user_id, created_at desc`,
-      [userIds]
-    );
-    ioMetadataByUser = ioRows.reduce((acc, r) => { acc[r.user_id] = r.metadata; return acc; }, {});
-  }
   const sosCounts = await getSosEventCounts(userIds, 7);
 
   return ok(res, {
+    jurisdictionAssigned: true,
     referrals: rows.map((r) => {
-      const accusedStatus = ioMetadataByUser[r.user_id]?.accusedStatus || null;
+      const accusedStatus = r.metadata?.accusedStatus || null;
       return {
         referralId: r.referral_id,
         userId: r.user_id, // needed so this case's referral rows can raise a structured task (agency_tasks) targeting any concerned office
@@ -85,23 +68,27 @@ router.get('/referrals', async (req, res) => {
         createdAt: r.created_at,
         resolvedAt: r.resolved_at,
         accusedStatus,
-        threatTier: accusedStatus
-          ? computeThreatTier({ accusedStatus, caseTypeName: r.case_type_name, sosEventCount7d: sosCounts[r.user_id] || 0 })
-          : null,
+        threatTier: computeThreatTier({ accusedStatus, caseTypeName: r.case_type_name, sosEventCount7d: sosCounts[r.user_id] || 0 }),
       };
     }),
   });
 });
 
-async function loadOwnReferral(referralId, res) {
+async function loadOwnReferral(referralId, res, req) {
+  const jurisdictionId = getOwnJurisdictionId(req);
+  if (!jurisdictionId) {
+    fail(res, 'No jurisdiction is assigned to your account yet. Kindly contact Ministry.', 403);
+    return null;
+  }
+
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
             u.docket_number, ct.name as case_type_name
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
-     where ar.referral_id = $1 and ar.referred_to_role = $2`,
-    [referralId, ROLE_NAME]
+     where ar.referral_id = $1 and ar.referred_to_role = $2 and u.jurisdiction_id = $3`,
+    [referralId, ROLE_NAME, jurisdictionId]
   );
   if (!rows[0]) {
     fail(res, 'Referral not found', 404);
@@ -111,7 +98,7 @@ async function loadOwnReferral(referralId, res) {
 }
 
 router.get('/referrals/:referralId', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res);
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
   if (!referral) return;
 
   const { rows: notes } = await pool.query(
@@ -123,7 +110,8 @@ router.get('/referrals/:referralId', async (req, res) => {
     [referral.referral_id]
   );
 
-  const threatAssessment = await getThreatAssessment(referral.user_id, referral.case_type_name);
+  const accusedStatus = referral.metadata?.accusedStatus || null;
+  const sosEventCount7d = await getSosEventCount(referral.user_id, 7);
 
   return ok(res, {
     referralId: referral.referral_id,
@@ -135,15 +123,39 @@ router.get('/referrals/:referralId', async (req, res) => {
     metadata: referral.metadata,
     createdAt: referral.created_at,
     resolvedAt: referral.resolved_at,
+    location: referral.metadata?.location || null,
     lastVerifiedAt: notes.length ? notes[notes.length - 1].created_at : null,
     notes: notes.map((n) => ({ noteId: n.note_id, noteText: n.note_text, createdAt: n.created_at, authorName: n.author_name })),
-    accusedStatus: threatAssessment.accusedStatus,
-    threatTier: threatAssessment.threatTier,
+    accusedStatus,
+    threatTier: computeThreatTier({ accusedStatus, caseTypeName: referral.case_type_name, sosEventCount7d }),
   });
 });
 
+// Sets Accused Status directly (absorbed from the retired Investigating
+// Officer role) - Threat Tier is computed fresh from this + real
+// sos_events history on every read, same discipline as before.
+router.patch('/referrals/:referralId/accused-status', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
+  if (!referral) return;
+
+  const { accusedStatus } = req.body;
+  if (!ACCUSED_STATUSES.includes(accusedStatus)) {
+    return fail(res, `accusedStatus must be one of: ${ACCUSED_STATUSES.join(', ')}`, 400);
+  }
+
+  const { error } = await supabase
+    .from('agency_referrals')
+    .update({ metadata: { ...referral.metadata, accusedStatus } })
+    .eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not update accused status: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, { referralId: referral.referral_id, accusedStatus }, 'Accused status updated');
+});
+
 router.post('/referrals/:referralId/notes', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res);
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
   if (!referral) return;
 
   const { noteText } = req.body;
@@ -162,7 +174,7 @@ router.post('/referrals/:referralId/notes', async (req, res) => {
 });
 
 router.patch('/referrals/:referralId/resolve', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res);
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
   if (!referral) return;
   if (referral.status === 'Resolved') return fail(res, 'This referral is already resolved', 400);
 
@@ -185,8 +197,8 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
 // e.g. District Collector directing Protection Officer to act, or DWO
 // flagging something for Rehabilitation Officer.
 const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-  'DLSA Coordinator', 'Special Public Prosecutor', 'District Collector', 'Rehabilitation Officer',
+  'District Welfare Officer', 'Protection Officer',
+'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
 ];
 
 router.get('/tasks', async (req, res) => {

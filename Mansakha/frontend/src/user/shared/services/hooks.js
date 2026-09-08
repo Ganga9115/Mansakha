@@ -158,6 +158,26 @@ export function useSubmitLegalAidFeedback() {
   });
 }
 
+// Threat (consolidated Protection Officer flow) - victim-initiated, no
+// case_stage gate, jurisdiction-routed to "the nearby officer" server-side.
+export function useThreatStatus() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'threat-status'],
+    queryFn: () => apiClient.get('/api/user/threat-status', token),
+    enabled: !!token,
+  });
+}
+
+export function useReportThreat() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reason, location }) => apiClient.post('/api/user/threat-report', { reason, location }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'threat-status'] }),
+  });
+}
+
 // --- Victim-Initiated Intervention Requests (User -> District Admin; see
 // migration_027_intervention_requests.sql) - replaces the old Counsellor-
 // recommended intervention feature entirely. Counselling is deliberately

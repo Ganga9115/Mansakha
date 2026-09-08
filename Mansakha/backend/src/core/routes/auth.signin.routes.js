@@ -26,12 +26,14 @@ const router = express.Router();
 // req.auth.type === 'official' (role-agnostic), so it already works for
 // these accounts unmodified. Signin.jsx's forced-password-change flow
 // posts to /api/auth/staff/change-password, same as every other role.
+// Investigating Officer and Special Public Prosecutor removed - retired as
+// separate logins under the consolidated Legal Aid/Threat flow (see
+// server.js's own comment on the same change). Their functions absorbed
+// into Protection Officer and DLSA Coordinator respectively.
 const SIGNIN_ROLES = [
   'District Welfare Officer',
-  'Investigating Officer',
   'Protection Officer',
   'DLSA Coordinator',
-  'Special Public Prosecutor',
   'District Collector',
   'Rehabilitation Officer',
 ];
