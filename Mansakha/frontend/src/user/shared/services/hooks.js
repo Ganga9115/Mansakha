@@ -129,6 +129,35 @@ export function useDeclineRehabilitation() {
   });
 }
 
+// Legal Aid (consolidated DLSA flow) - victim-initiated, available at any
+// case stage, not gated behind case closure the way rehabilitation is.
+export function useLegalAidStatus() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'legal-aid-status'],
+    queryFn: () => apiClient.get('/api/user/legal-aid-status', token),
+    enabled: !!token,
+  });
+}
+
+export function useRequestLegalAid() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (reason) => apiClient.post('/api/user/legal-aid-request', { reason }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-status'] }),
+  });
+}
+
+export function useSubmitLegalAidFeedback() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ rating, comment }) => apiClient.post('/api/user/legal-aid-feedback', { rating, comment }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-status'] }),
+  });
+}
+
 // --- Victim-Initiated Intervention Requests (User -> District Admin; see
 // migration_027_intervention_requests.sql) - replaces the old Counsellor-
 // recommended intervention feature entirely. Counselling is deliberately

@@ -147,38 +147,12 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
   return ok(res, { referralId: referral.referral_id, status: 'Resolved' }, 'Referral resolved');
 });
 
-// Hand-off to Special Public Prosecutor - a referral is scoped to one role,
-// so "marking trial-ready" creates a NEW referral for SPP (same user_id,
-// reason references this DLSA referral) and resolves this one. Same
-// mechanism DM's own escalation uses (District Admin creating a referral),
-// just DLSA-initiated instead of District-Admin-initiated.
-router.post('/referrals/:referralId/mark-trial-ready', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res);
-  if (!referral) return;
-  if (referral.status === 'Resolved') return fail(res, 'This referral is already resolved', 400);
-
-  const { data: sppReferral, error: insertError } = await supabase
-    .from('agency_referrals')
-    .insert({
-      user_id: referral.user_id,
-      referred_to_role: 'Special Public Prosecutor',
-      referred_by_official_id: req.auth.officialId,
-      reason: `Trial-ready hand-off from DLSA (referral ${referral.referral_id})`,
-    })
-    .select('referral_id')
-    .single();
-  if (insertError) return fail(res, `Could not hand off to prosecution: ${insertError.message}`, 500);
-
-  const { error: resolveError } = await supabase
-    .from('agency_referrals')
-    .update({ status: 'Resolved', resolved_at: new Date().toISOString() })
-    .eq('referral_id', referral.referral_id);
-  if (resolveError) return fail(res, `Hand-off created but could not resolve original referral: ${resolveError.message}`, 500);
-
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'agency_referral', entityId: sppReferral.referral_id });
-
-  return ok(res, { newReferralId: sppReferral.referral_id }, 'Handed off to Special Public Prosecutor', 201);
-});
+// mark-trial-ready (hand-off to Special Public Prosecutor) removed - SPP is
+// retired as a separate login under the new consolidated Legal Aid flow.
+// DLSA now carries a case through to resolution itself (assign counsel ->
+// hearings tracked via the Case Journey/eCourt simulation -> reassign on
+// poor feedback if needed -> Mark Resolved once concluded), rather than
+// handing off partway through.
 
 // ===== Structured tasks (migration_030_agency_tasks.sql) =====
 // Real action items - a specific role, a specific action, a due date, a

@@ -27,6 +27,7 @@ import CaseDetailsScreen from '../wellness/screens/CaseDetailsScreen';
 import RequestInterventionScreen from '../wellness/screens/RequestInterventionScreen';
 import RehabilitationProgressScreen from '../wellness/screens/RehabilitationProgressScreen';
 import RehabilitationOptInScreen from '../wellness/screens/RehabilitationOptInScreen';
+import LegalAidScreen from '../wellness/screens/LegalAidScreen';
 import WellnessScreen from '../wellness/screens/WellnessScreen';
 import JournalScreen from '../wellness/screens/JournalScreen';
 import MyEntryScreen from '../wellness/screens/MyEntry';
@@ -194,6 +195,7 @@ function DesktopNavigator() {
       <Drawer.Screen name="RequestIntervention" component={RequestInterventionScreen} />
       <Drawer.Screen name="RehabilitationProgress" component={RehabilitationProgressScreen} />
       <Drawer.Screen name="RehabilitationOptIn" component={RehabilitationOptInScreen} />
+      <Drawer.Screen name="LegalAid" component={LegalAidScreen} />
     </Drawer.Navigator>
   );
 }
@@ -229,6 +231,7 @@ function ShellStack({ tabs, includeExtras = true }) {
       <RootStack.Screen name="RequestIntervention" component={RequestInterventionScreen} />
       <RootStack.Screen name="RehabilitationProgress" component={RehabilitationProgressScreen} />
       <RootStack.Screen name="RehabilitationOptIn" component={RehabilitationOptInScreen} />
+      <RootStack.Screen name="LegalAid" component={LegalAidScreen} />
       {includeExtras && (
         <>
           <RootStack.Screen name="Chatbot" component={ChatScreen} />

@@ -225,7 +225,24 @@ export default function HomeScreen({ navigation }) {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.gridTitle}>Request Assistance</Text>
-                        <Text style={styles.gridSub}>Medical, legal aid & more</Text>
+                        <Text style={styles.gridSub}>Medical, safety & more</Text>
+                      </View>
+                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                    </Pressable>
+
+                    {/* Legal Aid - its own dedicated DLSA-routed pipeline,
+                        distinct from the generic Request Assistance above.
+                        See LegalAidScreen.js. */}
+                    <Pressable
+                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                      onPress={() => navigation?.navigate('LegalAid')}
+                    >
+                      <View style={styles.gridIconSquare}>
+                        <Feather name="briefcase" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.gridTitle}>Legal Aid</Text>
+                        <Text style={styles.gridSub}>Get a lawyer assigned to you</Text>
                       </View>
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>
