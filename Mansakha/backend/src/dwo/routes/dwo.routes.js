@@ -6,6 +6,12 @@ const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
+const {
+  getCompensationSchedule,
+  buildCompensationStages,
+  isCompensationStageUnlocked,
+  withLiveCompensationView,
+} = require('../../core/services/compensationSchedule');
 
 const router = express.Router();
 
@@ -22,19 +28,22 @@ const router = express.Router();
 // only, same privacy boundary as every existing officials-side route.
 const ROLE_NAME = 'District Welfare Officer';
 
-// Relief & Compliance - real structured fields (not a free-text guess) for
-// DWO's actual statutory function: relief type, sanctioned amount, and a
-// 7-day statutory compliance flag (relief not yet sanctioned within 7 days
-// of registration). Computed fresh on every read, same discipline as
-// core/services/threatAssessment.js's Threat Tier - never stored as a
-// stale label.
-const RELIEF_TYPES = ['Interim Relief', 'Final Relief', 'Rehabilitation Grant'];
-const STATUTORY_COMPLIANCE_DAYS = 7;
+// Two independent tracks on the same referral, matching DWO's real
+// statutory function - immediate relief (urgent financial/essential
+// support, settled fast) and compensation (the larger statutory PoA Act
+// award, paid out in stages tied to the case's own real progress). Both
+// computed fresh on every read from stored facts, same discipline as
+// core/services/threatAssessment.js's Threat Tier - never a stale label.
 
-function computeCompliance(metadata, createdAt) {
-  if (metadata?.sanctionedAt) return 'Sanctioned';
+// ===== Immediate Relief =====
+const ASSISTANCE_TYPES = ['Financial', 'Essential Support'];
+const IMMEDIATE_RELIEF_COMPLIANCE_DAYS = 7;
+
+function computeImmediateReliefCompliance(metadata, createdAt) {
+  const relief = metadata?.immediateRelief;
+  if (relief && relief.status !== 'Requested') return 'On Track'; // already moving
   const daysOpen = Math.floor((Date.now() - new Date(createdAt).getTime()) / 86400000);
-  return daysOpen > STATUTORY_COMPLIANCE_DAYS ? 'Overdue' : 'On Track';
+  return daysOpen > IMMEDIATE_RELIEF_COMPLIANCE_DAYS ? 'Overdue' : 'On Track';
 }
 
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
@@ -45,7 +54,7 @@ router.get('/referrals', async (req, res) => {
 
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
-            u.docket_number, ct.name as case_type_name
+            u.docket_number, u.case_stage, ct.name as case_type_name
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
@@ -65,9 +74,9 @@ router.get('/referrals', async (req, res) => {
       metadata: r.metadata,
       createdAt: r.created_at,
       resolvedAt: r.resolved_at,
-      reliefType: r.metadata?.reliefType || null,
-      reliefAmount: r.metadata?.reliefAmount || null,
-      complianceStatus: computeCompliance(r.metadata, r.created_at),
+      immediateRelief: r.metadata?.immediateRelief || null,
+      immediateReliefCompliance: computeImmediateReliefCompliance(r.metadata, r.created_at),
+      compensation: withLiveCompensationView(r.metadata?.compensation, r.case_stage),
     })),
   });
 });
@@ -113,10 +122,14 @@ router.get('/referrals/:referralId', async (req, res) => {
     createdAt: referral.created_at,
     resolvedAt: referral.resolved_at,
     notes: notes.map((n) => ({ noteId: n.note_id, noteText: n.note_text, createdAt: n.created_at, authorName: n.author_name })),
-    reliefType: referral.metadata?.reliefType || null,
-    reliefAmount: referral.metadata?.reliefAmount || null,
-    sanctionedAt: referral.metadata?.sanctionedAt || null,
-    complianceStatus: computeCompliance(referral.metadata, referral.created_at),
+    immediateRelief: referral.metadata?.immediateRelief || null,
+    immediateReliefCompliance: computeImmediateReliefCompliance(referral.metadata, referral.created_at),
+    // Shown even before DWO has verified anything, so the detail page can
+    // display "Suggested category & amount" as soon as a referral exists -
+    // matches the flowchart's "auto-identifies applicable statutory
+    // category" step, which happens independently of any DWO action.
+    suggestedCompensation: getCompensationSchedule(referral.case_type_name),
+    compensation: withLiveCompensationView(referral.metadata?.compensation, referral.case_stage),
     // Rehabilitation Officer's mandate only begins after case closure (see
     // hand-off-rehabilitation below) - exposed so the Assign Task form can
     // hide that option as a target until then, rather than offering a
@@ -125,35 +138,165 @@ router.get('/referrals/:referralId', async (req, res) => {
   });
 });
 
-// Sets/updates the relief type and amount, and can mark it sanctioned (the
-// event that resolves the statutory-compliance flag). A real structured
-// action, not a note - DWO's actual "Fast-Track Approval Workflow".
-router.patch('/referrals/:referralId/relief', async (req, res) => {
+// ===== Immediate Relief (financial + essential support) =====
+// The urgent, fast-turnaround track - "victim requires financial aid ->
+// DWO notification -> Financial assistance / Essential Support -> Relief
+// approved -> Relief provided -> victim notified -> victim confirms ->
+// resolved". Kept entirely separate from the Compensation Module below,
+// which is the larger statutory award paid out over the life of the case.
+router.patch('/referrals/:referralId/immediate-relief/approve', async (req, res) => {
   const referral = await loadOwnReferral(req.params.referralId, res);
   if (!referral) return;
 
-  const { reliefType, reliefAmount, sanctioned } = req.body;
-  if (reliefType !== undefined && !RELIEF_TYPES.includes(reliefType)) {
-    return fail(res, `reliefType must be one of: ${RELIEF_TYPES.join(', ')}`, 400);
-  }
-  if (reliefAmount !== undefined && (typeof reliefAmount !== 'number' || reliefAmount <= 0)) {
-    return fail(res, 'reliefAmount must be a positive number', 400);
+  const existing = referral.metadata?.immediateRelief;
+  if (existing && ['Provided', 'Confirmed'].includes(existing.status)) {
+    return fail(res, 'Immediate relief has already been provided and can no longer be modified.', 400);
   }
 
-  const nextMetadata = { ...referral.metadata };
-  if (reliefType !== undefined) nextMetadata.reliefType = reliefType;
-  if (reliefAmount !== undefined) nextMetadata.reliefAmount = reliefAmount;
-  if (sanctioned === true && !nextMetadata.sanctionedAt) nextMetadata.sanctionedAt = new Date().toISOString();
+  const { assistanceTypes, financialAmount, essentialSupportNotes } = req.body;
+  if (!Array.isArray(assistanceTypes) || assistanceTypes.length === 0) {
+    return fail(res, `assistanceTypes must include at least one of: ${ASSISTANCE_TYPES.join(', ')}`, 400);
+  }
+  if (!assistanceTypes.every((t) => ASSISTANCE_TYPES.includes(t))) {
+    return fail(res, `assistanceTypes must be one of: ${ASSISTANCE_TYPES.join(', ')}`, 400);
+  }
+  if (assistanceTypes.includes('Financial') && (typeof financialAmount !== 'number' || financialAmount <= 0)) {
+    return fail(res, 'financialAmount must be a positive number when Financial assistance is selected', 400);
+  }
+  if (assistanceTypes.includes('Essential Support') && (!essentialSupportNotes || !String(essentialSupportNotes).trim())) {
+    return fail(res, 'essentialSupportNotes is required when Essential Support is selected', 400);
+  }
+
+  const nextMetadata = {
+    ...referral.metadata,
+    immediateRelief: {
+      assistanceTypes,
+      financialAmount: assistanceTypes.includes('Financial') ? financialAmount : null,
+      essentialSupportNotes: assistanceTypes.includes('Essential Support') ? String(essentialSupportNotes).trim() : null,
+      status: 'Approved',
+      approvedAt: new Date().toISOString(),
+      providedAt: null,
+      confirmedAt: null,
+    },
+  };
 
   const { error } = await supabase
     .from('agency_referrals')
     .update({ metadata: nextMetadata })
     .eq('referral_id', referral.referral_id);
-  if (error) return fail(res, `Could not update relief details: ${error.message}`, 500);
+  if (error) return fail(res, `Could not approve relief: ${error.message}`, 500);
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
 
-  return ok(res, { referralId: referral.referral_id, metadata: nextMetadata }, 'Relief details updated');
+  return ok(res, { referralId: referral.referral_id, immediateRelief: nextMetadata.immediateRelief }, 'Relief approved');
+});
+
+// DWO's confirmation that the approved relief has actually been handed
+// over - a separate, later event from approval, so "approved on paper" and
+// "physically provided" are never conflated into one timestamp.
+router.patch('/referrals/:referralId/immediate-relief/mark-provided', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const relief = referral.metadata?.immediateRelief;
+  if (!relief || relief.status !== 'Approved') {
+    return fail(res, 'Relief must be approved before it can be marked as provided.', 400);
+  }
+
+  const nextMetadata = {
+    ...referral.metadata,
+    immediateRelief: { ...relief, status: 'Provided', providedAt: new Date().toISOString() },
+  };
+
+  const { error } = await supabase
+    .from('agency_referrals')
+    .update({ metadata: nextMetadata })
+    .eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not update relief: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, { referralId: referral.referral_id, immediateRelief: nextMetadata.immediateRelief }, 'Relief marked as provided');
+});
+
+// ===== Compensation Module =====
+// The larger statutory award, tracked in stages tied to the case's own
+// real progress - "DWO verification -> creates compensation case & tracks
+// it -> payment stages -> DWO monitors payment flow -> paid / pending ->
+// DM escalation if still unresolved".
+router.patch('/referrals/:referralId/compensation/verify', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const existing = referral.metadata?.compensation;
+  if (existing && existing.stages.some((s) => s.status === 'Paid')) {
+    return fail(res, 'The verified amount cannot be changed once a payment stage has been marked as paid.', 400);
+  }
+
+  const suggested = getCompensationSchedule(referral.case_type_name);
+  const { verifiedAmount } = req.body;
+  const amount = verifiedAmount !== undefined ? verifiedAmount : suggested.suggestedAmount;
+  if (typeof amount !== 'number' || amount <= 0) {
+    return fail(res, 'verifiedAmount must be a positive number', 400);
+  }
+
+  const nextMetadata = {
+    ...referral.metadata,
+    compensation: {
+      statutoryCategory: suggested.statutoryCategory,
+      suggestedAmount: suggested.suggestedAmount,
+      verifiedAmount: amount,
+      verifiedAt: new Date().toISOString(),
+      stages: buildCompensationStages(amount),
+    },
+  };
+
+  const { error } = await supabase
+    .from('agency_referrals')
+    .update({ metadata: nextMetadata })
+    .eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not verify compensation: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(
+    res,
+    { referralId: referral.referral_id, compensation: withLiveCompensationView(nextMetadata.compensation, referral.case_stage) },
+    'Compensation case verified and tracked'
+  );
+});
+
+router.patch('/referrals/:referralId/compensation/stages/:stageIndex/mark-paid', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res);
+  if (!referral) return;
+
+  const compensation = referral.metadata?.compensation;
+  if (!compensation) return fail(res, 'Compensation has not been verified for this case yet.', 400);
+
+  const idx = Number(req.params.stageIndex);
+  const stage = compensation.stages[idx];
+  if (!stage) return fail(res, 'Payment stage not found', 404);
+  if (!isCompensationStageUnlocked(stage.unlocksAtCaseStage, referral.case_stage)) {
+    return fail(res, `This stage unlocks once the case reaches "${stage.unlocksAtCaseStage}". The case has not reached that point yet.`, 400);
+  }
+  if (stage.status === 'Paid') return fail(res, 'This stage has already been marked as paid.', 400);
+
+  const nextStages = compensation.stages.map((s, i) => (i === idx ? { ...s, status: 'Paid', paidAt: new Date().toISOString() } : s));
+  const nextMetadata = { ...referral.metadata, compensation: { ...compensation, stages: nextStages } };
+
+  const { error } = await supabase
+    .from('agency_referrals')
+    .update({ metadata: nextMetadata })
+    .eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not update payment stage: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(
+    res,
+    { referralId: referral.referral_id, compensation: withLiveCompensationView(nextMetadata.compensation, referral.case_stage) },
+    'Payment stage marked as paid'
+  );
 });
 
 // Every task raised against this case, regardless of which role created it

@@ -3,111 +3,237 @@ import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
-import { HeartHandshake, IndianRupee, ShieldCheck, AlertTriangle } from 'lucide-react';
-import { useReferralDetail, useResolveReferral, useHandOffRehabilitation, useSetRelief, useRehabilitationProviders } from '../services/hooks';
+import { HeartHandshake, IndianRupee, ShieldCheck, AlertTriangle, CircleCheck, Lock, Landmark } from 'lucide-react';
+import {
+  useReferralDetail, useResolveReferral, useHandOffRehabilitation, useRehabilitationProviders,
+  useApproveImmediateRelief, useMarkReliefProvided, useVerifyCompensation, useMarkCompensationStagePaid,
+} from '../services/hooks';
 
-// District Welfare Officer's Referral Overview - context and the Relief &
-// Compliance card (DWO's real statutory function: relief type, sanctioned
-// amount, and a 7-day compliance flag), now on its own page instead of one
-// of several stacked cards. Notes moved to ReferralLog.jsx, task assignment
-// moved to ReferralTasks.jsx - each concern gets real room. THE TEMPLATE
-// for the other 6 role folders' equivalent Overview page.
+// District Welfare Officer's Referral Overview - context, plus the two
+// independent DWO tracks: Immediate Relief (fast, urgent financial/support
+// aid) and the Compensation Module (the larger statutory award, tracked in
+// 3 payment stages tied to the case's own real progress). Notes moved to
+// ReferralLog.jsx, task assignment moved to ReferralTasks.jsx.
+
+const ASSISTANCE_TYPES = ['Financial', 'Essential Support'];
 
 const COMPLIANCE_BADGE = {
-  Sanctioned: { cls: 'bg-emerald-100 text-emerald-700', icon: ShieldCheck },
   'On Track': { cls: 'bg-sky-100 text-sky-700', icon: ShieldCheck },
   Overdue: { cls: 'bg-rose-100 text-rose-700', icon: AlertTriangle },
 };
 
-const RELIEF_TYPES = ['Interim Relief', 'Final Relief', 'Rehabilitation Grant'];
+const inr = (n) => `₹${Number(n).toLocaleString('en-IN')}`;
 
-function ReliefComplianceCard({ r, referralId, onChanged }) {
-  const [reliefType, setReliefType] = useState(r.reliefType || '');
-  const [reliefAmount, setReliefAmount] = useState(r.reliefAmount || '');
+// ===== Immediate Relief =====
+function ImmediateReliefCard({ r, referralId, onChanged }) {
+  const relief = r.immediateRelief;
+  const [assistanceTypes, setAssistanceTypes] = useState([]);
+  const [financialAmount, setFinancialAmount] = useState('');
+  const [essentialSupportNotes, setEssentialSupportNotes] = useState('');
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const setRelief = useSetRelief();
+  const approve = useApproveImmediateRelief();
+  const markProvided = useMarkReliefProvided();
 
-  const compliance = COMPLIANCE_BADGE[r.complianceStatus] || COMPLIANCE_BADGE['On Track'];
-  const ComplianceIcon = compliance.icon;
+  const toggleType = (t) => setAssistanceTypes((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
-  const handleSave = async (markSanctioned) => {
+  const handleApprove = async () => {
     setError(null);
-    setSuccess(false);
     try {
-      await setRelief.mutate(referralId, {
-        reliefType: reliefType || undefined,
-        reliefAmount: reliefAmount ? Number(reliefAmount) : undefined,
-        sanctioned: markSanctioned || undefined,
+      await approve.mutate(referralId, {
+        assistanceTypes,
+        financialAmount: assistanceTypes.includes('Financial') ? Number(financialAmount) : undefined,
+        essentialSupportNotes: assistanceTypes.includes('Essential Support') ? essentialSupportNotes : undefined,
       });
-      setSuccess(true);
       onChanged();
     } catch (err) {
-      setError(err.message || 'Unable to update relief details. Kindly try again.');
+      setError(err.message || 'Could not approve relief. Kindly try again.');
+    }
+  };
+
+  const handleMarkProvided = async () => {
+    setError(null);
+    try {
+      await markProvided.mutate(referralId);
+      onChanged();
+    } catch (err) {
+      setError(err.message || 'Could not update relief. Kindly try again.');
+    }
+  };
+
+  const compliance = COMPLIANCE_BADGE[r.immediateReliefCompliance] || COMPLIANCE_BADGE['On Track'];
+  const ComplianceIcon = compliance.icon;
+
+  return (
+    <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h3 className="font-bold text-sm text-gray-800">Immediate Relief</h3>
+        {(!relief || relief.status === 'Requested') && (
+          <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${compliance.cls}`}>
+            <ComplianceIcon size={13} /> {r.immediateReliefCompliance}
+          </span>
+        )}
+      </div>
+      <p className="text-[11px] text-gray-400 -mt-2">Urgent financial assistance or essential support (medical, food, shelter). Kindly act within 7 days of the request.</p>
+
+      {!relief && (
+        <>
+          <div className="flex flex-wrap gap-3">
+            {ASSISTANCE_TYPES.map((t) => (
+              <label key={t} className="flex items-center gap-1.5 text-xs font-medium text-gray-700">
+                <input type="checkbox" checked={assistanceTypes.includes(t)} onChange={() => toggleType(t)} className="rounded" />
+                {t}
+              </label>
+            ))}
+          </div>
+          {assistanceTypes.includes('Financial') && (
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Financial Amount</label>
+              <div className="relative">
+                <IndianRupee size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input type="number" min="1" value={financialAmount} onChange={(e) => setFinancialAmount(e.target.value)} placeholder="e.g. 5000" className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs" />
+              </div>
+            </div>
+          )}
+          {assistanceTypes.includes('Essential Support') && (
+            <div>
+              <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Essential Support Details</label>
+              <textarea value={essentialSupportNotes} onChange={(e) => setEssentialSupportNotes(e.target.value)} rows={2} placeholder="e.g. Ration kit and temporary shelter arranged..." className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" />
+            </div>
+          )}
+          <button
+            onClick={handleApprove}
+            disabled={approve.loading || assistanceTypes.length === 0 || (assistanceTypes.includes('Financial') && !financialAmount) || (assistanceTypes.includes('Essential Support') && !essentialSupportNotes.trim())}
+            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+          >
+            {approve.loading ? 'Approving...' : 'Approve Relief'}
+          </button>
+        </>
+      )}
+
+      {relief && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {relief.assistanceTypes.map((t) => (
+              <span key={t} className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700">{t}</span>
+            ))}
+          </div>
+          {relief.financialAmount != null && <p className="text-xs text-gray-600">Financial: <span className="font-semibold">{inr(relief.financialAmount)}</span></p>}
+          {relief.essentialSupportNotes && <p className="text-xs text-gray-600">Essential Support: {relief.essentialSupportNotes}</p>}
+          <p className="text-[11px] text-gray-400">Approved on {new Date(relief.approvedAt).toLocaleString()}</p>
+
+          {relief.status === 'Approved' && (
+            <button
+              onClick={handleMarkProvided}
+              disabled={markProvided.loading}
+              className="px-4 py-2 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+            >
+              {markProvided.loading ? 'Updating...' : 'Mark as Provided'}
+            </button>
+          )}
+          {relief.status === 'Provided' && (
+            <div className="flex items-center gap-1.5 text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 w-fit text-xs font-semibold">
+              Provided on {new Date(relief.providedAt).toLocaleString()} - awaiting victim confirmation
+            </div>
+          )}
+          {relief.status === 'Confirmed' && (
+            <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 w-fit text-xs font-semibold">
+              <CircleCheck size={14} /> Confirmed received by victim on {new Date(relief.confirmedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+    </div>
+  );
+}
+
+// ===== Compensation Module =====
+function CompensationCard({ r, referralId, onChanged }) {
+  const compensation = r.compensation;
+  const [verifiedAmount, setVerifiedAmount] = useState(r.suggestedCompensation?.suggestedAmount || '');
+  const [error, setError] = useState(null);
+  const verify = useVerifyCompensation();
+  const markPaid = useMarkCompensationStagePaid();
+
+  const handleVerify = async () => {
+    setError(null);
+    try {
+      await verify.mutate(referralId, Number(verifiedAmount));
+      onChanged();
+    } catch (err) {
+      setError(err.message || 'Could not verify compensation. Kindly try again.');
+    }
+  };
+
+  const handleMarkPaid = async (idx) => {
+    setError(null);
+    try {
+      await markPaid.mutate(referralId, idx);
+      onChanged();
+    } catch (err) {
+      setError(err.message || 'Could not update payment stage. Kindly try again.');
     }
   };
 
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="font-bold text-sm text-gray-800">Relief &amp; Compliance</h3>
-        <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold ${compliance.cls}`}>
-          <ComplianceIcon size={13} /> {r.complianceStatus}
-        </span>
+      <div className="flex items-center gap-1.5">
+        <Landmark size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Compensation Module</h3>
       </div>
-      <p className="text-[11px] text-gray-400 -mt-2">Statutory relief must be sanctioned within 7 days of registration. This tracks that automatically.</p>
+      <p className="text-[11px] text-gray-400 -mt-2">
+        Statutory category: <span className="font-semibold text-gray-600">{r.suggestedCompensation.statutoryCategory}</span>.
+        Suggested amount is a starting figure per this app&apos;s own schedule - kindly verify and adjust as the case warrants.
+      </p>
 
-      {r.sanctionedAt && (
-        <div className="flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 w-fit text-xs">
-          <ShieldCheck size={14} />
-          <span className="font-semibold">Sanctioned on {new Date(r.sanctionedAt).toLocaleString()}</span>
+      {!compensation && (
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Verified Amount (₹)</label>
+            <div className="relative">
+              <IndianRupee size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input type="number" min="1" value={verifiedAmount} onChange={(e) => setVerifiedAmount(e.target.value)} className="w-52 pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs" />
+            </div>
+          </div>
+          <button
+            onClick={handleVerify}
+            disabled={verify.loading || !verifiedAmount}
+            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+          >
+            {verify.loading ? 'Verifying...' : 'Verify & Track Compensation'}
+          </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Relief Type</label>
-          <select value={reliefType} onChange={(e) => setReliefType(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-            <option value="" disabled>Select relief type...</option>
-            {RELIEF_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Amount (₹)</label>
-          <div className="relative">
-            <IndianRupee size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="number"
-              min="1"
-              value={reliefAmount}
-              onChange={(e) => setReliefAmount(e.target.value)}
-              placeholder="e.g. 25000"
-              className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-xs"
-            />
+      {compensation && (
+        <div className="space-y-3">
+          <p className="text-xs text-gray-600">Verified amount: <span className="font-semibold">{inr(compensation.verifiedAmount)}</span> on {new Date(compensation.verifiedAt).toLocaleDateString()}</p>
+          <div className="space-y-2">
+            {compensation.stages.map((s, idx) => (
+              <div key={s.stage} className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${s.status === 'Paid' ? 'border-emerald-200 bg-emerald-50' : s.unlocked ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-gray-800">{s.stage} <span className="text-gray-400 font-normal">({s.percentage}%)</span></p>
+                  <p className="text-[11px] text-gray-500">{inr(s.amount)}{s.paidAt && ` • paid ${new Date(s.paidAt).toLocaleDateString()}`}</p>
+                </div>
+                {s.status === 'Paid' ? (
+                  <span className="flex items-center gap-1 text-emerald-700 text-[11px] font-bold shrink-0"><CircleCheck size={13} /> Paid</span>
+                ) : s.unlocked ? (
+                  <button
+                    onClick={() => handleMarkPaid(idx)}
+                    disabled={markPaid.loading}
+                    className="px-3 py-1.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-[11px] font-semibold transition disabled:opacity-60 shrink-0"
+                  >
+                    Mark as Paid
+                  </button>
+                ) : (
+                  <span className="flex items-center gap-1 text-gray-400 text-[11px] font-semibold shrink-0"><Lock size={12} /> Locked until {s.unlocksAtCaseStage}</span>
+                )}
+              </div>
+            ))}
           </div>
         </div>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          onClick={() => handleSave(false)}
-          disabled={setRelief.loading || (!reliefType && !reliefAmount)}
-          className="px-4 py-2 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
-        >
-          {setRelief.loading ? 'Saving...' : 'Save Relief Details'}
-        </button>
-        {!r.sanctionedAt && (
-          <button
-            onClick={() => handleSave(true)}
-            disabled={setRelief.loading || !reliefType || !reliefAmount}
-            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
-          >
-            Mark Sanctioned
-          </button>
-        )}
-      </div>
+      )}
       {error && <p className="text-xs text-rose-600">{error}</p>}
-      {success && <p className="text-xs text-emerald-600">Relief details updated.</p>}
     </div>
   );
 }
@@ -212,7 +338,8 @@ export default function ReferralDetail() {
                 <p className="text-xs text-gray-600 whitespace-pre-wrap leading-relaxed">{r.reason}</p>
               </div>
             )}
-            <ReliefComplianceCard r={r} referralId={referralId} onChanged={detailQuery.refetch} />
+            <ImmediateReliefCard r={r} referralId={referralId} onChanged={detailQuery.refetch} />
+            <CompensationCard r={r} referralId={referralId} onChanged={detailQuery.refetch} />
           </div>
 
           <div className="space-y-6">

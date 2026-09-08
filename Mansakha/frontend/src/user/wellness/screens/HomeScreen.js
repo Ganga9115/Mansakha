@@ -263,6 +263,42 @@ export default function HomeScreen({ navigation }) {
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>
 
+                    {/* Financial Aid - District Welfare Officer's Immediate
+                        Relief track (money, food, shelter). See
+                        FinancialAidScreen.js. Kept separate from
+                        Compensation below - relief is fast/urgent,
+                        compensation is the larger statutory award. */}
+                    <Pressable
+                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                      onPress={() => navigation?.navigate('FinancialAid')}
+                    >
+                      <View style={styles.gridIconSquare}>
+                        <Feather name="heart" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.gridTitle}>Financial Aid</Text>
+                        <Text style={styles.gridSub}>Urgent money, food or shelter support</Text>
+                      </View>
+                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                    </Pressable>
+
+                    {/* Compensation - read-only view of the statutory
+                        award and its 3-stage payment tracker. See
+                        CompensationScreen.js. */}
+                    <Pressable
+                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                      onPress={() => navigation?.navigate('Compensation')}
+                    >
+                      <View style={styles.gridIconSquare}>
+                        <Feather name="credit-card" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.gridTitle}>Compensation</Text>
+                        <Text style={styles.gridSub}>Track your statutory compensation payments</Text>
+                      </View>
+                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                    </Pressable>
+
                     {/* Rehabilitation Progress - only shown once the victim
                         has an open post-case-closure rehabilitation phase
                         (livelihood/housing/schooling support tracked by a
