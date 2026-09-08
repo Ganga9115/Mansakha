@@ -45,7 +45,7 @@ async function verifyToken(req, res, next) {
 
   if (payload.type === 'official') {
     const { rows } = await pool.query(
-      `select o.official_id, o.must_change_password, o.last_active_at, o.password_changed_at, orr.jurisdiction_id, orr.provider_id, r.role_name, j.level as jurisdiction_level
+      `select o.official_id, o.must_change_password, o.last_active_at, o.password_changed_at, orr.jurisdiction_id, orr.provider_id, orr.station_id, r.role_name, j.level as jurisdiction_level
        from officials o
        left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
        left join roles r on r.role_id = orr.role_id
@@ -128,6 +128,10 @@ async function verifyToken(req, res, next) {
         // Officer works for, mirroring jurisdictionId's own per-role-grant
         // pattern. Always null for every other role.
         providerId: r.provider_id,
+        // migration_033 - which police_stations row an Investigating
+        // Officer works at, same per-role-grant pattern again. Always null
+        // for every other role.
+        stationId: r.station_id,
       })),
     };
     return next();

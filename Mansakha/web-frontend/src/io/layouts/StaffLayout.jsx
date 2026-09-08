@@ -8,12 +8,12 @@ import { useMe } from '../services/hooks';
 // dwo/layouts/StaffLayout.jsx (itself copied from district_admin's
 // template).
 const NAV_ITEMS = [
-  { name: 'Case Status Feed', icon: Shield, path: '/io' },
+  { name: 'Case Queue', icon: Shield, path: '/io' },
   { name: 'My Tasks', icon: ClipboardList, path: '/io/tasks' },
   { name: 'Profile', icon: User, path: '/io/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Case Status Feed' }) {
+export default function StaffLayout({ children, title = 'Case Queue' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();

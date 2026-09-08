@@ -11,7 +11,39 @@ import Card from '../../shared/components/Card';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary, EmptyState } from '../../shared/components/QueryStates';
-import { useUserDashboard, useCourtCaseDetails } from '../../shared/services/hooks';
+import { useUserDashboard, useCourtCaseDetails, useInvestigationProgress } from '../../shared/services/hooks';
+
+// Real, live status from the Investigating Officer's own record - kept as
+// its own independent card/query, entirely separate from the eCourts
+// simulation below (courtCaseSimulation.js is purely decorative/
+// deterministic; this is the genuine investigation record).
+const ACCUSED_STATUS_TONE = {
+  'In Custody': { bg: '#E4F5EC', fg: '#2F8A5B' },
+  Convicted: { bg: '#E4F5EC', fg: '#2F8A5B' },
+  'Out on Bail': { bg: '#FEF3C7', fg: '#9A5B06' },
+  Absconding: { bg: '#FBE9E8', fg: '#A13934' },
+};
+
+function InvestigationProgressCard({ data }) {
+  if (!data || (!data.accusedStatus && !data.investigationProgress && data.chargesheetStatus === 'Not Filed')) return null;
+  const tone = ACCUSED_STATUS_TONE[data.accusedStatus];
+  return (
+    <Card headerTitle="Investigation Progress">
+      {data.accusedStatus && (
+        <View style={styles.row}>
+          <Text style={styles.rowLabel}>Accused Status</Text>
+          <View style={[styles.statusPill, tone && { backgroundColor: tone.bg }]}>
+            <Text style={[styles.statusPillText, tone && { color: tone.fg }]}>{data.accusedStatus}</Text>
+          </View>
+        </View>
+      )}
+      <Row label="Chargesheet" value={data.chargesheetStatus === 'Filed' ? `Filed ${formatDate(data.chargesheetFiledAt)}` : 'Not yet filed'} />
+      {data.investigationProgress && (
+        <Text style={styles.progressText}>{data.investigationProgress}</Text>
+      )}
+    </Card>
+  );
+}
 
 function Row({ label, value }) {
   if (value == null || value === '') return null;
@@ -53,6 +85,7 @@ export default function CaseDetailsScreen({ navigation }) {
   const activeUserId = selectedUserId || linkedCases[0]?.userId;
   const activeCase = linkedCases.find((c) => c.userId === activeUserId);
   const courtQuery = useCourtCaseDetails(activeUserId);
+  const investigationQuery = useInvestigationProgress();
 
   return (
     <View style={styles.container}>
@@ -110,6 +143,8 @@ export default function CaseDetailsScreen({ navigation }) {
             ))}
           </View>
         )}
+
+        <InvestigationProgressCard data={investigationQuery.data} />
 
         {!activeUserId ? (
           <EmptyState icon="file-text" message="No case found for your account yet." />
@@ -264,6 +299,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs, gap: spacing.md },
   rowLabel: { ...typography.caption, color: colors.textSecondary, flex: 1 },
   rowValue: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13, flex: 1.4, textAlign: 'right' },
+  statusPill: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: spacing.sm },
+  statusPillText: { ...typography.caption, color: colors.textPrimary, fontWeight: '700' },
+  progressText: { ...typography.bodySmall, color: colors.textSecondary, lineHeight: 19, marginTop: spacing.xs },
 
   partyGroup: { marginBottom: spacing.sm },
   partyGroupTitle: { ...typography.caption, color: colors.textSecondary, marginBottom: 2 },

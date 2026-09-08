@@ -2056,4 +2056,32 @@ router.get('/compensation-status', async (req, res) => {
   });
 });
 
+// ===== Investigation Progress (read-only for the victim) =====
+// "Case progress shown to victim (no confidential evidence)" - a curated
+// subset of the Investigating Officer's own investigation_records
+// (migration_033): accused custody status and chargesheet status (both
+// factual, not raw evidence) plus IO's own victim-safe progress summary.
+// Raw investigative detail (case_notes, IO-authored) never surfaces here.
+// Entirely separate from the eCourts simulation (court-case/:userId above,
+// courtCaseSimulation.js) - that stays a decorative, deterministic fixture,
+// this is the real record IO actually maintains.
+router.get('/investigation-progress', async (req, res) => {
+  const { rows } = await pool.query(
+    `select ir.accused_status, ir.investigation_progress, ir.chargesheet_status, ir.chargesheet_filed_at
+     from users u
+     left join investigation_records ir on ir.user_id = u.user_id
+     where u.user_id = $1`,
+    [req.auth.userId]
+  );
+  const row = rows[0];
+  if (!row) return fail(res, 'Case not found', 404);
+
+  return ok(res, {
+    accusedStatus: row.accused_status || null,
+    investigationProgress: row.investigation_progress || null,
+    chargesheetStatus: row.chargesheet_status || 'Not Filed',
+    chargesheetFiledAt: row.chargesheet_filed_at || null,
+  });
+});
+
 module.exports = router;

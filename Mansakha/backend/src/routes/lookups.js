@@ -82,4 +82,20 @@ router.get('/rehabilitation-providers', async (req, res) => {
   return ok(res, { providers: rows.map((p) => ({ providerId: p.provider_id, name: p.name, providerType: p.provider_type })) });
 });
 
+// migration_033 - police stations, more granular than the district-level
+// jurisdictions above (a real Investigating Officer is scoped to the
+// station where the FIR was filed). Exposed here, unauthenticated, so both
+// Data Operator's case-intake form (which station registered the FIR) and
+// Ministry's Staff Management page (which station an IO account works at)
+// can populate a picker without a separate authenticated route - same
+// non-sensitive reference-data rationale as every other route here.
+// Optional ?jurisdictionId= narrows to stations within one district.
+router.get('/police-stations', async (req, res) => {
+  const { jurisdictionId } = req.query;
+  const { rows } = jurisdictionId
+    ? await pool.query('select station_id, name, jurisdiction_id from police_stations where deleted_at is null and jurisdiction_id = $1 order by name', [jurisdictionId])
+    : await pool.query('select station_id, name, jurisdiction_id from police_stations where deleted_at is null order by name');
+  return ok(res, { stations: rows.map((s) => ({ stationId: s.station_id, name: s.name, jurisdictionId: s.jurisdiction_id })) });
+});
+
 module.exports = router;

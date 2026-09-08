@@ -93,6 +93,21 @@ export function useRehabilitationProgress() {
   });
 }
 
+// Investigation Progress - the Investigating Officer's own curated,
+// victim-safe summary (migration_033): accused custody status and
+// chargesheet status (both factual, never raw evidence), always for the
+// caller's own docket - same no-userId-param convention as
+// useRehabilitationProgress. Entirely separate from useCourtCaseDetails'
+// eCourts simulation above - this is the real record IO actually maintains.
+export function useInvestigationProgress() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'investigation-progress'],
+    queryFn: () => apiClient.get('/api/user/investigation-progress', token),
+    enabled: !!token,
+  });
+}
+
 // Rehabilitation eligibility/opt-in gate (migration_029) - rehabilitation is
 // only reachable once the case is Closed, and only after the victim picks a
 // real provider (government center or NGO) themselves. See

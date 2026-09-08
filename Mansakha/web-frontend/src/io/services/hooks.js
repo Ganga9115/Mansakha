@@ -4,7 +4,10 @@ import { getToken } from './auth';
 
 // Investigating Officer's own copy of the data-hooks pattern (per-role,
 // no-shared-imports rule) - every /api/io/* call hits this role's own mount
-// (see backend/src/io/routes/io.routes.js).
+// (see backend/src/io/routes/io.routes.js). Station-scoped case queue, NOT
+// referral-based like every other new-role portal - "every registered case
+// gets investigated" (assigned via users.station_id), not a District-Admin-
+// created escalation.
 
 function useQuery(queryFn, deps) {
   const [state, setState] = useState({ data: null, loading: true, error: null });
@@ -29,44 +32,38 @@ export function useMe() {
   return useQuery(() => apiClient.get('/api/me', token), [token]);
 }
 
-export function useReferralsList(status) {
+export function useCasesList(status) {
   const token = getToken();
   return useQuery(() => {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
-    return apiClient.get(`/api/io/referrals?${params.toString()}`, token);
+    return apiClient.get(`/api/io/cases?${params.toString()}`, token);
   }, [token, status]);
 }
 
-export function useReferralDetail(referralId) {
+export function useCaseDetail(userId) {
   const token = getToken();
   return useQuery(
-    () => (referralId ? apiClient.get(`/api/io/referrals/${referralId}`, token) : Promise.resolve(null)),
-    [token, referralId]
+    () => (userId ? apiClient.get(`/api/io/cases/${userId}`, token) : Promise.resolve(null)),
+    [token, userId]
   );
 }
 
-export function useAddReferralNote() {
+export function useCaseTasks(userId) {
   const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (referralId, noteText) => {
-    setLoading(true);
-    try {
-      return await apiClient.post(`/api/io/referrals/${referralId}/notes`, { noteText }, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
+  return useQuery(
+    () => (userId ? apiClient.get(`/api/io/cases/${userId}/tasks`, token) : Promise.resolve(null)),
+    [token, userId]
+  );
 }
 
-export function useResolveReferral() {
+export function useAddCaseNote() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (referralId) => {
+  const mutate = async (userId, noteText) => {
     setLoading(true);
     try {
-      return await apiClient.patch(`/api/io/referrals/${referralId}/resolve`, {}, token);
+      return await apiClient.post(`/api/io/cases/${userId}/notes`, { noteText }, token);
     } finally {
       setLoading(false);
     }
@@ -79,10 +76,71 @@ export function useResolveReferral() {
 export function useSetAccusedStatus() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (referralId, accusedStatus) => {
+  const mutate = async (userId, accusedStatus) => {
     setLoading(true);
     try {
-      return await apiClient.patch(`/api/io/referrals/${referralId}/accused-status`, { accusedStatus }, token);
+      return await apiClient.patch(`/api/io/cases/${userId}/accused-status`, { accusedStatus }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Victim-safe progress summary shown on the victim's own Case Details.
+export function useSetInvestigationProgress() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId, investigationProgress) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/io/cases/${userId}/investigation-progress`, { investigationProgress }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// The one write path into the shared case_stage from this role - advances
+// Investigation to Trial (and unlocks DWO's Compensation Stage 2).
+export function useFileChargesheet() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/io/cases/${userId}/chargesheet`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useMarkInvestigationComplete() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/io/cases/${userId}/investigation-complete`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// "Threat detected -> Protection Officer alerted" - creates a real referral
+// for the jurisdiction's Protection Officer, not just a notification.
+export function useAlertProtectionOfficer() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/io/cases/${userId}/alert-protection-officer`, { reason }, token);
     } finally {
       setLoading(false);
     }
