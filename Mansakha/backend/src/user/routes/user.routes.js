@@ -1755,4 +1755,95 @@ router.post('/rehabilitation-decline', async (req, res) => {
   return ok(res, null, 'Your account has been deactivated as requested.');
 });
 
+// ===== Legal Aid (consolidated DLSA flow) =====
+// Victim-initiated, same self-referral pattern as rehabilitation opt-in -
+// referred_by_user_id (not an official) creates the request, DLSA
+// Coordinator reviews and assigns counsel. Unlike rehabilitation, this is
+// available at any case stage (a victim may need legal aid well before the
+// case closes), so there is no case_stage gate here.
+router.post('/legal-aid-request', async (req, res) => {
+  const { reason } = req.body;
+  if (!reason || !String(reason).trim()) return fail(res, 'reason is required - kindly state why legal aid is needed', 400);
+
+  const { rows: existing } = await pool.query(
+    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'DLSA Coordinator' and status = 'Open'`,
+    [req.auth.userId]
+  );
+  if (existing.length > 0) return fail(res, 'You already have an open legal aid request.', 400);
+
+  const { data, error } = await supabase
+    .from('agency_referrals')
+    .insert({
+      user_id: req.auth.userId,
+      referred_to_role: 'DLSA Coordinator',
+      referred_by_user_id: req.auth.userId,
+      reason: String(reason).trim(),
+    })
+    .select('referral_id')
+    .single();
+  if (error) return fail(res, `Could not submit legal aid request: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
+
+  return ok(res, { referralId: data.referral_id }, 'Legal aid request submitted', 201);
+});
+
+// Read-only status the victim's own app polls - assigned counsel's name
+// (once DLSA acts), SLA deadline, and whether feedback has already been
+// given for the current assignment (so the app doesn't re-show a feedback
+// form for counsel already rated).
+router.get('/legal-aid-status', async (req, res) => {
+  const { rows } = await pool.query(
+    `select referral_id, status, metadata, created_at, resolved_at
+     from agency_referrals
+     where user_id = $1 and referred_to_role = 'DLSA Coordinator'
+     order by created_at desc limit 1`,
+    [req.auth.userId]
+  );
+  const referral = rows[0];
+  if (!referral) return ok(res, { hasRequest: false });
+
+  const metadata = referral.metadata || {};
+  return ok(res, {
+    hasRequest: true,
+    referralId: referral.referral_id,
+    status: referral.status,
+    assignedLawyer: metadata.assignedLawyer || null,
+    slaDeadline: metadata.slaDeadline || null,
+    feedbackGiven: !!metadata.lawyerFeedback,
+    createdAt: referral.created_at,
+    resolvedAt: referral.resolved_at,
+  });
+});
+
+// Victim's feedback on their assigned counsel - stored on the same
+// referral's metadata (DLSA already reads/returns the full metadata blob,
+// so no change needed there for this to surface). One feedback per
+// assignment - re-assigning counsel (assign-lawyer overwrites
+// assignedLawyer) naturally clears the way for fresh feedback later, since
+// a NEW assignment is a different fact than the one already rated.
+router.post('/legal-aid-feedback', async (req, res) => {
+  const { rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) return fail(res, 'rating is required (1-5)', 400);
+
+  const { rows } = await pool.query(
+    `select referral_id, metadata from agency_referrals where user_id = $1 and referred_to_role = 'DLSA Coordinator' order by created_at desc limit 1`,
+    [req.auth.userId]
+  );
+  const referral = rows[0];
+  if (!referral) return fail(res, 'No legal aid request found', 404);
+  if (!referral.metadata?.assignedLawyer) return fail(res, 'Counsel has not been assigned yet', 400);
+
+  const newMetadata = {
+    ...referral.metadata,
+    lawyerFeedback: { rating, comment: comment ? String(comment).trim() : null, submittedAt: new Date().toISOString() },
+  };
+  const { error } = await supabase.from('agency_referrals').update({ metadata: newMetadata }).eq('referral_id', referral.referral_id);
+  if (error) return fail(res, `Could not submit feedback: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, null, 'Feedback submitted. Kindly note that if you rate your counsel poorly, DLSA may reassign your case to a different lawyer.');
+});
+
 module.exports = router;
