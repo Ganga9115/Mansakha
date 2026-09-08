@@ -1,13 +1,19 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 
-// Small linked row so a case's Overview/Activity Log/Tasks still reads as
-// ONE case even though each is now its own real route - matching this
-// codebase's own convention (every page is a distinct URL, not client-side
-// tab state), rather than cramming all three concerns onto one screen.
-// THE TEMPLATE reused verbatim across the other 6 role folders.
+// Small linked row so a case's Overview/Relief/Compensation/Activity
+// Log/Tasks still reads as ONE case even though each is now its own real
+// route - matching this codebase's own convention (every page is a
+// distinct URL, not client-side tab state), rather than cramming every
+// concern onto one screen. Immediate Relief and Compensation are DWO's own
+// two extra tabs, on top of the Overview/Log/Tasks base template reused
+// across the other role folders - each is a genuinely separate workflow
+// (approve-and-provide vs. verify-and-track-in-stages), not just another
+// card on the same page.
 const TABS = [
   { label: 'Overview', suffix: '' },
+  { label: 'Immediate Relief', suffix: '/relief' },
+  { label: 'Compensation', suffix: '/compensation' },
   { label: 'Activity Log', suffix: '/log' },
   { label: 'Tasks', suffix: '/tasks' },
 ];
