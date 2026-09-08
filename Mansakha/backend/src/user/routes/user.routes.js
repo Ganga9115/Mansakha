@@ -451,17 +451,27 @@ router.post('/chat/log', async (req, res) => {
 // external API that could be slow/down/rate-limited). Deliberately bypasses
 // interactions/distress_scores/alerts entirely - see sos_events in
 // schema.sql (source = 'sos' in alert_notifications predates this feature's
-// rename, kept rather than a migration for a label). Notifies THREE roles,
+// rename, kept rather than a migration for a label). Notifies FOUR roles,
 // not just the counsellor: the assigned counsellor (or, if none yet,
 // whichever counsellor nationwide currently has the lightest caseload - see
 // stressResponse.js's selectLeastLoadedCounsellor, which is no longer
 // district-scoped), every District Administration official over the user's
-// own district, and every State Administration official over that
-// district's parent state. The actual call to the Police Control Room
-// (100) happens client-side (Linking.openURL('tel:100')) - see PCR_NUMBER's
-// comment above for why that can't go through dispatch_queue's IVRS path.
+// own district, every State Administration official over that district's
+// parent state, and (migration_032) the Protection Officer assigned to the
+// victim's own district - given a real, actionable referral (not just a
+// passing notification), the same way a victim-initiated threat report
+// does. Best-effort current location (device-permission-dependent, may be
+// null) is captured client-side and carried on both the sos_events row and
+// the Protection Officer referral. The actual call to the Police Control
+// Room (100) happens client-side (Linking.openURL('tel:100')) - see
+// PCR_NUMBER's comment above for why that can't go through
+// dispatch_queue's IVRS path.
 router.post('/urgent-help', async (req, res) => {
   const userId = req.auth.userId;
+  const { location } = req.body;
+  const sosLocation = location && typeof location.lat === 'number' && typeof location.lng === 'number'
+    ? { lat: location.lat, lng: location.lng, capturedAt: new Date().toISOString() }
+    : null;
 
   // All three independent - the SOS event insert doesn't need anything read
   // from `user`/`identity` first (it only needs userId, already known from
@@ -474,7 +484,7 @@ router.post('/urgent-help', async (req, res) => {
   const [userResult, identityResult, sosResult] = await Promise.all([
     pool.query(`select jurisdiction_id, assigned_counsellor_id from users where user_id = $1 limit 1`, [userId]),
     pool.query(`select contact_number from user_identity where user_id = $1 limit 1`, [userId]),
-    supabase.from('sos_events').insert({ user_id: userId }).select('sos_event_id, triggered_at').single(),
+    supabase.from('sos_events').insert({ user_id: userId, location: sosLocation }).select('sos_event_id, triggered_at').single(),
   ]);
   const user = userResult.rows[0];
   const identity = identityResult.rows[0];
@@ -534,7 +544,51 @@ router.post('/urgent-help', async (req, res) => {
     for (const id of ids) adminIdSet.add(id);
   }
 
-  const recipientIds = [...new Set([counsellorId, ...adminIdSet].filter(Boolean))];
+  // Protection Officer assigned to the victim's own district(s) - "nearby
+  // PO", same jurisdiction_id scoping protectionOfficer.routes.js's own
+  // queue already enforces. Unlike Administration above, this does NOT walk
+  // up to the parent state - a PO is a district-level appointment.
+  const { rows: poRoles } = await pool.query(
+    `select orr.official_id
+     from official_roles orr
+     join roles r on r.role_id = orr.role_id
+     where orr.jurisdiction_id = any($1::uuid[]) and orr.revoked_at is null and r.role_name = 'Protection Officer'`,
+    [jurisdictionIds]
+  );
+  const protectionOfficerIds = [...new Set(poRoles.map((r) => r.official_id))];
+
+  // Give the Protection Officer a real, actionable referral - not just a
+  // passing notification - same self-referral pattern as /threat-report.
+  // Reuses an existing OPEN one if this victim already has one (adds a note
+  // and refreshes the location) rather than creating a duplicate.
+  if (protectionOfficerIds.length > 0) {
+    const { rows: existingReferralRows } = await pool.query(
+      `select referral_id, metadata from agency_referrals where user_id = $1 and referred_to_role = 'Protection Officer' and status = 'Open' limit 1`,
+      [userId]
+    );
+    const existingReferral = existingReferralRows[0];
+    if (existingReferral) {
+      // agency_referral_notes.author_official_id is not-null (a note always
+      // represents a real person's word) - a re-trigger just refreshes the
+      // location and relies on the alert_notifications/dispatch below (sent
+      // again either way) to actually re-notify the PO, rather than writing
+      // a note with no genuine author.
+      const nextMetadata = { ...existingReferral.metadata, ...(sosLocation ? { location: sosLocation, sosRetriggeredAt: new Date().toISOString() } : {}) };
+      await supabase.from('agency_referrals').update({ metadata: nextMetadata }).eq('referral_id', existingReferral.referral_id);
+    } else {
+      await supabase.from('agency_referrals').insert({
+        user_id: userId,
+        referred_to_role: 'Protection Officer',
+        referred_by_user_id: userId,
+        reason: 'Emergency SOS triggered via "Get Help Now" - immediate attention required.',
+        metadata: sosLocation ? { location: sosLocation, sosTriggered: true } : { sosTriggered: true },
+      });
+    }
+  } else {
+    console.error('POST /urgent-help: no Protection Officer assigned to this district', { userId, jurisdictionIds });
+  }
+
+  const recipientIds = [...new Set([counsellorId, ...adminIdSet, ...protectionOfficerIds].filter(Boolean))];
 
   if (recipientIds.length > 0) {
     const { error: notifyError } = await supabase
@@ -1757,37 +1811,16 @@ router.post('/rehabilitation-decline', async (req, res) => {
 });
 
 // ===== Legal Aid (consolidated DLSA flow) =====
-// Victim-initiated, same self-referral pattern as rehabilitation opt-in -
-// referred_by_user_id (not an official) creates the request, DLSA
-// Coordinator reviews and assigns counsel. Unlike rehabilitation, this is
-// available at any case stage (a victim may need legal aid well before the
-// case closes), so there is no case_stage gate here.
-router.post('/legal-aid-request', async (req, res) => {
-  const { reason } = req.body;
-  if (!reason || !String(reason).trim()) return fail(res, 'reason is required - kindly state why legal aid is needed', 400);
-
-  const { rows: existing } = await pool.query(
-    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'DLSA Coordinator' and status = 'Open'`,
-    [req.auth.userId]
-  );
-  if (existing.length > 0) return fail(res, 'You already have an open legal aid request.', 400);
-
-  const { data, error } = await supabase
-    .from('agency_referrals')
-    .insert({
-      user_id: req.auth.userId,
-      referred_to_role: 'DLSA Coordinator',
-      referred_by_user_id: req.auth.userId,
-      reason: String(reason).trim(),
-    })
-    .select('referral_id')
-    .single();
-  if (error) return fail(res, `Could not submit legal aid request: ${error.message}`, 500);
-
-  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
-
-  return ok(res, { referralId: data.referral_id }, 'Legal aid request submitted', 201);
-});
+// The no-proof self-referral creation route that used to live here
+// (POST /legal-aid-request) has been retired - real Legal Aid requests
+// under the PoA Act require verified proof (caste certificate, FIR copy,
+// photo ID), which only Request Assistance's existing document-upload flow
+// actually enforces. Creation now happens ONLY via
+// POST /intervention-requests (type 'Legal Aid') followed by DLSA
+// Coordinator's own Accept decision (interventionRequestReview.js), which
+// creates the same kind of agency_referral this route used to create
+// directly. The status/feedback routes below are unaffected - they simply
+// read whatever referral exists, however it was created.
 
 // Read-only status the victim's own app polls - assigned counsel's name
 // (once DLSA acts), SLA deadline, and whether feedback has already been
@@ -1922,36 +1955,16 @@ router.get('/threat-status', async (req, res) => {
 });
 
 // ===== DWO Financial Aid (Immediate Relief) =====
-// Victim-initiated, same self-referral pattern as legal aid/threat - no
-// case_stage gate, urgent need can arise at any point in the case. Routed
-// to District Welfare Officer, whose own routes carry the
-// approve/mark-provided actions (dwo.routes.js).
-router.post('/financial-aid-request', async (req, res) => {
-  const { reason } = req.body;
-  if (!reason || !String(reason).trim()) return fail(res, 'reason is required - kindly state what assistance is needed', 400);
-
-  const { rows: existing } = await pool.query(
-    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'District Welfare Officer' and status = 'Open'`,
-    [req.auth.userId]
-  );
-  if (existing.length > 0) return fail(res, 'You already have an open financial aid request.', 400);
-
-  const { data, error } = await supabase
-    .from('agency_referrals')
-    .insert({
-      user_id: req.auth.userId,
-      referred_to_role: 'District Welfare Officer',
-      referred_by_user_id: req.auth.userId,
-      reason: String(reason).trim(),
-    })
-    .select('referral_id')
-    .single();
-  if (error) return fail(res, `Could not submit financial aid request: ${error.message}`, 500);
-
-  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
-
-  return ok(res, { referralId: data.referral_id }, 'Financial aid request submitted', 201);
-});
+// The no-proof self-referral creation route that used to live here
+// (POST /financial-aid-request) has been retired - real Financial
+// Assistance under the PoA Act requires verified proof (FIR copy, caste
+// certificate, bank passbook), which only Request Assistance's existing
+// document-upload flow actually enforces. Creation now happens ONLY via
+// POST /intervention-requests (type 'Financial Assistance' or 'Medical')
+// followed by DWO's own Accept decision (interventionRequestReview.js),
+// which creates the same kind of agency_referral this route used to create
+// directly. The status/confirm routes below are unaffected - they simply
+// read whatever referral exists, however it was created.
 
 // Read-only status the victim's own app polls - what DWO has approved (if
 // anything) and whether it has actually been provided yet.

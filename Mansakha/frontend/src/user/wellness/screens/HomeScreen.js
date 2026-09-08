@@ -225,24 +225,7 @@ export default function HomeScreen({ navigation }) {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.gridTitle}>Request Assistance</Text>
-                        <Text style={styles.gridSub}>Medical, safety & more</Text>
-                      </View>
-                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                    </Pressable>
-
-                    {/* Legal Aid - its own dedicated DLSA-routed pipeline,
-                        distinct from the generic Request Assistance above.
-                        See LegalAidScreen.js. */}
-                    <Pressable
-                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('LegalAid')}
-                    >
-                      <View style={styles.gridIconSquare}>
-                        <Feather name="briefcase" size={18} color={colors.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.gridTitle}>Legal Aid</Text>
-                        <Text style={styles.gridSub}>Get a lawyer assigned to you</Text>
+                        <Text style={styles.gridSub}>Medical, legal aid, financial help & more</Text>
                       </View>
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>
@@ -259,25 +242,6 @@ export default function HomeScreen({ navigation }) {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.gridTitle}>Report a Threat</Text>
                         <Text style={styles.gridSub}>Notify your nearest Protection Officer</Text>
-                      </View>
-                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                    </Pressable>
-
-                    {/* Financial Aid - District Welfare Officer's Immediate
-                        Relief track (money, food, shelter). See
-                        FinancialAidScreen.js. Kept separate from
-                        Compensation below - relief is fast/urgent,
-                        compensation is the larger statutory award. */}
-                    <Pressable
-                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('FinancialAid')}
-                    >
-                      <View style={styles.gridIconSquare}>
-                        <Feather name="heart" size={18} color={colors.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.gridTitle}>Financial Aid</Text>
-                        <Text style={styles.gridSub}>Urgent money, food or shelter support</Text>
                       </View>
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>

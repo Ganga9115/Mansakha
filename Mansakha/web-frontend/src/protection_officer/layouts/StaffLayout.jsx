@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { ShieldCheck, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
+import { ShieldCheck, ClipboardList, FileCheck2, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
@@ -9,6 +9,7 @@ import { useMe } from '../services/hooks';
 // template).
 const NAV_ITEMS = [
   { name: 'Protection Registry', icon: ShieldCheck, path: '/protectionofficer' },
+  { name: 'Intervention Requests', icon: FileCheck2, path: '/protectionofficer/intervention-requests' },
   { name: 'My Tasks', icon: ClipboardList, path: '/protectionofficer/tasks' },
   { name: 'Profile', icon: User, path: '/protectionofficer/profile' },
 ];

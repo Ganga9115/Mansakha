@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Scale, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
+import { Scale, ClipboardList, FileCheck2, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
@@ -9,6 +9,7 @@ import { useMe } from '../services/hooks';
 // template).
 const NAV_ITEMS = [
   { name: 'Legal Aid Queue', icon: Scale, path: '/dlsa' },
+  { name: 'Intervention Requests', icon: FileCheck2, path: '/dlsa/intervention-requests' },
   { name: 'My Tasks', icon: ClipboardList, path: '/dlsa/tasks' },
   { name: 'Profile', icon: User, path: '/dlsa/profile' },
 ];

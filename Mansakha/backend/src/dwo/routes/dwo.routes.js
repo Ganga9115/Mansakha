@@ -12,6 +12,7 @@ const {
   isCompensationStageUnlocked,
   withLiveCompensationView,
 } = require('../../core/services/compensationSchedule');
+const { mountInterventionReviewRoutes } = require('../../core/services/interventionRequestReview');
 
 const router = express.Router();
 
@@ -47,6 +48,13 @@ function computeImmediateReliefCompliance(metadata, createdAt) {
 }
 
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
+
+// Financial Assistance and Medical requests (Request Assistance, proof
+// verified) are DWO's own to review - Financial Assistance is exactly the
+// Immediate Relief track above; Medical fits DWO's existing "Essential
+// Support" assistance type. Not jurisdiction-scoped, matching this role's
+// own existing (unscoped) referral queue below.
+mountInterventionReviewRoutes(router, { roleName: ROLE_NAME, interventionTypeNames: ['Financial Assistance', 'Medical'] });
 
 router.get('/referrals', async (req, res) => {
   const { status } = req.query;
