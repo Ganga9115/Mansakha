@@ -46,27 +46,59 @@ function ProviderCard({ provider, onChoose, choosing }) {
   );
 }
 
-function EligibleContent({ providers, navigation }) {
+// All / Government / NGO - a real filter over the provider list rather than
+// a flat scroll, so a victim can find the kind of centre they actually want
+// (a government hospital-run programme vs. an NGO) without reading every
+// card. Exported alongside EligibleContent so the mandatory decision gate
+// (RehabilitationDecisionGate.js) can reuse the exact same component -
+// there is only ever one implementation of "pick a provider" in this app.
+const PROVIDER_TYPE_FILTERS = ['All', 'Government', 'NGO'];
+
+function ProviderTypeToggle({ value, onChange }) {
+  return (
+    <View style={styles.toggleRow}>
+      {PROVIDER_TYPE_FILTERS.map((f) => {
+        const active = value === f;
+        return (
+          <Pressable
+            key={f}
+            onPress={() => onChange(f)}
+            style={[styles.toggleSegment, active && styles.toggleSegmentActive]}
+          >
+            <Text style={[styles.toggleSegmentText, active && styles.toggleSegmentTextActive]}>{f}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+// onOptedIn: called after a successful opt-in, instead of this component
+// deciding navigation itself - the standalone screen below passes a
+// navigation-based redirect; the mandatory gate passes nothing, since a
+// successful opt-in flips case_stage away from 'Case Closed' and the
+// gate's own eligibility query (invalidated by useOptInRehabilitation
+// already) naturally stops showing this screen on its very next render.
+export function EligibleContent({ providers, onOptedIn }) {
   const optIn = useOptInRehabilitation();
   const [chosenProviderId, setChosenProviderId] = useState(null);
   const [error, setError] = useState(null);
+  const [typeFilter, setTypeFilter] = useState('All');
 
   const handleChoose = async (providerId) => {
     setError(null);
     setChosenProviderId(providerId);
     try {
       await optIn.mutateAsync(providerId);
-      if (navigation?.canGoBack?.()) {
-        navigation.goBack();
-      } else {
-        navigation?.navigate('RehabilitationProgress');
-      }
+      onOptedIn?.();
     } catch (err) {
       setError(err.message || 'Could not opt in to rehabilitation.');
     } finally {
       setChosenProviderId(null);
     }
   };
+
+  const visibleProviders = typeFilter === 'All' ? providers : providers.filter((p) => p.providerType === typeFilter);
 
   return (
     <>
@@ -75,16 +107,22 @@ function EligibleContent({ providers, navigation }) {
         schooling support tracked by a Rehabilitation Officer.
       </Text>
 
+      <ProviderTypeToggle value={typeFilter} onChange={setTypeFilter} />
+
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      {providers.map((p) => (
-        <ProviderCard
-          key={p.providerId}
-          provider={p}
-          onChoose={handleChoose}
-          choosing={optIn.isPending && chosenProviderId === p.providerId}
-        />
-      ))}
+      {visibleProviders.length === 0 ? (
+        <EmptyState icon="filter" title="No centres of this type" message="Kindly try a different filter." />
+      ) : (
+        visibleProviders.map((p) => (
+          <ProviderCard
+            key={p.providerId}
+            provider={p}
+            onChoose={handleChoose}
+            choosing={optIn.isPending && chosenProviderId === p.providerId}
+          />
+        ))
+      )}
     </>
   );
 }
@@ -138,7 +176,18 @@ export default function RehabilitationOptInScreen({ navigation }) {
                 );
               }
 
-              return <EligibleContent providers={data.providers || []} navigation={navigation} />;
+              return (
+                <EligibleContent
+                  providers={data.providers || []}
+                  onOptedIn={() => {
+                    if (navigation?.canGoBack?.()) {
+                      navigation.goBack();
+                    } else {
+                      navigation?.navigate('RehabilitationProgress');
+                    }
+                  }}
+                />
+              );
             }}
           </QueryBoundary>
         </View>
@@ -170,6 +219,20 @@ const styles = StyleSheet.create({
   body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 720, alignSelf: 'center' },
 
   introText: { ...typography.bodySmall, color: colors.textSecondary, marginBottom: spacing.lg, lineHeight: 20 },
+
+  toggleRow: {
+    flexDirection: 'row',
+    backgroundColor: colors.background,
+    borderRadius: radius.pill,
+    padding: 4,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  toggleSegment: { flex: 1, paddingVertical: spacing.xs, borderRadius: radius.pill, alignItems: 'center' },
+  toggleSegmentActive: { backgroundColor: colors.primary },
+  toggleSegmentText: { ...typography.caption, fontWeight: '700', color: colors.textSecondary },
+  toggleSegmentTextActive: { color: colors.onPrimary },
 
   providerTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   providerName: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 15, flex: 1, marginRight: spacing.sm },

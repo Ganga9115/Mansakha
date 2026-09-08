@@ -118,6 +118,17 @@ export function useOptInRehabilitation() {
   });
 }
 
+// The mandatory decision gate's "No" answer - deactivates the account
+// outright (see RehabilitationDecisionGate.js). No cache invalidation
+// needed on success - the caller logs out immediately afterward, which
+// clears the whole session/query cache anyway.
+export function useDeclineRehabilitation() {
+  const token = useToken();
+  return useMutation({
+    mutationFn: () => apiClient.post('/api/user/rehabilitation-decline', {}, token),
+  });
+}
+
 // --- Victim-Initiated Intervention Requests (User -> District Admin; see
 // migration_027_intervention_requests.sql) - replaces the old Counsellor-
 // recommended intervention feature entirely. Counselling is deliberately

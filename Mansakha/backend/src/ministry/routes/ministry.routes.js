@@ -179,7 +179,7 @@ router.get('/users', async (req, res) => {
 // shape consistent") with what Section 3/8 requires for Ministry to function at
 // all: nothing else can onboard staff without this.
 router.post('/staff', async (req, res) => {
-  const { fullName, email, roleName, jurisdictionId, password, staffId, phone, whatsappNumber } = req.body;
+  const { fullName, email, roleName, jurisdictionId, providerId, password, staffId, phone, whatsappNumber } = req.body;
   if (!fullName || !email || !roleName || !password) return fail(res, 'fullName, email, roleName, and password are required', 400);
 
   // Server-side allowlist, not trusting client input: this endpoint can ONLY create
@@ -198,6 +198,12 @@ router.post('/staff', async (req, res) => {
   // login is email + password only (core/routes/auth.staff.routes.js).
   if (roleName === 'Counsellor' && !phone) {
     return fail(res, 'phone is required for Counsellor accounts (used for the Call/WhatsApp contact feature)', 400);
+  }
+  // migration_031 - a Rehabilitation Officer account is scoped to exactly
+  // one centre (mirrors Administration's jurisdictionId requirement above),
+  // otherwise its queue is empty by design (see rehabilitationOfficer.routes.js).
+  if (roleName === 'Rehabilitation Officer' && !providerId) {
+    return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
   }
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
@@ -230,8 +236,14 @@ router.post('/staff', async (req, res) => {
       );
       const id = rows[0].official_id;
       await client.query(
-        `insert into official_roles (official_id, role_id, jurisdiction_id, assigned_by) values ($1, $2, $3, $4)`,
-        [id, roleRow.role_id, roleName === 'Administration' ? jurisdictionId : jurisdictionId || null, req.auth.officialId]
+        `insert into official_roles (official_id, role_id, jurisdiction_id, provider_id, assigned_by) values ($1, $2, $3, $4, $5)`,
+        [
+          id,
+          roleRow.role_id,
+          roleName === 'Administration' ? jurisdictionId : jurisdictionId || null,
+          roleName === 'Rehabilitation Officer' ? providerId : providerId || null,
+          req.auth.officialId,
+        ]
       );
       return id;
     });
@@ -356,10 +368,11 @@ router.delete('/staff/:officialId', async (req, res) => {
 // same allowlist/validation as account creation.
 router.post('/staff/:officialId/roles', async (req, res) => {
   const { officialId } = req.params;
-  const { roleName, jurisdictionId } = req.body;
+  const { roleName, jurisdictionId, providerId } = req.body;
   if (!roleName) return fail(res, 'roleName is required', 400);
   if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
   if (roleName === 'Administration' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Administration accounts', 400);
+  if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
   if (limitError) return fail(res, limitError, 409);
@@ -375,7 +388,13 @@ router.post('/staff/:officialId/roles', async (req, res) => {
 
   const { data, error } = await supabase
     .from('official_roles')
-    .insert({ official_id: officialId, role_id: roleRow.role_id, jurisdiction_id: jurisdictionId || null, assigned_by: req.auth.officialId })
+    .insert({
+      official_id: officialId,
+      role_id: roleRow.role_id,
+      jurisdiction_id: jurisdictionId || null,
+      provider_id: providerId || null,
+      assigned_by: req.auth.officialId,
+    })
     .select('official_role_id')
     .single();
   if (error) return fail(res, `Could not assign role: ${error.message}`, 500);

@@ -93,13 +93,20 @@ export function useResolveReferral() {
 export function useHandOffRehabilitation() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (referralId) => {
+  const mutate = async (referralId, providerId) => {
     setLoading(true);
     try {
-      return await apiClient.post(`/api/dwo/referrals/${referralId}/hand-off-rehabilitation`, {}, token);
+      return await apiClient.post(`/api/dwo/referrals/${referralId}/hand-off-rehabilitation`, { providerId }, token);
     } finally {
       setLoading(false);
     }
   };
   return { mutate, loading };
+}
+
+// Public reference data (no auth needed, but token is harmless to send) -
+// populates the provider picker on the hand-off form.
+export function useRehabilitationProviders() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/lookups/rehabilitation-providers', token), [token]);
 }
