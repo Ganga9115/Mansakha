@@ -88,6 +88,8 @@ import DataOperatorMailThread from './dataoperator/pages/MailThread';
 // group of 7 signs in through.
 import DwoReferralQueue from './dwo/pages/ReferralQueue';
 import DwoReferralDetail from './dwo/pages/ReferralDetail';
+import DwoReferralRelief from './dwo/pages/ReferralRelief';
+import DwoReferralCompensation from './dwo/pages/ReferralCompensation';
 import DwoReferralLog from './dwo/pages/ReferralLog';
 import DwoReferralTasks from './dwo/pages/ReferralTasks';
 import DwoMyTasks from './dwo/pages/MyTasks';
@@ -221,6 +223,8 @@ export default function App() {
 
         <Route path="/dwo" element={<RequireAuth loginPath="/signin"><DwoReferralQueue /></RequireAuth>} />
         <Route path="/dwo/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DwoReferralDetail /></RequireAuth>} />
+        <Route path="/dwo/referrals/:referralId/relief" element={<RequireAuth loginPath="/signin"><DwoReferralRelief /></RequireAuth>} />
+        <Route path="/dwo/referrals/:referralId/compensation" element={<RequireAuth loginPath="/signin"><DwoReferralCompensation /></RequireAuth>} />
         <Route path="/dwo/referrals/:referralId/log" element={<RequireAuth loginPath="/signin"><DwoReferralLog /></RequireAuth>} />
         <Route path="/dwo/referrals/:referralId/tasks" element={<RequireAuth loginPath="/signin"><DwoReferralTasks /></RequireAuth>} />
         <Route path="/dwo/tasks" element={<RequireAuth loginPath="/signin"><DwoMyTasks /></RequireAuth>} />
