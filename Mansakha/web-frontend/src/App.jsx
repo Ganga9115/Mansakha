@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import RequireAuth from './shared/components/RequireAuth';
 import { ToastProvider } from './shared/context/ToastContext';
 import StaffLoginPage from './shared/pages/Login';
+import SignInPage from './shared/pages/SignIn';
 
 import CounsellorDashboard from './counsellor/pages/CounsellorDashboard';
 import MyUsers from './counsellor/pages/MyUsers';
@@ -25,6 +26,7 @@ import DistrictAdminAlerts from './district_admin/pages/AdminAlerts';
 import UserRegistration from './district_admin/pages/UserRegistration';
 import DistrictReports from './district_admin/pages/Reports';
 import DistrictInterventionRequests from './district_admin/pages/InterventionRequests';
+import DistrictAgencyCoordination from './district_admin/pages/AgencyCoordination';
 import DistrictSettings from './district_admin/pages/Settings';
 import DistrictMailInbox from './district_admin/pages/MailInbox';
 import DistrictMailSent from './district_admin/pages/MailSent';
@@ -81,6 +83,38 @@ import DataOperatorMailSent from './dataoperator/pages/MailSent';
 import DataOperatorMailArchived from './dataoperator/pages/MailArchived';
 import DataOperatorMailThread from './dataoperator/pages/MailThread';
 
+// New coordination roles (Sign In portal) - see shared/pages/SignIn.jsx and
+// backend/src/core/routes/auth.signin.routes.js for the shared login this
+// group of 7 signs in through.
+import DwoReferralQueue from './dwo/pages/ReferralQueue';
+import DwoReferralDetail from './dwo/pages/ReferralDetail';
+import DwoMyTasks from './dwo/pages/MyTasks';
+import DwoProfile from './dwo/pages/Profile';
+import IoCaseStatusFeed from './io/pages/CaseStatusFeed';
+import IoReferralDetail from './io/pages/ReferralDetail';
+import IoMyTasks from './io/pages/MyTasks';
+import IoProfile from './io/pages/Profile';
+import ProtectionOfficerRegistry from './protection_officer/pages/ProtectionRegistry';
+import ProtectionOfficerReferralDetail from './protection_officer/pages/ReferralDetail';
+import ProtectionOfficerMyTasks from './protection_officer/pages/MyTasks';
+import ProtectionOfficerProfile from './protection_officer/pages/Profile';
+import DlsaLegalAidQueue from './dlsa/pages/LegalAidQueue';
+import DlsaReferralDetail from './dlsa/pages/ReferralDetail';
+import DlsaMyTasks from './dlsa/pages/MyTasks';
+import DlsaProfile from './dlsa/pages/Profile';
+import SppTrialDocket from './spp/pages/TrialDocket';
+import SppReferralDetail from './spp/pages/ReferralDetail';
+import SppMyTasks from './spp/pages/MyTasks';
+import SppProfile from './spp/pages/Profile';
+import DistrictCollectorCommitteeReview from './district_collector/pages/CommitteeReview';
+import DistrictCollectorReviewDetail from './district_collector/pages/ReviewDetail';
+import DistrictCollectorMyTasks from './district_collector/pages/MyTasks';
+import DistrictCollectorProfile from './district_collector/pages/Profile';
+import RehabilitationOfficerPlans from './rehabilitation_officer/pages/RehabilitationPlans';
+import RehabilitationOfficerReferralDetail from './rehabilitation_officer/pages/ReferralDetail';
+import RehabilitationOfficerMyTasks from './rehabilitation_officer/pages/MyTasks';
+import RehabilitationOfficerProfile from './rehabilitation_officer/pages/Profile';
+
 export default function App() {
   return (
     <Router>
@@ -116,6 +150,7 @@ export default function App() {
         <Route path="/districtadmin/case-detail/:id" element={<RequireAuth><DistrictCaseDetail /></RequireAuth>} />
         <Route path="/districtadmin/alerts" element={<RequireAuth><DistrictAdminAlerts /></RequireAuth>} />
         <Route path="/districtadmin/intervention-requests" element={<RequireAuth><DistrictInterventionRequests /></RequireAuth>} />
+        <Route path="/districtadmin/agency-coordination" element={<RequireAuth><DistrictAgencyCoordination /></RequireAuth>} />
         <Route path="/districtadmin/registration" element={<RequireAuth><UserRegistration /></RequireAuth>} />
         <Route path="/districtadmin/reports" element={<RequireAuth><DistrictReports /></RequireAuth>} />
         <Route path="/districtadmin/mail" element={<RequireAuth><DistrictMailInbox /></RequireAuth>} />
@@ -183,6 +218,41 @@ export default function App() {
         <Route path="/dataoperator/mail/archived" element={<RequireAuth><DataOperatorMailArchived /></RequireAuth>} />
         <Route path="/dataoperator/mail/thread/:threadId" element={<RequireAuth><DataOperatorMailThread /></RequireAuth>} />
         <Route path="/dataoperator/profile" element={<RequireAuth><DataOperatorSettings /></RequireAuth>} />
+
+        {/* Signin - the second shared pre-role login (see SignIn.jsx's own
+            header comment), for the 7 new coordination roles. Each portal
+            below wraps in RequireAuth loginPath="/signin" - same pattern as
+            Ministry's own loginPath="/ministry/login". */}
+        <Route path="/signin" element={<SignInPage />} />
+
+        <Route path="/dwo" element={<RequireAuth loginPath="/signin"><DwoReferralQueue /></RequireAuth>} />
+        <Route path="/dwo/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DwoReferralDetail /></RequireAuth>} />
+        <Route path="/dwo/tasks" element={<RequireAuth loginPath="/signin"><DwoMyTasks /></RequireAuth>} />
+        <Route path="/dwo/profile" element={<RequireAuth loginPath="/signin"><DwoProfile /></RequireAuth>} />
+        <Route path="/io" element={<RequireAuth loginPath="/signin"><IoCaseStatusFeed /></RequireAuth>} />
+        <Route path="/io/referrals/:referralId" element={<RequireAuth loginPath="/signin"><IoReferralDetail /></RequireAuth>} />
+        <Route path="/io/tasks" element={<RequireAuth loginPath="/signin"><IoMyTasks /></RequireAuth>} />
+        <Route path="/io/profile" element={<RequireAuth loginPath="/signin"><IoProfile /></RequireAuth>} />
+        <Route path="/protectionofficer" element={<RequireAuth loginPath="/signin"><ProtectionOfficerRegistry /></RequireAuth>} />
+        <Route path="/protectionofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><ProtectionOfficerReferralDetail /></RequireAuth>} />
+        <Route path="/protectionofficer/tasks" element={<RequireAuth loginPath="/signin"><ProtectionOfficerMyTasks /></RequireAuth>} />
+        <Route path="/protectionofficer/profile" element={<RequireAuth loginPath="/signin"><ProtectionOfficerProfile /></RequireAuth>} />
+        <Route path="/dlsa" element={<RequireAuth loginPath="/signin"><DlsaLegalAidQueue /></RequireAuth>} />
+        <Route path="/dlsa/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DlsaReferralDetail /></RequireAuth>} />
+        <Route path="/dlsa/tasks" element={<RequireAuth loginPath="/signin"><DlsaMyTasks /></RequireAuth>} />
+        <Route path="/dlsa/profile" element={<RequireAuth loginPath="/signin"><DlsaProfile /></RequireAuth>} />
+        <Route path="/spp" element={<RequireAuth loginPath="/signin"><SppTrialDocket /></RequireAuth>} />
+        <Route path="/spp/referrals/:referralId" element={<RequireAuth loginPath="/signin"><SppReferralDetail /></RequireAuth>} />
+        <Route path="/spp/tasks" element={<RequireAuth loginPath="/signin"><SppMyTasks /></RequireAuth>} />
+        <Route path="/spp/profile" element={<RequireAuth loginPath="/signin"><SppProfile /></RequireAuth>} />
+        <Route path="/districtcollector" element={<RequireAuth loginPath="/signin"><DistrictCollectorCommitteeReview /></RequireAuth>} />
+        <Route path="/districtcollector/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DistrictCollectorReviewDetail /></RequireAuth>} />
+        <Route path="/districtcollector/tasks" element={<RequireAuth loginPath="/signin"><DistrictCollectorMyTasks /></RequireAuth>} />
+        <Route path="/districtcollector/profile" element={<RequireAuth loginPath="/signin"><DistrictCollectorProfile /></RequireAuth>} />
+        <Route path="/rehabilitationofficer" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerPlans /></RequireAuth>} />
+        <Route path="/rehabilitationofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerReferralDetail /></RequireAuth>} />
+        <Route path="/rehabilitationofficer/tasks" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerMyTasks /></RequireAuth>} />
+        <Route path="/rehabilitationofficer/profile" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerProfile /></RequireAuth>} />
       </Routes>
       </ToastProvider>
     </Router>

@@ -14,7 +14,7 @@ import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor } from '../../shared/services/hooks';
+import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor, useRehabilitationProgress, useRehabilitationEligibility } from '../../shared/services/hooks';
 
 export default function HomeScreen({ navigation }) {
   const query = useUserDashboard();
@@ -22,6 +22,10 @@ export default function HomeScreen({ navigation }) {
   const upcomingSessions = sessionsQuery.data?.sessions || [];
   const assignedCounsellorQuery = useAssignedCounsellor();
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
+  const rehabilitationQuery = useRehabilitationProgress();
+  const inRehabilitation = !!rehabilitationQuery.data?.inRehabilitation;
+  const rehabilitationEligibilityQuery = useRehabilitationEligibility();
+  const rehabilitationEligible = !!rehabilitationEligibilityQuery.data?.eligible;
   const { tier, isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
   const today = new Date();
@@ -223,6 +227,46 @@ export default function HomeScreen({ navigation }) {
                       </View>
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>
+
+                    {/* Rehabilitation Progress - only shown once the victim
+                        has an open post-case-closure rehabilitation phase
+                        (livelihood/housing/schooling support tracked by a
+                        Rehabilitation Officer). See
+                        RehabilitationProgressScreen.js. */}
+                    {inRehabilitation && (
+                      <Pressable
+                        style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                        onPress={() => navigation?.navigate('RehabilitationProgress')}
+                      >
+                        <View style={styles.gridIconSquare}>
+                          <Feather name="sunrise" size={18} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.gridTitle}>Rehabilitation Progress</Text>
+                          <Text style={styles.gridSub}>Livelihood, housing & more</Text>
+                        </View>
+                        <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                      </Pressable>
+                    )}
+
+                    {/* Start Rehabilitation Support - shown once the case is
+                        closed and the victim hasn't yet opted in to a
+                        provider. See RehabilitationOptInScreen.js. */}
+                    {rehabilitationEligible && (
+                      <Pressable
+                        style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                        onPress={() => navigation?.navigate('RehabilitationOptIn')}
+                      >
+                        <View style={styles.gridIconSquare}>
+                          <Feather name="compass" size={18} color={colors.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.gridTitle}>Start Rehabilitation Support</Text>
+                          <Text style={styles.gridSub}>See available support options</Text>
+                        </View>
+                        <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                      </Pressable>
+                    )}
                   </View>
 
                   {/* Two Column Layout for Upcoming Sessions and Recent Activity */}

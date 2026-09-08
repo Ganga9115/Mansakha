@@ -102,6 +102,10 @@ alter table report_recipients enable row level security;
 -- their own jurisdiction's) lives in the route handlers.
 alter table intervention_requests enable row level security;
 alter table intervention_request_documents enable row level security;
+alter table agency_referrals enable row level security;
+alter table agency_referral_notes enable row level security;
+alter table rehabilitation_providers enable row level security;
+alter table agency_tasks enable row level security;
 
 -- NOT public, matching voice-messages/mail-attachments - proof documents
 -- (caste certificates, medical records, FIR copies) are as sensitive as

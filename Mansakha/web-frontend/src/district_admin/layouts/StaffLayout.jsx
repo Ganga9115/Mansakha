@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bell, BarChart3, FileText, UserPlus, User, LogOut, Menu, X, Mail, HeartHandshake } from 'lucide-react';
+import { LayoutDashboard, Bell, BarChart3, FileText, UserPlus, User, LogOut, Menu, X, Mail, HeartHandshake, Network } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -23,6 +23,7 @@ const NAV_ITEMS = [
   { name: 'Register User', icon: UserPlus, path: '/districtadmin/registration' },
   { name: 'Alerts', icon: Bell, path: '/districtadmin/alerts' },
   { name: 'Intervention Requests', icon: HeartHandshake, path: '/districtadmin/intervention-requests' },
+  { name: 'Agency Coordination', icon: Network, path: '/districtadmin/agency-coordination' },
   { name: 'Reports', icon: FileText, path: '/districtadmin/reports' },
   { name: 'Mail', icon: Mail, path: '/districtadmin/mail' },
   { name: 'Profile', icon: User, path: '/districtadmin/profile' },

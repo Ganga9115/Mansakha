@@ -18,9 +18,13 @@ create table roles (
   -- variant) - its permission set (create user credentials, simulated
   -- case fetch) doesn't overlap with District/State/National Administration
   -- at all, so modeling it as its own role keeps RBAC checks unambiguous.
-  role_name   text not null unique check (role_name in ('Ministry', 'Administration', 'Counsellor', 'Data Operator'))
+  role_name   text not null unique check (role_name in ('Ministry', 'Administration', 'Counsellor', 'Data Operator',
+    'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
+    'DLSA Coordinator', 'Special Public Prosecutor', 'District Collector', 'Rehabilitation Officer'))
 );
-insert into roles (role_name) values ('Ministry'), ('Administration'), ('Counsellor'), ('Data Operator');
+insert into roles (role_name) values ('Ministry'), ('Administration'), ('Counsellor'), ('Data Operator'),
+  ('District Welfare Officer'), ('Investigating Officer'), ('Protection Officer'),
+  ('DLSA Coordinator'), ('Special Public Prosecutor'), ('District Collector'), ('Rehabilitation Officer');
 
 create table case_types (
   case_type_id  uuid primary key default gen_random_uuid(),
@@ -399,6 +403,76 @@ create table intervention_request_documents (
   uploaded_at    timestamptz not null default now()
 );
 
+-- Six new coordination roles (District Welfare Officer, Investigating
+-- Officer, Protection Officer, DLSA Coordinator, Special Public Prosecutor,
+-- District Collector) work this referral layer, independent of
+-- intervention_requests/interventions/alerts/distress_scores - District Admin
+-- remains the sole Accept/Reject authority on every Intervention Request,
+-- unchanged; a referral is something District Admin optionally creates AFTER
+-- already deciding a case, purely for cross-agency awareness/follow-up.
+create table agency_referrals (
+  referral_id              uuid primary key default gen_random_uuid(),
+  user_id                  uuid not null references users(user_id),
+  referred_to_role         text not null check (referred_to_role in ('District Welfare Officer',
+    'Investigating Officer', 'Protection Officer', 'DLSA Coordinator', 'Special Public Prosecutor', 'District Collector', 'Rehabilitation Officer')),
+  -- Usually an official's action, but a Rehabilitation Officer referral can
+  -- also be the victim's own opt-in (migration_029) - exactly one of these
+  -- two is set depending on who created it.
+  referred_by_official_id  uuid references officials(official_id),
+  referred_by_user_id      uuid references users(user_id),
+  reason                   text,
+  status                   text not null default 'Open' check (status in ('Open', 'Resolved')),
+  metadata                 jsonb not null default '{}'::jsonb, -- role-specific structured fields (assigned lawyer, SLA deadline, trial outcome, rehabilitation providerId/providerName) - same data-driven pattern as intervention_types.required_documents
+  created_at               timestamptz not null default now(),
+  resolved_at              timestamptz
+);
+
+-- Real rehabilitation providers a victim can opt into once their case
+-- reaches 'Case Closed' - Government or NGO, Ministry-manageable
+-- (migration_029_rehabilitation_opt_in.sql).
+create table rehabilitation_providers (
+  provider_id     uuid primary key default gen_random_uuid(),
+  name            text not null,
+  provider_type   text not null check (provider_type in ('Government', 'NGO')),
+  jurisdiction_id uuid references jurisdictions(jurisdiction_id),
+  contact_info    text,
+  deleted_at      timestamptz
+);
+insert into rehabilitation_providers (name, provider_type, contact_info) values
+  ('District Social Welfare Department - Rehabilitation Cell', 'Government', 'Contact your District Welfare Officer for local details.'),
+  ('State SC/ST Welfare Department', 'Government', 'Contact your District Welfare Officer for local details.'),
+  ('NGO Partner (pending Ministry onboarding)', 'NGO', 'No NGO partners are configured yet - Ministry can add real, vetted partners via System Configuration.');
+
+-- Structured, trackable directives/tasks across all 7 coordination roles -
+-- a real action item (specific role, specific action, due date,
+-- Pending/Completed status) rather than a free-text note. Any of the 7
+-- roles or District Admin can create one targeting any role for a case.
+create table agency_tasks (
+  task_id                 uuid primary key default gen_random_uuid(),
+  user_id                 uuid not null references users(user_id),
+  source_referral_id      uuid references agency_referrals(referral_id),
+  assigned_to_role        text not null check (assigned_to_role in ('District Welfare Officer',
+    'Investigating Officer', 'Protection Officer', 'DLSA Coordinator', 'Special Public Prosecutor', 'District Collector', 'Rehabilitation Officer')),
+  created_by_official_id  uuid references officials(official_id),
+  action                  text not null,
+  due_at                  timestamptz,
+  status                  text not null default 'Pending' check (status in ('Pending', 'Completed')),
+  completed_at            timestamptz,
+  auto_generated          boolean not null default false,
+  created_at              timestamptz not null default now()
+);
+
+-- Generic timestamped log - covers IO's status updates, Protection Officer's
+-- weekly verification, DWO/DLSA/SPP's working notes, and DM's directives with
+-- one shape, same "parent row + notes" pattern as case_notes below.
+create table agency_referral_notes (
+  note_id             uuid primary key default gen_random_uuid(),
+  referral_id         uuid not null references agency_referrals(referral_id),
+  author_official_id  uuid not null references officials(official_id),
+  note_text           text not null,
+  created_at          timestamptz not null default now()
+);
+
 -- Free-text case notes a Counsellor leaves on a case - separate from
 -- interventions (a structured, typed action) and from audit_log (a record of
 -- reads/writes, not commentary).
@@ -660,6 +734,19 @@ create unique index idx_report_recipients_one_ministry on report_recipients(repo
 create index idx_intervention_requests_user on intervention_requests(user_id, requested_at desc);
 create index idx_intervention_requests_status on intervention_requests(status);
 create index idx_intervention_request_documents_request on intervention_request_documents(request_id);
+
+-- migration_028_agency_referrals.sql
+create index idx_agency_referrals_role_status on agency_referrals(referred_to_role, status);
+create index idx_agency_referrals_user on agency_referrals(user_id, created_at desc);
+create index idx_agency_referral_notes_referral on agency_referral_notes(referral_id, created_at);
+
+-- migration_029_rehabilitation_opt_in.sql
+create index idx_rehabilitation_providers_jurisdiction on rehabilitation_providers(jurisdiction_id) where deleted_at is null;
+
+-- migration_030_agency_tasks.sql
+create index idx_agency_tasks_role_status on agency_tasks(assigned_to_role, status);
+create index idx_agency_tasks_user on agency_tasks(user_id, created_at desc);
+create index idx_agency_tasks_source_referral_auto on agency_tasks(source_referral_id) where auto_generated = true;
 -- migration_011_ollama_and_policies.sql
 -- Description: Adds tables for the Ollama 15-question dynamic Check-In flow and Ministry Policy deployment.
 
