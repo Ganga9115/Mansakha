@@ -15,9 +15,12 @@ const router = express.Router();
 
 router.use(verifyToken, requireRole(['Ministry']), generalApiLimiter);
 
+// Investigating Officer and Special Public Prosecutor removed - retired as
+// separate logins under the consolidated Legal Aid/Threat flow (see
+// server.js's own comment on the same change).
 const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator',
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-  'DLSA Coordinator', 'Special Public Prosecutor', 'District Collector', 'Rehabilitation Officer'];
+  'District Welfare Officer', 'Protection Officer',
+  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
 // Section 6.2's new validation - an Administration account at district or

@@ -42,8 +42,8 @@ function ThreatAssessmentCard({ r }) {
 // Roles a task may be assigned to - independent of this portal's own role,
 // so a directive can be raised for any concerned office, not only this one.
 const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-  'DLSA Coordinator', 'Special Public Prosecutor', 'District Collector', 'Rehabilitation Officer',
+  'District Welfare Officer', 'Protection Officer',
+'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
 ];
 
 // Assign a structured, trackable action item to any concerned office for
