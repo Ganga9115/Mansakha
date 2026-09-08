@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import ReferralHeader from '../components/ReferralHeader';
-import ReferralSubNav from '../components/ReferralSubNav';
+import CaseHeader from '../components/CaseHeader';
+import CaseSubNav from '../components/CaseSubNav';
 import { Send, ClipboardList, Bot, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { useReferralDetail, useResolveReferral } from '../services/hooks';
-import { useReferralTasks, useCreateTask } from '../services/taskHooks';
+import { useCaseDetail, useCaseTasks, useMarkInvestigationComplete } from '../services/hooks';
+import { useCreateTask } from '../services/taskHooks';
 
 // Roles a task may be assigned to - independent of this portal's own role,
 // so a directive can be raised for any concerned office, not only this one.
 const TASK_ASSIGNABLE_ROLES = [
   'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
+  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
 ];
 
 function formatDate(iso) {
@@ -19,12 +19,8 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// Every task raised on this case so far - across ANY role, not just this
-// one - so a case's full directive picture is visible in one place, same
-// case-level visibility principle District Collector's cross-agency view
-// already establishes as normal practice here.
-function CaseTasksList({ referralId }) {
-  const query = useReferralTasks(referralId);
+function CaseTasksList({ userId }) {
+  const query = useCaseTasks(userId);
   const tasks = query.data?.tasks || [];
 
   if (query.loading) return <p className="text-xs text-gray-400">Loading...</p>;
@@ -60,7 +56,7 @@ function CaseTasksList({ referralId }) {
   );
 }
 
-function AssignTaskCard({ userId, referralId, onCreated }) {
+function AssignTaskCard({ userId, onCreated }) {
   const [assignedToRole, setAssignedToRole] = useState(TASK_ASSIGNABLE_ROLES[0]);
   const [action, setAction] = useState('');
   const [dueAt, setDueAt] = useState('');
@@ -73,7 +69,7 @@ function AssignTaskCard({ userId, referralId, onCreated }) {
     setError(null);
     setSuccess(false);
     try {
-      await createTask.mutate(userId, assignedToRole, action.trim(), dueAt ? new Date(dueAt).toISOString() : null, referralId);
+      await createTask.mutate(userId, assignedToRole, action.trim(), dueAt ? new Date(dueAt).toISOString() : null, null);
       setAction('');
       setDueAt('');
       setSuccess(true);
@@ -127,44 +123,43 @@ function AssignTaskCard({ userId, referralId, onCreated }) {
   );
 }
 
-export default function ReferralTasks() {
-  const { referralId } = useParams();
-  const navigate = useNavigate();
+export default function CaseTasks() {
+  const { userId } = useParams();
   const [actionError, setActionError] = useState(null);
-  const detailQuery = useReferralDetail(referralId);
-  const resolve = useResolveReferral();
-  const tasksQuery = useReferralTasks(referralId);
+  const detailQuery = useCaseDetail(userId);
+  const tasksQuery = useCaseTasks(userId);
+  const markComplete = useMarkInvestigationComplete();
 
-  const r = detailQuery.data;
+  const c = detailQuery.data;
 
   if (detailQuery.loading) {
     return <StaffLayout title="Case Tasks"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
   }
-  if (detailQuery.error || !r) {
+  if (detailQuery.error || !c) {
     return (
       <StaffLayout title="Case Tasks">
         <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
+          {detailQuery.error || 'This case could not be located.'}
         </div>
       </StaffLayout>
     );
   }
 
-  const handleResolve = async () => {
+  const handleMarkComplete = async () => {
     setActionError(null);
     try {
-      await resolve.mutate(referralId);
-      navigate('/dwo');
+      await markComplete.mutate(userId);
+      detailQuery.refetch();
     } catch (err) {
-      setActionError(err.message || 'Could not resolve this referral. Kindly try again.');
+      setActionError(err.message || 'Could not mark investigation complete. Kindly try again.');
     }
   };
 
   return (
     <StaffLayout title="Case Tasks">
       <div className="space-y-4">
-        <ReferralHeader r={r} backTo="/dwo" backLabel="Back to Referral Queue" onResolve={handleResolve} resolveLoading={resolve.loading} />
-        <ReferralSubNav base={`/dwo/referrals/${referralId}`} />
+        <CaseHeader c={c} backTo="/io" backLabel="Back to Case Queue" onMarkComplete={handleMarkComplete} markCompleteLoading={markComplete.loading} />
+        <CaseSubNav base={`/io/cases/${userId}`} />
 
         {actionError && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-4 py-3 rounded-lg">{actionError}</div>}
 
@@ -176,12 +171,12 @@ export default function ReferralTasks() {
                 <h3 className="font-bold text-sm text-gray-800">Action Items on This Case</h3>
               </div>
               <p className="text-[11px] text-gray-400 mb-4">Every directive raised on this case, whichever office it was assigned to.</p>
-              <CaseTasksList referralId={referralId} />
+              <CaseTasksList userId={userId} />
             </div>
           </div>
 
           <div className="space-y-6">
-            {r.status === 'Open' && <AssignTaskCard userId={r.userId} referralId={referralId} onCreated={tasksQuery.refetch} />}
+            <AssignTaskCard userId={userId} onCreated={tasksQuery.refetch} />
           </div>
         </div>
       </div>

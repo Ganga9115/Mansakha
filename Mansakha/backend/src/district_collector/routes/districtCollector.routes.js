@@ -173,7 +173,7 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
 // e.g. District Collector directing Protection Officer to act, or DWO
 // flagging something for Rehabilitation Officer.
 const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Protection Officer',
+  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
 'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
 ];
 

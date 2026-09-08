@@ -41,6 +41,17 @@ export function useJurisdictionOptions(level, parentId) {
   }, [token, level, parentId]);
 }
 
+// migration_033 - which police station registered the FIR, narrowed to the
+// district already selected in the form (a station belongs to exactly one
+// district). Returns an empty list until a district is chosen.
+export function usePoliceStationOptions(jurisdictionId) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve({ stations: [] });
+    return apiClient.get(`/api/lookups/police-stations?jurisdictionId=${jurisdictionId}`, token);
+  }, [token, jurisdictionId]);
+}
+
 export function useMe() {
   const token = getToken();
   return useQuery(() => apiClient.get('/api/me', token), [token]);

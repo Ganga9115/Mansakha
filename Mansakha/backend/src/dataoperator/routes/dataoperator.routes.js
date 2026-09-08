@@ -17,10 +17,10 @@ router.use(verifyToken, requireRole(['Data Operator']), generalApiLimiter);
 // intake role that can register a user into any district, not a
 // district-operational one - so no requireJurisdiction here.
 router.post('/register-user', async (req, res) => {
-  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber } = req.body;
+  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber, stationId } = req.body;
   try {
     const { userId, temporaryPassword } = await createUser({
-      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber,
+      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber, stationId,
       provisionedVia: 'data_operator',
     });
     await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });

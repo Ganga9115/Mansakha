@@ -6,18 +6,18 @@ const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
-const { ACCUSED_STATUSES, computeThreatTier, getSosEventCounts, getSosEventCount } = require('../../core/services/threatAssessment');
+const { computeThreatTier, getSosEventCounts, getSosEventCount } = require('../../core/services/threatAssessment');
 const { mountInterventionReviewRoutes } = require('../../core/services/interventionRequestReview');
 
 const router = express.Router();
 
 // Protection Officer - the consolidated Threat flow. Investigating Officer
-// is retired as a separate login (see the Legal Aid/Threat flow redesign) -
-// its one piece of real value, Accused Status -> Threat Tier, is absorbed
-// here rather than lost, since Protection Officer is now the sole handler
-// of everything threat-related end to end. Weekly safety-verification log
-// stays as notes - the frontend surfaces the most recent note's createdAt
-// as "last verified".
+// has since been REINSTATED (migration_033) as a real, separate role, and
+// Accused Status authority moves back to IO's own investigation_records -
+// this file now only READS accused_status (joined by user_id) to compute
+// Threat Tier, it no longer sets it. Weekly safety-verification log stays
+// as notes - the frontend surfaces the most recent note's createdAt as
+// "last verified".
 //
 // Jurisdiction-scoped (migration_031's provider_id pattern, but reusing the
 // jurisdiction_id column officials already have via official_roles, since
@@ -48,10 +48,11 @@ router.get('/referrals', async (req, res) => {
 
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
-            u.docket_number, ct.name as case_type_name
+            u.docket_number, ct.name as case_type_name, ir.accused_status
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
+     left join investigation_records ir on ir.user_id = ar.user_id
      where ar.referred_to_role = $1 and u.jurisdiction_id = $2 ${status ? 'and ar.status = $3' : ''}
      order by ar.created_at desc`,
     status ? [ROLE_NAME, jurisdictionId, status] : [ROLE_NAME, jurisdictionId]
@@ -63,7 +64,7 @@ router.get('/referrals', async (req, res) => {
   return ok(res, {
     jurisdictionAssigned: true,
     referrals: rows.map((r) => {
-      const accusedStatus = r.metadata?.accusedStatus || null;
+      const accusedStatus = r.accused_status || null;
       return {
         referralId: r.referral_id,
         userId: r.user_id, // needed so this case's referral rows can raise a structured task (agency_tasks) targeting any concerned office
@@ -90,10 +91,11 @@ async function loadOwnReferral(referralId, res, req) {
 
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
-            u.docket_number, ct.name as case_type_name
+            u.docket_number, ct.name as case_type_name, ir.accused_status
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
+     left join investigation_records ir on ir.user_id = ar.user_id
      where ar.referral_id = $1 and ar.referred_to_role = $2 and u.jurisdiction_id = $3`,
     [referralId, ROLE_NAME, jurisdictionId]
   );
@@ -117,7 +119,7 @@ router.get('/referrals/:referralId', async (req, res) => {
     [referral.referral_id]
   );
 
-  const accusedStatus = referral.metadata?.accusedStatus || null;
+  const accusedStatus = referral.accused_status || null;
   const sosEventCount7d = await getSosEventCount(referral.user_id, 7);
 
   return ok(res, {
@@ -133,32 +135,13 @@ router.get('/referrals/:referralId', async (req, res) => {
     location: referral.metadata?.location || null,
     lastVerifiedAt: notes.length ? notes[notes.length - 1].created_at : null,
     notes: notes.map((n) => ({ noteId: n.note_id, noteText: n.note_text, createdAt: n.created_at, authorName: n.author_name })),
+    // Read-only here - set by the Investigating Officer (migration_033),
+    // reinstated as the role with real statutory custody over these facts.
+    // Threat Tier is still computed fresh from this + real sos_events
+    // history on every read, same discipline as before.
     accusedStatus,
     threatTier: computeThreatTier({ accusedStatus, caseTypeName: referral.case_type_name, sosEventCount7d }),
   });
-});
-
-// Sets Accused Status directly (absorbed from the retired Investigating
-// Officer role) - Threat Tier is computed fresh from this + real
-// sos_events history on every read, same discipline as before.
-router.patch('/referrals/:referralId/accused-status', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res, req);
-  if (!referral) return;
-
-  const { accusedStatus } = req.body;
-  if (!ACCUSED_STATUSES.includes(accusedStatus)) {
-    return fail(res, `accusedStatus must be one of: ${ACCUSED_STATUSES.join(', ')}`, 400);
-  }
-
-  const { error } = await supabase
-    .from('agency_referrals')
-    .update({ metadata: { ...referral.metadata, accusedStatus } })
-    .eq('referral_id', referral.referral_id);
-  if (error) return fail(res, `Could not update accused status: ${error.message}`, 500);
-
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
-
-  return ok(res, { referralId: referral.referral_id, accusedStatus }, 'Accused status updated');
 });
 
 router.post('/referrals/:referralId/notes', async (req, res) => {
@@ -204,7 +187,7 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
 // e.g. District Collector directing Protection Officer to act, or DWO
 // flagging something for Rehabilitation Officer.
 const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Protection Officer',
+  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
 'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
 ];
 

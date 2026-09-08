@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Copy } from 'lucide-react';
-import { useCaseTypeOptions, useJurisdictionOptions } from '../services/hooks';
+import { useCaseTypeOptions, useJurisdictionOptions, usePoliceStationOptions } from '../services/hooks';
 
 const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
 
@@ -25,13 +25,16 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
   const [aadhaarNumber, setAadhaarNumber] = useState(initialValues?.suggestedAadhaarNumber || '');
   const [stateId, setStateId] = useState(initialValues?.suggestedStateId || '');
   const [districtId, setDistrictId] = useState(initialValues?.suggestedDistrictId || '');
+  const [stationId, setStationId] = useState('');
   const [error, setError] = useState(null);
   const [created, setCreated] = useState(null);
 
   const districtQuery = useJurisdictionOptions('district', stateId);
+  const stationQuery = usePoliceStationOptions(districtId);
   const caseTypeOptions = caseTypesQuery.data?.caseTypes || [];
   const stateOptions = stateQuery.data?.jurisdictions || [];
   const districtOptions = districtQuery.data?.jurisdictions || [];
+  const stationOptions = stationQuery.data?.stations || [];
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -49,6 +52,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
         password: password.trim() || undefined,
         jurisdictionId: districtId,
         caseTypeId,
+        ...(stationId ? { stationId } : {}),
         ...(caseStage ? { caseStage } : {}),
         ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
         ...(aadhaarNumber.trim() ? { aadhaarNumber: aadhaarNumber.trim() } : {}),
@@ -67,6 +71,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
       setAadhaarNumber('');
       setStateId('');
       setDistrictId('');
+      setStationId('');
     } catch (err) {
       setError(err.message || 'Could not create this user record.');
     }
@@ -160,7 +165,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
           <select
             value={districtId}
-            onChange={(e) => setDistrictId(e.target.value)}
+            onChange={(e) => { setDistrictId(e.target.value); setStationId(''); }}
             disabled={!stateId}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
           >
@@ -170,6 +175,22 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
             ))}
           </select>
         </div>
+      </div>
+
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Police Station (FIR registered at)</label>
+        <select
+          value={stationId}
+          onChange={(e) => setStationId(e.target.value)}
+          disabled={!districtId}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
+        >
+          <option value="">{districtId ? (stationOptions.length ? 'Select...' : 'No stations set up for this district yet') : 'Select a district first'}</option>
+          {stationOptions.map((s) => <option key={s.stationId} value={s.stationId}>{s.name}</option>)}
+        </select>
+        <p className="text-[10px] text-gray-400 mt-1">
+          Assigns this case to that station's Investigating Officer(s). Can be left unassigned for now and set later.
+        </p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

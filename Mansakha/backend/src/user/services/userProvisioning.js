@@ -81,7 +81,7 @@ class ProvisioningError extends Error {
 // 'Investigation') - per explicit request, stage is something the operator
 // sets later via the Users list's editable dropdown (PATCH .../users/:id
 // below), not a decision made at intake time.
-async function createUser({ docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, provisionedVia, address = null, caseBackground = null, password = null, aadhaarNumber = null }) {
+async function createUser({ docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, provisionedVia, address = null, caseBackground = null, password = null, aadhaarNumber = null, stationId = null }) {
   if (!docketNumber || !fullName || !contactNumber || !jurisdictionId || !caseTypeId) {
     throw new ProvisioningError('docketNumber, fullName, contactNumber, jurisdictionId, and caseTypeId are required', 400);
   }
@@ -112,11 +112,16 @@ async function createUser({ docketNumber, fullName, contactNumber, jurisdictionI
   let userId;
   try {
     userId = await withTransaction(async (client) => {
+      // stationId (migration_033) - which police station's Investigating
+      // Officer(s) this case is assigned to (the station where the FIR was
+      // filed). Optional/nullable so every existing caller of createUser
+      // stays valid unchanged; a case created without one simply has no IO
+      // assigned yet.
       const { rows } = await client.query(
-        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password)
-         values ($1, $2, $3, $4, $5, $6, $7, true)
+        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, station_id)
+         values ($1, $2, $3, $4, $5, $6, $7, true, $8)
          returning user_id`,
-        [docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash]
+        [docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash, stationId]
       );
       const id = rows[0].user_id;
       await client.query(

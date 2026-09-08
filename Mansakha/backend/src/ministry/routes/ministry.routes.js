@@ -15,11 +15,12 @@ const router = express.Router();
 
 router.use(verifyToken, requireRole(['Ministry']), generalApiLimiter);
 
-// Investigating Officer and Special Public Prosecutor removed - retired as
-// separate logins under the consolidated Legal Aid/Threat flow (see
-// server.js's own comment on the same change).
+// Special Public Prosecutor stays retired (absorbed into DLSA Coordinator).
+// Investigating Officer is REINSTATED (migration_033) with real substance -
+// station-scoped, its own investigation_records - after having briefly been
+// retired under the earlier Legal Aid/Threat consolidation.
 const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator',
-  'District Welfare Officer', 'Protection Officer',
+  'Investigating Officer', 'District Welfare Officer', 'Protection Officer',
   'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
@@ -182,7 +183,7 @@ router.get('/users', async (req, res) => {
 // shape consistent") with what Section 3/8 requires for Ministry to function at
 // all: nothing else can onboard staff without this.
 router.post('/staff', async (req, res) => {
-  const { fullName, email, roleName, jurisdictionId, providerId, password, staffId, phone, whatsappNumber } = req.body;
+  const { fullName, email, roleName, jurisdictionId, providerId, stationId, password, staffId, phone, whatsappNumber } = req.body;
   if (!fullName || !email || !roleName || !password) return fail(res, 'fullName, email, roleName, and password are required', 400);
 
   // Server-side allowlist, not trusting client input: this endpoint can ONLY create
@@ -207,6 +208,12 @@ router.post('/staff', async (req, res) => {
   // otherwise its queue is empty by design (see rehabilitationOfficer.routes.js).
   if (roleName === 'Rehabilitation Officer' && !providerId) {
     return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
+  }
+  // migration_033 - an Investigating Officer is scoped to exactly one police
+  // station (mirrors Rehabilitation Officer's providerId requirement above),
+  // otherwise their case queue is empty by design (see io.routes.js).
+  if (roleName === 'Investigating Officer' && !stationId) {
+    return fail(res, 'stationId is required for Investigating Officer accounts', 400);
   }
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
@@ -239,12 +246,13 @@ router.post('/staff', async (req, res) => {
       );
       const id = rows[0].official_id;
       await client.query(
-        `insert into official_roles (official_id, role_id, jurisdiction_id, provider_id, assigned_by) values ($1, $2, $3, $4, $5)`,
+        `insert into official_roles (official_id, role_id, jurisdiction_id, provider_id, station_id, assigned_by) values ($1, $2, $3, $4, $5, $6)`,
         [
           id,
           roleRow.role_id,
           roleName === 'Administration' ? jurisdictionId : jurisdictionId || null,
           roleName === 'Rehabilitation Officer' ? providerId : providerId || null,
+          roleName === 'Investigating Officer' ? stationId : stationId || null,
           req.auth.officialId,
         ]
       );
@@ -371,11 +379,12 @@ router.delete('/staff/:officialId', async (req, res) => {
 // same allowlist/validation as account creation.
 router.post('/staff/:officialId/roles', async (req, res) => {
   const { officialId } = req.params;
-  const { roleName, jurisdictionId, providerId } = req.body;
+  const { roleName, jurisdictionId, providerId, stationId } = req.body;
   if (!roleName) return fail(res, 'roleName is required', 400);
   if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
   if (roleName === 'Administration' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Administration accounts', 400);
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
+  if (roleName === 'Investigating Officer' && !stationId) return fail(res, 'stationId is required for Investigating Officer accounts', 400);
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
   if (limitError) return fail(res, limitError, 409);
@@ -396,6 +405,7 @@ router.post('/staff/:officialId/roles', async (req, res) => {
       role_id: roleRow.role_id,
       jurisdiction_id: jurisdictionId || null,
       provider_id: providerId || null,
+      station_id: stationId || null,
       assigned_by: req.auth.officialId,
     })
     .select('official_role_id')

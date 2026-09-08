@@ -13,10 +13,12 @@ import { useToast } from '../context/ToastContext';
 // same reasoning the backend's auth.signin.routes.js uses for being its own
 // file rather than widening auth.staff.routes.js. Posts to
 // /api/auth/signin/login; structurally mirrors Login.jsx otherwise.
-// Investigating Officer and Special Public Prosecutor removed - retired as
-// separate logins under the consolidated Legal Aid/Threat flow (see
-// backend/server.js's own comment on the same change).
+// Special Public Prosecutor stays retired (absorbed into DLSA Coordinator).
+// Investigating Officer is REINSTATED (migration_033, see backend/server.js's
+// own comment on the same change) with real substance - station-scoped, its
+// own investigation_records.
 const SIGNIN_ROLES = [
+  'Investigating Officer',
   'District Welfare Officer',
   'Protection Officer',
   'DLSA Coordinator',
@@ -25,6 +27,7 @@ const SIGNIN_ROLES = [
 ];
 
 const ROLE_HOME_PATH = {
+  'Investigating Officer': '/io',
   'District Welfare Officer': '/dwo',
   'Protection Officer': '/protectionofficer',
   'DLSA Coordinator': '/dlsa',

@@ -79,13 +79,15 @@ app.use('/api/auth/signin', require('./src/core/routes/auth.signin.routes'));
 // (migration_028_agency_referrals.sql), entirely independent of the
 // Intervention Requests flow above.
 //
-// Investigating Officer and Special Public Prosecutor are retired as
-// separate logins under the consolidated Legal Aid/Threat flow redesign -
-// their routes/frontends are left on disk (not deleted, matching this
-// codebase's own additive-only caution) but unmounted here so no account
-// can reach them. IO's one real function (Accused Status -> Threat Tier)
-// moved into Protection Officer's own routes; SPP's function (carrying a
-// case through trial) moved into DLSA's own routes.
+// Special Public Prosecutor stays retired (its trial-carrying function
+// moved into DLSA's own routes) - its routes/frontend stay on disk, not
+// deleted, but unmounted so no account can reach them.
+//
+// Investigating Officer is REINSTATED (migration_033) with real substance -
+// station-scoped case queue, its own investigation_records - after briefly
+// being retired under the earlier Legal Aid/Threat consolidation. Its
+// accused-status authority moves back from Protection Officer to here.
+app.use('/api/io', require('./src/io/routes/io.routes'));
 app.use('/api/dwo', require('./src/dwo/routes/dwo.routes'));
 app.use('/api/protectionofficer', require('./src/protection_officer/routes/protectionOfficer.routes'));
 app.use('/api/dlsa', require('./src/dlsa/routes/dlsa.routes'));
