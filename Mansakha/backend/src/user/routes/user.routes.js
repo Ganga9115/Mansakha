@@ -1725,4 +1725,34 @@ router.post('/rehabilitation-opt-in', async (req, res) => {
   return ok(res, { referralId }, 'Opted in to rehabilitation', 201);
 });
 
+// Self-service decline - the mandatory app-open gate's "No" answer. Same two
+// guards as GET /rehabilitation-eligibility (already opted in / case not yet
+// closed), so this can't be called out of turn. Sets users.status =
+// 'inactive' directly (the same flag Data Operator's own account-management
+// page already uses) - enforced immediately by verifyToken.js's per-request
+// check, and at login by auth.user.routes.js, so the account is genuinely
+// unusable from this point on, not just hidden client-side.
+router.post('/rehabilitation-decline', async (req, res) => {
+  const { rows: userRows } = await pool.query('select case_stage from users where user_id = $1', [req.auth.userId]);
+  const user = userRows[0];
+  if (!user) return fail(res, 'Case not found', 404);
+
+  const { rows: existing } = await pool.query(
+    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Rehabilitation Officer'`,
+    [req.auth.userId]
+  );
+  if (existing.length > 0) return fail(res, 'You have already opted in to rehabilitation.', 400);
+
+  if (user.case_stage !== 'Case Closed') {
+    return fail(res, 'This decision is only available once your case is closed.', 400);
+  }
+
+  const { error } = await supabase.from('users').update({ status: 'inactive' }).eq('user_id', req.auth.userId);
+  if (error) return fail(res, `Could not process this request: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'update', entityType: 'user', entityId: req.auth.userId });
+
+  return ok(res, null, 'Your account has been deactivated as requested.');
+});
+
 module.exports = router;

@@ -70,4 +70,16 @@ router.get('/languages', async (req, res) => {
   return ok(res, { languages: rows });
 });
 
+// Same non-sensitive reference-data rationale as the routes above - names,
+// types, and contact info a victim already sees on their own opt-in screen
+// once authenticated. Exposed here too so Ministry's Staff Management page
+// can populate a provider picker when creating a Rehabilitation Officer
+// account (migration_031) without a separate authenticated route.
+router.get('/rehabilitation-providers', async (req, res) => {
+  const { rows } = await pool.query(
+    `select provider_id, name, provider_type from rehabilitation_providers where deleted_at is null order by provider_type, name`
+  );
+  return ok(res, { providers: rows.map((p) => ({ providerId: p.provider_id, name: p.name, providerType: p.provider_type })) });
+});
+
 module.exports = router;

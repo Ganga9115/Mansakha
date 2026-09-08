@@ -14,7 +14,7 @@ import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor, useRehabilitationProgress, useRehabilitationEligibility } from '../../shared/services/hooks';
+import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor, useRehabilitationProgress } from '../../shared/services/hooks';
 
 export default function HomeScreen({ navigation }) {
   const query = useUserDashboard();
@@ -24,8 +24,10 @@ export default function HomeScreen({ navigation }) {
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
   const rehabilitationQuery = useRehabilitationProgress();
   const inRehabilitation = !!rehabilitationQuery.data?.inRehabilitation;
-  const rehabilitationEligibilityQuery = useRehabilitationEligibility();
-  const rehabilitationEligible = !!rehabilitationEligibilityQuery.data?.eligible;
+  // "Start Rehabilitation Support" was removed from here - the mandatory
+  // app-open decision gate (UserGate.js -> RehabilitationDecisionGate.js)
+  // now handles this before Home is ever reached, so an optional tile for
+  // the same decision would be unreachable dead UI.
   const { tier, isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
   const today = new Date();
@@ -249,24 +251,6 @@ export default function HomeScreen({ navigation }) {
                       </Pressable>
                     )}
 
-                    {/* Start Rehabilitation Support - shown once the case is
-                        closed and the victim hasn't yet opted in to a
-                        provider. See RehabilitationOptInScreen.js. */}
-                    {rehabilitationEligible && (
-                      <Pressable
-                        style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                        onPress={() => navigation?.navigate('RehabilitationOptIn')}
-                      >
-                        <View style={styles.gridIconSquare}>
-                          <Feather name="compass" size={18} color={colors.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.gridTitle}>Start Rehabilitation Support</Text>
-                          <Text style={styles.gridSub}>See available support options</Text>
-                        </View>
-                        <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                      </Pressable>
-                    )}
                   </View>
 
                   {/* Two Column Layout for Upcoming Sessions and Recent Activity */}

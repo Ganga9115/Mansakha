@@ -4,7 +4,7 @@ import StaffLayout from '../layouts/StaffLayout';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { HeartHandshake, IndianRupee, ShieldCheck, AlertTriangle } from 'lucide-react';
-import { useReferralDetail, useResolveReferral, useHandOffRehabilitation, useSetRelief } from '../services/hooks';
+import { useReferralDetail, useResolveReferral, useHandOffRehabilitation, useSetRelief, useRehabilitationProviders } from '../services/hooks';
 
 // District Welfare Officer's Referral Overview - context and the Relief &
 // Compliance card (DWO's real statutory function: relief type, sanctioned
@@ -112,13 +112,64 @@ function ReliefComplianceCard({ r, referralId, onChanged }) {
   );
 }
 
+// Requires a providerId now (migration_031) so the receiving officer's
+// provider-scoped queue actually shows this case - see
+// backend/src/dwo/routes/dwo.routes.js's hand-off-rehabilitation route.
+function HandOffRehabCard({ referralId, onHandedOff }) {
+  const [providerId, setProviderId] = useState('');
+  const [error, setError] = useState(null);
+  const providersQuery = useRehabilitationProviders();
+  const handOffRehab = useHandOffRehabilitation();
+  const providers = providersQuery.data?.providers || [];
+
+  const handleSubmit = async () => {
+    if (!providerId) return;
+    setError(null);
+    try {
+      await handOffRehab.mutate(referralId, providerId);
+      onHandedOff();
+    } catch (err) {
+      setError(err.message || 'Could not hand off to Rehabilitation Officer. Kindly try again.');
+    }
+  };
+
+  return (
+    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+      <div className="flex items-center gap-1.5">
+        <HeartHandshake size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Forward to Rehabilitation Officer</h3>
+      </div>
+      <p className="text-[11px] text-gray-400">Select the government or NGO centre this case is being handed to.</p>
+      <select
+        value={providerId}
+        onChange={(e) => setProviderId(e.target.value)}
+        disabled={providersQuery.loading}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
+      >
+        <option value="" disabled>{providersQuery.loading ? 'Loading centres...' : 'Select a centre...'}</option>
+        {providers.map((p) => (
+          <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>
+        ))}
+      </select>
+      <button
+        onClick={handleSubmit}
+        disabled={!providerId || handOffRehab.loading}
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+      >
+        <HeartHandshake size={14} />
+        {handOffRehab.loading ? 'Forwarding...' : 'Forward to Rehabilitation Officer'}
+      </button>
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+    </div>
+  );
+}
+
 export default function ReferralDetail() {
   const { referralId } = useParams();
   const navigate = useNavigate();
   const [actionError, setActionError] = useState(null);
   const detailQuery = useReferralDetail(referralId);
   const resolve = useResolveReferral();
-  const handOffRehab = useHandOffRehabilitation();
 
   const r = detailQuery.data;
 
@@ -145,16 +196,6 @@ export default function ReferralDetail() {
     }
   };
 
-  const handleHandOffRehab = async () => {
-    setActionError(null);
-    try {
-      await handOffRehab.mutate(referralId);
-      navigate('/dwo');
-    } catch (err) {
-      setActionError(err.message || 'Could not hand off to Rehabilitation Officer. Kindly try again.');
-    }
-  };
-
   return (
     <StaffLayout title="Referral Overview">
       <div className="space-y-4">
@@ -176,17 +217,7 @@ export default function ReferralDetail() {
 
           <div className="space-y-6">
             {r.status === 'Open' && (
-              <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-                <h3 className="font-bold text-sm text-gray-800">Actions</h3>
-                <button
-                  onClick={handleHandOffRehab}
-                  disabled={handOffRehab.loading}
-                  className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
-                >
-                  <HeartHandshake size={14} />
-                  {handOffRehab.loading ? 'Forwarding...' : 'Forward to Rehabilitation Officer'}
-                </button>
-              </div>
+              <HandOffRehabCard referralId={referralId} onHandedOff={() => navigate('/dwo')} />
             )}
           </div>
         </div>

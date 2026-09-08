@@ -160,7 +160,8 @@ create table official_roles (
   jurisdiction_id      uuid references jurisdictions(jurisdiction_id), -- null for Ministry (unrestricted)
   assigned_by          uuid references officials(official_id),
   assigned_at          timestamptz not null default now(),
-  revoked_at           timestamptz
+  revoked_at           timestamptz,
+  provider_id          uuid references rehabilitation_providers(provider_id) -- migration_031: which centre a Rehabilitation Officer works for (mirrors jurisdiction_id's own pattern - scope lives on the role grant, not the account)
 );
 
 -- ===== Users & identity (depend on case_types, jurisdictions) =====

@@ -23,9 +23,24 @@ const ROLE_NAME = 'Rehabilitation Officer';
 
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
 
+// migration_031 - which rehabilitation_providers row this officer's account
+// is scoped to (a nullable column on official_roles, mirroring
+// jurisdiction_id's own per-role-grant pattern). An officer with no provider
+// assigned yet sees an empty queue (fail-closed, not fail-open) rather than
+// every case nationwide - Ministry must assign a centre via POST /staff or
+// POST /staff/:officialId/roles before the account is actually useful.
+function getOwnProviderId(req) {
+  return req.auth.roles.find((r) => r.roleName === ROLE_NAME)?.providerId || null;
+}
+
 router.get('/referrals', async (req, res) => {
   const { status } = req.query;
   if (status && !['Open', 'Resolved'].includes(status)) return fail(res, "status must be 'Open' or 'Resolved'", 400);
+
+  const providerId = getOwnProviderId(req);
+  if (!providerId) {
+    return ok(res, { referrals: [], providerAssigned: false });
+  }
 
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
@@ -33,12 +48,13 @@ router.get('/referrals', async (req, res) => {
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
-     where ar.referred_to_role = $1 ${status ? 'and ar.status = $2' : ''}
+     where ar.referred_to_role = $1 and ar.metadata->>'providerId' = $2 ${status ? 'and ar.status = $3' : ''}
      order by ar.created_at desc`,
-    status ? [ROLE_NAME, status] : [ROLE_NAME]
+    status ? [ROLE_NAME, providerId, status] : [ROLE_NAME, providerId]
   );
 
   return ok(res, {
+    providerAssigned: true,
     referrals: rows.map((r) => ({
       referralId: r.referral_id,
       userId: r.user_id, // needed so this case's referral rows can raise a structured task (agency_tasks) targeting any concerned office
@@ -53,15 +69,21 @@ router.get('/referrals', async (req, res) => {
   });
 });
 
-async function loadOwnReferral(referralId, res) {
+async function loadOwnReferral(referralId, res, req) {
+  const providerId = getOwnProviderId(req);
+  if (!providerId) {
+    fail(res, 'No rehabilitation centre is assigned to your account yet. Kindly contact Ministry.', 403);
+    return null;
+  }
+
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
             u.docket_number, ct.name as case_type_name
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
-     where ar.referral_id = $1 and ar.referred_to_role = $2`,
-    [referralId, ROLE_NAME]
+     where ar.referral_id = $1 and ar.referred_to_role = $2 and ar.metadata->>'providerId' = $3`,
+    [referralId, ROLE_NAME, providerId]
   );
   if (!rows[0]) {
     fail(res, 'Referral not found', 404);
@@ -71,7 +93,7 @@ async function loadOwnReferral(referralId, res) {
 }
 
 router.get('/referrals/:referralId', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res);
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
   if (!referral) return;
 
   const { rows: notes } = await pool.query(
@@ -98,7 +120,7 @@ router.get('/referrals/:referralId', async (req, res) => {
 });
 
 router.post('/referrals/:referralId/notes', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res);
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
   if (!referral) return;
 
   const { noteText } = req.body;
@@ -117,7 +139,7 @@ router.post('/referrals/:referralId/notes', async (req, res) => {
 });
 
 router.patch('/referrals/:referralId/resolve', async (req, res) => {
-  const referral = await loadOwnReferral(req.params.referralId, res);
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
   if (!referral) return;
   if (referral.status === 'Resolved') return fail(res, 'This referral is already resolved', 400);
 
@@ -130,6 +152,34 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
 
   return ok(res, { referralId: referral.referral_id, status: 'Resolved' }, 'Referral resolved');
+});
+
+// Discontinuation - the victim has moved away from this centre or stopped
+// using its services. Same outcome as declining rehabilitation up front
+// (see user.routes.js's POST /rehabilitation-decline): the referral is
+// resolved AND the victim's account is deactivated (users.status =
+// 'inactive'), which - per verifyToken.js's own per-request status check -
+// takes effect immediately, not just at next login.
+router.patch('/referrals/:referralId/discontinue', async (req, res) => {
+  const referral = await loadOwnReferral(req.params.referralId, res, req);
+  if (!referral) return;
+  if (referral.status === 'Resolved') return fail(res, 'This referral is already resolved', 400);
+
+  const { error: resolveError } = await supabase
+    .from('agency_referrals')
+    .update({ status: 'Resolved', resolved_at: new Date().toISOString() })
+    .eq('referral_id', referral.referral_id);
+  if (resolveError) return fail(res, `Could not resolve referral: ${resolveError.message}`, 500);
+
+  const { error: deactivateError } = await supabase
+    .from('users')
+    .update({ status: 'inactive' })
+    .eq('user_id', referral.user_id);
+  if (deactivateError) return fail(res, `Referral resolved, but could not deactivate the account: ${deactivateError.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: referral.user_id, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
+
+  return ok(res, { referralId: referral.referral_id, status: 'Resolved' }, 'Marked discontinued. The account has been deactivated.');
 });
 
 // ===== Structured tasks (migration_030_agency_tasks.sql) =====

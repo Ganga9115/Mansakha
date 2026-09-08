@@ -239,10 +239,25 @@ router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) =
   if (!referral) return;
   if (referral.status === 'Resolved') return fail(res, 'This referral is already resolved', 400);
 
+  // migration_031 - a providerId is now required so the new referral is
+  // visible to the officer actually assigned to that centre (see
+  // rehabilitationOfficer.routes.js's provider-scoped queue). Without this,
+  // a hand-off-created referral would carry no providerId and be invisible
+  // to every officer, same gap the victim's own opt-in never had.
+  const { providerId } = req.body;
+  if (!providerId) return fail(res, 'providerId is required to hand off to Rehabilitation Officer', 400);
+
   const { rows: caseRows } = await pool.query('select case_stage from users where user_id = $1', [referral.user_id]);
   if (!caseRows[0] || caseRows[0].case_stage !== 'Case Closed') {
     return fail(res, 'Rehabilitation hand-off is only available once the case is closed.', 400);
   }
+
+  const { rows: providerRows } = await pool.query(
+    'select provider_id, name from rehabilitation_providers where provider_id = $1 and deleted_at is null',
+    [providerId]
+  );
+  const provider = providerRows[0];
+  if (!provider) return fail(res, 'Selected provider not found', 404);
 
   const { data: rehabReferral, error: insertError } = await supabase
     .from('agency_referrals')
@@ -250,7 +265,8 @@ router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) =
       user_id: referral.user_id,
       referred_to_role: 'Rehabilitation Officer',
       referred_by_official_id: req.auth.officialId,
-      reason: `Long-term rehabilitation hand-off from DWO (referral ${referral.referral_id})`,
+      reason: `Long-term rehabilitation hand-off from DWO (referral ${referral.referral_id}) to ${provider.name}.`,
+      metadata: { providerId: provider.provider_id, providerName: provider.name },
     })
     .select('referral_id')
     .single();
