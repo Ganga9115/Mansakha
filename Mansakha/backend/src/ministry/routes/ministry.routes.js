@@ -1188,32 +1188,11 @@ router.get('/reports/:reportId/pdf', async (req, res) => {
   return res.send(buffer);
 });
 
-// ===== Detailed PDF Reports - Forward After Review =====
-// Same route/logic as the 3 admin tiers' own POST .../reports/:reportId/forward
-// (this router's own verifyToken/requireRole(['Ministry'])/generalApiLimiter
-// are already applied file-wide via router.use() above, so no per-route
-// middleware here) - included for API completeness/consistency, but a
-// Ministry caller always matches the report_recipients row via
-// recipient_type='ministry', and Ministry has nothing above it, so this
-// always rejects for a real Ministry caller. Ministry has no other
-// jurisdiction to forward from in practice; this exists so the route shape
-// is symmetric across all 4 files rather than silently 404ing here.
-router.post('/reports/:reportId/forward', async (req, res) => {
-  const { reportId } = req.params;
-
-  const { rows: reportRows } = await pool.query('select report_id from reports where report_id = $1', [reportId]);
-  if (!reportRows[0]) return fail(res, 'Report not found', 404);
-
-  const { rows: recipientRows } = await pool.query(
-    'select recipient_id, recipient_type, jurisdiction_id from report_recipients where report_id = $1',
-    [reportId]
-  );
-
-  const myRow = recipientRows.find((r) => r.recipient_type === 'ministry');
-  if (!myRow) return fail(res, 'You are not a recipient of this report', 404);
-
-  // Ministry has nothing above it - nothing to forward to.
-  return fail(res, 'Ministry has no recipient above it to forward a report to', 400);
-});
+// No forward route here, deliberately. Ministry is the top of the reporting
+// chain - it RECEIVES reports (GET /reports and GET /reports/:id/pdf above)
+// and has no recipient above it to forward one to. A forward route did
+// exist purely for shape-symmetry with the district/state/national files,
+// but it could only ever reject, so it has been removed rather than left as
+// an endpoint that always fails.
 
 module.exports = router;
