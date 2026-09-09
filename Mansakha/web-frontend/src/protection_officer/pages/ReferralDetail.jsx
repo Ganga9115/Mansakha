@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowLeft, CheckCircle2, Send, ShieldCheck, ShieldAlert, MapPin, AlertOctagon } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Send, ShieldCheck, ShieldAlert, MapPin, AlertOctagon, User, Phone, Home } from 'lucide-react';
 import { useReferralDetail, useAddReferralNote, useResolveReferral, useSetManualThreatTier, useCompleteDirective } from '../services/hooks';
 
 // Deliberately NOT the distress score's Low/Moderate/High/Critical palette -
@@ -86,6 +86,50 @@ function ThreatAssessmentCard({ r, onChanged }) {
         )}
         {error && <p className="text-xs text-rose-600 mt-1.5">{error}</p>}
       </div>
+    </div>
+  );
+}
+
+// Dispatch details - the one place in this system where an officials-side
+// role sees a victim's name, phone and address. Justified precisely because
+// this role is physically dispatched to find and protect a person, often on
+// an emergency SOS: an officer with only a docket number cannot knock on a
+// door or call back when a GPS fix is stale. Scoped to the single case being
+// opened (never the queue listing) and audit-logged server-side on every
+// read.
+function DispatchDetailsCard({ r }) {
+  if (!r.victimName && !r.victimContactNumber && !r.victimAddress) return null;
+  return (
+    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+      <div className="flex items-center gap-1.5">
+        <User size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Dispatch Details</h3>
+      </div>
+      <p className="text-[11px] text-gray-400">
+        Shown so you can actually reach this person. Every view of these details is recorded in the audit log.
+      </p>
+      {r.victimName && (
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Name</span>
+          <span className="text-xs font-bold text-gray-800">{r.victimName}</span>
+        </div>
+      )}
+      {r.victimContactNumber && (
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
+          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+            <Phone size={12} /> {r.victimContactNumber}
+          </a>
+        </div>
+      )}
+      {r.victimAddress && (
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Address</span>
+          <span className="flex items-start gap-1.5 text-xs text-gray-700 leading-relaxed">
+            <Home size={12} className="mt-0.5 shrink-0 text-gray-400" /> {r.victimAddress}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -381,6 +425,7 @@ export default function ReferralDetail() {
           </div>
 
           <div className="space-y-6">
+            <DispatchDetailsCard r={r} />
             <ThreatAssessmentCard r={r} onChanged={detailQuery.refetch} />
           </div>
         </div>

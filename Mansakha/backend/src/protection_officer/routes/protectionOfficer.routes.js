@@ -136,13 +136,26 @@ async function loadOwnReferral(referralId, res, req) {
     return null;
   }
 
+  // Protection Officer is the ONE officials-side role that gets the
+  // victim's name, phone and address - and only on this single-case detail
+  // view, never in the list. Every other role in this system (IO included)
+  // works from a docket number alone, and that is right for them: they read
+  // a case file. This role is different in kind - it is physically
+  // dispatched to find and protect a person, often on an emergency SOS. An
+  // officer sent to an address they cannot see, for someone whose name they
+  // do not know, with no number to call back if the GPS fix is stale or was
+  // never granted, cannot actually do the job. The privacy boundary is kept
+  // where it still holds: identity is scoped to the one case being opened,
+  // is not in the queue listing, and every read is audit-logged below.
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
-            u.docket_number, ct.name as case_type_name, ir.accused_status
+            u.docket_number, ct.name as case_type_name, ir.accused_status,
+            ui.full_name, ui.contact_number, ui.address
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
      left join investigation_records ir on ir.user_id = ar.user_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
      where ar.referral_id = $1 and ar.referred_to_role = $2 and u.jurisdiction_id = $3`,
     [referralId, ROLE_NAME, jurisdictionId]
   );
@@ -186,6 +199,10 @@ router.get('/referrals/:referralId', async (req, res) => {
     [referral.user_id, ROLE_NAME]
   );
 
+  // Reading a victim's identity is a real, attributable act - logged the
+  // same way every other sensitive read in this system is.
+  await writeAuditLog({ officialId: req.auth.officialId, userId: referral.user_id, action: 'read', entityType: 'victim_contact_details', entityId: referral.referral_id });
+
   return ok(res, {
     referralId: referral.referral_id,
     userId: referral.user_id,
@@ -197,6 +214,11 @@ router.get('/referrals/:referralId', async (req, res) => {
     createdAt: referral.created_at,
     resolvedAt: referral.resolved_at,
     location: referral.metadata?.location || null,
+    // Dispatch details - see loadOwnReferral's own comment on why this one
+    // role gets them. null on a case whose identity row is missing.
+    victimName: referral.full_name || null,
+    victimContactNumber: referral.contact_number || null,
+    victimAddress: referral.address || null,
     originType: referral.metadata?.originType || null,
     outcome: referral.metadata?.outcome || null,
     lastVerifiedAt: notes.length ? notes[notes.length - 1].created_at : null,

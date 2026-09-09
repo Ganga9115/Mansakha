@@ -5,7 +5,7 @@ import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { Send, ClipboardList, Bot, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useReferralDetail, useResolveReferral } from '../services/hooks';
-import { useReferralTasks, useCreateTask } from '../services/taskHooks';
+import { useReferralTasks, useCreateTask, useCompleteTask } from '../services/taskHooks';
 
 // Roles a task may be assigned to - independent of this portal's own role,
 // so a directive can be raised for any concerned office, not only this one.
@@ -23,9 +23,30 @@ function formatDate(iso) {
 // one - so a case's full directive picture is visible in one place, same
 // case-level visibility principle District Collector's cross-agency view
 // already establishes as normal practice here.
+// The "My Tasks" page this role used to have has been removed - a directive
+// is only meaningful next to the case it concerns, so a directive raised FOR
+// District Welfare Officer is completed here, in context, instead.
+const ROLE_NAME = 'District Welfare Officer';
+
 function CaseTasksList({ referralId }) {
   const query = useReferralTasks(referralId);
+  const complete = useCompleteTask();
+  const [completingId, setCompletingId] = useState(null);
+  const [completeError, setCompleteError] = useState(null);
   const tasks = query.data?.tasks || [];
+
+  const handleComplete = async (taskId) => {
+    setCompleteError(null);
+    setCompletingId(taskId);
+    try {
+      await complete.mutate(taskId);
+      query.refetch();
+    } catch (err) {
+      setCompleteError(err.message || 'Could not update this directive. Kindly try again.');
+    } finally {
+      setCompletingId(null);
+    }
+  };
 
   if (query.loading) return <p className="text-xs text-gray-400">Loading...</p>;
   if (query.error) return <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3 py-2 rounded-lg">{query.error}</div>;
@@ -33,6 +54,7 @@ function CaseTasksList({ referralId }) {
 
   return (
     <div className="space-y-3">
+      {completeError && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3 py-2 rounded-lg">{completeError}</div>}
       {tasks.map((t) => (
         <div key={t.taskId} className="border border-gray-200 rounded-lg p-3.5">
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -54,6 +76,16 @@ function CaseTasksList({ referralId }) {
             Assigned by {t.createdByName} on {formatDate(t.createdAt)} - Due: {formatDate(t.dueAt)}
             {t.completedAt && ` - Completed ${formatDate(t.completedAt)}`}
           </p>
+          {t.assignedToRole === ROLE_NAME && t.status === 'Pending' && (
+            <button
+              onClick={() => handleComplete(t.taskId)}
+              disabled={completingId === t.taskId}
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-md text-[11px] font-semibold transition disabled:opacity-60"
+            >
+              <CheckCircle2 size={12} />
+              {completingId === t.taskId ? 'Working...' : 'Mark Complete'}
+            </button>
+          )}
         </div>
       ))}
     </div>

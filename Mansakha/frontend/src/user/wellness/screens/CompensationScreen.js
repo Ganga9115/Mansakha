@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
@@ -11,7 +11,7 @@ import Card from '../../shared/components/Card';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useUserDashboard, useCompensationStatus } from '../../shared/services/hooks';
+import { useUserDashboard, useCompensationStatus, useBankDetails, useSaveBankDetails } from '../../shared/services/hooks';
 
 // Compensation Module - read-only for the victim. Auto-identifies the
 // applicable statutory category and suggested amount the moment a case is
@@ -85,6 +85,115 @@ function CompensationContent({ data }) {
   );
 }
 
+
+// migration_038 - compensation is paid by direct bank transfer (DBT), so the
+// victim has to be able to say where. Without this the District Welfare
+// Officer can verify an amount but has no account to send it to - and their
+// Mark Paid action is now blocked until this exists.
+function BankDetailsCard() {
+  const query = useBankDetails();
+  const save = useSaveBankDetails();
+  const [accountName, setAccountName] = useState('');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [ifsc, setIfsc] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState(null);
+  const [saved, setSaved] = useState(false);
+
+  const d = query.data;
+
+  useEffect(() => {
+    if (!d) return;
+    setAccountName(d.accountName || '');
+    setAccountNumber(d.accountNumber || '');
+    setIfsc(d.ifsc || '');
+    setBankName(d.bankName || '');
+  }, [d?.accountName, d?.accountNumber, d?.ifsc, d?.bankName]);
+
+  const handleSave = async () => {
+    setError(null);
+    setSaved(false);
+    try {
+      await save.mutateAsync({ accountName, accountNumber, ifsc, bankName });
+      setSaved(true);
+      setEditing(false);
+    } catch (err) {
+      setError(err.message || 'Could not save your bank details.');
+    }
+  };
+
+  if (query.isLoading) return null;
+
+  const hasDetails = !!d?.hasDetails;
+
+  return (
+    <Card headerTitle="Bank Account for Payment">
+      <Text style={styles.bankIntro}>
+        Your compensation is paid directly into your bank account. Kindly make sure these details are correct.
+      </Text>
+
+      {hasDetails && !editing ? (
+        <>
+          <View style={styles.bankRow}>
+            <Text style={styles.bankLabel}>Account Holder</Text>
+            <Text style={styles.bankValue}>{d.accountName}</Text>
+          </View>
+          <View style={styles.bankRow}>
+            <Text style={styles.bankLabel}>Account Number</Text>
+            <Text style={styles.bankValue}>{d.accountNumber}</Text>
+          </View>
+          <View style={styles.bankRow}>
+            <Text style={styles.bankLabel}>IFSC</Text>
+            <Text style={styles.bankValue}>{d.ifsc}</Text>
+          </View>
+          {!!d.bankName && (
+            <View style={styles.bankRow}>
+              <Text style={styles.bankLabel}>Bank</Text>
+              <Text style={styles.bankValue}>{d.bankName}</Text>
+            </View>
+          )}
+          <Pressable style={styles.bankEditBtn} onPress={() => setEditing(true)}>
+            <Feather name="edit-2" size={13} color={colors.primaryDark} />
+            <Text style={styles.bankEditBtnText}>Update details</Text>
+          </Pressable>
+        </>
+      ) : (
+        <>
+          {!hasDetails && (
+            <View style={styles.bankWarning}>
+              <Feather name="alert-circle" size={14} color={colors.warning} />
+              <Text style={styles.bankWarningText}>
+                No account added yet - your compensation cannot be paid out until you add one.
+              </Text>
+            </View>
+          )}
+          <Text style={styles.bankFieldLabel}>Account Holder Name</Text>
+          <TextInput style={styles.bankInput} value={accountName} onChangeText={setAccountName} placeholder="As printed in your passbook" />
+          <Text style={styles.bankFieldLabel}>Account Number</Text>
+          <TextInput style={styles.bankInput} value={accountNumber} onChangeText={setAccountNumber} keyboardType="number-pad" placeholder="9-18 digits" />
+          <Text style={styles.bankFieldLabel}>IFSC Code</Text>
+          <TextInput style={styles.bankInput} value={ifsc} onChangeText={(t) => setIfsc(t.toUpperCase())} autoCapitalize="characters" placeholder="e.g. SBIN0001234" />
+          <Text style={styles.bankFieldLabel}>Bank Name (optional)</Text>
+          <TextInput style={styles.bankInput} value={bankName} onChangeText={setBankName} placeholder="e.g. State Bank of India" />
+
+          {error && <Text style={styles.bankError}>{error}</Text>}
+
+          <Pressable
+            style={[styles.bankSaveBtn, save.isPending && styles.bankSaveBtnDisabled]}
+            onPress={handleSave}
+            disabled={save.isPending}
+          >
+            <Text style={styles.bankSaveBtnText}>{save.isPending ? 'Saving...' : 'Save Bank Details'}</Text>
+          </Pressable>
+        </>
+      )}
+
+      {saved && <Text style={styles.bankSaved}>Saved - your compensation will be paid into this account.</Text>}
+    </Card>
+  );
+}
+
 export default function CompensationScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
@@ -127,6 +236,7 @@ export default function CompensationScreen({ navigation, route }) {
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={styles.body}>
           <QueryBoundary query={compensationQuery}>{(data) => <CompensationContent data={data} />}</QueryBoundary>
+          <BankDetailsCard />
         </View>
       </ScrollView>
     </View>
@@ -134,6 +244,31 @@ export default function CompensationScreen({ navigation, route }) {
 }
 
 const styles = StyleSheet.create({
+  bankIntro: { ...typography.bodySmall, color: colors.textSecondary, lineHeight: 19, marginBottom: spacing.md },
+  bankRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs, gap: spacing.md },
+  bankLabel: { ...typography.caption, color: colors.textSecondary, flex: 1 },
+  bankValue: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13, flex: 1.4, textAlign: 'right' },
+  bankFieldLabel: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.sm, marginBottom: 4 },
+  bankInput: {
+    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md,
+    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    ...typography.body, fontSize: 14, color: colors.textPrimary, backgroundColor: colors.surface,
+  },
+  bankWarning: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+    backgroundColor: colors.warningLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm,
+  },
+  bankWarningText: { ...typography.caption, color: colors.warning, flex: 1, lineHeight: 16 },
+  bankError: { ...typography.bodySmall, color: colors.danger, marginTop: spacing.sm },
+  bankSaved: { ...typography.bodySmall, color: colors.success, marginTop: spacing.sm },
+  bankSaveBtn: {
+    backgroundColor: colors.primaryDark, borderRadius: radius.lg,
+    paddingVertical: spacing.md, alignItems: 'center', marginTop: spacing.md,
+  },
+  bankSaveBtnDisabled: { opacity: 0.6 },
+  bankSaveBtnText: { color: colors.onPrimary, fontWeight: '700', fontSize: 14 },
+  bankEditBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
+  bankEditBtnText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
   container: { flex: 1, backgroundColor: colors.background },
   scrollView: { flex: 1, backgroundColor: colors.background },
   topHeader: {

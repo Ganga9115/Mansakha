@@ -25,15 +25,9 @@ function useQuery(queryFn, deps) {
   return { ...state, refetch };
 }
 
-export function useTasksList(status) {
-  const token = getToken();
-  return useQuery(() => {
-    const params = new URLSearchParams();
-    if (status) params.set('status', status);
-    return apiClient.get(`/api/dwo/tasks?${params.toString()}`, token);
-  }, [token, status]);
-}
-
+// useTasksList removed along with the "My Tasks" page it backed - a
+// directive is listed and completed on the case it concerns instead
+// (useReferralTasks + useCompleteTask below).
 export function useCreateTask() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

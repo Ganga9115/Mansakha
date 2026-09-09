@@ -90,12 +90,20 @@ router.get('/referrals', async (req, res) => {
 });
 
 async function loadOwnReferral(referralId, res) {
+  // migration_038 - the account compensation is actually disbursed into.
+  // Resolved through the anchor (coalesce) because a bank account belongs to
+  // the PERSON, not one docket - a linked case has no identity row of its
+  // own. Still no name/contact here: DWO disburses money, it does not need
+  // to contact or identify the victim directly (that boundary is unchanged).
   const { rows } = await pool.query(
     `select ar.referral_id, ar.user_id, ar.reason, ar.status, ar.metadata, ar.created_at, ar.resolved_at,
-            u.docket_number, u.case_stage, ct.name as case_type_name
+            u.docket_number, u.case_stage, ct.name as case_type_name,
+            ui.bank_account_name, ui.bank_account_number, ui.bank_ifsc, ui.bank_name,
+            ui.bank_proof_path, ui.bank_details_updated_at
      from agency_referrals ar
      join users u on u.user_id = ar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
      where ar.referral_id = $1 and ar.referred_to_role = $2`,
     [referralId, ROLE_NAME]
   );
@@ -119,6 +127,13 @@ router.get('/referrals/:referralId', async (req, res) => {
     [referral.referral_id]
   );
 
+  // Short-lived signed URL, minted per read - never a stored or public link.
+  let bankProofUrl = null;
+  if (referral.bank_proof_path) {
+    const { data, error } = await supabase.storage.from('intervention-proofs').createSignedUrl(referral.bank_proof_path, 3600);
+    bankProofUrl = error ? null : data.signedUrl;
+  }
+
   return ok(res, {
     referralId: referral.referral_id,
     userId: referral.user_id,
@@ -138,6 +153,17 @@ router.get('/referrals/:referralId', async (req, res) => {
     // category" step, which happens independently of any DWO action.
     suggestedCompensation: getCompensationSchedule(referral.case_type_name),
     compensation: withLiveCompensationView(referral.metadata?.compensation, referral.case_stage),
+    // migration_038 - where a payment stage actually gets disbursed to.
+    bankDetails: referral.bank_account_number
+      ? {
+        accountName: referral.bank_account_name,
+        accountNumber: referral.bank_account_number,
+        ifsc: referral.bank_ifsc,
+        bankName: referral.bank_name || null,
+        proofUrl: bankProofUrl,
+        updatedAt: referral.bank_details_updated_at,
+      }
+      : null,
     // migration_034: Rehabilitation is now a genuine mid-case eCourt stage
     // (Investigation -> Trial -> Rehabilitation -> Compensation -> Case
     // Closed), not a post-closure phase - exposed so the Assign Task form
@@ -290,6 +316,12 @@ router.patch('/referrals/:referralId/compensation/stages/:stageIndex/mark-paid',
     return fail(res, `This stage unlocks once the case reaches "${stage.unlocksAtCaseStage}". The case has not reached that point yet.`, 400);
   }
   if (stage.status === 'Paid') return fail(res, 'This stage has already been marked as paid.', 400);
+  // migration_038 - a stage cannot be marked paid with no account to have
+  // paid into. This is the whole point of DBT: "Paid" must correspond to a
+  // real transfer destination, not just a status flip.
+  if (!referral.bank_account_number) {
+    return fail(res, 'This victim has not yet provided bank details. Compensation is paid by direct transfer - kindly ask them to add an account in their app before marking a stage paid.', 400);
+  }
 
   const nextStages = compensation.stages.map((s, i) => (i === idx ? { ...s, status: 'Paid', paidAt: new Date().toISOString() } : s));
   const nextMetadata = { ...referral.metadata, compensation: { ...compensation, stages: nextStages } };
@@ -465,48 +497,10 @@ const TASK_ASSIGNABLE_ROLES = [
 'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
 ];
 
-router.get('/tasks', async (req, res) => {
-  const { status } = req.query;
-  if (status && !['Pending', 'Completed'].includes(status)) return fail(res, "status must be 'Pending' or 'Completed'", 400);
-
-  const { rows } = await pool.query(
-    `select t.task_id, t.action, t.due_at, t.status, t.completed_at, t.auto_generated, t.created_at,
-            t.source_referral_id, ar.referred_to_role as source_referral_role,
-            u.docket_number, ct.name as case_type_name, o.full_name as created_by_name
-     from agency_tasks t
-     join users u on u.user_id = t.user_id
-     join case_types ct on ct.case_type_id = u.case_type_id
-     left join officials o on o.official_id = t.created_by_official_id
-     left join agency_referrals ar on ar.referral_id = t.source_referral_id
-     where t.assigned_to_role = $1 ${status ? 'and t.status = $2' : ''}
-     order by (t.due_at is null), t.due_at asc, t.created_at desc`,
-    status ? [ROLE_NAME, status] : [ROLE_NAME]
-  );
-
-  return ok(res, {
-    tasks: rows.map((t) => ({
-      taskId: t.task_id,
-      docketNumber: t.docket_number,
-      caseTypeName: t.case_type_name,
-      action: t.action,
-      dueAt: t.due_at,
-      status: t.status,
-      completedAt: t.completed_at,
-      autoGenerated: t.auto_generated,
-      createdByName: t.created_by_name || 'System (auto-escalated)',
-      createdAt: t.created_at,
-      overdue: t.status === 'Pending' && !!t.due_at && new Date(t.due_at) < new Date(),
-      // Only usable as an in-app link when the source referral belongs to
-      // THIS role's own queue (a task raised against another role's
-      // referral - e.g. DC directing Protection Officer - is not something
-      // this portal can open). The frontend checks sourceReferralRole
-      // against its own role name before rendering "View Referral".
-      sourceReferralId: t.source_referral_id,
-      sourceReferralRole: t.source_referral_role,
-    })),
-  });
-});
-
+// No portal-wide task list here - the "My Tasks" page it backed has been
+// removed. A directive raised FOR this role is shown, and completed, on the
+// case it actually concerns (ReferralTasks.jsx), which is the only place it
+// carries any meaning.
 router.post('/tasks', async (req, res) => {
   const { userId, assignedToRole, action, dueAt, sourceReferralId } = req.body;
   if (!userId || !assignedToRole || !action || !String(action).trim()) {

@@ -2257,4 +2257,94 @@ router.get('/investigation-progress', async (req, res) => {
   });
 });
 
+
+// ===== Compensation bank details (migration_038) =====
+// PoA Act relief is paid by DBT into the victim's own account - without
+// this, DWO could mark a payment stage "Paid" with nothing to pay into.
+// Held against the PERSON (user_identity, resolved through the anchor for a
+// linked case), not one docket: the same account is used for every case
+// this person has.
+//
+// Deliberately NOT proof-gated to submit. The bank proof is optional
+// supporting evidence DWO can ask for - the same reasoning migration_036
+// applied to the intervention types: a victim entitled to statutory relief
+// should not be blocked from even recording where to send it. DWO verifies
+// before actually disbursing.
+router.get('/bank-details', async (req, res) => {
+  const { rows } = await pool.query(
+    `select bank_account_name, bank_account_number, bank_ifsc, bank_name, bank_proof_path, bank_details_updated_at
+     from user_identity where user_id = $1`,
+    [req.auth.userId]
+  );
+  const row = rows[0];
+  if (!row) return ok(res, { hasDetails: false });
+
+  let proofUrl = null;
+  if (row.bank_proof_path) {
+    const { data, error } = await supabase.storage.from('intervention-proofs').createSignedUrl(row.bank_proof_path, 3600);
+    proofUrl = error ? null : data.signedUrl;
+  }
+
+  return ok(res, {
+    hasDetails: !!row.bank_account_number,
+    accountName: row.bank_account_name || null,
+    accountNumber: row.bank_account_number || null,
+    ifsc: row.bank_ifsc || null,
+    bankName: row.bank_name || null,
+    proofUrl,
+    updatedAt: row.bank_details_updated_at || null,
+  });
+});
+
+router.patch('/bank-details', async (req, res) => {
+  const { accountName, accountNumber, ifsc, bankName } = req.body;
+  if (!accountName || !String(accountName).trim()) return fail(res, 'accountName is required', 400);
+  if (!accountNumber || !/^[0-9]{9,18}$/.test(String(accountNumber).trim())) {
+    return fail(res, 'accountNumber must be 9-18 digits', 400);
+  }
+  // Real IFSC format: 4 letters, then 0, then 6 alphanumerics.
+  if (!ifsc || !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(String(ifsc).trim().toUpperCase())) {
+    return fail(res, 'ifsc must be a valid IFSC code (e.g. SBIN0001234)', 400);
+  }
+
+  const { error } = await supabase
+    .from('user_identity')
+    .update({
+      bank_account_name: String(accountName).trim(),
+      bank_account_number: String(accountNumber).trim(),
+      bank_ifsc: String(ifsc).trim().toUpperCase(),
+      bank_name: bankName ? String(bankName).trim() : null,
+      bank_details_updated_at: new Date().toISOString(),
+    })
+    .eq('user_id', req.auth.userId);
+  if (error) return fail(res, `Could not save bank details: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'update', entityType: 'bank_details', entityId: req.auth.userId });
+
+  return ok(res, null, 'Bank details saved - your compensation will be paid into this account');
+});
+
+// Optional supporting proof (passbook page / cancelled cheque). Reuses the
+// existing private intervention-proofs bucket - same class of sensitive
+// victim document, retrieved only through a short-lived signed URL.
+router.post('/bank-details/proof', interventionDocumentUpload.single('file'), async (req, res) => {
+  if (!req.file) return fail(res, 'file is required', 400);
+
+  const storagePath = `${req.auth.userId}/bank-proof/${crypto.randomUUID()}-${sanitizeDocumentFileName(req.file.originalname)}`;
+  const { error: uploadError } = await supabase.storage
+    .from('intervention-proofs')
+    .upload(storagePath, req.file.buffer, { contentType: req.file.mimetype });
+  if (uploadError) return fail(res, `Could not upload proof: ${uploadError.message}`, 500);
+
+  const { error } = await supabase
+    .from('user_identity')
+    .update({ bank_proof_path: storagePath })
+    .eq('user_id', req.auth.userId);
+  if (error) return fail(res, `Uploaded, but could not attach it to your record: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'update', entityType: 'bank_details', entityId: req.auth.userId });
+
+  return ok(res, null, 'Bank proof uploaded', 201);
+});
+
 module.exports = router;
