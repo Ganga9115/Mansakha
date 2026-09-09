@@ -316,11 +316,19 @@ router.patch('/cases/:userId/investigation-complete', async (req, res) => {
   return ok(res, { userId: c.user_id }, 'Investigation marked complete');
 });
 
-// "Threat detected -> Protection Officer alerted (jurisdiction-scoped)" -
-// creates a real, actionable referral for the jurisdiction's Protection
-// Officer (same self-referral-style creation used by urgent-help's own PO
-// alert), not just a passive notification. Reuses an existing OPEN
-// referral if one already exists rather than creating a duplicate.
+// "Threat detected -> referred to the district's Protection Officer" -
+// creates a real, actionable referral (same self-referral-style creation
+// used by urgent-help's own PO alert), not just a passive notification.
+// Reuses an existing OPEN referral rather than creating a duplicate.
+//
+// Framed as a REFERRAL, not an order, deliberately. Real grounding: under
+// the Witness Protection Scheme, 2018 an Investigating Officer genuinely may
+// move a protection application, and the Threat Analysis Report is prepared
+// by an ACP/DySP-rank officer - which is this role. What the IO cannot do is
+// direct the protective response: measures are authorised by a Competent
+// Authority and implemented by police. The Protection Officer accordingly
+// runs its own Threat Tier assessment on the far side and can override it -
+// nothing here binds them.
 router.post('/cases/:userId/alert-protection-officer', async (req, res) => {
   const c = await loadOwnCase(req.params.userId, req, res);
   if (!c) return;
