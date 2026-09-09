@@ -11,8 +11,8 @@ import {
 } from '../services/hooks';
 
 // Investigating Officer's Case Overview - accused status, victim-safe
-// investigation progress, chargesheet filing, and alerting Protection
-// Officer on a detected threat. migration_034: filing a chargesheet no
+// investigation progress, chargesheet filing, case documents, and referring
+// a detected threat to the Protection Officer. migration_034: filing a chargesheet no
 // longer touches the shared case_stage - that's now exclusively the
 // (simulated) eCourt sync worker's authority (core/services/
 // ecourtStageSync.js). It only records chargesheetStatus/chargesheetFiledAt
@@ -233,6 +233,15 @@ function PrivacyShieldNote() {
   );
 }
 
+// Real-world grounding: an Investigating Officer genuinely CAN initiate
+// protection - under the Witness Protection Scheme, 2018 an application may
+// be moved by the IO, and the Threat Analysis Report is prepared by an
+// officer of ACP/DySP rank, which is this role. What the IO cannot do is
+// DIRECT the protective response: measures are authorised by a Competent
+// Authority, and police implement them. So this is deliberately worded as a
+// referral for independent assessment, not an order - and the Protection
+// Officer's own screen reflects that, running its own Threat Tier
+// assessment which it can override.
 function AlertProtectionOfficerCard({ c, userId, onChanged }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
@@ -246,7 +255,7 @@ function AlertProtectionOfficerCard({ c, userId, onChanged }) {
       setReason('');
       onChanged();
     } catch (err) {
-      setError(err.message || 'Could not alert Protection Officer. Kindly try again.');
+      setError(err.message || 'Could not refer this threat. Kindly try again.');
     }
   };
 
@@ -254,12 +263,12 @@ function AlertProtectionOfficerCard({ c, userId, onChanged }) {
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
         <AlertTriangle size={15} className="text-rose-600" />
-        <h3 className="font-bold text-sm text-gray-800">Alert Protection Officer</h3>
+        <h3 className="font-bold text-sm text-gray-800">Refer Threat to Protection Officer</h3>
       </div>
-      <p className="text-[11px] text-gray-400">Raises a real, actionable referral for the case's jurisdiction Protection Officer - use this when the investigation surfaces a threat to the victim.</p>
+      <p className="text-[11px] text-gray-400">Refers a threat surfaced during investigation to the Protection Officer for this district. They assess it independently and decide the protective response - this does not direct them.</p>
       {c.threatAlertedAt && (
         <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5 w-fit">
-          Last alerted {new Date(c.threatAlertedAt).toLocaleString()}
+          Last referred {new Date(c.threatAlertedAt).toLocaleString()}
         </p>
       )}
       <textarea
@@ -275,7 +284,7 @@ function AlertProtectionOfficerCard({ c, userId, onChanged }) {
         className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
       >
         <Send size={13} />
-        {alertPo.loading ? 'Alerting...' : 'Send Alert'}
+        {alertPo.loading ? 'Referring...' : 'Refer to Protection Officer'}
       </button>
       {error && <p className="text-xs text-rose-600">{error}</p>}
     </div>
