@@ -30,13 +30,27 @@
 //     functionary, which is the District Welfare Officer role in this
 //     system - not the physical-protection one.
 //
+// Two further calls worth stating:
+//   - Superintendent of Police is NOT listed here, though the Rules do name
+//     the SP alongside the DM for protection arrangements. The SP is the
+//     district police chief: realistic as the officer who COMMANDS
+//     protection, not as one working a queue of individual protection
+//     referrals, which is what this role actually does in this system. SP
+//     remains on the Investigating Officer list, where Rule 7's "not below
+//     DySP" bar genuinely admits them for a serious case.
+//   - "Circle Officer" is carried alongside DySP because that is what the
+//     same rank is called in several states (Uttar Pradesh among them), and
+//     ACP is its urban-commissionerate equivalent. Same officer, different
+//     state nomenclature - listing one label only would read as wrong to
+//     half the country.
+//
 // Every rank below is a sub-division or district-level post, which is why
 // this role is district-scoped and never tied to a single police station.
 const PROTECTION_OFFICER_DESIGNATIONS = [
-  'Deputy Superintendent of Police (DSP)',
+  'Deputy Superintendent of Police (DySP) / Circle Officer',
+  'Assistant Commissioner of Police (ACP)',
   'Sub-Divisional Magistrate (SDM)',
   'Additional District Magistrate (ADM)',
-  'Superintendent of Police (SP)',
 ];
 
 // Deliberately starts at DySP: Rule 7 of the SC/ST (Prevention of
@@ -46,7 +60,7 @@ const PROTECTION_OFFICER_DESIGNATIONS = [
 // investigate an ordinary IPC case - legally cannot be the IO here, so
 // those ranks are absent by design, not by omission.
 const INVESTIGATING_OFFICER_DESIGNATIONS = [
-  'Deputy Superintendent of Police (DySP)',
+  'Deputy Superintendent of Police (DySP) / Circle Officer',
   'Assistant Commissioner of Police (ACP)',
   'Additional Superintendent of Police (Addl. SP)',
   'Superintendent of Police (SP)',
