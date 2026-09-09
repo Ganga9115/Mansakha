@@ -69,6 +69,13 @@ export default function Profile() {
   };
 
   const jobTitle = 'Protection Officer';
+  // migration_035 - designation and district, set by Ministry at
+  // appointment (Staff Management), shown here read-only - never
+  // self-selected by the officer. No police station: every real
+  // designation this role can hold (SDM/DSP/Tehsildar/DSWO) is a
+  // sub-division/district-level post under the PoA Act Rules, not a
+  // single-station one.
+  const myRole = me?.roles?.find((r) => r.roleName === jobTitle);
 
   return (
     <StaffLayout title="Profile">
@@ -118,6 +125,27 @@ export default function Profile() {
               readOnly
               className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Designation</label>
+              <input
+                value={myRole?.designation || 'Not specified'}
+                readOnly
+                title="Set by Ministry at appointment - contact Ministry to change this"
+                className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">District</label>
+              <input
+                value={myRole?.jurisdictionName || 'Not yet assigned'}
+                readOnly
+                title="Set by Ministry at appointment - contact Ministry to change this"
+                className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
+              />
+            </div>
           </div>
         </div>
 

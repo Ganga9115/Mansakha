@@ -32,6 +32,22 @@ const JURISDICTION_LEVELS = ['district', 'state', 'national'];
 // Administration's National/State/District split).
 const JURISDICTION_SCOPED_ROLES = ['Administration', 'Protection Officer'];
 
+// migration_035 - mirrors backend/src/ministry/routes/ministry.routes.js's
+// PROTECTION_OFFICER_DESIGNATIONS exactly. Real-world grounding: the PoA
+// Act Rules leave "Protection Officer" appointment to state government
+// notification rather than one fixed post nationally - different states
+// have designated a DSP, an SDM, a Tehsildar, or a District Social Welfare
+// Officer. Deliberately district-scoped only (jurisdictionId above), never
+// a police station - every one of these is a sub-division/district-level
+// post, unlike Investigating Officer's genuinely station-level appointment.
+const PROTECTION_OFFICER_DESIGNATIONS = [
+  'Deputy Superintendent of Police (DSP)',
+  'Sub-Divisional Magistrate (SDM)',
+  'Tehsildar',
+  'District Social Welfare Officer (DSWO)',
+  'Additional District Magistrate (ADM)',
+];
+
 const STATUS_BADGE = {
   active: 'bg-emerald-100 text-emerald-700',
   revoked: 'bg-gray-100 text-gray-500',
@@ -108,6 +124,7 @@ export default function StaffManagement() {
   const [roleName, setRoleName] = useState('Counsellor');
   const [jurisdictionLevel, setJurisdictionLevel] = useState('district');
   const [jurisdictionId, setJurisdictionId] = useState('');
+  const [designation, setDesignation] = useState('');
   const [providerId, setProviderId] = useState('');
   const [stationStateId, setStationStateId] = useState('');
   const [stationDistrictId, setStationDistrictId] = useState('');
@@ -125,6 +142,7 @@ export default function StaffManagement() {
   // edited - kept fully separate from the Create form's own state above so
   // both can be open at once without cross-contaminating each other.
   const [editJurisdictionId, setEditJurisdictionId] = useState('');
+  const [editDesignation, setEditDesignation] = useState('');
   const [editProviderId, setEditProviderId] = useState('');
   const [editStationStateId, setEditStationStateId] = useState('');
   const [editStationDistrictId, setEditStationDistrictId] = useState('');
@@ -176,6 +194,7 @@ export default function StaffManagement() {
         roleName,
         password,
         jurisdictionId: JURISDICTION_SCOPED_ROLES.includes(roleName) ? jurisdictionId : undefined,
+        designation: roleName === 'Protection Officer' ? designation || undefined : undefined,
         providerId: roleName === 'Rehabilitation Officer' ? providerId : undefined,
         stationId: roleName === 'Investigating Officer' ? stationId : undefined,
       });
@@ -186,6 +205,7 @@ export default function StaffManagement() {
       setPassword('');
       setShowPassword(false);
       setJurisdictionId('');
+      setDesignation('');
       setProviderId('');
       setStationStateId('');
       setStationDistrictId('');
@@ -208,6 +228,7 @@ export default function StaffManagement() {
     // Pre-fill the scope picker with this account's current assignment (or
     // blank if it has none yet - exactly the "-" case that started this).
     setEditJurisdictionId(s.jurisdictionId || '');
+    setEditDesignation(s.designation || '');
     setEditProviderId(s.providerId || '');
     setEditStationStateId(s.stationStateId || '');
     setEditStationDistrictId(s.stationDistrictId || '');
@@ -252,6 +273,7 @@ export default function StaffManagement() {
       if (SCOPE_EDITABLE_ROLES.includes(role)) {
         await updateStaffScope.mutate(officialId, role, {
           jurisdictionId: role === 'Protection Officer' ? editJurisdictionId : undefined,
+          designation: role === 'Protection Officer' ? editDesignation || undefined : undefined,
           providerId: role === 'Rehabilitation Officer' ? editProviderId : undefined,
           stationId: role === 'Investigating Officer' ? editStationId : undefined,
         });
@@ -389,13 +411,24 @@ export default function StaffManagement() {
                 the same way Administration's own queue is - just one flat
                 district, not tiered by level. */}
             {roleName === 'Protection Officer' && (
-              <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                  <option value="">Select...</option>
-                  {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                </select>
-              </div>
+              <>
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
+                  <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                    <option value="">Select...</option>
+                    {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
+                  </select>
+                </div>
+                {/* migration_035 - real-world title (state-notification-
+                    dependent under the PoA Act Rules), not free text. */}
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
+                  <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                    <option value="">Not specified</option>
+                    {PROTECTION_OFFICER_DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+              </>
             )}
             {/* migration_031 - which centre this Rehabilitation Officer
                 works for; otherwise their queue is empty by design. */}
@@ -491,7 +524,10 @@ export default function StaffManagement() {
                           (Rehabilitation Officer), or station (Investigating
                           Officer) - "-" for roles with none (DWO, DLSA,
                           District Collector aren't scoped at all today). */}
-                      <td className="py-4 px-4 text-gray-700">{s.jurisdictionName || s.providerName || s.stationName || '-'}</td>
+                      <td className="py-4 px-4 text-gray-700">
+                        {s.jurisdictionName || s.providerName || s.stationName || '-'}
+                        {s.designation && <span className="block text-[10px] text-gray-400 font-normal">{s.designation}</span>}
+                      </td>
                       <td className="py-4 px-6 text-right">
                         <button
                           onClick={() => (editingId === s.officialId ? cancelEdit() : startEdit(s))}
@@ -558,13 +594,22 @@ export default function StaffManagement() {
                           {SCOPE_EDITABLE_ROLES.includes(s.roleName) && (
                             <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl">
                               {s.roleName === 'Protection Officer' && (
-                                <div>
-                                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                                  <select value={editJurisdictionId} onChange={(e) => setEditJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                    <option value="">{s.jurisdictionName ? `Currently: ${s.jurisdictionName}` : 'Not yet assigned - select...'}</option>
-                                    {editJurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                                  </select>
-                                </div>
+                                <>
+                                  <div>
+                                    <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
+                                    <select value={editJurisdictionId} onChange={(e) => setEditJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                      <option value="">{s.jurisdictionName ? `Currently: ${s.jurisdictionName}` : 'Not yet assigned - select...'}</option>
+                                      {editJurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
+                                    <select value={editDesignation} onChange={(e) => setEditDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                      <option value="">{s.designation ? `Currently: ${s.designation}` : 'Not specified'}</option>
+                                      {PROTECTION_OFFICER_DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                  </div>
+                                </>
                               )}
                               {s.roleName === 'Rehabilitation Officer' && (
                                 <div>

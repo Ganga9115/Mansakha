@@ -60,13 +60,49 @@ export function useAddReferralNote() {
   return { mutate, loading };
 }
 
+// Requires a structured outcome - see ReferralDetail.jsx's ResolveDialog
+// and the backend's own RESOLUTION_OUTCOME_CATEGORIES.
 export function useResolveReferral() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (referralId) => {
+  const mutate = async (referralId, outcomeCategory, outcomeDetail) => {
     setLoading(true);
     try {
-      return await apiClient.patch(`/api/protectionofficer/referrals/${referralId}/resolve`, {}, token);
+      return await apiClient.patch(`/api/protectionofficer/referrals/${referralId}/resolve`, { outcomeCategory, outcomeDetail }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Additive to (never replacing) the computed Threat Tier - pass null to
+// clear the override. See ReferralDetail.jsx's ThreatAssessmentCard.
+export function useSetManualThreatTier() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (referralId, manualTier) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/protectionofficer/referrals/${referralId}/threat-tier`, { manualTier }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Completes an inbound directive (from District Collector, the only role
+// with authority to direct Protection Officer) - surfaced inline on the
+// relevant case's own Referral Detail (see pendingDirectives in
+// useReferralDetail's response), not a standalone task list any more.
+export function useCompleteDirective() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (taskId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/protectionofficer/tasks/${taskId}/complete`, {}, token);
     } finally {
       setLoading(false);
     }

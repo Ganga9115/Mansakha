@@ -1,16 +1,20 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { ShieldCheck, ClipboardList, FileCheck2, User, LogOut, Menu, X } from 'lucide-react';
+import { ShieldCheck, FileCheck2, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
 // Protection Officer's own dedicated shell - copied from
 // dwo/layouts/StaffLayout.jsx (itself copied from district_admin's
-// template).
+// template). Deliberately exactly 3 routes - Protection Officer has no
+// statutory authority to raise cross-departmental directives (only
+// District Collector does), so the "My Tasks" outbound-task page that used
+// to sit here has been removed entirely; an inbound directive for a
+// specific case now surfaces inline on that case's own Referral Detail
+// instead (see ReferralDetail.jsx's PendingDirectivesCard).
 const NAV_ITEMS = [
   { name: 'Protection Registry', icon: ShieldCheck, path: '/protectionofficer' },
   { name: 'Intervention Requests', icon: FileCheck2, path: '/protectionofficer/intervention-requests' },
-  { name: 'My Tasks', icon: ClipboardList, path: '/protectionofficer/tasks' },
   { name: 'Profile', icon: User, path: '/protectionofficer/profile' },
 ];
 
