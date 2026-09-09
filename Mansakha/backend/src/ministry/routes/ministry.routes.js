@@ -100,11 +100,13 @@ router.get('/staff', async (req, res) => {
       ),
       pool.query(
         `select o.official_id, o.full_name, o.email, o.phone, o.whatsapp_number, o.staff_id, o.must_change_password,
-                r.role_name, j.name as jurisdiction_name
+                r.role_name, j.name as jurisdiction_name, rp.name as provider_name, ps.name as station_name
          from officials o
          join official_roles orl on orl.official_id = o.official_id
          join roles r on r.role_id = orl.role_id
          left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
+         left join rehabilitation_providers rp on rp.provider_id = orl.provider_id
+         left join police_stations ps on ps.station_id = orl.station_id
          where ${whereClause}
          order by o.full_name
          limit ${pageSize} offset ${offset}`,
@@ -121,7 +123,13 @@ router.get('/staff', async (req, res) => {
       staffId: o.staff_id,
       mustChangePassword: o.must_change_password,
       roleName: o.role_name,
+      // Whichever scope this role actually uses - jurisdiction (Administration,
+      // Protection Officer), provider (Rehabilitation Officer), or station
+      // (Investigating Officer) - null for roles with none (DWO, DLSA,
+      // District Collector aren't scoped at all today).
       jurisdictionName: o.jurisdiction_name,
+      providerName: o.provider_name,
+      stationName: o.station_name,
       status: 'active', // the join above only matches unrevoked role rows
     }));
 
@@ -195,6 +203,13 @@ router.post('/staff', async (req, res) => {
   }
   if (roleName === 'Administration' && !jurisdictionId) {
     return fail(res, 'jurisdictionId is required for Administration accounts', 400);
+  }
+  // A Protection Officer's queue is jurisdiction-scoped (protectionOfficer.routes.js) -
+  // required here too, same fail-closed reasoning as Rehabilitation Officer's
+  // providerId and Investigating Officer's stationId below: an account created
+  // without one would just sit with a permanently empty queue.
+  if (roleName === 'Protection Officer' && !jurisdictionId) {
+    return fail(res, 'jurisdictionId is required for Protection Officer accounts', 400);
   }
   // Required for Counsellor accounts specifically because the Call
   // Counsellor/WhatsApp redirect a user can trigger (user/routes/user.routes.js)
@@ -383,6 +398,7 @@ router.post('/staff/:officialId/roles', async (req, res) => {
   if (!roleName) return fail(res, 'roleName is required', 400);
   if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
   if (roleName === 'Administration' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Administration accounts', 400);
+  if (roleName === 'Protection Officer' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Protection Officer accounts', 400);
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
   if (roleName === 'Investigating Officer' && !stationId) return fail(res, 'stationId is required for Investigating Officer accounts', 400);
 
