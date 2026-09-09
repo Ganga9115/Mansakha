@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import { Copy } from 'lucide-react';
 import { useCaseTypeOptions, useJurisdictionOptions, usePoliceStationOptions } from '../services/hooks';
 
-const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
-
 // Data Operator's own copy - NOT jurisdiction-locked (State/District are
-// open dropdowns, unlike District Admin's own copy of this form), and DOES
-// collect Case Stage at intake (District Admin's copy never shows it - that
-// stage is set later there via the Users list's editable dropdown instead).
+// open dropdowns, unlike District Admin's own copy of this form).
+// migration_034: Case Stage is no longer collected here (or anywhere on the
+// Data Operator side) - a newly created case is always auto-set to
+// Investigation by the backend, and every subsequent stage change comes
+// exclusively from the simulated eCourt sync worker
+// (core/services/ecourtStageSync.js). Data Operator has no path, at
+// creation or afterward, to set/advance/downgrade a case's stage.
 // `initialValues` - optional, from FetchCase.jsx's "Use These Details" -
 // pre-fills every field from a simulated fetch result so it can be
 // reviewed/edited before submitting, rather than retyped from scratch.
@@ -20,7 +22,6 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
   const [contactNumber, setContactNumber] = useState(initialValues?.suggestedContactNumber || '');
   const [password, setPassword] = useState('');
   const [caseTypeId, setCaseTypeId] = useState(initialValues?.suggestedCaseTypeId || '');
-  const [caseStage, setCaseStage] = useState(initialValues?.suggestedCaseStage || '');
   const [caseBackground, setCaseBackground] = useState(initialValues?.suggestedCaseBackground || '');
   const [aadhaarNumber, setAadhaarNumber] = useState(initialValues?.suggestedAadhaarNumber || '');
   const [stateId, setStateId] = useState(initialValues?.suggestedStateId || '');
@@ -53,7 +54,6 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
         jurisdictionId: districtId,
         caseTypeId,
         ...(stationId ? { stationId } : {}),
-        ...(caseStage ? { caseStage } : {}),
         ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
         ...(aadhaarNumber.trim() ? { aadhaarNumber: aadhaarNumber.trim() } : {}),
       });
@@ -66,7 +66,6 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
       setContactNumber('');
       setPassword('');
       setCaseTypeId('');
-      setCaseStage('');
       setCaseBackground('');
       setAadhaarNumber('');
       setStateId('');
@@ -193,21 +192,16 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
         </p>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div>
-          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Type</label>
-          <select value={caseTypeId} onChange={(e) => setCaseTypeId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Select...</option>
-            {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Stage</label>
-          <select value={caseStage} onChange={(e) => setCaseStage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Investigation (default)</option>
-            {CASE_STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </div>
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Type</label>
+        <select value={caseTypeId} onChange={(e) => setCaseTypeId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+          <option value="">Select...</option>
+          {caseTypeOptions.map((c) => <option key={c.case_type_id} value={c.case_type_id}>{c.name}</option>)}
+        </select>
+        <p className="text-[10px] text-gray-400 mt-1">
+          Case Stage always starts at Investigation and is updated exclusively by the eCourt system as the
+          case progresses - it cannot be set here.
+        </p>
       </div>
 
       <div>

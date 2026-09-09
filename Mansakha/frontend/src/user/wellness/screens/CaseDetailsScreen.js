@@ -72,12 +72,15 @@ function PartyList({ title, parties }) {
   );
 }
 
-export default function CaseDetailsScreen({ navigation }) {
+export default function CaseDetailsScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
   const dashboardQuery = useUserDashboard();
   const linkedCases = dashboardQuery.data?.linkedCases || [];
-  const [selectedUserId, setSelectedUserId] = useState(null);
+  // migration_034 - seeded from whichever case was active on Home (so this
+  // opens already showing that same case), but still fully overridable via
+  // the switcher below.
+  const [selectedUserId, setSelectedUserId] = useState(route?.params?.caseUserId || null);
 
   // Default to the caller's own anchor case once the list loads - the
   // switcher below only ever renders when there's more than one to choose
@@ -85,7 +88,11 @@ export default function CaseDetailsScreen({ navigation }) {
   const activeUserId = selectedUserId || linkedCases[0]?.userId;
   const activeCase = linkedCases.find((c) => c.userId === activeUserId);
   const courtQuery = useCourtCaseDetails(activeUserId);
-  const investigationQuery = useInvestigationProgress();
+  // Scoped to whichever docket the switcher currently has selected - this
+  // used to always read the caller's own anchor case regardless of the
+  // switcher above, which would show the wrong docket's chargesheet/accused
+  // status once a second case was selected.
+  const investigationQuery = useInvestigationProgress(activeUserId);
 
   return (
     <View style={styles.container}>

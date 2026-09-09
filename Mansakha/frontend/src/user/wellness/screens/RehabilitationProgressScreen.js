@@ -67,11 +67,15 @@ function PhaseCard({ phase, index, showIndex }) {
   );
 }
 
-export default function RehabilitationProgressScreen({ navigation }) {
+export default function RehabilitationProgressScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const dashboardQuery = useUserDashboard();
-  const rehabilitationQuery = useRehabilitationProgress();
+  // migration_034 - which docket this screen concerns (passed from
+  // HomeScreen's active case); defaults to the caller's own anchor case
+  // when opened without one.
+  const caseUserId = route?.params?.caseUserId;
+  const dashboardQuery = useUserDashboard(caseUserId);
+  const rehabilitationQuery = useRehabilitationProgress(caseUserId);
 
   return (
     <View style={styles.container}>

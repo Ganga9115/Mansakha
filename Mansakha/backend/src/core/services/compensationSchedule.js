@@ -38,15 +38,18 @@ const COMPENSATION_STAGES = [
   { stage: 'Chargesheet Filed', percentage: 25, unlocksAtCaseStage: 'Trial' },
   { stage: 'Final Stage (Court Outcome)', percentage: 25, unlocksAtCaseStage: 'Compensation' },
 ];
-const CASE_STAGE_ORDER = ['Investigation', 'Trial', 'Compensation', 'Case Closed'];
+// migration_034: the strict, eCourt-authoritative case-stage order -
+// Rehabilitation is now a genuine mid-case stage (between Trial and
+// Compensation), not a post-closure phase, so it takes a real position
+// here instead of the special-cased "beyond every stage" treatment this
+// used to need. A case in Rehabilitation has therefore reached Stage 2
+// (chargesheet filed, unlocked at Trial) but not yet Stage 3 (unlocked at
+// Compensation) - it hasn't skipped ahead, it's exactly where the eCourt
+// stage says it is.
+const CASE_STAGE_ORDER = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation', 'Case Closed'];
 const COMPENSATION_ESCALATION_DAYS = 14; // "still unresolved" -> DC escalation threshold
 
-// 'Rehabilitation' is a distinct post-closure stage (migration_029) that
-// sits outside this list entirely - by the time a case reaches it every
-// compensation stage is necessarily unlocked, so it is treated as "beyond
-// the final stage" rather than added to CASE_STAGE_ORDER itself.
 function isCompensationStageUnlocked(unlocksAtCaseStage, currentCaseStage) {
-  if (currentCaseStage === 'Rehabilitation') return true;
   const currentIdx = CASE_STAGE_ORDER.indexOf(currentCaseStage);
   const unlockIdx = CASE_STAGE_ORDER.indexOf(unlocksAtCaseStage);
   if (currentIdx === -1 || unlockIdx === -1) return false;

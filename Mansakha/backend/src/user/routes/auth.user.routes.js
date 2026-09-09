@@ -45,6 +45,8 @@ router.post('/login', userLoginLimiter, async (req, res) => {
   // either way, not a tradeoff.
   const { rows } = await pool.query(
     `select u.user_id, u.password_hash, u.must_change_password, u.status, u.linked_to_user_id,
+            u.case_stage, u.rehabilitation_opted_in_at, u.rehabilitation_closure_pending_ack,
+            u.rehabilitation_continued_after_closure,
             anchor.password_hash as anchor_password_hash, anchor.status as anchor_status
      from users u
      left join users anchor on anchor.user_id = u.linked_to_user_id
@@ -97,6 +99,27 @@ router.post('/login', userLoginLimiter, async (req, res) => {
   if (anchorStatus !== 'active') {
     console.log('Login blocked - inactive account:', anchorUserId);
     return fail(res, 'This account has been deactivated. Please contact your assigned counsellor or administrator.', 403);
+  }
+
+  // migration_034: once eCourt closes THIS SPECIFIC docket, it stops being
+  // usable as a login credential - "the closed docket must be invalidated
+  // for application access" - UNLESS this is exactly the special case a
+  // victim who was already opted into Rehabilitation gets: they still need
+  // to be able to log in via this docket, either to see the "your case has
+  // been closed - continue Rehabilitation?" popup for the first time
+  // (closure_pending_ack still true), or to keep using the Rehabilitation
+  // context they already said "yes" to (continued_after_closure true).
+  // Once they've explicitly said "No" to that popup, neither flag is true
+  // any more and this docket goes back to being an ordinary closed case -
+  // blocked here exactly like one that never opted into Rehabilitation at
+  // all. A person with other still-open cases simply logs in with one of
+  // THOSE docket numbers instead (same shared password across the whole
+  // family - see POST /change-password below), which still works normally.
+  const stillHasRehabilitationAccess = !!user.rehabilitation_opted_in_at
+    && (user.rehabilitation_closure_pending_ack || user.rehabilitation_continued_after_closure);
+  if (user.case_stage === 'Case Closed' && !stillHasRehabilitationAccess) {
+    console.log('Login blocked - closed docket with no rehabilitation continuation:', user.user_id);
+    return fail(res, 'This case has been closed. If you have another active case, kindly log in using that docket number instead.', 403);
   }
 
   console.log('User login successful for:', anchorUserId, user.linked_to_user_id ? `(via linked docket ${user.user_id})` : '');

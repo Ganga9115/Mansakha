@@ -10,10 +10,13 @@ import {
 } from '../services/hooks';
 
 // Investigating Officer's Case Overview - accused status, victim-safe
-// investigation progress, chargesheet filing (the one write path into the
-// shared case_stage - advances Investigation to Trial, unlocking DWO's
-// Compensation Stage 2), and alerting Protection Officer on a detected
-// threat. Notes live on CaseLog.jsx, task assignment on CaseTasks.jsx.
+// investigation progress, chargesheet filing, and alerting Protection
+// Officer on a detected threat. migration_034: filing a chargesheet no
+// longer touches the shared case_stage - that's now exclusively the
+// (simulated) eCourt sync worker's authority (core/services/
+// ecourtStageSync.js). It only records chargesheetStatus/chargesheetFiledAt
+// on this case's own investigation record. Notes live on CaseLog.jsx, task
+// assignment on CaseTasks.jsx.
 
 const ACCUSED_STATUSES = ['In Custody', 'Out on Bail', 'Absconding', 'Convicted'];
 
@@ -109,7 +112,7 @@ function ChargesheetCard({ c, userId, onChanged }) {
   const fileChargesheet = useFileChargesheet();
 
   const handleFile = async () => {
-    if (!window.confirm('Filing the chargesheet will advance this case from Investigation to Trial, and unlock the second Compensation payment stage. Continue?')) return;
+    if (!window.confirm('Mark the chargesheet as filed for this case? This records the filing date on the case record - the case\'s stage itself is updated separately by the eCourt system.')) return;
     setError(null);
     try {
       await fileChargesheet.mutate(userId);
@@ -124,11 +127,11 @@ function ChargesheetCard({ c, userId, onChanged }) {
       <h3 className="font-bold text-sm text-gray-800">Chargesheet</h3>
       {c.chargesheetStatus === 'Filed' ? (
         <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 w-fit">
-          Filed on {new Date(c.chargesheetFiledAt).toLocaleDateString()} - case has advanced to Trial.
+          Filed on {new Date(c.chargesheetFiledAt).toLocaleDateString()}.
         </p>
       ) : (
         <>
-          <p className="text-[11px] text-gray-400">Filing the chargesheet advances this case's stage from Investigation to Trial, and unlocks DWO's second Compensation payment stage.</p>
+          <p className="text-[11px] text-gray-400">Records the chargesheet as filed on this case. The case's own eCourt stage (Investigation/Trial/etc.) is set exclusively by the eCourt system, not by this action.</p>
           <button
             onClick={handleFile}
             disabled={fileChargesheet.loading}

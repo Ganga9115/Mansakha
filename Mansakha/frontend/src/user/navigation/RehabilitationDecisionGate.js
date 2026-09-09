@@ -5,41 +5,42 @@ import { colors } from '../shared/theme/colors';
 import { spacing } from '../shared/theme/spacing';
 import { radius } from '../shared/theme/radius';
 import { typography } from '../shared/theme/typography';
-import { useAuth } from '../shared/context/AuthContext';
-import { useToast } from '../shared/context/ToastContext';
+import { useDeclineRehabilitation } from '../shared/services/hooks';
 import { EligibleContent } from '../wellness/screens/RehabilitationOptInScreen';
 
-// Mandatory app-open decision, rendered by UserGate INSTEAD of UserShell
-// whenever the case is closed and no rehabilitation decision has been made
-// yet - the victim can no longer just discover an optional Home tile, they
-// must decide before the app opens at all.
+// migration_034: this gate now fires the moment a SPECIFIC docket's own
+// eCourt case_stage reaches 'Rehabilitation' and the victim hasn't yet
+// answered for it (not on case closure - Rehabilitation is a genuine
+// mid-lifecycle stage now, between Trial and Compensation). Rendered by
+// UserGate INSTEAD of UserShell for that decision, same convention as
+// RehabilitationClosureGate.js.
 //
-// "No" calls the self-service decline route then logs out directly - this
-// app has no global 401 interceptor (only UserGate's own consent check
-// reacts to one), so relying on a 401 to eventually force a logout
-// elsewhere would leave a declined session looking "logged in" until the
-// user manually backs out. Calling logout() here, synchronously, right
-// after the API call succeeds, sidesteps that gap entirely.
+// "No" no longer deactivates the account or logs anyone out - it just
+// records rehabilitation_declined_at for THIS docket and lets the case
+// continue under completely normal (non-isolated) tracking; when it later
+// reaches Case Closed it's treated as an ordinary closure, not a
+// continuing rehabilitation. UserGate's own next check (its dashboard query
+// is invalidated by the decline mutation) naturally falls through to
+// UserShell once this is recorded.
 //
 // "Yes" reuses EligibleContent (the exact same provider-picker component
-// RehabilitationOptInScreen.js renders) with no onOptedIn navigation - a
-// successful opt-in flips case_stage away from 'Case Closed' via the
-// backend, and useOptInRehabilitation already invalidates the eligibility
-// query it's built on, so this gate's own next render naturally falls
-// through to <UserShell/> with no explicit navigation call needed.
-export default function RehabilitationDecisionGate({ providers, onDeclined }) {
+// RehabilitationOptInScreen.js renders), scoped to this docket via
+// caseUserId - a successful opt-in records rehabilitation_opted_in_at for
+// this case (never touching case_stage, which stays exclusively eCourt's),
+// and the invalidated eligibility/dashboard queries naturally fall through
+// to UserShell on the next render, isolated into this case's own context.
+export default function RehabilitationDecisionGate({ providers, caseUserId, docketNumber, onDeclined }) {
   const [step, setStep] = useState('prompt'); // 'prompt' | 'choosing'
   const [declining, setDeclining] = useState(false);
   const [error, setError] = useState(null);
-  const { logout } = useAuth();
-  const toast = useToast();
+  const decline = useDeclineRehabilitation(caseUserId);
 
   const handleDecline = async () => {
     setError(null);
     setDeclining(true);
     try {
-      await onDeclined();
-      await logout();
+      await decline.mutateAsync();
+      onDeclined?.();
     } catch (err) {
       setError(err.message || 'Could not process this request. Kindly try again.');
       setDeclining(false);
@@ -51,7 +52,7 @@ export default function RehabilitationDecisionGate({ providers, onDeclined }) {
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <Text style={styles.headerLabel}>Rehabilitation Support</Text>
-          <EligibleContent providers={providers} />
+          <EligibleContent providers={providers} caseUserId={caseUserId} />
         </ScrollView>
       </View>
     );
@@ -63,11 +64,14 @@ export default function RehabilitationDecisionGate({ providers, onDeclined }) {
         <View style={styles.iconCircle}>
           <Feather name="compass" size={28} color={colors.primaryDark} />
         </View>
-        <Text style={styles.headerLabel}>Your Case Has Been Closed</Text>
+        <Text style={styles.headerLabel}>
+          {docketNumber ? `Docket ${docketNumber} · Rehabilitation Stage` : 'Rehabilitation Stage'}
+        </Text>
         <Text style={styles.title}>Would You Like to Proceed With Rehabilitation Support?</Text>
         <Text style={styles.subtitle}>
-          Kindly indicate whether you wish to continue with government or NGO-provided rehabilitation
-          services - livelihood, housing, and social support tracked by a dedicated Rehabilitation Officer.
+          The eCourt has moved this case into the Rehabilitation stage. Kindly indicate whether you wish to
+          continue with government or NGO-provided rehabilitation services - livelihood, housing, and social
+          support tracked by a dedicated Rehabilitation Officer.
         </Text>
 
         {error && <Text style={styles.errorText}>{error}</Text>}
@@ -88,13 +92,13 @@ export default function RehabilitationDecisionGate({ providers, onDeclined }) {
           {declining ? (
             <ActivityIndicator color={colors.danger} size="small" />
           ) : (
-            <Text style={styles.secondaryBtnText}>No, close my account</Text>
+            <Text style={styles.secondaryBtnText}>No, continue without rehabilitation</Text>
           )}
         </Pressable>
 
         <Text style={styles.footnote}>
-          Choosing "No" will deactivate your account. You will be signed out and your docket number and
-          password will no longer be valid.
+          Choosing "No" simply continues this case under normal tracking - your account and docket number
+          stay active either way.
         </Text>
       </ScrollView>
     </View>

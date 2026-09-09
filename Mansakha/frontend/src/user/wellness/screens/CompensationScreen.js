@@ -85,11 +85,15 @@ function CompensationContent({ data }) {
   );
 }
 
-export default function CompensationScreen({ navigation }) {
+export default function CompensationScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const dashboardQuery = useUserDashboard();
-  const compensationQuery = useCompensationStatus();
+  // migration_034 - which docket in the caller's own family this screen
+  // concerns (passed from HomeScreen's own active case / case switcher);
+  // defaults to the caller's own anchor case when opened without one.
+  const caseUserId = route?.params?.caseUserId;
+  const dashboardQuery = useUserDashboard(caseUserId);
+  const compensationQuery = useCompensationStatus(caseUserId);
 
   return (
     <View style={styles.container}>

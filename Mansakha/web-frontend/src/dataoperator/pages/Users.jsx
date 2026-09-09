@@ -4,10 +4,17 @@ import { Trash2, Link2, X } from 'lucide-react';
 import { useDataOperatorUsers, useUpdateDataOperatorUser, useDeleteDataOperatorUser, useLinkExistingCase } from '../services/hooks';
 import PersonSearchPicker from '../components/PersonSearchPicker';
 
-// 'Case Closed' is a terminal stage settable only by Data Operator (this
-// screen) - District Admin's equivalent editor stays restricted to the
-// original 4 (user/services/userProvisioning.js enforces this server-side).
-const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation', 'Case Closed'];
+// migration_034: Case Stage is no longer editable by Data Operator (or any
+// staff role) here or anywhere else - it's read-only, shown exactly as the
+// backend reports it, and changes exclusively through the simulated eCourt
+// sync worker (core/services/ecourtStageSync.js).
+const CASE_STAGE_TONE = {
+  Investigation: 'bg-amber-50 text-amber-700',
+  Trial: 'bg-blue-50 text-blue-700',
+  Rehabilitation: 'bg-violet-50 text-violet-700',
+  Compensation: 'bg-teal-50 text-teal-700',
+  'Case Closed': 'bg-gray-100 text-gray-600',
+};
 
 // A real switch (track + sliding knob) instead of a colored badge that
 // happened to be clickable - the status toggle already worked correctly
@@ -45,10 +52,11 @@ function StatusToggle({ status, onToggle, disabled }) {
 
 // Feature Catalog Section 7 extension (explicit user request) - every user
 // this Data Operator flow has registered, with full detail and the
-// ability to update case stage/status or delete a mistaken entry. Delete
-// only actually succeeds server-side for a user with no case history yet
-// (see user/services/userProvisioning.js's deleteUser) - the error message
-// from a blocked delete is surfaced as-is, suggesting "mark inactive" instead.
+// ability to update status or delete a mistaken entry. Case Stage is
+// read-only (migration_034 - eCourt-exclusive authority). Delete only
+// actually succeeds server-side for a user with no case history yet (see
+// user/services/userProvisioning.js's deleteUser) - the error message from a
+// blocked delete is surfaced as-is, suggesting "mark inactive" instead.
 export default function Users() {
   const { data, loading, error, refetch } = useDataOperatorUsers();
   const updateUser = useUpdateDataOperatorUser();
@@ -76,16 +84,6 @@ export default function Users() {
       // with no activity yet can be merged into another person"). Kept open
       // so the operator can see why and pick a different person instead.
       setLinkError(err.message || 'Could not link this case.');
-    }
-  };
-
-  const handleStageChange = async (userId, caseStage) => {
-    setRowError((prev) => ({ ...prev, [userId]: null }));
-    try {
-      await updateUser.mutate(userId, { caseStage });
-      refetch();
-    } catch (err) {
-      setRowError((prev) => ({ ...prev, [userId]: err.message }));
     }
   };
 
@@ -142,14 +140,9 @@ export default function Users() {
                   <td className="py-3 px-4 text-gray-700">{u.caseType || '-'}</td>
                   <td className="py-3 px-4 text-gray-700">{u.jurisdictionName || '-'}</td>
                   <td className="py-3 px-4">
-                    <select
-                      value={u.caseStage}
-                      onChange={(e) => handleStageChange(u.userId, e.target.value)}
-                      disabled={updateUser.loading}
-                      className="px-2 py-1 border border-gray-300 rounded text-xs bg-white"
-                    >
-                      {CASE_STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
+                    <span className={`inline-block px-2 py-1 rounded-full text-[11px] font-semibold ${CASE_STAGE_TONE[u.caseStage] || 'bg-gray-100 text-gray-600'}`}>
+                      {u.caseStage}
+                    </span>
                   </td>
                   <td className="py-3 px-4">
                     <StatusToggle

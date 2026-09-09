@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -17,12 +17,39 @@ import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor, useRehabilitationProgress } from '../../shared/services/hooks';
 
 export default function HomeScreen({ navigation }) {
-  const query = useUserDashboard();
+  // Case-lifecycle isolation (migration_034): null means "let the backend
+  // resolve to the anchor" (today's exact default behaviour). Only ever set
+  // to something else by the effect below (auto-isolating into a
+  // Rehabilitation-opted-in case) or by the victim's own tap on the case
+  // switcher further down - never inferred from anything else.
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const query = useUserDashboard(selectedUserId);
+  const linkedCases = query.data?.linkedCases || [];
+  const activeUserId = query.data?.userId;
+
+  // A case in the Rehabilitation stage that the victim has opted into gets
+  // isolated into its own docket-based context automatically - opening the
+  // app should show that isolated view immediately, not require a manual
+  // switch, while Investigation/Trial/Compensation/Case-Closed cases stay
+  // on the normal shared (anchor) context exactly as before. Only runs
+  // while the victim hasn't already made an explicit choice via the
+  // switcher (selectedUserId still null), so a manual switch away is never
+  // silently overridden back.
+  useEffect(() => {
+    if (selectedUserId || !activeUserId) return;
+    const rehabCase = linkedCases.find((c) => c.caseStage === 'Rehabilitation' && c.rehabilitationOptedIn);
+    if (rehabCase && rehabCase.userId !== activeUserId) {
+      setSelectedUserId(rehabCase.userId);
+    }
+  }, [linkedCases, activeUserId, selectedUserId]);
+
   const sessionsQuery = useUpcomingSessions();
   const upcomingSessions = sessionsQuery.data?.sessions || [];
   const assignedCounsellorQuery = useAssignedCounsellor();
   const hasAssignedCounsellor = !!assignedCounsellorQuery.data?.assigned;
-  const rehabilitationQuery = useRehabilitationProgress();
+  // Scoped to whichever case is currently active - never leaks another
+  // case's Rehabilitation referral/phases into this one's view.
+  const rehabilitationQuery = useRehabilitationProgress(activeUserId);
   const inRehabilitation = !!rehabilitationQuery.data?.inRehabilitation;
   // "Start Rehabilitation Support" was removed from here - the mandatory
   // app-open decision gate (UserGate.js -> RehabilitationDecisionGate.js)
@@ -95,6 +122,31 @@ export default function HomeScreen({ navigation }) {
                     <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
                     <Text style={styles.tickerText}>{yearStr}</Text>
                   </View>
+
+                  {/* Case Switcher - migration_034: only shown when this
+                      account actually has more than one docket. Each pill
+                      shows that case's own current eCourt stage so it's
+                      clear which one (if any) is the isolated Rehabilitation
+                      context - switching here is the "exit" path back to a
+                      victim's other cases from inside that isolation. */}
+                  {linkedCases.length > 1 && (
+                    <View style={styles.caseSwitcherRow}>
+                      {linkedCases.map((c) => (
+                        <Pressable
+                          key={c.userId}
+                          onPress={() => setSelectedUserId(c.userId)}
+                          style={[styles.caseSwitcherPill, c.userId === activeUserId && styles.caseSwitcherPillActive]}
+                        >
+                          <Text style={[styles.caseSwitcherDocket, c.userId === activeUserId && styles.caseSwitcherTextActive]}>
+                            Docket {c.docketNumber}
+                          </Text>
+                          <Text style={[styles.caseSwitcherStage, c.userId === activeUserId && styles.caseSwitcherTextActive]}>
+                            {c.caseStage}{c.caseStage === 'Rehabilitation' && c.rehabilitationOptedIn ? ' · Opted In' : ''}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
 
                   {/* Distress Score Hero Card */}
                   <View style={styles.distressCard}>
@@ -169,7 +221,7 @@ export default function HomeScreen({ navigation }) {
                   <View style={styles.gridContainer}>
                     <Pressable
                       style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('CaseDetails')}
+                      onPress={() => navigation?.navigate('CaseDetails', { caseUserId: activeUserId })}
                     >
                       <View style={styles.gridIconSquare}>
                         <Feather name="file-text" size={18} color={colors.primary} />
@@ -251,7 +303,7 @@ export default function HomeScreen({ navigation }) {
                         CompensationScreen.js. */}
                     <Pressable
                       style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('Compensation')}
+                      onPress={() => navigation?.navigate('Compensation', { caseUserId: activeUserId })}
                     >
                       <View style={styles.gridIconSquare}>
                         <Feather name="credit-card" size={18} color={colors.primary} />
@@ -271,7 +323,7 @@ export default function HomeScreen({ navigation }) {
                     {inRehabilitation && (
                       <Pressable
                         style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                        onPress={() => navigation?.navigate('RehabilitationProgress')}
+                        onPress={() => navigation?.navigate('RehabilitationProgress', { caseUserId: activeUserId })}
                       >
                         <View style={styles.gridIconSquare}>
                           <Feather name="sunrise" size={18} color={colors.primary} />
@@ -462,6 +514,15 @@ const styles = StyleSheet.create({
   },
   tickerText: { ...typography.bodyStrong, color: colors.primary },
   tickerTextActive: { color: colors.error },
+  caseSwitcherRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg, flexWrap: 'wrap' },
+  caseSwitcherPill: {
+    paddingVertical: spacing.xs, paddingHorizontal: spacing.md, borderRadius: radius.lg,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  },
+  caseSwitcherPillActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
+  caseSwitcherDocket: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 12 },
+  caseSwitcherStage: { ...typography.caption, color: colors.textSecondary, fontSize: 10, marginTop: 1 },
+  caseSwitcherTextActive: { color: colors.white },
   distressCard: {
     backgroundColor: colors.primaryLight,
     borderRadius: radius.xl,

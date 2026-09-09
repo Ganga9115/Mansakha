@@ -17,10 +17,13 @@ router.use(verifyToken, requireRole(['Data Operator']), generalApiLimiter);
 // intake role that can register a user into any district, not a
 // district-operational one - so no requireJurisdiction here.
 router.post('/register-user', async (req, res) => {
-  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber, stationId } = req.body;
+  // migration_034: caseStage is no longer accepted here at all - every case
+  // is created at 'Investigation' and only eCourt (simulated,
+  // core/services/ecourtStageSync.js) ever advances it from there.
+  const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, address, caseBackground, password, aadhaarNumber, stationId } = req.body;
   try {
     const { userId, temporaryPassword } = await createUser({
-      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber, stationId,
+      docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, address, caseBackground, password, aadhaarNumber, stationId,
       provisionedVia: 'data_operator',
     });
     await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });
@@ -37,11 +40,13 @@ router.post('/register-user', async (req, res) => {
 // response shown to a user, so every result carries a clear "Simulated data"
 // label the frontend is required to render, not just a comment here.
 // Explicit request: a fetched "case" should carry every field Register User
-// actually needs (name, contact, case type, case stage, state/district,
-// background), not just case type/stage - so the fetched result can be
-// reviewed and used to pre-fill that form directly (see the frontend's "Use
-// These Details" button), matching what a real NHAA/Integrated Portal record
-// would plausibly hand over once/if that integration ever exists.
+// actually needs (name, contact, case type, state/district, background) -
+// so the fetched result can be reviewed and used to pre-fill that form
+// directly (see the frontend's "Use These Details" button), matching what a
+// real NHAA/Integrated Portal record would plausibly hand over once/if that
+// integration ever exists. No case stage field - migration_034 means a
+// freshly reported case is always Investigation, decided by the backend,
+// never something this intake step suggests or the operator sets.
 const FIRST_NAMES = ['Aarav', 'Vivaan', 'Aditya', 'Vihaan', 'Arjun', 'Ishaan', 'Kabir', 'Rohan', 'Diya', 'Riya', 'Saanvi', 'Anaya', 'Priya', 'Meera', 'Kavya', 'Ananya'];
 const LAST_NAMES = ['Sharma', 'Verma', 'Patel', 'Singh', 'Reddy', 'Das', 'Nair', 'Gupta', 'Iyer', 'Chauhan', 'Mehta', 'Joshi'];
 
@@ -53,7 +58,6 @@ router.post('/fetch-case', async (req, res) => {
   // docket number always "fetches" the same plausible-looking result during
   // a demo, without pretending to hit a real backing system.
   const seed = String(docketNumber).split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-  const stages = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
 
   // Both raw pg (not Supabase REST) - same ~500-650ms-per-call PostgREST cost
   // documented elsewhere this session, felt here on every "Fetch Case" click.
@@ -110,7 +114,10 @@ router.post('/fetch-case', async (req, res) => {
     suggestedContactNumber: contactNumber,
     suggestedCaseTypeId: caseType?.case_type_id || null,
     suggestedCaseType: caseType?.name || null,
-    suggestedCaseStage: stages[seed % stages.length],
+    // migration_034: no suggestedCaseStage - a case reported here doesn't
+    // exist yet, so it would always be Investigation anyway (the only stage
+    // Data Operator's own case creation can ever result in; every stage
+    // after that comes exclusively from the simulated eCourt sync worker).
     suggestedStateId: district?.state_id || null,
     suggestedStateName: district?.state_name || null,
     suggestedDistrictId: district?.district_id || null,
@@ -168,14 +175,17 @@ router.get('/users', async (req, res) => {
   });
 });
 
+// migration_034: caseStage removed - Data Operator (like every other staff
+// role) has no option whatsoever to create, modify, advance, downgrade, or
+// otherwise set a case's stage, including marking it 'Case Closed'. That
+// used to be Data Operator's own explicit privilege; it now belongs
+// exclusively to the (simulated) eCourt sync worker - see
+// core/services/ecourtStageSync.js.
 router.patch('/users/:userId', async (req, res) => {
   const { userId } = req.params;
-  const { caseStage, status, address, contactNumber } = req.body;
+  const { status, address, contactNumber } = req.body;
   try {
-    // canCloseCase: true - marking a case 'Case Closed' after Compensation is
-    // explicitly a Data Operator action, per request; District Admin's
-    // equivalent route (district_admin/routes/districtAdmin.routes.js) does not set this.
-    await updateUser(userId, { caseStage, status, address, contactNumber }, { canCloseCase: true });
+    await updateUser(userId, { status, address, contactNumber });
     await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'update', entityType: 'user', entityId: userId });
     return ok(res, null, 'User record updated');
   } catch (err) {
@@ -288,10 +298,12 @@ router.get('/search-person', async (req, res) => {
 // since a dependent case inherits the anchor's identity and gets its own
 // default temp password (see createLinkedCase in userProvisioning.js).
 router.post('/register-linked-case', async (req, res) => {
-  const { docketNumber, caseTypeId, jurisdictionId, caseStage, caseBackground, linkToUserId } = req.body;
+  // migration_034: caseStage not accepted - a linked case starts at
+  // 'Investigation' exactly like any other, same reasoning as /register-user.
+  const { docketNumber, caseTypeId, jurisdictionId, caseBackground, linkToUserId } = req.body;
   try {
     const { userId, docketNumber: dn, temporaryPassword, anchorUserId } = await createLinkedCase({
-      docketNumber, caseTypeId, jurisdictionId, caseStage, caseBackground, linkToUserId,
+      docketNumber, caseTypeId, jurisdictionId, caseBackground, linkToUserId,
       provisionedVia: 'data_operator',
     });
     await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });

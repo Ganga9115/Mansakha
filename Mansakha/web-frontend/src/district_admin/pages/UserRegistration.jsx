@@ -5,7 +5,18 @@ import UserRegistrationForm from '../components/UserRegistrationForm';
 import { useMyJurisdiction, useCreateUser, useSearchUserByDocket, useUpdateUser } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
-const CASE_STAGE_OPTIONS = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation'];
+// migration_034: Case Stage is no longer editable by District Admin (or any
+// staff role) - it's read-only here, shown exactly as eCourt (simulated,
+// core/services/ecourtStageSync.js) reports it. This panel now edits the
+// two fields District Admin's own PATCH /users/:userId still accepts -
+// contact number and address.
+const CASE_STAGE_TONE = {
+  Investigation: 'bg-amber-50 text-amber-700',
+  Trial: 'bg-blue-50 text-blue-700',
+  Rehabilitation: 'bg-violet-50 text-violet-700',
+  Compensation: 'bg-teal-50 text-teal-700',
+  'Case Closed': 'bg-gray-100 text-gray-600',
+};
 
 // District Admin only - Feature Catalog's User Credential Management.
 // State/National Administration don't get this page (no nav item for
@@ -20,7 +31,8 @@ export default function UserRegistration() {
 
   const [searchDocket, setSearchDocket] = useState('');
   const [editUser, setEditUser] = useState(null);
-  const [editCaseStage, setEditCaseStage] = useState('');
+  const [editContactNumber, setEditContactNumber] = useState('');
+  const [editAddress, setEditAddress] = useState('');
   const [editSuccess, setEditSuccess] = useState(false);
 
   const handleSearch = async (e) => {
@@ -36,7 +48,8 @@ export default function UserRegistration() {
         return;
       }
       setEditUser(user);
-      setEditCaseStage(user.caseStage || '');
+      setEditContactNumber(user.contactNumber || '');
+      setEditAddress(user.address || '');
     } catch (err) {
       toast.error(err.message || 'Search failed.');
     }
@@ -46,7 +59,7 @@ export default function UserRegistration() {
     if (!editUser) return;
     setEditSuccess(false);
     try {
-      await updateUser.mutate(editUser.userId, { caseStage: editCaseStage });
+      await updateUser.mutate(editUser.userId, { contactNumber: editContactNumber, address: editAddress });
       setEditSuccess(true);
     } catch (err) {
       toast.error(err.message || 'Could not save changes.');
@@ -91,14 +104,29 @@ export default function UserRegistration() {
                 <span className="text-sm font-semibold text-gray-800">{editUser.fullName}</span>
               </div>
               <div>
-                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Stage</label>
-                <select
-                  value={editCaseStage}
-                  onChange={(e) => setEditCaseStage(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                >
-                  {CASE_STAGE_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-                </select>
+                <span className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Case Stage</span>
+                <span className={`inline-block px-2 py-1 rounded-full text-[11px] font-semibold ${CASE_STAGE_TONE[editUser.caseStage] || 'bg-gray-100 text-gray-600'}`}>
+                  {editUser.caseStage || 'Unknown'}
+                </span>
+                <p className="text-[10px] text-gray-400 mt-1">Set exclusively by the eCourt system - not editable here.</p>
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Contact Number</label>
+                <input
+                  type="text"
+                  value={editContactNumber}
+                  onChange={(e) => setEditContactNumber(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Address</label>
+                <textarea
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                />
               </div>
               {editSuccess && <p className="text-xs text-emerald-600">Saved.</p>}
               <button
