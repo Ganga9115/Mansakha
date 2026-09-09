@@ -1,4 +1,6 @@
 const express = require('express');
+const multer = require('multer');
+const crypto = require('crypto');
 const { supabase } = require('../../core/db/supabaseClient');
 const { pool } = require('../../core/db/pgPool');
 const { writeAuditLog } = require('../../core/services/auditLog');
@@ -27,6 +29,42 @@ const ROLE_NAME = 'Investigating Officer';
 
 function getOwnStationId(req) {
   return req.auth.roles.find((r) => r.roleName === ROLE_NAME)?.stationId || null;
+}
+
+// Privacy Shield: NOTHING in this file ever selects user_identity's
+// full_name/contact_number/address - a case is identified to this officer by
+// docket number alone, the same boundary every other officials-side role
+// file holds. There is deliberately no "masked calling" feature built on top
+// of that: this project has no real telephony credentials (see
+// dispatchWorker.js's placeIvrsCall, a disclosed stub), so a masked-call
+// button would be a fabricated capability rather than a real one. The
+// stronger guarantee is the one actually implemented here - the contact
+// number is never sent to this role's client at all, so there is nothing on
+// screen to extract, mask or leak.
+
+// migration_037 - FIR / Chargesheet PDFs. Memory storage, straight through
+// to Supabase Storage without touching disk, exactly like the victim's own
+// intervention-proof uploads (user.routes.js) and me.js's profile photos.
+const caseDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB - a scanned chargesheet runs larger than a photo
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype !== 'application/pdf') return cb(new Error('File must be a PDF'));
+    cb(null, true);
+  },
+});
+
+// Multer signals a rejected file (wrong type, over the size limit) by
+// passing an Error to next() - with no handler that surfaces to the client
+// as an opaque 500 "Internal server error", which tells an officer who
+// picked a .docx nothing at all. This turns those into the real 400 they
+// are, with multer's own message.
+function handleUpload(middleware) {
+  return (req, res, next) => middleware(req, res, (err) => {
+    if (!err) return next();
+    const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+    return fail(res, tooLarge ? 'File is too large (10MB maximum)' : err.message || 'Could not read the uploaded file', 400);
+  });
 }
 
 router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
@@ -87,7 +125,8 @@ async function loadOwnCase(userId, req, res) {
   const { rows } = await pool.query(
     `select u.user_id, u.docket_number, u.case_stage, u.station_id, ct.name as case_type_name,
             ir.investigation_id, ir.accused_status, ir.investigation_progress, ir.chargesheet_status,
-            ir.chargesheet_filed_at, ir.threat_alerted_at, ir.investigation_complete_at
+            ir.chargesheet_filed_at, ir.threat_alerted_at, ir.investigation_complete_at,
+            ir.fir_document_path, ir.chargesheet_document_path
      from users u
      join case_types ct on ct.case_type_id = u.case_type_id
      left join investigation_records ir on ir.user_id = u.user_id
@@ -115,6 +154,19 @@ router.get('/cases/:userId', async (req, res) => {
 
   const sosEventCount7d = await getSosEventCount(c.user_id, 7);
 
+  // migration_037 - fresh short-lived signed URLs per read (the stored
+  // value is a storage path, never a URL). Same pattern as
+  // interventionRequestReview.js's own proof-document retrieval.
+  const signDocument = async (path) => {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from('case-documents').createSignedUrl(path, 3600);
+    return error ? null : data.signedUrl;
+  };
+  const [firDocumentUrl, chargesheetDocumentUrl] = await Promise.all([
+    signDocument(c.fir_document_path),
+    signDocument(c.chargesheet_document_path),
+  ]);
+
   return ok(res, {
     userId: c.user_id,
     docketNumber: c.docket_number,
@@ -126,6 +178,8 @@ router.get('/cases/:userId', async (req, res) => {
     chargesheetFiledAt: c.chargesheet_filed_at || null,
     threatAlertedAt: c.threat_alerted_at || null,
     investigationCompleteAt: c.investigation_complete_at || null,
+    firDocumentUrl,
+    chargesheetDocumentUrl,
     sosEventCount7d,
     threatTier: computeThreatTier({ accusedStatus: c.accused_status || null, caseTypeName: c.case_type_name, sosEventCount7d }),
     notes: notes.map((n) => ({ noteId: n.note_id, noteText: n.note_text, authoredBy: n.authored_by, createdAt: n.created_at })),
@@ -207,6 +261,41 @@ router.patch('/cases/:userId/chargesheet', async (req, res) => {
   await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
 
   return ok(res, { userId: c.user_id, chargesheetStatus: 'Filed' }, 'Chargesheet marked as filed');
+});
+
+// Document Transparency (migration_037) - the FIR copy and the filed
+// chargesheet, uploaded as PDFs and bound to this case's own record, then
+// downloadable by the victim from their own Case Details (see
+// user.routes.js's GET /investigation-progress, which mints a fresh
+// short-lived signed URL per read - the stored value here is a storage
+// path, never a URL). Re-uploading replaces the previous file at the same
+// deterministic path rather than accumulating orphans, matching me.js's
+// own profile-photo upsert reasoning.
+const CASE_DOCUMENT_TYPES = {
+  fir: { column: 'fir_document_path', label: 'FIR copy' },
+  chargesheet: { column: 'chargesheet_document_path', label: 'Chargesheet' },
+};
+
+router.post('/cases/:userId/documents/:documentType', handleUpload(caseDocumentUpload.single('file')), async (req, res) => {
+  const meta = CASE_DOCUMENT_TYPES[req.params.documentType];
+  if (!meta) return fail(res, `documentType must be one of: ${Object.keys(CASE_DOCUMENT_TYPES).join(', ')}`, 400);
+
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+  if (!req.file) return fail(res, 'file is required (PDF)', 400);
+
+  const storagePath = `${c.user_id}/${req.params.documentType}-${crypto.randomUUID()}.pdf`;
+  const { error: uploadError } = await supabase.storage
+    .from('case-documents')
+    .upload(storagePath, req.file.buffer, { contentType: 'application/pdf', upsert: true });
+  if (uploadError) return fail(res, `Could not upload ${meta.label}: ${uploadError.message}`, 500);
+
+  const { error } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { [meta.column]: storagePath });
+  if (error) return fail(res, `Uploaded, but could not bind it to the case record: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
+
+  return ok(res, { userId: c.user_id, documentType: req.params.documentType }, `${meta.label} uploaded - the victim can now download it`, 201);
 });
 
 // A bookkeeping close-out distinct from the chargesheet/case_stage
@@ -325,85 +414,21 @@ router.post('/cases/:userId/notes', async (req, res) => {
   return ok(res, { noteId: data.note_id }, 'Note added', 201);
 });
 
-// ===== Structured tasks (migration_030_agency_tasks.sql) =====
-// Same template every other new-role file uses.
-const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
-];
-
-router.get('/tasks', async (req, res) => {
-  const { status } = req.query;
-  if (status && !['Pending', 'Completed'].includes(status)) return fail(res, "status must be 'Pending' or 'Completed'", 400);
-
-  const { rows } = await pool.query(
-    `select t.task_id, t.action, t.due_at, t.status, t.completed_at, t.auto_generated, t.created_at,
-            t.source_referral_id, ar.referred_to_role as source_referral_role,
-            u.docket_number, ct.name as case_type_name, o.full_name as created_by_name
-     from agency_tasks t
-     join users u on u.user_id = t.user_id
-     join case_types ct on ct.case_type_id = u.case_type_id
-     left join officials o on o.official_id = t.created_by_official_id
-     left join agency_referrals ar on ar.referral_id = t.source_referral_id
-     where t.assigned_to_role = $1 ${status ? 'and t.status = $2' : ''}
-     order by (t.due_at is null), t.due_at asc, t.created_at desc`,
-    status ? [ROLE_NAME, status] : [ROLE_NAME]
-  );
-
-  return ok(res, {
-    tasks: rows.map((t) => ({
-      taskId: t.task_id,
-      docketNumber: t.docket_number,
-      caseTypeName: t.case_type_name,
-      action: t.action,
-      dueAt: t.due_at,
-      status: t.status,
-      completedAt: t.completed_at,
-      autoGenerated: t.auto_generated,
-      createdByName: t.created_by_name || 'System (auto-escalated)',
-      createdAt: t.created_at,
-      overdue: t.status === 'Pending' && !!t.due_at && new Date(t.due_at) < new Date(),
-      // IO's own case pages live at /io/cases/:userId, not /io/referrals/:id -
-      // a task whose source referral belongs to another role (e.g. Protection
-      // Officer) is never something this portal can open directly, matching
-      // every other role file's same sourceReferralRole check.
-      sourceReferralId: t.source_referral_id,
-      sourceReferralRole: t.source_referral_role,
-    })),
-  });
-});
-
-router.post('/tasks', async (req, res) => {
-  const { userId, assignedToRole, action, dueAt, sourceReferralId } = req.body;
-  if (!userId || !assignedToRole || !action || !String(action).trim()) {
-    return fail(res, 'userId, assignedToRole, and action are required', 400);
-  }
-  if (!TASK_ASSIGNABLE_ROLES.includes(assignedToRole)) {
-    return fail(res, `assignedToRole must be one of: ${TASK_ASSIGNABLE_ROLES.join(', ')}`, 400);
-  }
-
-  const { rows: userRows } = await pool.query('select user_id from users where user_id = $1', [userId]);
-  if (!userRows[0]) return fail(res, 'Case not found', 404);
-
-  const { data, error } = await supabase
-    .from('agency_tasks')
-    .insert({
-      user_id: userId,
-      source_referral_id: sourceReferralId || null,
-      assigned_to_role: assignedToRole,
-      created_by_official_id: req.auth.officialId,
-      action: String(action).trim(),
-      due_at: dueAt || null,
-    })
-    .select('task_id')
-    .single();
-  if (error) return fail(res, `Could not create task: ${error.message}`, 500);
-
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'agency_task', entityId: data.task_id });
-
-  return ok(res, { taskId: data.task_id }, 'Task created', 201);
-});
-
+// ===== Structured tasks (migration_030_agency_tasks.sql) - INBOUND ONLY =====
+// Investigating Officer has no statutory authority to raise cross-
+// departmental directives - real-world grounding: IO's own authority
+// (Rule 7, PoA Rules) is investigation-specific (arrest, custody,
+// chargesheet); directing another department is an executive/
+// administrative act, which is District Collector's function, not a police
+// investigator's. GET /tasks (a global list) and POST /tasks (outbound
+// creation) - which backed the old "My Tasks" page and "Assign Action
+// Item" card - have been removed entirely. A directive raised on THIS
+// case by another role (e.g. District Collector) is still visible via the
+// per-case GET /cases/:userId/tasks above, regardless of which role it
+// targets - and can be marked complete here if it targets Investigating
+// Officer. Other roles' own routes.js files keep their own POST /tasks,
+// which can still target 'Investigating Officer' as assignedToRole - this
+// cut is one-directional.
 router.patch('/tasks/:taskId/complete', async (req, res) => {
   const { rows } = await pool.query(
     'select task_id, status from agency_tasks where task_id = $1 and assigned_to_role = $2',

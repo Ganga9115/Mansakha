@@ -1,8 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
-import { useMe } from '../services/hooks';
+import { useMe, useDesignationOptions, useUpdateDesignation } from '../services/hooks';
 import { Eye, EyeOff, User } from 'lucide-react';
 
 // Investigating Officer's own copy of the shared Settings/Profile screen -
@@ -69,6 +69,36 @@ export default function Profile() {
   };
 
   const jobTitle = 'Investigating Officer';
+  // migration_035/033 - rank is officer-editable here (it grants nothing);
+  // the police station is NOT - it stays Ministry-set and read-only,
+  // because it decides which cases reach this queue. Station is the
+  // real scoping key for this role: a case reaches this queue because its
+  // FIR was registered at this station (io.routes.js's users.station_id
+  // filter), never by manual assignment.
+  const myRole = me?.roles?.find((r) => r.roleName === jobTitle);
+  const optionsQuery = useDesignationOptions();
+  const designationOptions = optionsQuery.data?.options?.[jobTitle] || [];
+  const updateDesignation = useUpdateDesignation();
+  const [designation, setDesignation] = useState('');
+  const [designationSaved, setDesignationSaved] = useState(false);
+  const [designationError, setDesignationError] = useState(null);
+
+  // Seeded from the server's own value once /api/me resolves, then owned by
+  // this control.
+  useEffect(() => { setDesignation(myRole?.designation || ''); }, [myRole?.designation]);
+
+  const handleDesignationChange = async (next) => {
+    setDesignation(next);
+    setDesignationSaved(false);
+    setDesignationError(null);
+    try {
+      await updateDesignation.mutate(jobTitle, next || null);
+      setDesignationSaved(true);
+      refetchMe();
+    } catch (err) {
+      setDesignationError(err.message || 'Could not save your designation.');
+    }
+  };
 
   return (
     <StaffLayout title="Profile">
@@ -118,6 +148,38 @@ export default function Profile() {
               readOnly
               className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Designation</label>
+              <select
+                value={designation}
+                onChange={(e) => handleDesignationChange(e.target.value)}
+                disabled={updateDesignation.loading}
+                className="w-full px-3.5 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 disabled:opacity-60"
+              >
+                <option value="">Not specified</option>
+                {designationOptions.map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+              {designationSaved && <p className="text-[10px] text-emerald-600 mt-1">Designation saved.</p>}
+              {designationError && <p className="text-[10px] text-rose-600 mt-1">{designationError}</p>}
+              <p className="text-[10px] text-gray-400 mt-1">
+                Rule 7, SC/ST (PoA) Rules 1995 requires an atrocity case to be investigated by an officer not below DySP rank.
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1.5">Police Station</label>
+              <input
+                value={myRole?.stationName || 'Not yet assigned'}
+                readOnly
+                title="Set by Ministry at appointment - your case queue is scoped to this station"
+                className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">
+                Cases reach your queue automatically when their FIR is registered at this station.
+              </p>
+            </div>
           </div>
         </div>
 

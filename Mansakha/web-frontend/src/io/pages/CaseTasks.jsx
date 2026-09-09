@@ -3,32 +3,51 @@ import { useParams } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import CaseHeader from '../components/CaseHeader';
 import CaseSubNav from '../components/CaseSubNav';
-import { Send, ClipboardList, Bot, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { useCaseDetail, useCaseTasks, useMarkInvestigationComplete } from '../services/hooks';
-import { useCreateTask } from '../services/taskHooks';
+import { Bot, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { useCaseDetail, useCaseTasks, useMarkInvestigationComplete, useCompleteDirective } from '../services/hooks';
 
-// Roles a task may be assigned to - independent of this portal's own role,
-// so a directive can be raised for any concerned office, not only this one.
-const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
-];
+// Read-only, except for completing a directive raised FOR this role.
+// Investigating Officer has no authority to raise cross-departmental
+// directives - IO's own statutory function (Rule 7, PoA Rules) is
+// investigation (arrest, custody, chargesheet); directing another
+// department is an executive act belonging to District Collector. The
+// "Assign Action Item" card that used to sit here has been removed, along
+// with the backend's own POST /tasks for this role.
+const ROLE_NAME = 'Investigating Officer';
 
 function formatDate(iso) {
   if (!iso) return 'No date specified';
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function CaseTasksList({ userId }) {
+function CaseTasksList({ userId, onChanged }) {
   const query = useCaseTasks(userId);
+  const complete = useCompleteDirective();
+  const [completingId, setCompletingId] = useState(null);
+  const [error, setError] = useState(null);
   const tasks = query.data?.tasks || [];
 
   if (query.loading) return <p className="text-xs text-gray-400">Loading...</p>;
   if (query.error) return <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3 py-2 rounded-lg">{query.error}</div>;
   if (tasks.length === 0) return <p className="text-xs text-gray-400">No action items have been raised on this case yet.</p>;
 
+  const handleComplete = async (taskId) => {
+    setError(null);
+    setCompletingId(taskId);
+    try {
+      await complete.mutate(taskId);
+      query.refetch();
+      onChanged?.();
+    } catch (err) {
+      setError(err.message || 'Could not update this directive. Kindly try again.');
+    } finally {
+      setCompletingId(null);
+    }
+  };
+
   return (
     <div className="space-y-3">
+      {error && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3 py-2 rounded-lg">{error}</div>}
       {tasks.map((t) => (
         <div key={t.taskId} className="border border-gray-200 rounded-lg p-3.5">
           <div className="flex items-center gap-2 flex-wrap mb-1.5">
@@ -50,75 +69,19 @@ function CaseTasksList({ userId }) {
             Assigned by {t.createdByName} on {formatDate(t.createdAt)} - Due: {formatDate(t.dueAt)}
             {t.completedAt && ` - Completed ${formatDate(t.completedAt)}`}
           </p>
+          {/* Only a directive raised FOR this role can be closed out here. */}
+          {t.assignedToRole === ROLE_NAME && t.status === 'Pending' && (
+            <button
+              onClick={() => handleComplete(t.taskId)}
+              disabled={completingId === t.taskId}
+              className="mt-2 flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-md text-[11px] font-semibold transition disabled:opacity-60"
+            >
+              <CheckCircle2 size={12} />
+              {completingId === t.taskId ? 'Working...' : 'Mark Complete'}
+            </button>
+          )}
         </div>
       ))}
-    </div>
-  );
-}
-
-function AssignTaskCard({ userId, onCreated }) {
-  const [assignedToRole, setAssignedToRole] = useState(TASK_ASSIGNABLE_ROLES[0]);
-  const [action, setAction] = useState('');
-  const [dueAt, setDueAt] = useState('');
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const createTask = useCreateTask();
-
-  const handleSubmit = async () => {
-    if (!action.trim()) return;
-    setError(null);
-    setSuccess(false);
-    try {
-      await createTask.mutate(userId, assignedToRole, action.trim(), dueAt ? new Date(dueAt).toISOString() : null, null);
-      setAction('');
-      setDueAt('');
-      setSuccess(true);
-      onCreated();
-    } catch (err) {
-      setError(err.message || 'Unable to assign this task. Kindly try again.');
-    }
-  };
-
-  return (
-    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-      <div className="flex items-center gap-1.5">
-        <ClipboardList size={15} className="text-[#3D5A80]" />
-        <h3 className="font-bold text-sm text-gray-800">Assign Action Item</h3>
-      </div>
-      <p className="text-[11px] text-gray-400">Raise a structured, due-dated directive for any concerned office on this case.</p>
-      <select
-        value={assignedToRole}
-        onChange={(e) => setAssignedToRole(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      >
-        {TASK_ASSIGNABLE_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
-      </select>
-      <textarea
-        value={action}
-        onChange={(e) => setAction(e.target.value)}
-        placeholder="Specify the action required..."
-        rows={3}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      />
-      <div>
-        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Due Date</label>
-        <input
-          type="date"
-          value={dueAt}
-          onChange={(e) => setDueAt(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-        />
-      </div>
-      <button
-        onClick={handleSubmit}
-        disabled={!action.trim() || createTask.loading}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
-      >
-        <Send size={13} />
-        {createTask.loading ? 'Submitting...' : 'Submit'}
-      </button>
-      {error && <p className="text-xs text-rose-600">{error}</p>}
-      {success && <p className="text-xs text-emerald-600">Action item assigned successfully.</p>}
     </div>
   );
 }
@@ -171,13 +134,10 @@ export default function CaseTasks() {
                 <h3 className="font-bold text-sm text-gray-800">Action Items on This Case</h3>
               </div>
               <p className="text-[11px] text-gray-400 mb-4">Every directive raised on this case, whichever office it was assigned to.</p>
-              <CaseTasksList userId={userId} />
+              <CaseTasksList userId={userId} onChanged={tasksQuery.refetch} />
             </div>
           </div>
 
-          <div className="space-y-6">
-            <AssignTaskCard userId={userId} onCreated={tasksQuery.refetch} />
-          </div>
         </div>
       </div>
     </StaffLayout>

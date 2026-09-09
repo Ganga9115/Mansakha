@@ -11,6 +11,7 @@ const { ok, fail } = require('../../core/services/responseEnvelope');
 const { getDescendantJurisdictionIds } = require('../../core/services/jurisdictionTree');
 const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
 const { generateSimulatedStationName } = require('../../core/services/policeStationSimulation');
+const { DESIGNATIONS_BY_ROLE } = require('../../core/services/officialDesignations');
 
 const router = express.Router();
 
@@ -25,21 +26,10 @@ const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator',
   'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
-// migration_035 - Protection Officer's real-world title under the PoA Act
-// Rules, which leave the actual appointment to state government
-// notification rather than naming one fixed post nationally - different
-// states have designated a Deputy Superintendent of Police, a
-// Sub-Divisional Magistrate, a Tehsildar, or a District Social Welfare
-// Officer to the role. Optional (Ministry may not know it at the moment of
-// account creation) but constrained to this list when provided, rather than
-// free text, so the officer's own Profile page can render it consistently.
-const PROTECTION_OFFICER_DESIGNATIONS = [
-  'Deputy Superintendent of Police (DSP)',
-  'Sub-Divisional Magistrate (SDM)',
-  'Tehsildar',
-  'District Social Welfare Officer (DSWO)',
-  'Additional District Magistrate (ADM)',
-];
+// migration_035 - designation lists live in one shared place so Ministry's
+// own Staff Management and the officer's own Profile can never drift apart.
+// See that file for the real-world grounding of each list (and for why
+// designation is descriptive, not an authorization boundary).
 
 // Section 6.2's new validation - an Administration account at district or
 // state level can't be created (or granted) where an active one already
@@ -251,8 +241,8 @@ router.post('/staff', async (req, res) => {
   // Officer genuinely is (an FIR is registered, and an IO attached, at one
   // specific station) - jurisdictionId (district) is the correct and only
   // scope for this role.
-  if (roleName === 'Protection Officer' && designation && !PROTECTION_OFFICER_DESIGNATIONS.includes(designation)) {
-    return fail(res, `designation must be one of: ${PROTECTION_OFFICER_DESIGNATIONS.join(', ')}`, 400);
+  if (designation && DESIGNATIONS_BY_ROLE[roleName] && !DESIGNATIONS_BY_ROLE[roleName].includes(designation)) {
+    return fail(res, `designation must be one of: ${DESIGNATIONS_BY_ROLE[roleName].join(', ')}`, 400);
   }
   // Required for Counsellor accounts specifically because the Call
   // Counsellor/WhatsApp redirect a user can trigger (user/routes/user.routes.js)
@@ -317,7 +307,7 @@ router.post('/staff', async (req, res) => {
           // a single-station one - so this is deliberately NOT a generic
           // pass-through the way jurisdiction/provider above are.
           roleName === 'Investigating Officer' ? stationId || null : null,
-          roleName === 'Protection Officer' ? designation || null : null,
+          DESIGNATIONS_BY_ROLE[roleName] ? designation || null : null,
           req.auth.officialId,
         ]
       );
@@ -451,8 +441,8 @@ router.post('/staff/:officialId/roles', async (req, res) => {
   if (roleName === 'Protection Officer' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Protection Officer accounts', 400);
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
   if (roleName === 'Investigating Officer' && !stationId) return fail(res, 'stationId is required for Investigating Officer accounts', 400);
-  if (roleName === 'Protection Officer' && designation && !PROTECTION_OFFICER_DESIGNATIONS.includes(designation)) {
-    return fail(res, `designation must be one of: ${PROTECTION_OFFICER_DESIGNATIONS.join(', ')}`, 400);
+  if (designation && DESIGNATIONS_BY_ROLE[roleName] && !DESIGNATIONS_BY_ROLE[roleName].includes(designation)) {
+    return fail(res, `designation must be one of: ${DESIGNATIONS_BY_ROLE[roleName].join(', ')}`, 400);
   }
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
@@ -477,7 +467,7 @@ router.post('/staff/:officialId/roles', async (req, res) => {
       // Investigating Officer only - see POST /staff's own comment on why
       // this isn't a generic pass-through like jurisdiction/provider above.
       station_id: roleName === 'Investigating Officer' ? stationId || null : null,
-      designation: roleName === 'Protection Officer' ? designation || null : null,
+      designation: DESIGNATIONS_BY_ROLE[roleName] ? designation || null : null,
       assigned_by: req.auth.officialId,
     })
     .select('official_role_id')
@@ -511,8 +501,8 @@ router.patch('/staff/:officialId/roles/:roleName/scope', async (req, res) => {
   }
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
   if (roleName === 'Investigating Officer' && !stationId) return fail(res, 'stationId is required for Investigating Officer accounts', 400);
-  if (roleName === 'Protection Officer' && designation && !PROTECTION_OFFICER_DESIGNATIONS.includes(designation)) {
-    return fail(res, `designation must be one of: ${PROTECTION_OFFICER_DESIGNATIONS.join(', ')}`, 400);
+  if (designation && DESIGNATIONS_BY_ROLE[roleName] && !DESIGNATIONS_BY_ROLE[roleName].includes(designation)) {
+    return fail(res, `designation must be one of: ${DESIGNATIONS_BY_ROLE[roleName].join(', ')}`, 400);
   }
 
   const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
@@ -537,7 +527,7 @@ router.patch('/staff/:officialId/roles/:roleName/scope', async (req, res) => {
       // Investigating Officer only - see POST /staff's own comment on why
       // this isn't a generic pass-through like jurisdiction/provider above.
       station_id: roleName === 'Investigating Officer' ? stationId || null : null,
-      designation: roleName === 'Protection Officer' ? designation || null : null,
+      designation: DESIGNATIONS_BY_ROLE[roleName] ? designation || null : null,
     })
     .eq('official_role_id', grant.official_role_id);
   if (error) return fail(res, `Could not update scope: ${error.message}`, 500);

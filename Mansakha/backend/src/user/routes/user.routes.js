@@ -2222,7 +2222,8 @@ router.get('/compensation-status', async (req, res) => {
 router.get('/investigation-progress', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
   const { rows } = await pool.query(
-    `select ir.accused_status, ir.investigation_progress, ir.chargesheet_status, ir.chargesheet_filed_at
+    `select ir.accused_status, ir.investigation_progress, ir.chargesheet_status, ir.chargesheet_filed_at,
+            ir.fir_document_path, ir.chargesheet_document_path
      from users u
      left join investigation_records ir on ir.user_id = u.user_id
      where u.user_id = $1`,
@@ -2231,11 +2232,28 @@ router.get('/investigation-progress', async (req, res) => {
   const row = rows[0];
   if (!row) return fail(res, 'Case not found', 404);
 
+  // migration_037 - Document Transparency: the FIR copy and filed
+  // chargesheet the Investigating Officer uploaded, downloadable straight
+  // from the victim's own Case Details. A fresh short-lived signed URL is
+  // minted per read (never a permanent public link, never a stored URL) -
+  // same discipline as intervention-proof retrieval.
+  const signDocument = async (path) => {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from('case-documents').createSignedUrl(path, 3600);
+    return error ? null : data.signedUrl;
+  };
+  const [firDocumentUrl, chargesheetDocumentUrl] = await Promise.all([
+    signDocument(row.fir_document_path),
+    signDocument(row.chargesheet_document_path),
+  ]);
+
   return ok(res, {
     accusedStatus: row.accused_status || null,
     investigationProgress: row.investigation_progress || null,
     chargesheetStatus: row.chargesheet_status || 'Not Filed',
     chargesheetFiledAt: row.chargesheet_filed_at || null,
+    firDocumentUrl,
+    chargesheetDocumentUrl,
   });
 });
 

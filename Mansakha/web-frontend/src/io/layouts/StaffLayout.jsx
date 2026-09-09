@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Shield, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
+import { Shield, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
 // Investigating Officer's own dedicated shell - copied from
 // dwo/layouts/StaffLayout.jsx (itself copied from district_admin's
-// template).
+// template). Deliberately exactly 2 routes: this role works its own
+// station's case queue, nothing else. The old "My Tasks" page is gone -
+// IO has no authority to raise cross-departmental directives (that's
+// District Collector's function), and a directive raised on one of THIS
+// officer's cases is already visible in context on that case's own Tasks
+// tab (CaseTasks.jsx), which is where it belongs.
 const NAV_ITEMS = [
   { name: 'Case Queue', icon: Shield, path: '/io' },
-  { name: 'My Tasks', icon: ClipboardList, path: '/io/tasks' },
   { name: 'Profile', icon: User, path: '/io/profile' },
 ];
 

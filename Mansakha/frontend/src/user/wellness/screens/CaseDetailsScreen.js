@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
@@ -40,6 +40,26 @@ function InvestigationProgressCard({ data }) {
       <Row label="Chargesheet" value={data.chargesheetStatus === 'Filed' ? `Filed ${formatDate(data.chargesheetFiledAt)}` : 'Not yet filed'} />
       {data.investigationProgress && (
         <Text style={styles.progressText}>{data.investigationProgress}</Text>
+      )}
+      {/* migration_037 - the FIR copy and chargesheet the Investigating
+          Officer uploaded, downloadable here. Each URL is a short-lived
+          signed link minted fresh by the backend on this very read, never a
+          permanent public link. */}
+      {(data.firDocumentUrl || data.chargesheetDocumentUrl) && (
+        <View style={styles.documentRow}>
+          {data.firDocumentUrl && (
+            <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.firDocumentUrl)}>
+              <Feather name="download" size={14} color={colors.primaryDark} />
+              <Text style={styles.documentBtnText}>FIR Copy (PDF)</Text>
+            </Pressable>
+          )}
+          {data.chargesheetDocumentUrl && (
+            <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.chargesheetDocumentUrl)}>
+              <Feather name="download" size={14} color={colors.primaryDark} />
+              <Text style={styles.documentBtnText}>Chargesheet (PDF)</Text>
+            </Pressable>
+          )}
+        </View>
       )}
     </Card>
   );
@@ -309,6 +329,13 @@ const styles = StyleSheet.create({
   statusPill: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: spacing.sm },
   statusPillText: { ...typography.caption, color: colors.textPrimary, fontWeight: '700' },
   progressText: { ...typography.bodySmall, color: colors.textSecondary, lineHeight: 19, marginTop: spacing.xs },
+  documentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  documentBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+    borderWidth: 1, borderColor: colors.primaryDark, borderRadius: radius.md,
+    paddingVertical: spacing.xs, paddingHorizontal: spacing.md,
+  },
+  documentBtnText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
 
   partyGroup: { marginBottom: spacing.sm },
   partyGroupTitle: { ...typography.caption, color: colors.textSecondary, marginBottom: 2 },

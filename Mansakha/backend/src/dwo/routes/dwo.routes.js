@@ -18,7 +18,7 @@ const router = express.Router();
 
 // District Welfare Officer - works the agency_referrals queue District Admin
 // creates for it (migration_028_agency_referrals.sql). THE TEMPLATE for the
-// other new-role route files (io, protection_officer, dlsa, spp,
+// other new-role route files (io, protection_officer, dlsa,
 // district_collector, rehabilitation_officer) - same core 4 routes, just a
 // different requireRole / referred_to_role filter per role. District
 // Collector's copy additionally fetches sibling referrals for the same case

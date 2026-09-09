@@ -48,6 +48,23 @@ const PROTECTION_OFFICER_DESIGNATIONS = [
   'Additional District Magistrate (ADM)',
 ];
 
+// migration_035 - mirrors the backend's INVESTIGATING_OFFICER_DESIGNATIONS.
+// Deliberately starts at DySP: Rule 7 of the SC/ST (PoA) Rules, 1995
+// requires an atrocity case to be investigated by an officer NOT BELOW the
+// rank of Deputy Superintendent of Police, so SI/Inspector - who would
+// handle an ordinary IPC case - legally cannot be the IO here.
+const INVESTIGATING_OFFICER_DESIGNATIONS = [
+  'Deputy Superintendent of Police (DySP)',
+  'Assistant Commissioner of Police (ACP)',
+  'Additional Superintendent of Police (Addl. SP)',
+  'Superintendent of Police (SP)',
+];
+
+const DESIGNATIONS_BY_ROLE = {
+  'Protection Officer': PROTECTION_OFFICER_DESIGNATIONS,
+  'Investigating Officer': INVESTIGATING_OFFICER_DESIGNATIONS,
+};
+
 const STATUS_BADGE = {
   active: 'bg-emerald-100 text-emerald-700',
   revoked: 'bg-gray-100 text-gray-500',
@@ -194,7 +211,7 @@ export default function StaffManagement() {
         roleName,
         password,
         jurisdictionId: JURISDICTION_SCOPED_ROLES.includes(roleName) ? jurisdictionId : undefined,
-        designation: roleName === 'Protection Officer' ? designation || undefined : undefined,
+        designation: DESIGNATIONS_BY_ROLE[roleName] ? designation || undefined : undefined,
         providerId: roleName === 'Rehabilitation Officer' ? providerId : undefined,
         stationId: roleName === 'Investigating Officer' ? stationId : undefined,
       });
@@ -273,7 +290,7 @@ export default function StaffManagement() {
       if (SCOPE_EDITABLE_ROLES.includes(role)) {
         await updateStaffScope.mutate(officialId, role, {
           jurisdictionId: role === 'Protection Officer' ? editJurisdictionId : undefined,
-          designation: role === 'Protection Officer' ? editDesignation || undefined : undefined,
+          designation: DESIGNATIONS_BY_ROLE[role] ? editDesignation || undefined : undefined,
           providerId: role === 'Rehabilitation Officer' ? editProviderId : undefined,
           stationId: role === 'Investigating Officer' ? editStationId : undefined,
         });
@@ -419,16 +436,25 @@ export default function StaffManagement() {
                     {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
                   </select>
                 </div>
-                {/* migration_035 - real-world title (state-notification-
-                    dependent under the PoA Act Rules), not free text. */}
-                <div>
-                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
-                  <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                    <option value="">Not specified</option>
-                    {PROTECTION_OFFICER_DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
               </>
+            )}
+            {/* migration_035 - real-world rank/title, constrained to the
+                posts that may actually hold this role (PoA Act Rules for
+                Protection Officer; Rule 7's DySP-and-above bar for
+                Investigating Officer), never free text. */}
+            {DESIGNATIONS_BY_ROLE[roleName] && (
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
+                <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                  <option value="">Not specified</option>
+                  {DESIGNATIONS_BY_ROLE[roleName].map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+                {roleName === 'Investigating Officer' && (
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    Rule 7, SC/ST (PoA) Rules 1995: an atrocity case must be investigated by an officer not below the rank of DySP.
+                  </p>
+                )}
+              </div>
             )}
             {/* migration_031 - which centre this Rehabilitation Officer
                 works for; otherwise their queue is empty by design. */}
@@ -602,14 +628,16 @@ export default function StaffManagement() {
                                       {editJurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
                                     </select>
                                   </div>
-                                  <div>
-                                    <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
-                                    <select value={editDesignation} onChange={(e) => setEditDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                      <option value="">{s.designation ? `Currently: ${s.designation}` : 'Not specified'}</option>
-                                      {PROTECTION_OFFICER_DESIGNATIONS.map((d) => <option key={d} value={d}>{d}</option>)}
-                                    </select>
-                                  </div>
                                 </>
+                              )}
+                              {DESIGNATIONS_BY_ROLE[s.roleName] && (
+                                <div>
+                                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
+                                  <select value={editDesignation} onChange={(e) => setEditDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                    <option value="">{s.designation ? `Currently: ${s.designation}` : 'Not specified'}</option>
+                                    {DESIGNATIONS_BY_ROLE[s.roleName].map((d) => <option key={d} value={d}>{d}</option>)}
+                                  </select>
+                                </div>
                               )}
                               {s.roleName === 'Rehabilitation Officer' && (
                                 <div>

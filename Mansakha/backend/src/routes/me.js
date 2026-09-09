@@ -4,6 +4,7 @@ const { supabase } = require('../core/db/supabaseClient');
 const { pool } = require('../core/db/pgPool');
 const { verifyToken } = require('../core/middleware/verifyToken');
 const { ok, fail } = require('../core/services/responseEnvelope');
+const { DESIGNATIONS_BY_ROLE } = require('../core/services/officialDesignations');
 
 const router = express.Router();
 
@@ -218,6 +219,61 @@ router.get('/notifications', verifyToken, async (req, res) => {
   } catch (err) {
     return fail(res, `Could not load notifications: ${err.message}`, 500);
   }
+});
+
+// The officer's own designation, set from their own Profile page. Safe to
+// be self-service precisely because designation grants nothing: it's a
+// descriptive record of the post they hold. What actually scopes a role -
+// an Investigating Officer's police station, a Protection Officer's
+// district - stays Ministry-only (ministry.routes.js's own scope routes)
+// and read-only here, because those DO decide which cases reach a queue.
+// Constrained to the same shared lists Ministry uses, never free text, and
+// only for roles the caller actually holds.
+router.patch('/designation', verifyToken, async (req, res) => {
+  if (req.auth.type !== 'official') return fail(res, 'Staff account required', 403);
+
+  const { roleName, designation } = req.body;
+  if (!roleName) return fail(res, 'roleName is required', 400);
+
+  const allowed = DESIGNATIONS_BY_ROLE[roleName];
+  if (!allowed) return fail(res, `${roleName} does not carry a designation`, 400);
+  if (designation && !allowed.includes(designation)) {
+    return fail(res, `designation must be one of: ${allowed.join(', ')}`, 400);
+  }
+  // Only a role this account actually holds - never someone else's grant,
+  // and never a role they were never given.
+  if (!req.auth.roles.some((r) => r.roleName === roleName)) {
+    return fail(res, `You do not hold the ${roleName} role`, 403);
+  }
+
+  const { rows } = await pool.query(
+    `select orr.official_role_id
+     from official_roles orr
+     join roles r on r.role_id = orr.role_id
+     where orr.official_id = $1 and r.role_name = $2 and orr.revoked_at is null
+     limit 1`,
+    [req.auth.officialId, roleName]
+  );
+  if (!rows[0]) return fail(res, `No active ${roleName} role found on this account`, 404);
+
+  const { error } = await supabase
+    .from('official_roles')
+    .update({ designation: designation || null })
+    .eq('official_role_id', rows[0].official_role_id);
+  if (error) return fail(res, `Could not update designation: ${error.message}`, 500);
+
+  return ok(res, { roleName, designation: designation || null }, 'Designation updated');
+});
+
+// The designation options this account may choose from, per role it holds -
+// so a Profile page never has to hardcode a copy of the lists.
+router.get('/designation-options', verifyToken, async (req, res) => {
+  if (req.auth.type !== 'official') return fail(res, 'Staff account required', 403);
+  const options = {};
+  for (const r of req.auth.roles) {
+    if (DESIGNATIONS_BY_ROLE[r.roleName]) options[r.roleName] = DESIGNATIONS_BY_ROLE[r.roleName];
+  }
+  return ok(res, { options });
 });
 
 // Uploads to Supabase Storage's `profile-photos` bucket (public read, see
