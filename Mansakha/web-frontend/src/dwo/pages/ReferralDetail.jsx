@@ -119,8 +119,13 @@ export default function ReferralDetail() {
           </div>
 
           <div className="space-y-6">
-            {r.status === 'Open' && (
+            {r.status === 'Open' && r.rehabilitationEligible && (
               <HandOffRehabCard referralId={referralId} onHandedOff={() => navigate('/dwo')} />
+            )}
+            {r.status === 'Open' && !r.rehabilitationEligible && (
+              <p className="text-[11px] text-gray-400 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                Rehabilitation hand-off becomes available once this case reaches the Rehabilitation stage (set by the eCourt system).
+              </p>
             )}
           </div>
         </div>

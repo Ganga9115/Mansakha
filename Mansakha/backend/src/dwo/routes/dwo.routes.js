@@ -138,11 +138,13 @@ router.get('/referrals/:referralId', async (req, res) => {
     // category" step, which happens independently of any DWO action.
     suggestedCompensation: getCompensationSchedule(referral.case_type_name),
     compensation: withLiveCompensationView(referral.metadata?.compensation, referral.case_stage),
-    // Rehabilitation Officer's mandate only begins after case closure (see
-    // hand-off-rehabilitation below) - exposed so the Assign Task form can
-    // hide that option as a target until then, rather than offering a
-    // directive the officer has no case access to yet.
-    rehabilitationEligible: referral.case_stage === 'Case Closed',
+    // migration_034: Rehabilitation is now a genuine mid-case eCourt stage
+    // (Investigation -> Trial -> Rehabilitation -> Compensation -> Case
+    // Closed), not a post-closure phase - exposed so the Assign Task form
+    // can hide that option as a target until the case actually reaches it,
+    // rather than offering a directive the officer has no case access to
+    // yet.
+    rehabilitationEligible: referral.case_stage === 'Rehabilitation',
   });
 });
 
@@ -382,9 +384,15 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
 // Hand-off to Rehabilitation Officer once immediate relief is settled - same
 // mechanism as dlsa.routes.js's mark-trial-ready (a referral is scoped to
 // one role, so this creates a NEW referral for Rehabilitation Officer and
-// resolves this one). Rehabilitation is a post-case-closure phase
-// (migration_029) - gated on the case actually being Closed, same rule the
-// victim's own opt-in route enforces (user.routes.js's POST /rehabilitation-opt-in).
+// resolves this one). migration_034: Rehabilitation is now a genuine
+// mid-case eCourt stage, not a post-closure phase - gated on the case
+// actually being at that stage, same rule the victim's own opt-in route
+// enforces (user.routes.js's POST /rehabilitation-opt-in). Also sets
+// rehabilitation_opted_in_at on the case, exactly like the victim's own
+// opt-in does - without this, an officer-initiated hand-off would create a
+// referral but never mark the case as opted in, so it would never actually
+// get isolated into its own Rehabilitation context, and the special
+// post-closure continuation popup would never arm for it later.
 router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) => {
   const referral = await loadOwnReferral(req.params.referralId, res);
   if (!referral) return;
@@ -398,9 +406,9 @@ router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) =
   const { providerId } = req.body;
   if (!providerId) return fail(res, 'providerId is required to hand off to Rehabilitation Officer', 400);
 
-  const { rows: caseRows } = await pool.query('select case_stage from users where user_id = $1', [referral.user_id]);
-  if (!caseRows[0] || caseRows[0].case_stage !== 'Case Closed') {
-    return fail(res, 'Rehabilitation hand-off is only available once the case is closed.', 400);
+  const { rows: caseRows } = await pool.query('select case_stage, rehabilitation_opted_in_at from users where user_id = $1', [referral.user_id]);
+  if (!caseRows[0] || caseRows[0].case_stage !== 'Rehabilitation') {
+    return fail(res, 'Rehabilitation hand-off is only available once the case reaches the Rehabilitation stage.', 400);
   }
 
   const { rows: providerRows } = await pool.query(
@@ -422,6 +430,17 @@ router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) =
     .select('referral_id')
     .single();
   if (insertError) return fail(res, `Could not hand off to rehabilitation: ${insertError.message}`, 500);
+
+  // Only set once - a case already opted in (e.g. the victim opted in
+  // themselves earlier) must not have its original opt-in timestamp
+  // overwritten.
+  if (!caseRows[0].rehabilitation_opted_in_at) {
+    const { error: optInError } = await supabase
+      .from('users')
+      .update({ rehabilitation_opted_in_at: new Date().toISOString() })
+      .eq('user_id', referral.user_id);
+    if (optInError) console.error('hand-off-rehabilitation: could not set rehabilitation_opted_in_at', optInError.message);
+  }
 
   const { error: resolveError } = await supabase
     .from('agency_referrals')
@@ -499,12 +518,13 @@ router.post('/tasks', async (req, res) => {
 
   const { rows: userRows } = await pool.query('select user_id, case_stage from users where user_id = $1', [userId]);
   if (!userRows[0]) return fail(res, 'Case not found', 404);
-  // Rehabilitation Officer's mandate only begins after case closure (same
-  // rule as hand-off-rehabilitation above and the victim's own opt-in
-  // route) - a task raised before that would sit in the officer's queue
-  // for a case they have no referral or case access to yet.
-  if (assignedToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Case Closed') {
-    return fail(res, "Rehabilitation Officer's role begins only once the case is closed. Kindly assign this to a different office, or raise it again after closure.", 400);
+  // migration_034: Rehabilitation Officer's mandate begins once the case
+  // reaches the Rehabilitation eCourt stage (same rule as
+  // hand-off-rehabilitation above and the victim's own opt-in route) - a
+  // task raised before that would sit in the officer's queue for a case
+  // they have no referral or case access to yet.
+  if (assignedToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Rehabilitation') {
+    return fail(res, "Rehabilitation Officer's role begins only once the case reaches the Rehabilitation stage. Kindly assign this to a different office, or raise it again once the case reaches that stage.", 400);
   }
 
   const { data, error } = await supabase
