@@ -115,3 +115,11 @@ alter table agency_tasks enable row level security;
 insert into storage.buckets (id, name, public)
 values ('intervention-proofs', 'intervention-proofs', false)
 on conflict (id) do nothing;
+
+-- migration_037 - same reasoning again: the FIR copy and filed chargesheet
+-- an Investigating Officer uploads are downloadable by the victim from
+-- their own Case Details, but always via a short-lived signed URL, never a
+-- permanent public link.
+insert into storage.buckets (id, name, public)
+values ('case-documents', 'case-documents', false)
+on conflict (id) do nothing;

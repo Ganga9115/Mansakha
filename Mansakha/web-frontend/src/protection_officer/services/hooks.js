@@ -144,3 +144,27 @@ export function useReviewInterventionRequest() {
   };
   return { mutate, loading };
 }
+
+// The designation options this account may choose from (per role it holds)
+// and the self-service update. Designation grants nothing - it's a
+// descriptive record of the post held - which is why it is officer-editable,
+// unlike station/district scoping, which stays Ministry-only because it
+// decides which cases reach this queue.
+export function useDesignationOptions() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/me/designation-options', token), [token]);
+}
+
+export function useUpdateDesignation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (roleName, designation) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch('/api/me/designation', { roleName, designation }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}

@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import CaseHeader from '../components/CaseHeader';
 import CaseSubNav from '../components/CaseSubNav';
-import { ShieldAlert, FileText, Send, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, FileText, Send, AlertTriangle, Upload, Download, ShieldOff } from 'lucide-react';
 import {
   useCaseDetail, useSetAccusedStatus, useSetInvestigationProgress,
   useFileChargesheet, useMarkInvestigationComplete, useAlertProtectionOfficer,
+  useUploadCaseDocument,
 } from '../services/hooks';
 
 // Investigating Officer's Case Overview - accused status, victim-safe
@@ -146,6 +147,92 @@ function ChargesheetCard({ c, userId, onChanged }) {
   );
 }
 
+// migration_037 - Document Transparency. One row per document kind; the
+// uploaded PDF binds to this case's own record and immediately becomes a
+// Download button on the victim's own Case Details.
+function CaseDocumentRow({ label, documentType, existingUrl, userId, onChanged }) {
+  const fileInputRef = useRef(null);
+  const [error, setError] = useState(null);
+  const upload = useUploadCaseDocument();
+
+  const handleSelected = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    try {
+      await upload.mutate(userId, documentType, file);
+      onChanged();
+    } catch (err) {
+      setError(err.message || `Could not upload the ${label}. Kindly try again.`);
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-3 border border-gray-200 rounded-lg px-3.5 py-3 flex-wrap">
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-gray-800">{label}</p>
+        <p className="text-[10px] text-gray-400">
+          {existingUrl ? 'Uploaded - the victim can download this from their own Case Details.' : 'Not uploaded yet.'}
+        </p>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        {existingUrl && (
+          <a
+            href={existingUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#EBF4FA] rounded-md text-[11px] font-semibold transition"
+          >
+            <Download size={12} /> View
+          </a>
+        )}
+        <input type="file" accept="application/pdf" ref={fileInputRef} onChange={handleSelected} className="hidden" />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={upload.loading}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-md text-[11px] font-semibold transition disabled:opacity-60"
+        >
+          <Upload size={12} />
+          {upload.loading ? 'Uploading...' : existingUrl ? 'Replace PDF' : 'Upload PDF'}
+        </button>
+      </div>
+      {error && <p className="text-xs text-rose-600 w-full">{error}</p>}
+    </div>
+  );
+}
+
+function CaseDocumentsCard({ c, userId, onChanged }) {
+  return (
+    <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+      <div className="flex items-center gap-1.5">
+        <FileText size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Case Documents</h3>
+      </div>
+      <p className="text-[11px] text-gray-400">
+        PDF only. Uploading here immediately gives the victim a Download button on their own Case Details - retrieval always goes through a short-lived signed link, never a permanent public URL.
+      </p>
+      <CaseDocumentRow label="FIR Copy" documentType="fir" existingUrl={c.firDocumentUrl} userId={userId} onChanged={onChanged} />
+      <CaseDocumentRow label="Chargesheet" documentType="chargesheet" existingUrl={c.chargesheetDocumentUrl} userId={userId} onChanged={onChanged} />
+    </div>
+  );
+}
+
+// The Privacy Shield, stated plainly for the officer: this portal never
+// receives the victim's contact details at all (see io.routes.js's own
+// comment) - a case is identified by docket number alone.
+function PrivacyShieldNote() {
+  return (
+    <div className="flex items-start gap-2 bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg px-3.5 py-2.5">
+      <ShieldOff size={14} className="text-[#3D5A80] mt-0.5 shrink-0" />
+      <p className="text-[11px] text-[#3D5A80] leading-relaxed">
+        <span className="font-bold">Privacy Shield.</span> The victim's name, phone number and address are never sent to this portal - cases are identified by docket number only. Contact must be made through the assigned Counsellor or Protection Officer.
+      </p>
+    </div>
+  );
+}
+
 function AlertProtectionOfficerCard({ c, userId, onChanged }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState(null);
@@ -240,8 +327,10 @@ export default function CaseDetail() {
             <AccusedStatusCard c={c} userId={userId} onChanged={detailQuery.refetch} />
             <InvestigationProgressCard c={c} userId={userId} onChanged={detailQuery.refetch} />
             <ChargesheetCard c={c} userId={userId} onChanged={detailQuery.refetch} />
+            <CaseDocumentsCard c={c} userId={userId} onChanged={detailQuery.refetch} />
           </div>
           <div className="space-y-6">
+            <PrivacyShieldNote />
             <AlertProtectionOfficerCard c={c} userId={userId} onChanged={detailQuery.refetch} />
           </div>
         </div>

@@ -339,7 +339,7 @@ router.patch('/referrals/:referralId/threat-tier', async (req, res) => {
 // still surfaced - inline on the specific case's own Referral Detail (see
 // GET /referrals/:referralId's pendingDirectives above), not as a separate
 // portal-wide list - and can still be marked complete here. Other roles'
-// own routes.js files (dwo, districtAdmin, spp, district_collector, etc.)
+// own routes.js files (dwo, districtAdmin, district_collector, etc.)
 // keep their own POST /tasks, which can still target 'Protection Officer'
 // as assignedToRole - this cut is one-directional.
 router.patch('/tasks/:taskId/complete', async (req, res) => {

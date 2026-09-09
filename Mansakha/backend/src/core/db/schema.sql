@@ -400,6 +400,12 @@ create table investigation_records (
   investigation_progress    text,
   chargesheet_status        text not null default 'Not Filed' check (chargesheet_status in ('Not Filed', 'Filed')),
   chargesheet_filed_at      timestamptz,
+  -- migration_037: storage paths (not URLs) into the private 'case-documents'
+  -- bucket - retrieval always goes through a short-lived signed URL, same
+  -- discipline as intervention-proofs. Uploaded by IO, downloadable by the
+  -- victim from their own Case Details.
+  fir_document_path         text,
+  chargesheet_document_path text,
   threat_alerted_at         timestamptz, -- when IO alerted Protection Officer (the "threat detected" branch)
   investigation_complete_at timestamptz,
   updated_by                uuid references officials(official_id),

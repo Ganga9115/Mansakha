@@ -90,7 +90,6 @@ import IoCaseQueue from './io/pages/CaseQueue';
 import IoCaseDetail from './io/pages/CaseDetail';
 import IoCaseLog from './io/pages/CaseLog';
 import IoCaseTasks from './io/pages/CaseTasks';
-import IoMyTasks from './io/pages/MyTasks';
 import IoProfile from './io/pages/Profile';
 import DwoReferralQueue from './dwo/pages/ReferralQueue';
 import DwoReferralDetail from './dwo/pages/ReferralDetail';
@@ -233,7 +232,6 @@ export default function App() {
         <Route path="/io/cases/:userId" element={<RequireAuth loginPath="/signin"><IoCaseDetail /></RequireAuth>} />
         <Route path="/io/cases/:userId/log" element={<RequireAuth loginPath="/signin"><IoCaseLog /></RequireAuth>} />
         <Route path="/io/cases/:userId/tasks" element={<RequireAuth loginPath="/signin"><IoCaseTasks /></RequireAuth>} />
-        <Route path="/io/tasks" element={<RequireAuth loginPath="/signin"><IoMyTasks /></RequireAuth>} />
         <Route path="/io/profile" element={<RequireAuth loginPath="/signin"><IoProfile /></RequireAuth>} />
         <Route path="/dwo" element={<RequireAuth loginPath="/signin"><DwoReferralQueue /></RequireAuth>} />
         <Route path="/dwo/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DwoReferralDetail /></RequireAuth>} />

@@ -149,3 +149,66 @@ export function useAlertProtectionOfficer() {
   };
   return { mutate, loading };
 }
+
+// migration_037 - Document Transparency: uploads the FIR copy or the filed
+// chargesheet as a PDF, bound to this case's own record and immediately
+// downloadable by the victim from their own Case Details (see
+// user.routes.js's GET /investigation-progress, which mints a fresh
+// short-lived signed URL per read).
+export function useUploadCaseDocument() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId, documentType, file) => {
+    setLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      return await apiClient.uploadFile(`/api/io/cases/${userId}/documents/${documentType}`, formData, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Completes a directive raised FOR this role on one of its own cases -
+// surfaced inline on that case's Tasks tab (CaseTasks.jsx), not a
+// standalone portal-wide list. This role cannot raise directives of its
+// own (see io.routes.js's own comment on why).
+export function useCompleteDirective() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (taskId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/io/tasks/${taskId}/complete`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// The designation options this account may choose from (per role it holds)
+// and the self-service update. Designation grants nothing - it's a
+// descriptive record of the post held - which is why it is officer-editable,
+// unlike station/district scoping, which stays Ministry-only because it
+// decides which cases reach this queue.
+export function useDesignationOptions() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/me/designation-options', token), [token]);
+}
+
+export function useUpdateDesignation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (roleName, designation) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch('/api/me/designation', { roleName, designation }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
