@@ -24,6 +24,13 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
   const [caseTypeId, setCaseTypeId] = useState(initialValues?.suggestedCaseTypeId || '');
   const [caseBackground, setCaseBackground] = useState(initialValues?.suggestedCaseBackground || '');
   const [aadhaarNumber, setAadhaarNumber] = useState(initialValues?.suggestedAadhaarNumber || '');
+  // Residential address, transcribed from the FIR like every other field on
+  // this form. The victim is never asked for it in the mobile app - there is
+  // no profile-edit screen there - so intake is the only point at which it
+  // can legitimately enter the system, and an FIR always records the
+  // complainant's full address. Without it, the Protection Officer dispatched
+  // to relocate someone has a district and nothing else.
+  const [address, setAddress] = useState(initialValues?.suggestedAddress || '');
   const [stateId, setStateId] = useState(initialValues?.suggestedStateId || '');
   const [districtId, setDistrictId] = useState(initialValues?.suggestedDistrictId || '');
   const [stationId, setStationId] = useState('');
@@ -56,6 +63,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
         ...(stationId ? { stationId } : {}),
         ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
         ...(aadhaarNumber.trim() ? { aadhaarNumber: aadhaarNumber.trim() } : {}),
+        ...(address.trim() ? { address: address.trim() } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
@@ -68,6 +76,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
       setCaseTypeId('');
       setCaseBackground('');
       setAadhaarNumber('');
+      setAddress('');
       setStateId('');
       setDistrictId('');
       setStationId('');
@@ -143,6 +152,21 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
         <p className="text-[10px] text-gray-400 mt-1">
           Used to recognize if this person already has another case - if it matches an existing case, use Link Cases
           instead of registering a new one here.
+        </p>
+      </div>
+
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Residential Address (optional)</label>
+        <textarea
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          rows={2}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="As recorded in the FIR"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          Transcribed from the FIR. Shared only with the Protection Officer if this case is later referred to
+          them for Relocation or Witness Protection - never shown to any other role.
         </p>
       </div>
 

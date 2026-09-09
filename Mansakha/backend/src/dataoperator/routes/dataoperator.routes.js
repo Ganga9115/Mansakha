@@ -49,6 +49,12 @@ router.post('/register-user', async (req, res) => {
 // never something this intake step suggests or the operator sets.
 const FIRST_NAMES = ['Aarav', 'Vivaan', 'Aditya', 'Vihaan', 'Arjun', 'Ishaan', 'Kabir', 'Rohan', 'Diya', 'Riya', 'Saanvi', 'Anaya', 'Priya', 'Meera', 'Kavya', 'Ananya'];
 const LAST_NAMES = ['Sharma', 'Verma', 'Patel', 'Singh', 'Reddy', 'Das', 'Nair', 'Gupta', 'Iyer', 'Chauhan', 'Mehta', 'Joshi'];
+// Street-level detail only - the district/state a real FIR's address falls
+// under is already the case's own jurisdiction fields (suggestedDistrictName/
+// suggestedStateName below), so this fixture supplies just the house/street
+// portion, matching what "Use These Details" needs to fill the Residential
+// Address field with something a real complainant's FIR entry would read like.
+const STREET_NAMES = ['Gandhi Road', 'Nehru Colony', 'Station Road', 'Ambedkar Nagar', 'Old Bus Stand Road', 'Civil Lines', 'Mahatma Marg', 'Subhash Chowk'];
 
 router.post('/fetch-case', async (req, res) => {
   const { docketNumber } = req.body;
@@ -84,6 +90,9 @@ router.post('/fetch-case', async (req, res) => {
   // plausibly carry this, and it's what lets Data Operator recognize two
   // different docket numbers as the same person.
   const aadhaarNumber = String(100000000000 + (seed * 8951) % 899999999999).slice(0, 12);
+  const houseNumber = 1 + (seed % 199);
+  const street = STREET_NAMES[(seed * 3) % STREET_NAMES.length];
+  const address = district ? `House No. ${houseNumber}, ${street}, ${district.district_name}` : `House No. ${houseNumber}, ${street}`;
 
   // Proactive match check - if this Aadhaar already belongs to a DIFFERENT
   // existing case, surface it immediately so the operator can link on the
@@ -124,6 +133,7 @@ router.post('/fetch-case', async (req, res) => {
     suggestedDistrictName: district?.district_name || null,
     suggestedCaseBackground: `Referred via NHAA helpline (simulated) - caller reported an incident consistent with ${caseType?.name || 'the suggested case type'} and requested follow-up support.`,
     suggestedAadhaarNumber: aadhaarNumber,
+    suggestedAddress: address,
     existingMatch,
     note: 'Simulated data - placeholder for a real NHAA/Integrated Portal API integration that does not exist yet. Not a live government record.',
   });
