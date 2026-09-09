@@ -7,16 +7,12 @@ import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
 import { typography } from '../../shared/theme/typography';
 import { useResponsive } from '../../shared/hooks/useResponsive';
-import Card from '../../shared/components/Card';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary, EmptyState } from '../../shared/components/QueryStates';
 import { useUserDashboard, useCourtCaseDetails, useInvestigationProgress } from '../../shared/services/hooks';
 
-// Real, live status from the Investigating Officer's own record - kept as
-// its own independent card/query, entirely separate from the eCourts
-// simulation below (courtCaseSimulation.js is purely decorative/
-// deterministic; this is the genuine investigation record).
+// Real, live status from the Investigating Officer's own record
 const ACCUSED_STATUS_TONE = {
   'In Custody': { bg: '#E4F5EC', fg: '#2F8A5B' },
   Convicted: { bg: '#E4F5EC', fg: '#2F8A5B' },
@@ -28,46 +24,53 @@ function InvestigationProgressCard({ data }) {
   if (!data || (!data.accusedStatus && !data.investigationProgress && data.chargesheetStatus === 'Not Filed' && !data.investigationCompleteAt)) return null;
   const tone = ACCUSED_STATUS_TONE[data.accusedStatus];
   return (
-    <Card headerTitle="Investigation Progress">
-      {data.accusedStatus && (
-        <View style={styles.row}>
-          <Text style={styles.rowLabel}>Accused Status</Text>
-          <View style={[styles.statusPill, tone && { backgroundColor: tone.bg }]}>
-            <Text style={[styles.statusPillText, tone && { color: tone.fg }]}>{data.accusedStatus}</Text>
+    <View style={styles.cardContainer}>
+      <View style={styles.cardHeaderRow}>
+        <View style={styles.cardHeaderLeft}>
+          <View style={styles.cardHeaderIconTile}>
+            <Feather name="shield" size={18} color="#3B5998" />
+          </View>
+          <View>
+            <Text style={styles.cardTitle}>Investigation Progress</Text>
+            <Text style={styles.cardSubTitle}>Current status from investigating record</Text>
           </View>
         </View>
-      )}
-      <Row label="Chargesheet" value={data.chargesheetStatus === 'Filed' ? `Filed ${formatDate(data.chargesheetFiledAt)}` : 'Not yet filed'} />
-      {/* A real milestone for someone waiting on their own case - the victim
-          previously had no way of learning the investigation had concluded. */}
-      <Row
-        label="Investigation"
-        value={data.investigationCompleteAt ? `Completed ${formatDate(data.investigationCompleteAt)}` : 'Ongoing'}
-      />
-      {data.investigationProgress && (
-        <Text style={styles.progressText}>{data.investigationProgress}</Text>
-      )}
-      {/* migration_037 - the FIR copy and chargesheet the Investigating
-          Officer uploaded, downloadable here. Each URL is a short-lived
-          signed link minted fresh by the backend on this very read, never a
-          permanent public link. */}
-      {(data.firDocumentUrl || data.chargesheetDocumentUrl) && (
-        <View style={styles.documentRow}>
-          {data.firDocumentUrl && (
-            <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.firDocumentUrl)}>
-              <Feather name="download" size={14} color={colors.primaryDark} />
-              <Text style={styles.documentBtnText}>FIR Copy (PDF)</Text>
-            </Pressable>
-          )}
-          {data.chargesheetDocumentUrl && (
-            <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.chargesheetDocumentUrl)}>
-              <Feather name="download" size={14} color={colors.primaryDark} />
-              <Text style={styles.documentBtnText}>Chargesheet (PDF)</Text>
-            </Pressable>
-          )}
-        </View>
-      )}
-    </Card>
+      </View>
+      <View style={styles.cardContent}>
+        {data.accusedStatus && (
+          <View style={styles.row}>
+            <Text style={styles.rowLabel}>Accused Status</Text>
+            <View style={[styles.statusPill, tone && { backgroundColor: tone.bg }]}>
+              <Text style={[styles.statusPillText, tone && { color: tone.fg }]}>{data.accusedStatus}</Text>
+            </View>
+          </View>
+        )}
+        <Row label="Chargesheet" value={data.chargesheetStatus === 'Filed' ? `Filed ${formatDate(data.chargesheetFiledAt)}` : 'Not yet filed'} />
+        <Row
+          label="Investigation"
+          value={data.investigationCompleteAt ? `Completed ${formatDate(data.investigationCompleteAt)}` : 'Ongoing'}
+        />
+        {data.investigationProgress && (
+          <Text style={styles.progressText}>{data.investigationProgress}</Text>
+        )}
+        {(data.firDocumentUrl || data.chargesheetDocumentUrl) && (
+          <View style={styles.documentRow}>
+            {data.firDocumentUrl && (
+              <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.firDocumentUrl)}>
+                <Feather name="download" size={14} color="#3B5998" />
+                <Text style={styles.documentBtnText}>FIR Copy (PDF)</Text>
+              </Pressable>
+            )}
+            {data.chargesheetDocumentUrl && (
+              <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.chargesheetDocumentUrl)}>
+                <Feather name="download" size={14} color="#3B5998" />
+                <Text style={styles.documentBtnText}>Chargesheet (PDF)</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -86,14 +89,38 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function PartyList({ title, parties }) {
+function PartyList({ icon, title, pillBg, pillFg, parties, isLast }) {
   if (!parties || parties.length === 0) return null;
   return (
-    <View style={styles.partyGroup}>
-      <Text style={styles.partyGroupTitle}>{title}</Text>
+    <View style={[styles.partyColumn, isLast && { borderRightWidth: 0 }]}>
+      <View style={styles.partyHeaderRow}>
+        <View style={[styles.partyPill, { backgroundColor: pillBg }]}>
+          <Feather name={icon} size={14} color={pillFg} style={{ marginRight: 6 }} />
+          <Text style={[styles.partyPillText, { color: pillFg }]}>{title}</Text>
+        </View>
+      </View>
       {parties.map((p, i) => (
-        <Text key={i} style={styles.partyName}>{p.name} <Text style={styles.partyRole}>({p.role})</Text></Text>
+        <View key={i} style={styles.partyTextContainer}>
+          <Text style={styles.partyName}>
+            {p.name} {p.role ? <Text style={styles.partyRole}>({p.role})</Text> : null}
+          </Text>
+        </View>
       ))}
+    </View>
+  );
+}
+
+function HearingGridCell({ icon, label, value, isLast }) {
+  if (value == null || value === '') return null;
+  return (
+    <View style={[styles.hearingCell, isLast && { borderRightWidth: 0 }]}>
+      <View style={styles.hearingIconTile}>
+        <Feather name={icon} size={16} color="#3B82F6" />
+      </View>
+      <View style={styles.hearingTextContainer}>
+        <Text style={styles.hearingLabel}>{label}</Text>
+        <Text style={styles.hearingValue}>{value}</Text>
+      </View>
     </View>
   );
 }
@@ -103,32 +130,16 @@ export default function CaseDetailsScreen({ navigation, route }) {
   const insets = useSafeAreaInsets();
   const dashboardQuery = useUserDashboard();
   const linkedCases = dashboardQuery.data?.linkedCases || [];
-  // migration_034 - seeded from whichever case was active on Home (so this
-  // opens already showing that same case), but still fully overridable via
-  // the switcher below.
+
   const [selectedUserId, setSelectedUserId] = useState(route?.params?.caseUserId || null);
 
-  // Default to the caller's own anchor case once the list loads - the
-  // switcher below only ever renders when there's more than one to choose
-  // between.
   const activeUserId = selectedUserId || linkedCases[0]?.userId;
   const activeCase = linkedCases.find((c) => c.userId === activeUserId);
   const courtQuery = useCourtCaseDetails(activeUserId);
-  // Scoped to whichever docket the switcher currently has selected - this
-  // used to always read the caller's own anchor case regardless of the
-  // switcher above, which would show the wrong docket's chargesheet/accused
-  // status once a second case was selected.
   const investigationQuery = useInvestigationProgress(activeUserId);
 
   return (
     <View style={styles.container}>
-      {/* Fixed top bar - a sibling of the ScrollView below, not its first
-          child, so it stays pinned while the body scrolls underneath it
-          (matches JournalScreen.js's actual structure - AtrocitiesActScreen
-          claims to follow the same pattern but puts its header inside the
-          ScrollView instead, which scrolls it away with the content; that
-          reads as a broken/missing top bar on web/desktop specifically,
-          where a fixed header is the expected behavior). */}
       <View
         style={[
           styles.topHeader,
@@ -143,7 +154,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
             </Pressable>
           )}
           <View style={styles.headerIconTile}>
-            <Feather name="file-text" size={22} color={colors.primaryDark} />
+            <Feather name="file-text" size={20} color={colors.primaryDark} />
           </View>
           <Text style={styles.headerTitle}>Case Details</Text>
         </View>
@@ -157,150 +168,338 @@ export default function CaseDetailsScreen({ navigation, route }) {
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
-      <View style={styles.body}>
-        {/* Case switcher - Multi-Case-Per-Person Support: only shown when
-            this account actually has more than one docket to choose
-            between (see useUserDashboard's linkedCases). */}
-        {linkedCases.length > 1 && (
-          <View style={styles.switcherRow}>
-            {linkedCases.map((c) => (
-              <Pressable
-                key={c.userId}
-                onPress={() => setSelectedUserId(c.userId)}
-                style={[styles.switcherPill, c.userId === activeUserId && styles.switcherPillActive]}
-              >
-                <Text style={[styles.switcherPillText, c.userId === activeUserId && styles.switcherPillTextActive]}>
-                  Docket {c.docketNumber}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
+        <View style={styles.body}>
+          {linkedCases.length > 1 && (
+            <View style={styles.switcherRow}>
+              {linkedCases.map((c, index) => (
+                <Pressable
+                  key={c.userId}
+                  onPress={() => setSelectedUserId(c.userId)}
+                  style={[
+                    styles.switcherPill,
+                    c.userId === activeUserId && styles.switcherPillActive,
+                  ]}
+                >
+                  <Text style={[styles.switcherPillText, c.userId === activeUserId && styles.switcherPillTextActive]}>
+                    Docket {c.docketNumber || index + 1}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
 
-        <InvestigationProgressCard data={investigationQuery.data} />
+          <InvestigationProgressCard data={investigationQuery.data} />
 
-        {!activeUserId ? (
-          <EmptyState icon="file-text" message="No case found for your account yet." />
-        ) : (
-          <QueryBoundary query={courtQuery}>
-            {(data) => {
-              if (!data?.available) {
+          {!activeUserId ? (
+            <EmptyState icon="file-text" message="No case found for your account yet." />
+          ) : (
+            <QueryBoundary query={courtQuery}>
+              {(data) => {
+                if (!data?.available) {
+                  return (
+                    <EmptyState
+                      icon="clock"
+                      title="Not yet available"
+                      message={data?.reason || 'Court case details aren’t available for this case yet.'}
+                    />
+                  );
+                }
+
+                const hasIaOrOther = (data.iaDetails?.length > 0) || (data.connectedCases?.length > 0)
+                  || (data.transferHistory?.length > 0) || (data.objections?.length > 0) || data.originatingCaseNumber;
+
                 return (
-                  <EmptyState
-                    icon="clock"
-                    title="Not yet available"
-                    message={data?.reason || 'Court case details aren’t available for this case yet.'}
-                  />
-                );
-              }
+                  <>
+                    {/* Case Overview Panel */}
+                    <View style={styles.overviewCard}>
+                      <Text style={styles.overviewHeaderTitle}>CASE OVERVIEW</Text>
 
-              const hasIaOrOther = (data.iaDetails?.length > 0) || (data.connectedCases?.length > 0)
-                || (data.transferHistory?.length > 0) || (data.objections?.length > 0) || data.originatingCaseNumber;
-
-              return (
-                <>
-                  <Card headerTitle="Case Overview">
-                    <Row label="CNR Number" value={data.cnrNumber} />
-                    <Row label="Case Type" value={data.caseType} />
-                    <Row label="Category" value={data.caseCategory} />
-                    <Row label="Filing No. / Date" value={data.filingNumber ? `${data.filingNumber} (${formatDate(data.filingDate)})` : null} />
-                    <Row label="Registration No. / Date" value={data.registrationNumber ? `${data.registrationNumber} (${formatDate(data.registrationDate)})` : null} />
-                    <Row label="Court Complex" value={data.courtComplex} />
-                    <Row label="Court Establishment" value={data.courtEstablishment} />
-                    <Row label="Court Number" value={data.courtNumber} />
-                    <Row label="Coram" value={data.coram?.join(', ')} />
-                    <Row label="Case Stage" value={data.caseStageLabel} />
-                    <Row label="Status" value={data.caseStatus} />
-                    {data.caseStatus === 'Disposed' && (
-                      <>
-                        <Row label="Decision Date" value={formatDate(data.decisionDate)} />
-                        <Row label="Disposal Nature" value={data.disposalNature} />
-                      </>
-                    )}
-                  </Card>
-
-                  {data.caseStatus !== 'Disposed' && (
-                    <Card headerTitle="Next Hearing">
-                      <Row label="Date" value={formatDate(data.nextHearingDate)} />
-                      <Row label="Purpose" value={data.nextHearingPurpose} />
-                      <Row label="First Hearing" value={formatDate(data.firstHearingDate)} />
-                      <Row label="Hearing Mode" value={data.hearingMode} />
-                    </Card>
-                  )}
-
-                  <Card headerTitle="Parties & Advocates">
-                    <PartyList title="Petitioner" parties={data.petitionerNames} />
-                    <PartyList title="Respondent" parties={data.respondentNames} />
-                    <PartyList title="Advocates" parties={data.advocateNames} />
-                  </Card>
-
-                  <Card headerTitle="Acts, Sections & FIR">
-                    {data.actsSections?.map((a, i) => <Text key={i} style={styles.listItem}>{'•'} {a}</Text>)}
-                    <Row label="Police Station" value={data.firPoliceStation} />
-                    <Row label="FIR Number" value={data.firNumber} />
-                    <Row label="FIR Year" value={data.firYear} />
-                  </Card>
-
-                  {data.iaDetails?.length > 0 && (
-                    <Card headerTitle="Interlocutory Applications (incl. Bail)">
-                      {data.iaDetails.map((ia, i) => (
-                        <View key={i} style={styles.iaItem}>
-                          <Text style={styles.iaType}>{ia.iaType} <Text style={styles.iaStatus}>({ia.status})</Text></Text>
-                          <Text style={styles.iaMeta}>{ia.iaNumber} · filed {formatDate(ia.filingDate)}</Text>
-                        </View>
-                      ))}
-                    </Card>
-                  )}
-
-                  {data.hearingHistory?.length > 0 && (
-                    <Card headerTitle="Hearing History">
-                      {data.hearingHistory.slice().reverse().map((h, i) => (
-                        <View key={i} style={styles.historyItem}>
-                          <Text style={styles.historyDate}>{formatDate(h.date)}</Text>
-                          <Text style={styles.historyBusiness}>{h.business}</Text>
-                        </View>
-                      ))}
-                    </Card>
-                  )}
-
-                  {data.orders?.length > 0 && (
-                    <Card headerTitle="Orders & Judgments">
-                      {data.orders.slice().reverse().map((o, i) => (
-                        <View key={i} style={styles.historyItem}>
-                          <Feather name={o.type === 'Judgment' ? 'award' : 'file'} size={14} color={colors.primaryDark} style={{ marginRight: spacing.xs }} />
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.historyBusiness}>{o.title}</Text>
-                            <Text style={styles.historyDate}>{formatDate(o.date)}</Text>
+                      <View style={styles.overviewContainer}>
+                        <View style={styles.overviewGridRow}>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>CNR Number</Text>
+                            <Text style={styles.overviewValue}>{data.cnrNumber}</Text>
+                          </View>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Case Type</Text>
+                            <Text style={styles.overviewValue}>{data.caseType}</Text>
+                          </View>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Category</Text>
+                            <Text style={styles.overviewValue}>{data.caseCategory}</Text>
                           </View>
                         </View>
-                      ))}
-                    </Card>
-                  )}
 
-                  {hasIaOrOther && (
-                    <Card headerTitle="Other Details">
-                      <Row label="Originating Case No." value={data.originatingCaseNumber} />
-                      <Row label="Connected Cases" value={data.connectedCases?.join(', ')} />
-                      <Row label="Transfer History" value={data.transferHistory?.length ? `${data.transferHistory.length} transfer(s) on record` : null} />
-                      <Row label="Objections" value={data.objections?.length ? `${data.objections.length} objection(s) raised` : null} />
-                    </Card>
-                  )}
+                        <View style={styles.overviewGridRow}>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Filing No. / Date</Text>
+                            <Text style={styles.overviewValue}>
+                              {data.filingNumber ? `${data.filingNumber} (${formatDate(data.filingDate)})` : null}
+                            </Text>
+                          </View>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Registration No. / Date</Text>
+                            <Text style={styles.overviewValue}>
+                              {data.registrationNumber ? `${data.registrationNumber} (${formatDate(data.registrationDate)})` : null}
+                            </Text>
+                          </View>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Court Complex</Text>
+                            <Text style={styles.overviewValue}>{data.courtComplex}</Text>
+                          </View>
+                        </View>
 
-                  <Text style={styles.disclaimer}>{data.note}</Text>
-                </>
-              );
-            }}
-          </QueryBoundary>
-        )}
-      </View>
+                        <View style={styles.overviewGridRow}>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Court Establishment</Text>
+                            <Text style={styles.overviewValue}>{data.courtEstablishment}</Text>
+                          </View>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Court Number</Text>
+                            <Text style={styles.overviewValue}>{data.courtNumber}</Text>
+                          </View>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Coram</Text>
+                            <Text style={styles.overviewValue}>{data.coram?.join(', ')}</Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.overviewGridRow}>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Case Stage</Text>
+                            <Text style={styles.overviewValue}>{data.caseStageLabel}</Text>
+                          </View>
+                          <View style={styles.overviewGridCell}>
+                            <Text style={styles.overviewLabel}>Status</Text>
+                            <Text style={styles.overviewValue}>{data.caseStatus}</Text>
+                          </View>
+                          {data.caseStatus === 'Disposed' ? (
+                            <View style={styles.overviewGridCell}>
+                              <Text style={styles.overviewLabel}>Decision Date</Text>
+                              <Text style={styles.overviewValue}>{formatDate(data.decisionDate)}</Text>
+                            </View>
+                          ) : (
+                            <View style={styles.overviewGridCell} />
+                          )}
+                        </View>
+
+                        {data.caseStatus === 'Disposed' && (
+                          <View style={styles.overviewGridRow}>
+                            <View style={styles.overviewGridCell}>
+                              <Text style={styles.overviewLabel}>Disposal Nature</Text>
+                              <Text style={styles.overviewValue}>{data.disposalNature}</Text>
+                            </View>
+                            <View style={styles.overviewGridCell} />
+                            <View style={styles.overviewGridCell} />
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Parties & Advocates */}
+                    <View style={styles.cardContainer}>
+                      <View style={styles.cardHeaderRow}>
+                        <View style={styles.cardHeaderLeft}>
+                          <View style={styles.cardHeaderIconTile}>
+                            <Feather name="users" size={18} color="#3B82F6" />
+                          </View>
+                          <View>
+                            <Text style={styles.cardTitle}>Parties & Advocates</Text>
+                            <Text style={styles.cardSubTitle}>People involved in the case and their roles.</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={styles.cardContent}>
+                        <View style={styles.innerPanelContainer}>
+                          <View style={isDesktop ? styles.partiesGrid : styles.fullWidth}>
+                            <PartyList icon="home" title="Petitioner" pillBg="#DBEAFE" pillFg="#1E40AF" parties={data.petitionerNames} />
+                            <PartyList icon="user" title="Respondent" pillBg="#F3E8FF" pillFg="#6B21A8" parties={data.respondentNames} />
+                            <PartyList icon="users" title="Advocates" pillBg="#DCFCE7" pillFg="#15803D" parties={data.advocateNames} isLast />
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Next Hearing */}
+                    {data.caseStatus !== 'Disposed' && (
+                      <View style={styles.cardContainer}>
+                        <View style={styles.cardHeaderRow}>
+                          <View style={styles.cardHeaderLeft}>
+                            <View style={styles.cardHeaderIconTile}>
+                              <Feather name="calendar" size={18} color="#3B82F6" />
+                            </View>
+                            <View>
+                              <Text style={styles.cardTitle}>Next Hearing</Text>
+                              <Text style={styles.cardSubTitle}>Upcoming court proceedings and schedule.</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.cardContent}>
+                          <View style={styles.innerPanelContainer}>
+                            <View style={styles.hearingGridRow}>
+                              <HearingGridCell icon="calendar" label="Date" value={formatDate(data.nextHearingDate)} />
+                              <HearingGridCell icon="clock" label="First Hearing" value={formatDate(data.firstHearingDate)} isLast />
+                            </View>
+                            <View style={[styles.hearingGridRow, { borderTopWidth: 1, borderTopColor: '#EBF1F6' }]}>
+                              <HearingGridCell icon="help-circle" label="Purpose" value={data.nextHearingPurpose} />
+                              <HearingGridCell icon="video" label="Hearing Mode" value={data.hearingMode} isLast />
+                            </View>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Acts, Sections & FIR */}
+                    <View style={styles.cardContainer}>
+                      <View style={styles.cardHeaderRow}>
+                        <View style={styles.cardHeaderLeft}>
+                          <View style={styles.cardHeaderIconTile}>
+                            <Feather name="book-open" size={18} color="#3B82F6" />
+                          </View>
+                          <View>
+                            <Text style={styles.cardTitle}>Acts, Sections & FIR</Text>
+                            <Text style={styles.cardSubTitle}>Legal classifications and station info.</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={styles.cardContent}>
+                        <View style={styles.innerPanelContainer}>
+                          <View style={styles.actsListSection}>
+                            {data.actsSections?.map((a, i) => (
+                              <Text key={i} style={styles.listItem}>{'•'} {a}</Text>
+                            ))}
+                          </View>
+                          <View style={styles.firGridRow}>
+                            <HearingGridCell icon="shield" label="Police Station" value={data.firPoliceStation} />
+                            <HearingGridCell icon="file-text" label="FIR Number" value={data.firNumber} />
+                            <HearingGridCell icon="calendar" label="FIR Year" value={data.firYear} isLast />
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Interlocutory Applications */}
+                    {data.iaDetails?.length > 0 && (
+                      <View style={styles.cardContainer}>
+                        <View style={styles.cardHeaderRow}>
+                          <View style={styles.cardHeaderLeft}>
+                            <View style={styles.cardHeaderIconTile}>
+                              <Feather name="layers" size={18} color="#3B5998" />
+                            </View>
+                            <View>
+                              <Text style={styles.cardTitle}>Interlocutory Applications (Incl. Bail)</Text>
+                              <Text style={styles.cardSubTitle}>Interim petitions and filings.</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.cardContent}>
+                          {data.iaDetails.map((ia, i) => (
+                            <View key={i} style={styles.iaItem}>
+                              <Text style={styles.iaType}>{ia.iaType} <Text style={styles.iaStatus}>({ia.status})</Text></Text>
+                              <Text style={styles.iaMeta}>{ia.iaNumber} · filed {formatDate(ia.filingDate)}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Hearing History */}
+                    {data.hearingHistory?.length > 0 && (
+                      <View style={styles.cardContainer}>
+                        <View style={styles.cardHeaderRow}>
+                          <View style={styles.cardHeaderLeft}>
+                            <View style={styles.cardHeaderIconTile}>
+                              <Feather name="clock" size={18} color="#3B5998" />
+                            </View>
+                            <View>
+                              <Text style={styles.cardTitle}>Hearing History</Text>
+                              <Text style={styles.cardSubTitle}>Past court dates and outcomes.</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.cardContent}>
+                          {data.hearingHistory.slice().reverse().map((h, i) => (
+                            <View key={i} style={styles.historyItem}>
+                              <Text style={styles.historyDate}>{formatDate(h.date)}</Text>
+                              <Text style={styles.historyBusiness}>{h.business}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Orders & Judgments */}
+                    {data.orders?.length > 0 && (
+                      <View style={styles.cardContainer}>
+                        <View style={styles.cardHeaderRow}>
+                          <View style={styles.cardHeaderLeft}>
+                            <View style={styles.cardHeaderIconTile}>
+                              <Feather name="file" size={18} color="#3B5998" />
+                            </View>
+                            <View>
+                              <Text style={styles.cardTitle}>Orders & Judgments</Text>
+                              <Text style={styles.cardSubTitle}>Issued legal decrees and records.</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.cardContent}>
+                          {data.orders.slice().reverse().map((o, i) => (
+                            <View key={i} style={styles.historyItem}>
+                              <Feather name={o.type === 'Judgment' ? 'award' : 'file'} size={14} color="#3B5998" style={{ marginRight: spacing.xs }} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.historyBusiness}>{o.title}</Text>
+                                <Text style={styles.historyDate}>{formatDate(o.date)}</Text>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Other Details */}
+                    {hasIaOrOther && (
+                      <View style={styles.cardContainer}>
+                        <View style={styles.cardHeaderRow}>
+                          <View style={styles.cardHeaderLeft}>
+                            <View style={styles.cardHeaderIconTile}>
+                              <Feather name="grid" size={18} color="#3B5998" />
+                            </View>
+                            <View>
+                              <Text style={styles.cardTitle}>Other Details</Text>
+                              <Text style={styles.cardSubTitle}>Additional legal metadata.</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.cardContent}>
+                          <Row label="Originating Case No." value={data.originatingCaseNumber} />
+                          <Row label="Connected Cases" value={data.connectedCases?.join(', ')} />
+                          <Row label="Transfer History" value={data.transferHistory?.length ? `${data.transferHistory.length} transfer(s) on record` : null} />
+                          <Row label="Objections" value={data.objections?.length ? `${data.objections.length} objection(s) raised` : null} />
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Disclaimer Banner */}
+                    <View style={styles.infoBanner}>
+                      <View style={styles.infoIconTile}>
+                        <Feather name="info" size={16} color="#3B82F6" />
+                      </View>
+                      <Text style={styles.disclaimer}>{data.note}</Text>
+                    </View>
+                  </>
+                );
+              }}
+            </QueryBoundary>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scrollView: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  scrollView: { flex: 1, backgroundColor: '#F8FAFC' },
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
@@ -318,46 +517,343 @@ const styles = StyleSheet.create({
   backBtn: { marginRight: spacing.sm, padding: spacing.xs },
   headerIconTile: { alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
   headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 20, fontWeight: '700' },
-  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 720, alignSelf: 'center' },
+  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 1080, alignSelf: 'center' },
 
-  switcherRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.lg, flexWrap: 'wrap' },
+  switcherRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg, flexWrap: 'wrap' },
   switcherPill: {
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.lg, borderRadius: radius.pill,
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+    paddingVertical: 8,
+    paddingHorizontal: 20,
+    borderRadius: radius.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  switcherPillActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
-  switcherPillText: { ...typography.bodyStrong, color: colors.textSecondary, fontSize: 13 },
-  switcherPillTextActive: { color: colors.white },
+  switcherPillActive: {
+    backgroundColor: '#3B5998',
+    borderColor: '#3B5998',
+  },
+  switcherPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  switcherPillTextActive: {
+    color: '#FFFFFF',
+  },
 
-  row: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: spacing.xs, gap: spacing.md },
-  rowLabel: { ...typography.caption, color: colors.textSecondary, flex: 1 },
-  rowValue: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13, flex: 1.4, textAlign: 'right' },
-  statusPill: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingVertical: 3, paddingHorizontal: spacing.sm },
-  statusPillText: { ...typography.caption, color: colors.textPrimary, fontWeight: '700' },
-  progressText: { ...typography.bodySmall, color: colors.textSecondary, lineHeight: 19, marginTop: spacing.xs },
-  documentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  /* Overview Box */
+  overviewCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#EBF1F6',
+    marginBottom: spacing.lg,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  overviewHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#8E9BAE',
+    letterSpacing: 0.5,
+    marginBottom: 16,
+  },
+  overviewContainer: {
+    width: '100%',
+    backgroundColor: '#F5F8FF',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#E8F0FE',
+  },
+  overviewGridRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8EEF9',
+  },
+  overviewGridCell: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  overviewLabel: {
+    fontSize: 12,
+    color: '#8E9BAE',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  overviewValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#3B5998',
+  },
+
+  /* Section Cards */
+  cardContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EBF1F6',
+    marginBottom: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
+    elevation: 1,
+    overflow: 'hidden',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  cardHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  cardHeaderIconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  cardSubTitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  cardContent: {
+    paddingHorizontal: spacing.xl,
+    paddingBottom: spacing.lg,
+    paddingTop: spacing.xs,
+  },
+
+  innerPanelContainer: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EBF1F6',
+    overflow: 'hidden',
+  },
+
+  /* Parties Grid */
+  partiesGrid: {
+    flexDirection: 'row',
+  },
+  partyColumn: {
+    flex: 1,
+    padding: 16,
+    borderRightWidth: 1,
+    borderRightColor: '#EBF1F6',
+  },
+  partyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  partyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  partyPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  partyTextContainer: {
+    marginVertical: 2,
+  },
+  partyName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  partyRole: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: '#64748B',
+  },
+
+  /* Hearing Grid */
+  hearingGridRow: {
+    flexDirection: 'row',
+  },
+  hearingCell: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    borderRightWidth: 1,
+    borderRightColor: '#EBF1F6',
+  },
+  hearingIconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  hearingTextContainer: {
+    flex: 1,
+  },
+  hearingLabel: {
+    fontSize: 12,
+    color: '#8E9BAE',
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  hearingValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+
+  /* Acts & FIR */
+  actsListSection: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EBF1F6',
+  },
+  firGridRow: {
+    flexDirection: 'row',
+  },
+
+  row: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  rowLabel: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  rowValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  progressText: {
+    fontSize: 13,
+    color: '#334155',
+    marginTop: spacing.xs,
+    lineHeight: 18,
+  },
+  documentRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.md,
+    flexWrap: 'wrap',
+  },
   documentBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
-    borderWidth: 1, borderColor: colors.primaryDark, borderRadius: radius.md,
-    paddingVertical: spacing.xs, paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  documentBtnText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
-
-  partyGroup: { marginBottom: spacing.sm },
-  partyGroupTitle: { ...typography.caption, color: colors.textSecondary, marginBottom: 2 },
-  partyName: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13 },
-  partyRole: { ...typography.caption, color: colors.textSecondary, fontWeight: '400' },
-
-  listItem: { ...typography.body, color: colors.textPrimary, fontSize: 13, marginBottom: 4 },
-
-  iaItem: { paddingVertical: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border + '50' },
-  iaType: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13 },
-  iaStatus: { ...typography.caption, color: colors.textSecondary, fontWeight: '400' },
-  iaMeta: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-
-  historyItem: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border + '50' },
-  historyDate: { ...typography.caption, color: colors.textSecondary, width: 90 },
-  historyBusiness: { ...typography.body, color: colors.textPrimary, fontSize: 13, flex: 1 },
-
-  disclaimer: { ...typography.caption, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', marginTop: spacing.sm, marginBottom: spacing.xxxl },
+  documentBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3B5998',
+  },
+  fullWidth: {
+    width: '100%',
+  },
+  listItem: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+    paddingVertical: 2,
+  },
+  iaItem: {
+    paddingVertical: spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  iaType: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  iaStatus: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '400',
+  },
+  iaMeta: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  historyItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.xs,
+  },
+  historyDate: {
+    fontSize: 12,
+    color: '#64748B',
+    width: 90,
+  },
+  historyBusiness: {
+    fontSize: 13,
+    color: '#1E293B',
+    flex: 1,
+  },
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    padding: spacing.md,
+    borderRadius: 12,
+    gap: spacing.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl,
+  },
+  infoIconTile: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#DBEAFE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  disclaimer: {
+    fontSize: 12,
+    color: '#1E40AF',
+    flex: 1,
+  },
 });

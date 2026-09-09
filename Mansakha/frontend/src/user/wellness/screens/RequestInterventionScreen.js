@@ -21,25 +21,33 @@ import {
   useUploadInterventionDocument,
 } from '../../shared/services/hooks';
 
-// Modeled on how a real Indian state residential/domicile certificate
-// application actually works (e-District/CSC style): pick what you're
-// asking for, attach the proof it genuinely requires, submit, then track
-// a status your District Admin decides on - Accepted/Rejected with a
-// reason - see migration_027_intervention_requests.sql and its own design
-// doc for the document-requirement research behind each type below.
-
 const STATUS_META = {
   Pending: { color: colors.warning, bg: colors.warningLight, icon: 'clock' },
   Accepted: { color: colors.success, bg: colors.successLight, icon: 'check-circle' },
   Rejected: { color: colors.danger, bg: colors.dangerLight, icon: 'x-circle' },
 };
 
+function getTypeIcon(name) {
+  switch (name) {
+    case 'Financial Assistance':
+      return 'credit-card';
+    case 'Legal Aid':
+      return 'briefcase';
+    case 'Medical':
+      return 'plus-square';
+    case 'Relocation':
+      return 'home';
+    case 'Witness Protection':
+      return 'shield';
+    default:
+      return 'user';
+  }
+}
+
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-// One row per required/optional document for the selected type - shows
-// whether it's attached yet and lets the victim pick a photo of it.
 function DocumentSlot({ doc, attached, uploading, onPick }) {
   return (
     <View style={styles.docSlot}>
@@ -67,7 +75,7 @@ function DocumentSlot({ doc, attached, uploading, onPick }) {
 function NewRequestForm({ types, caseUserId }) {
   const [selectedTypeId, setSelectedTypeId] = useState(null);
   const [description, setDescription] = useState('');
-  const [pendingDocs, setPendingDocs] = useState({}); // label -> {uri, mimeType}
+  const [pendingDocs, setPendingDocs] = useState({});
   const [activeRequestId, setActiveRequestId] = useState(null);
   const [uploadingLabel, setUploadingLabel] = useState(null);
   const [submitError, setSubmitError] = useState(null);
@@ -86,13 +94,6 @@ function NewRequestForm({ types, caseUserId }) {
     setSubmitError(null);
   };
 
-  // Documents are now picked BEFORE the request is created, not after. The
-  // old order submitted first and asked for proof afterwards, which meant a
-  // request could reach the reviewing officer with none of its required
-  // proof attached - and nothing ever forced the victim back to finish it.
-  // Anything still marked required in intervention_types (migration_036
-  // deliberately left only the few that genuinely gate a decision) must now
-  // be attached before Submit will fire.
   const missingRequired = (selectedType?.requiredDocuments || [])
     .filter((d) => d.required && !pendingDocs[d.label])
     .map((d) => d.label);
@@ -106,12 +107,13 @@ function NewRequestForm({ types, caseUserId }) {
     setSubmitError(null);
     try {
       const result = await submitRequest.mutateAsync({ interventionTypeId: selectedTypeId, description });
-      // Upload everything picked, one at a time - same one-document-per-call
-      // convention the backend route already follows.
       for (const [label, file] of Object.entries(pendingDocs)) {
         setUploadingLabel(label);
         await uploadDocument.mutateAsync({
-          requestId: result.requestId, documentLabel: label, uri: file.uri, mimeType: file.mimeType,
+          requestId: result.requestId,
+          documentLabel: label,
+          uri: file.uri,
+          mimeType: file.mimeType,
         });
       }
       setUploadingLabel(null);
@@ -122,8 +124,6 @@ function NewRequestForm({ types, caseUserId }) {
     }
   };
 
-  // Only stores the picked file - the actual upload happens on submit, once
-  // there is a request to attach it to.
   const handlePickDocument = async (label) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -141,26 +141,40 @@ function NewRequestForm({ types, caseUserId }) {
   };
 
   return (
-    <Card headerTitle="New Request">
+    <Card style={styles.cardContainer}>
+      <View style={styles.cardHeaderRow}>
+        <Feather name="file-text" size={18} color={colors.primaryDark} />
+        <Text style={styles.cardHeaderTitle}>New Request</Text>
+      </View>
+
       {!submitted ? (
         <>
-          <Text style={styles.fieldLabel}>What kind of assistance do you need?</Text>
           <View style={styles.typeGrid}>
-            {types.map((t) => (
-              <Pressable
-                key={t.interventionTypeId}
-                style={[styles.typeChip, selectedTypeId === t.interventionTypeId && styles.typeChipActive]}
-                onPress={() => setSelectedTypeId(t.interventionTypeId)}
-              >
-                <Text style={[styles.typeChipText, selectedTypeId === t.interventionTypeId && styles.typeChipTextActive]}>
-                  {t.name}
-                </Text>
-              </Pressable>
-            ))}
+            {types.map((t) => {
+              const isSelected = selectedTypeId === t.interventionTypeId;
+              return (
+                <Pressable
+                  key={t.interventionTypeId}
+                  style={[styles.typeCard, isSelected && styles.typeCardActive]}
+                  onPress={() => setSelectedTypeId(t.interventionTypeId)}
+                >
+                  <View style={[styles.typeIconBox, isSelected && styles.typeIconBoxActive]}>
+                    <Feather
+                      name={getTypeIcon(t.name)}
+                      size={20}
+                      color={isSelected ? colors.primaryDark : colors.textSecondary}
+                    />
+                  </View>
+                  <Text style={[styles.typeCardText, isSelected && styles.typeCardTextActive]}>
+                    {t.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
 
           {selectedType && (
-            <>
+            <View style={styles.formSection}>
               <Text style={styles.fieldLabel}>Tell us more (optional)</Text>
               <TextInput
                 style={styles.textArea}
@@ -172,7 +186,7 @@ function NewRequestForm({ types, caseUserId }) {
                 onChangeText={setDescription}
               />
 
-              {selectedType.requiredDocuments.length > 0 && (
+              {selectedType.requiredDocuments?.length > 0 && (
                 <>
                   <Text style={styles.fieldLabel}>Documents</Text>
                   {selectedType.requiredDocuments.map((doc) => (
@@ -196,11 +210,11 @@ function NewRequestForm({ types, caseUserId }) {
                 disabled={missingRequired.length > 0 || submitRequest.isPending}
                 style={{ marginTop: spacing.md }}
               />
-            </>
+            </View>
           )}
         </>
       ) : (
-        <>
+        <View style={{ paddingTop: spacing.sm }}>
           <View style={styles.submittedBanner}>
             <Feather name="check-circle" size={18} color={colors.success} />
             <Text style={styles.submittedText}>
@@ -208,19 +222,13 @@ function NewRequestForm({ types, caseUserId }) {
             </Text>
           </View>
 
-          <Button title="Submit Another Request" variant="outline" onPress={resetForm} style={{ marginTop: spacing.lg }} />
-        </>
+          <Button title="Submit Another Request" variant="outline" onPress={resetForm} style={{ marginTop: spacing.md }} />
+        </View>
       )}
     </Card>
   );
 }
 
-// Once a proof-verified request is Accepted, the specialist role's own
-// screen (already built for its own referral-tracking purpose) becomes the
-// real place to follow progress - assigned lawyer for Legal Aid, relief
-// status for Financial Assistance/Medical, protection updates for Witness
-// Protection/Relocation. Both routes read the exact same underlying
-// agency_referral this Accept just created, so no new screen is needed.
 const STATUS_SCREEN_BY_TYPE = {
   'Legal Aid': 'LegalAid',
   'Financial Assistance': 'FinancialAid',
@@ -234,37 +242,43 @@ function RequestHistoryItem({ r, navigation }) {
   const statusScreen = r.status === 'Accepted' ? STATUS_SCREEN_BY_TYPE[r.interventionTypeName] : null;
 
   return (
-    <View style={styles.historyItem}>
-      <View style={styles.historyTopRow}>
-        <Text style={styles.historyType}>
-          {r.interventionTypeName}
-          {!!r.docketNumber && <Text style={styles.historyDocket}>  ·  Docket {r.docketNumber}</Text>}
-        </Text>
+    <Pressable 
+      style={styles.historyRow}
+      onPress={() => statusScreen && navigation?.navigate(statusScreen)}
+      disabled={!statusScreen}
+    >
+      <View style={styles.historyLeft}>
+        <View style={styles.historyIconBox}>
+          <Feather name={getTypeIcon(r.interventionTypeName)} size={18} color={colors.primaryDark} />
+        </View>
+        <View style={styles.historyMainContent}>
+          <Text style={styles.historyTypeName}>
+            {r.interventionTypeName}
+            {!!r.docketNumber && <Text style={styles.historyDocket}>  ·  Docket {r.docketNumber}</Text>}
+          </Text>
+          <Text style={styles.historyDateText}>Requested {formatDate(r.requestedAt)}</Text>
+          {r.description ? <Text style={styles.historyDescription}>{r.description}</Text> : null}
+          {r.documents?.length > 0 && (
+            <Text style={styles.historyDocs}>
+              {r.documents.length} document{r.documents.length > 1 ? 's' : ''} attached
+            </Text>
+          )}
+          {r.status === 'Rejected' && r.decisionReason && (
+            <View style={styles.rejectionBox}>
+              <Text style={styles.rejectionLabel}>Reason</Text>
+              <Text style={styles.rejectionText}>{r.decisionReason}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.historyRight}>
         <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
           <Feather name={meta.icon} size={11} color={meta.color} />
           <Text style={[styles.statusPillText, { color: meta.color }]}>{r.status}</Text>
         </View>
       </View>
-      <Text style={styles.historyDate}>Requested {formatDate(r.requestedAt)}</Text>
-      {r.description ? <Text style={styles.historyDescription}>{r.description}</Text> : null}
-      {r.documents?.length > 0 && (
-        <Text style={styles.historyDocs}>
-          {r.documents.length} document{r.documents.length > 1 ? 's' : ''} attached
-        </Text>
-      )}
-      {r.status === 'Rejected' && r.decisionReason && (
-        <View style={styles.rejectionBox}>
-          <Text style={styles.rejectionLabel}>Reason</Text>
-          <Text style={styles.rejectionText}>{r.decisionReason}</Text>
-        </View>
-      )}
-      {statusScreen && (
-        <Pressable style={styles.viewStatusBtn} onPress={() => navigation?.navigate(statusScreen)}>
-          <Text style={styles.viewStatusBtnText}>View Status</Text>
-          <Feather name="arrow-right" size={13} color={colors.primaryDark} />
-        </Pressable>
-      )}
-    </View>
+    </Pressable>
   );
 }
 
@@ -272,9 +286,6 @@ export default function RequestInterventionScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
   const dashboardQuery = useUserDashboard(route?.params?.caseUserId);
-  // Which docket a new request is filed against - the officer who reviews it
-  // is scoped to that case's district, so this has to be the case the victim
-  // is actually acting on, not always their anchor.
   const activeUserId = dashboardQuery.data?.userId;
   const typesQuery = useInterventionTypes();
   const requestsQuery = useMyInterventionRequests();
@@ -311,32 +322,58 @@ export default function RequestInterventionScreen({ navigation, route }) {
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={styles.body}>
+          {/* Banner / Hero Section */}
+          <View style={styles.heroBanner}>
+            <View style={styles.heroIconBox}>
+              <Feather name="shield" size={22} color={colors.primaryDark} />
+            </View>
+            <View style={styles.heroTextContainer}>
+              <Text style={styles.heroTitle}>Request Assistance</Text>
+              <Text style={styles.heroSubtitle}>Choose the type of support you need.</Text>
+            </View>
+          </View>
+
+          {/* New Request Form Card */}
           <QueryBoundary query={typesQuery}>
             {(typesData) => <NewRequestForm types={typesData?.interventionTypes || []} caseUserId={activeUserId} />}
           </QueryBoundary>
 
-          <Text style={styles.sectionTitle}>My Requests</Text>
-          <QueryBoundary query={requestsQuery}>
-            {() =>
-              requests.length === 0 ? (
-                <EmptyState icon="inbox" message="You haven't requested any assistance yet." />
-              ) : (
-                <Card>
-                  {requests.map((r, i) => (
-                    <View key={r.requestId} style={i > 0 ? styles.historyDivider : null}>
-                      <RequestHistoryItem r={r} navigation={navigation} />
-                    </View>
-                  ))}
-                </Card>
-              )
-            }
-          </QueryBoundary>
+          {/* My Requests Section Card */}
+          <Card style={styles.cardContainer}>
+            <View style={styles.cardHeaderRow}>
+              <Feather name="file-text" size={18} color={colors.primaryDark} />
+              <Text style={styles.cardHeaderTitle}>My Requests</Text>
+            </View>
 
-          <Text style={styles.disclaimer}>
-            Requests are reviewed by the office best placed to verify your proof - the District Welfare Officer
-            for Financial Assistance and Medical, DLSA for Legal Aid, and your Protection Officer for Witness
-            Protection and Relocation.
-          </Text>
+            <QueryBoundary query={requestsQuery}>
+              {() =>
+                requests.length === 0 ? (
+                  <EmptyState icon="inbox" message="You haven't requested any assistance yet." />
+                ) : (
+                  <View style={styles.historyList}>
+                    {requests.map((r, i) => (
+                      <View key={r.requestId}>
+                        {i > 0 && <View style={styles.historyDivider} />}
+                        <RequestHistoryItem r={r} navigation={navigation} />
+                      </View>
+                    ))}
+                  </View>
+                )
+              }
+            </QueryBoundary>
+          </Card>
+
+          {/* Info Banner at Bottom */}
+          <View style={styles.infoBanner}>
+            <View style={styles.infoBannerIcon}>
+              <Feather name="info" size={18} color={colors.primaryDark} />
+            </View>
+            <Text style={styles.infoBannerText}>
+              Requests are reviewed by the office best placed to verify your proof - the District Welfare Officer
+              for Financial Assistance and Medical, DLSA for Legal Aid, your Protection Officer for Witness
+              Protection and Relocation, and District Administration for Rehabilitation.
+            </Text>
+          </View>
         </View>
       </ScrollView>
     </View>
@@ -363,66 +400,223 @@ const styles = StyleSheet.create({
   backBtn: { marginRight: spacing.sm, padding: spacing.xs },
   headerIconTile: { alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
   headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 20, fontWeight: '700' },
-  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 720, alignSelf: 'center' },
+  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 960, alignSelf: 'center' },
 
-  fieldLabel: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13, marginBottom: spacing.sm, marginTop: spacing.sm },
-  typeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  typeChip: {
-    paddingVertical: spacing.sm, paddingHorizontal: spacing.md, borderRadius: radius.pill,
-    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
+  // Hero Section
+  heroBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.sm,
   },
-  typeChipActive: { backgroundColor: colors.primaryDark, borderColor: colors.primaryDark },
-  typeChipText: { ...typography.bodyStrong, color: colors.textSecondary, fontSize: 13 },
-  typeChipTextActive: { color: colors.white },
-  docsPreviewNote: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.md, fontStyle: 'italic' },
+  heroIconBox: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  heroTextContainer: { flex: 1 },
+  heroTitle: { ...typography.h2, color: colors.primaryDark, fontWeight: '700', fontSize: 20 },
+  heroSubtitle: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
 
+  // Card Styling
+  cardContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  cardHeaderTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700', fontSize: 16 },
+
+  // Grid for New Request Types
+  typeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.md,
+  },
+  typeCard: {
+    flex: 1,
+    minWidth: 130,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight + '30',
+  },
+  typeIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  typeIconBoxActive: {
+    backgroundColor: colors.primaryLight,
+  },
+  typeCardText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  typeCardTextActive: {
+    color: colors.primaryDark,
+    fontWeight: '700',
+  },
+
+  formSection: {
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '60',
+  },
+  fieldLabel: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13, marginBottom: spacing.sm, marginTop: spacing.xs },
   textArea: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.md,
-    ...typography.body, color: colors.textPrimary, textAlignVertical: 'top', minHeight: 90,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    ...typography.body,
+    color: colors.textPrimary,
+    textAlignVertical: 'top',
+    minHeight: 90,
   },
   errorText: { ...typography.bodySmall, color: colors.danger, marginTop: spacing.sm },
 
   submittedBanner: {
-    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
-    backgroundColor: colors.successLight, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.successLight,
+    borderRadius: radius.md,
+    padding: spacing.md,
   },
   submittedText: { ...typography.bodySmall, color: colors.textPrimary, flex: 1 },
 
   docSlot: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border + '50',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border + '50',
   },
   docLabel: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13 },
   docTag: { ...typography.caption, fontSize: 10, marginTop: 2 },
   docTagRequired: { color: colors.danger },
   docTagOptional: { color: colors.textSecondary },
   docAttachedPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    backgroundColor: colors.successLight, paddingVertical: 6, paddingHorizontal: spacing.sm, borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.successLight,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
   },
   docAttachedText: { ...typography.caption, color: colors.success, fontWeight: '700' },
   docPickBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    borderWidth: 1, borderColor: colors.primary, paddingVertical: 6, paddingHorizontal: spacing.sm, borderRadius: radius.pill,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    paddingVertical: 6,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
   },
   docPickText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
 
-  sectionTitle: { ...typography.h3, color: colors.textPrimary, marginTop: spacing.xl, marginBottom: spacing.md, fontWeight: '700' },
-  historyDivider: { borderTopWidth: 1, borderTopColor: colors.border + '50', marginTop: spacing.md, paddingTop: spacing.md },
-  historyItem: {},
-  historyTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  historyType: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14 },
+  // History List
+  historyList: {
+    marginTop: spacing.xs,
+  },
+  historyDivider: {
+    height: 1,
+    backgroundColor: colors.border + '50',
+    marginVertical: spacing.xs,
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.sm,
+  },
+  historyLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  historyIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryLight + '50',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  historyMainContent: { flex: 1 },
+  historyTypeName: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14 },
   historyDocket: { ...typography.caption, color: colors.textSecondary, fontWeight: '400' },
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: radius.pill },
-  statusPillText: { ...typography.caption, fontWeight: '700', fontSize: 10 },
-  historyDate: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  historyDateText: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   historyDescription: { ...typography.bodySmall, color: colors.textPrimary, marginTop: spacing.xs },
   historyDocs: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
   rejectionBox: { backgroundColor: colors.dangerLight, borderRadius: radius.md, padding: spacing.sm, marginTop: spacing.sm },
   rejectionLabel: { ...typography.label, color: colors.danger, fontSize: 10 },
   rejectionText: { ...typography.bodySmall, color: colors.textPrimary, marginTop: 2 },
-  viewStatusBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm, alignSelf: 'flex-start' },
-  viewStatusBtnText: { ...typography.bodySmall, color: colors.primaryDark, fontWeight: '700' },
+  historyRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.pill,
+  },
+  statusPillText: { ...typography.caption, fontWeight: '700', fontSize: 11 },
 
-  disclaimer: { ...typography.caption, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', marginTop: spacing.lg, marginBottom: spacing.xxxl },
+  // Info Banner
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: colors.primaryLight + '40',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.xs,
+  },
+  infoBannerIcon: {
+    marginRight: spacing.xs,
+    marginTop: 2,
+  },
+  infoBannerText: {
+    ...typography.caption,
+    color: colors.primaryDark,
+    flex: 1,
+    lineHeight: 18,
+  },
 });
