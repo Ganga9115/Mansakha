@@ -7,85 +7,204 @@ import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
 import { typography } from '../../shared/theme/typography';
 import { useResponsive } from '../../shared/hooks/useResponsive';
-import Card from '../../shared/components/Card';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary, EmptyState } from '../../shared/components/QueryStates';
 import { useUserDashboard, useRehabilitationProgress } from '../../shared/services/hooks';
-
-// Status pill styling for a phase - mirrors RequestInterventionScreen.js's
-// own STATUS_META/statusPill convention (Pending/Accepted/Rejected there),
-// adapted to this endpoint's two statuses.
-const STATUS_META = {
-  Open: { color: colors.warning, bg: colors.warningLight, icon: 'clock' },
-  Resolved: { color: colors.success, bg: colors.successLight, icon: 'check-circle' },
-};
-
-function Row({ label, value }) {
-  if (value == null || value === '') return null;
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
 
 function formatDate(iso) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function PhaseCard({ phase, index, showIndex }) {
-  const meta = STATUS_META[phase.status] || STATUS_META.Open;
-  const updates = phase.updates || [];
+// Timeline item status styling helper
+function getTimelineStatusMeta(status) {
+  switch (status) {
+    case 'Completed':
+      return { bg: '#E6F4EA', color: '#1E8E3E', icon: 'check-circle', label: 'Completed' };
+    case 'In Progress':
+    case 'Open':
+      return { bg: '#E8F0FE', color: '#1A73E8', icon: 'clock', label: 'In Progress' };
+    default:
+      return { bg: '#F1F5F9', color: '#64748B', icon: 'clock', label: 'Pending' };
+  }
+}
+
+function TimelineItem({ item, isLast }) {
+  const meta = getTimelineStatusMeta(item.status);
+  const isCompleted = item.status === 'Completed';
+  const isInProgress = item.status === 'In Progress' || item.status === 'Open';
 
   return (
-    <Card headerTitle={showIndex ? `Rehabilitation Phase ${index + 1}` : 'Rehabilitation Phase'}>
-      <View style={styles.row}>
-        <Text style={styles.rowLabel}>Status</Text>
-        <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
-          <Feather name={meta.icon} size={11} color={meta.color} />
-          <Text style={[styles.statusPillText, { color: meta.color }]}>{phase.status}</Text>
+    <View style={styles.timelineRow}>
+      {/* Timeline left indicator column */}
+      <View style={styles.timelineLeftColumn}>
+        <View
+          style={[
+            styles.timelineIconContainer,
+            isCompleted && styles.timelineIconCompleted,
+            isInProgress && styles.timelineIconInProgress,
+          ]}
+        >
+          <Feather
+            name={isCompleted ? 'check' : isInProgress ? 'refresh-cw' : 'lock'}
+            size={12}
+            color={isCompleted ? '#FFFFFF' : isInProgress ? '#1A73E8' : '#94A3B8'}
+          />
+        </View>
+        {!isLast && <View style={[styles.timelineLine, isCompleted && styles.timelineLineCompleted]} />}
+      </View>
+
+      {/* Timeline item content card */}
+      <View style={styles.timelineContentCard}>
+        <View style={styles.timelineContentLeft}>
+          <View style={styles.itemIconTile}>
+            <Feather name={item.icon || 'file-text'} size={18} color="#1E293B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemTitle}>{item.title || item.noteText || 'Rehabilitation Step'}</Text>
+            <Text style={styles.itemSubtext}>
+              {item.description || item.subtext || 'Regular progress update and support.'}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.timelineContentRight}>
+          <View style={[styles.statusBadge, { backgroundColor: meta.bg }]}>
+            <Feather name={meta.icon} size={11} color={meta.color} />
+            <Text style={[styles.statusBadgeText, { color: meta.color }]}>{meta.label}</Text>
+          </View>
+          <Text style={styles.timelineDateText}>
+            {formatDate(item.createdAt || item.startedAt) || '09 Sept 2026'}
+          </Text>
         </View>
       </View>
-      <Row label="Started" value={formatDate(phase.startedAt)} />
-      <Row label="Completed" value={formatDate(phase.completedAt)} />
+    </View>
+  );
+}
 
-      {updates.length > 0 && (
-        <View style={styles.updatesSection}>
-          <Text style={styles.updatesSectionTitle}>Progress Updates</Text>
-          {updates.slice().reverse().map((u, i) => (
-            <View key={i} style={styles.historyItem}>
-              <Text style={styles.historyDate}>{formatDate(u.createdAt)}</Text>
-              <Text style={styles.historyBusiness}>{u.noteText}</Text>
+function PhaseCard({ phase }) {
+  const updates = phase.updates || [];
+  const defaultSteps = [
+    {
+      title: 'Assessment & Placement',
+      description: 'Initial assessment and placement in rehabilitation program.',
+      status: 'Completed',
+      createdAt: phase.startedAt,
+      icon: 'file-text',
+    },
+    {
+      title: 'Counselling & Support',
+      description: 'Regular counselling sessions and family support.',
+      status: phase.status === 'Resolved' ? 'Completed' : 'In Progress',
+      createdAt: phase.startedAt,
+      icon: 'users',
+    },
+    {
+      title: 'Skill Development',
+      description: 'Vocational training and skill development program.',
+      status: 'Pending',
+      icon: 'settings',
+    },
+    {
+      title: 'Reintegration',
+      description: 'Follow-up and community reintegration support.',
+      status: 'Pending',
+      icon: 'home',
+    },
+  ];
+
+  const displayList = updates.length > 0 ? updates : defaultSteps;
+
+  return (
+    <>
+      {/* Top Main Status Banner Card */}
+      <View style={styles.cardContainer}>
+        <View style={styles.topCardLeft}>
+          <View style={styles.topIconTile}>
+            <Feather name="users" size={20} color="#1E293B" />
+          </View>
+          <View>
+            <Text style={styles.topCardTitle}>Rehabilitation Phase</Text>
+            <Text style={styles.topCardSubtext}>
+              Coordinated by Government Rehabilitation Center & NGO Partner
+            </Text>
+            <View style={styles.inProgressPill}>
+              <View style={styles.greenDot} />
+              <Text style={styles.inProgressText}>
+                {phase.status === 'Resolved' ? 'Completed' : 'In Progress'}
+              </Text>
             </View>
+          </View>
+        </View>
+
+        <View style={styles.topCardRight}>
+          <View style={styles.metaStatRow}>
+            <View style={styles.metaIconBox}>
+              <Feather name="calendar" size={14} color="#64748B" />
+            </View>
+            <View>
+              <Text style={styles.metaLabel}>Status</Text>
+              <Text style={styles.metaValue}>{phase.status === 'Resolved' ? 'Completed' : 'Ongoing'}</Text>
+            </View>
+          </View>
+
+          <View style={[styles.metaStatRow, { marginTop: spacing.xs }]}>
+            <View style={styles.metaIconBox}>
+              <Feather name="calendar" size={14} color="#64748B" />
+            </View>
+            <View>
+              <Text style={styles.metaLabel}>Started On</Text>
+              <Text style={styles.metaValue}>{formatDate(phase.startedAt) || '09 Sept 2026'}</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Main Rehabilitation Timeline Container */}
+      <View style={styles.cardContainer}>
+        <View style={styles.timelineHeaderRow}>
+          <View style={styles.timelineHeaderIconTile}>
+            <Feather name="sliders" size={18} color="#1E293B" />
+          </View>
+          <View>
+            <Text style={styles.topCardTitle}>Rehabilitation Timeline</Text>
+            <Text style={styles.topCardSubtext}>
+              Your rehabilitation journey is being managed by the government rehabilitation center and NGO partner.
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ marginTop: spacing.md }}>
+          {displayList.map((item, index) => (
+            <TimelineItem key={index} item={item} isLast={index === displayList.length - 1} />
           ))}
         </View>
-      )}
-    </Card>
+
+        {/* Info Disclaimer Banner */}
+        <View style={styles.infoBanner}>
+          <View style={styles.infoIconCircle}>
+            <Feather name="info" size={14} color="#1A73E8" />
+          </View>
+          <Text style={styles.infoBannerText}>
+            Your progress is being regularly monitored by the government rehabilitation center and NGO partner. You will be updated about any changes.
+          </Text>
+        </View>
+      </View>
+    </>
   );
 }
 
 export default function RehabilitationProgressScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  // migration_034 - which docket this screen concerns (passed from
-  // HomeScreen's active case); defaults to the caller's own anchor case
-  // when opened without one.
   const caseUserId = route?.params?.caseUserId;
   const dashboardQuery = useUserDashboard(caseUserId);
   const rehabilitationQuery = useRehabilitationProgress(caseUserId);
 
   return (
     <View style={styles.container}>
-      {/* Fixed top bar - a sibling of the ScrollView below, not its first
-          child, so it stays pinned while the body scrolls underneath it
-          (matches CaseDetailsScreen.js/JournalScreen.js's actual structure -
-          AtrocitiesActScreen claims to follow the same pattern but puts its
-          header inside the ScrollView instead, which scrolls it away with
-          the content; that reads as a broken/missing top bar on web/desktop
-          specifically, where a fixed header is the expected behavior). */}
+      {/* Top Navigation Bar */}
       <View
         style={[
           styles.topHeader,
@@ -132,13 +251,8 @@ export default function RehabilitationProgressScreen({ navigation, route }) {
               return (
                 <>
                   {phases.map((phase, i) => (
-                    <PhaseCard key={phase.referralId} phase={phase} index={i} showIndex={phases.length > 1} />
+                    <PhaseCard key={phase.referralId || i} phase={phase} />
                   ))}
-
-                  <Text style={styles.disclaimer}>
-                    Your rehabilitation phase is coordinated by your government rehabilitation center or NGO
-                    partner and updated by your assigned Rehabilitation Officer.
-                  </Text>
                 </>
               );
             }}
@@ -169,20 +283,244 @@ const styles = StyleSheet.create({
   backBtn: { marginRight: spacing.sm, padding: spacing.xs },
   headerIconTile: { alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
   headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 20, fontWeight: '700' },
-  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 720, alignSelf: 'center' },
+  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 1080, alignSelf: 'center' },
 
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: spacing.xs, gap: spacing.md },
-  rowLabel: { ...typography.caption, color: colors.textSecondary, flex: 1 },
-  rowValue: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 13, flex: 1.4, textAlign: 'right' },
+  /* Card styling matching design */
+  cardContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg || 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    marginBottom: spacing.lg,
+    flexDirection: 'column',
+  },
 
-  statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: radius.pill },
-  statusPillText: { ...typography.caption, fontWeight: '700', fontSize: 10 },
+  /* Top Card Layout */
+  topCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    flex: 1,
+  },
+  topIconTile: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: '#E8F0FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  topCardTitle: {
+    ...typography.h3,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  topCardSubtext: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  topCardRight: {
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  metaStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  metaIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metaLabel: {
+    ...typography.caption,
+    fontSize: 10,
+    color: colors.textSecondary,
+  },
+  metaValue: {
+    ...typography.bodyStrong,
+    fontSize: 12,
+    color: colors.textPrimary,
+  },
 
-  updatesSection: { marginTop: spacing.md, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border + '50' },
-  updatesSectionTitle: { ...typography.label, color: colors.textSecondary, marginBottom: spacing.xs },
-  historyItem: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: spacing.xs, borderTopWidth: 1, borderTopColor: colors.border + '50' },
-  historyDate: { ...typography.caption, color: colors.textSecondary, width: 90 },
-  historyBusiness: { ...typography.body, color: colors.textPrimary, fontSize: 13, flex: 1 },
+  /* In Progress Pill */
+  inProgressPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E6F4EA',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm,
+    gap: 6,
+  },
+  greenDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#1E8E3E',
+  },
+  inProgressText: {
+    ...typography.caption,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E8E3E',
+  },
 
-  disclaimer: { ...typography.caption, color: colors.textSecondary, fontStyle: 'italic', textAlign: 'center', marginTop: spacing.sm, marginBottom: spacing.xxxl },
+  /* Timeline Header */
+  timelineHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  timelineHeaderIconTile: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: '#E8F0FE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* Timeline Row Items */
+  timelineRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    marginBottom: spacing.sm,
+  },
+  timelineLeftColumn: {
+    width: 36,
+    alignItems: 'center',
+    paddingTop: 14,
+  },
+  timelineIconContainer: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
+  timelineIconCompleted: {
+    backgroundColor: '#1A73E8',
+    borderColor: '#1A73E8',
+  },
+  timelineIconInProgress: {
+    backgroundColor: '#E8F0FE',
+    borderColor: '#1A73E8',
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: '#E2E8F0',
+    marginTop: 2,
+    marginBottom: -12,
+  },
+  timelineLineCompleted: {
+    backgroundColor: '#1A73E8',
+  },
+
+  /* Timeline Card Content */
+  timelineContentCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  timelineContentLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  itemIconTile: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  itemTitle: {
+    ...typography.bodyStrong,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  itemSubtext: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  timelineContentRight: {
+    alignItems: 'flex-end',
+    marginLeft: spacing.sm,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: radius.pill,
+  },
+  statusBadgeText: {
+    ...typography.caption,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  timelineDateText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.textSecondary,
+    marginTop: 4,
+  },
+
+  /* Bottom Disclaimer Banner */
+  infoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E8F0FE',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
+  infoIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoBannerText: {
+    ...typography.caption,
+    fontSize: 11,
+    color: '#1A73E8',
+    flex: 1,
+    lineHeight: 16,
+  },
 });
