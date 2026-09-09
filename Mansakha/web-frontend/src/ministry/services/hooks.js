@@ -47,6 +47,23 @@ export function useJurisdictionOptions(level, parentId) {
   }, [token, level, parentId]);
 }
 
+// migration_031/033 - which centre a Rehabilitation Officer works for /
+// which station an Investigating Officer works at, needed when Staff
+// Management creates one of those accounts (mirrors jurisdictionId's own
+// picker above).
+export function useRehabilitationProviderOptions() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/lookups/rehabilitation-providers', token), [token]);
+}
+
+export function usePoliceStationOptions(jurisdictionId) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve({ stations: [] });
+    return apiClient.get(`/api/lookups/police-stations?jurisdictionId=${jurisdictionId}`, token);
+  }, [token, jurisdictionId]);
+}
+
 // --- National-tier dashboard/broadcast/policy/analytics (Ministry's own
 // "home" view reuses these, scoped to the root national jurisdiction). ---
 

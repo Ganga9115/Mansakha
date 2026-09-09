@@ -8,11 +8,28 @@ import {
   useUpdateStaff,
   useDeleteStaff,
   useJurisdictionOptions,
+  useRehabilitationProviderOptions,
+  usePoliceStationOptions,
 } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
-const ROLE_OPTIONS = ['Counsellor', 'Administration', 'Data Operator'];
+// Special Public Prosecutor stays retired (absorbed into DLSA Coordinator) -
+// the other 6 coordination roles built this session were, until now, only
+// ever creatable via direct API calls - never actually reachable from this
+// page, despite CREATABLE_ROLES already allowing every one of them
+// server-side.
+const ROLE_OPTIONS = [
+  'Counsellor', 'Administration', 'Data Operator',
+  'Investigating Officer', 'District Welfare Officer', 'Protection Officer',
+  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
+];
 const JURISDICTION_LEVELS = ['district', 'state', 'national'];
+
+// Roles whose queue is jurisdiction-scoped the same way Administration's own
+// is (Protection Officer - "nearby officer" means "assigned to the victim's
+// own district", same jurisdiction_id column, just not tiered by level like
+// Administration's National/State/District split).
+const JURISDICTION_SCOPED_ROLES = ['Administration', 'Protection Officer'];
 
 const STATUS_BADGE = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -21,15 +38,21 @@ const STATUS_BADGE = {
 
 // One tab per category the Ministry needs to browse - National/State/District
 // Admin are all role='Administration', split only by jurisdiction level;
-// Counsellor/Data Operator are their own roles; Users is a separate
-// endpoint/shape entirely (Section 3/8's oversight remit over every user
-// record, not just what one Data Operator provisioned).
+// every other role is its own tab. Users is a separate endpoint/shape
+// entirely (Section 3/8's oversight remit over every user record, not just
+// what one Data Operator provisioned).
 const STAFF_TABS = [
   { key: 'national', label: 'National Admin', role: 'Administration', level: 'national' },
   { key: 'state', label: 'State Admins', role: 'Administration', level: 'state' },
   { key: 'district', label: 'District Admins', role: 'Administration', level: 'district' },
   { key: 'counsellor', label: 'Counsellors', role: 'Counsellor', level: undefined },
   { key: 'dataoperator', label: 'Data Operators', role: 'Data Operator', level: undefined },
+  { key: 'io', label: 'Investigating Officers', role: 'Investigating Officer', level: undefined },
+  { key: 'dwo', label: 'Welfare Officers', role: 'District Welfare Officer', level: undefined },
+  { key: 'po', label: 'Protection Officers', role: 'Protection Officer', level: undefined },
+  { key: 'dlsa', label: 'DLSA Coordinators', role: 'DLSA Coordinator', level: undefined },
+  { key: 'dc', label: 'District Collectors', role: 'District Collector', level: undefined },
+  { key: 'rehab', label: 'Rehabilitation Officers', role: 'Rehabilitation Officer', level: undefined },
 ];
 const USERS_TAB = { key: 'users', label: 'Users' };
 const TABS = [...STAFF_TABS, USERS_TAB];
@@ -83,6 +106,10 @@ export default function StaffManagement() {
   const [roleName, setRoleName] = useState('Counsellor');
   const [jurisdictionLevel, setJurisdictionLevel] = useState('district');
   const [jurisdictionId, setJurisdictionId] = useState('');
+  const [providerId, setProviderId] = useState('');
+  const [stationStateId, setStationStateId] = useState('');
+  const [stationDistrictId, setStationDistrictId] = useState('');
+  const [stationId, setStationId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -94,9 +121,21 @@ export default function StaffManagement() {
   const [showEditNewPassword, setShowEditNewPassword] = useState(false);
 
   const jurisdictionQuery = useJurisdictionOptions(
-    roleName === 'Administration' ? jurisdictionLevel : undefined
+    roleName === 'Administration' ? jurisdictionLevel : JURISDICTION_SCOPED_ROLES.includes(roleName) ? 'district' : undefined
   );
   const jurisdictionOptions = jurisdictionQuery.data?.jurisdictions || [];
+
+  const providerQuery = useRehabilitationProviderOptions();
+  const providerOptions = providerQuery.data?.providers || [];
+
+  // Station is scoped to a district - same State -> District -> Station
+  // cascade as Data Operator's own intake form.
+  const stationStateQuery = useJurisdictionOptions(roleName === 'Investigating Officer' ? 'state' : undefined);
+  const stationDistrictQuery = useJurisdictionOptions(roleName === 'Investigating Officer' ? 'district' : undefined, stationStateId);
+  const stationQuery = usePoliceStationOptions(stationDistrictId);
+  const stationStateOptions = stationStateQuery.data?.jurisdictions || [];
+  const stationDistrictOptions = stationDistrictQuery.data?.jurisdictions || [];
+  const stationOptions = stationQuery.data?.stations || [];
 
   const staff = data?.staff || [];
   const total = data?.total || 0;
@@ -114,7 +153,9 @@ export default function StaffManagement() {
         phone: phone.trim() || undefined,
         roleName,
         password,
-        jurisdictionId: roleName === 'Administration' ? jurisdictionId : undefined,
+        jurisdictionId: JURISDICTION_SCOPED_ROLES.includes(roleName) ? jurisdictionId : undefined,
+        providerId: roleName === 'Rehabilitation Officer' ? providerId : undefined,
+        stationId: roleName === 'Investigating Officer' ? stationId : undefined,
       });
       setShowForm(false);
       setFullName('');
@@ -123,6 +164,10 @@ export default function StaffManagement() {
       setPassword('');
       setShowPassword(false);
       setJurisdictionId('');
+      setProviderId('');
+      setStationStateId('');
+      setStationDistrictId('');
+      setStationId('');
       refetch();
     } catch (err) {
       // e.g. the 1-per-district/state limit rejection - whole-action-failed,
@@ -287,6 +332,75 @@ export default function StaffManagement() {
                 </div>
               </>
             )}
+            {/* Protection Officer's "nearby officer" is jurisdiction-scoped
+                the same way Administration's own queue is - just one flat
+                district, not tiered by level. */}
+            {roleName === 'Protection Officer' && (
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
+                <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                  <option value="">Select...</option>
+                  {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
+                </select>
+              </div>
+            )}
+            {/* migration_031 - which centre this Rehabilitation Officer
+                works for; otherwise their queue is empty by design. */}
+            {roleName === 'Rehabilitation Officer' && (
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Rehabilitation Centre</label>
+                <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                  <option value="">Select...</option>
+                  {providerOptions.map((p) => <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>)}
+                </select>
+              </div>
+            )}
+            {/* migration_033 - which police station this Investigating
+                Officer works at, cascaded State -> District -> Station same
+                as Data Operator's own intake form. */}
+            {roleName === 'Investigating Officer' && (
+              <>
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">State</label>
+                  <select
+                    value={stationStateId}
+                    onChange={(e) => { setStationStateId(e.target.value); setStationDistrictId(''); setStationId(''); }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                  >
+                    <option value="">Select...</option>
+                    {[...stationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
+                      <option key={s.jurisdictionId} value={s.jurisdictionId}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
+                  <select
+                    value={stationDistrictId}
+                    onChange={(e) => { setStationDistrictId(e.target.value); setStationId(''); }}
+                    disabled={!stationStateId}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
+                  >
+                    <option value="">{stationStateId ? 'Select...' : 'Select a state first'}</option>
+                    {[...stationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
+                      <option key={d.jurisdictionId} value={d.jurisdictionId}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Police Station</label>
+                  <select
+                    value={stationId}
+                    onChange={(e) => setStationId(e.target.value)}
+                    disabled={!stationDistrictId}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
+                  >
+                    <option value="">{stationDistrictId ? (stationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}</option>
+                    {stationOptions.map((s) => <option key={s.stationId} value={s.stationId}>{s.name}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
             <div className="col-span-2">
               <button type="submit" disabled={createStaff.loading} className="px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
                 {createStaff.loading ? 'Creating...' : 'Create Account'}
@@ -303,7 +417,7 @@ export default function StaffManagement() {
                 <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                   <th className="py-3.5 px-6">Name</th>
                   <th className="py-3.5 px-4">Role</th>
-                  <th className="py-3.5 px-4">Jurisdiction</th>
+                  <th className="py-3.5 px-4">Scope</th>
                   <th className="py-3.5 px-6 text-right">Action</th>
                 </tr>
               </thead>
@@ -319,7 +433,12 @@ export default function StaffManagement() {
                     <tr className="hover:bg-gray-50/70 transition">
                       <td className="py-4 px-6 font-bold text-gray-800">{s.fullName}</td>
                       <td className="py-4 px-4 text-gray-700 font-medium">{s.roleName}</td>
-                      <td className="py-4 px-4 text-gray-700">{s.jurisdictionName || '-'}</td>
+                      {/* Whichever scope this role actually uses - jurisdiction
+                          (Administration, Protection Officer), centre
+                          (Rehabilitation Officer), or station (Investigating
+                          Officer) - "-" for roles with none (DWO, DLSA,
+                          District Collector aren't scoped at all today). */}
+                      <td className="py-4 px-4 text-gray-700">{s.jurisdictionName || s.providerName || s.stationName || '-'}</td>
                       <td className="py-4 px-6 text-right">
                         <button
                           onClick={() => (editingId === s.officialId ? cancelEdit() : startEdit(s))}
