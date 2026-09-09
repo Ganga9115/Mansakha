@@ -30,7 +30,17 @@ const STATUSES = ['Pending', 'Accepted', 'Rejected'];
 // proof-verified request now flows straight into the reviewing role's own
 // existing referral workflow (Immediate Relief, assign-lawyer, threat
 // tier) instead of dead-ending as just an `interventions` row.
-function mountInterventionReviewRoutes(router, { roleName, interventionTypeNames, jurisdictionScoped = false }) {
+// `discloseContactDetails` is deliberately opt-in per mount rather than on
+// for every role that shares this module. Accepting a request is not the
+// same act for each of them: a Protection Officer who accepts a Relocation
+// or Witness Protection request has to physically go and move a person, so
+// a docket number alone leaves them with no way to reach the very victim
+// they just committed to protect. DWO and DLSA do not have that problem -
+// DWO disburses to a bank account it already holds, DLSA assigns a lawyer
+// through DLSA's own channel - so they stay on docket-only, which is the
+// tighter default. Same boundary as the Protection Registry keeps: detail
+// view only, never the queue listing, and every read audit-logged.
+function mountInterventionReviewRoutes(router, { roleName, interventionTypeNames, jurisdictionScoped = false, discloseContactDetails = false }) {
   function getOwnJurisdictionId(req) {
     const role = req.auth.roles.find((r) => r.roleName === roleName);
     return role?.jurisdictionId || null;
@@ -81,13 +91,21 @@ function mountInterventionReviewRoutes(router, { roleName, interventionTypeNames
   });
 
   router.get('/intervention-requests/:requestId', async (req, res) => {
+    // Identity always lives on the case-family ANCHOR row, never on a linked
+    // docket - same coalesce the Protection Registry uses.
+    const contactSelect = discloseContactDetails ? ', ui.full_name, ui.contact_number, ui.address' : '';
+    const contactJoin = discloseContactDetails
+      ? 'left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)'
+      : '';
+
     const { rows } = await pool.query(
-      `select ir.request_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
-              u.jurisdiction_id, u.docket_number, u.case_stage, ct.name as case_type_name, it.name as intervention_type_name
+      `select ir.request_id, ir.user_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
+              u.jurisdiction_id, u.docket_number, u.case_stage, ct.name as case_type_name, it.name as intervention_type_name${contactSelect}
        from intervention_requests ir
        join users u on u.user_id = ir.user_id
        join case_types ct on ct.case_type_id = u.case_type_id
        join intervention_types it on it.intervention_type_id = ir.intervention_type_id
+       ${contactJoin}
        where ir.request_id = $1`,
       [req.params.requestId]
     );
@@ -105,6 +123,12 @@ function mountInterventionReviewRoutes(router, { roleName, interventionTypeNames
     }));
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'intervention_request', entityId: req.params.requestId });
+    // Reading a victim's identity is a separate, attributable act from
+    // reading the request itself - logged under its own entity type, the
+    // same one the Protection Registry's dispatch details use.
+    if (discloseContactDetails) {
+      await writeAuditLog({ officialId: req.auth.officialId, userId: r.user_id, action: 'read', entityType: 'victim_contact_details', entityId: req.params.requestId });
+    }
 
     return ok(res, {
       requestId: r.request_id,
@@ -118,6 +142,13 @@ function mountInterventionReviewRoutes(router, { roleName, interventionTypeNames
       requestedAt: r.requested_at,
       reviewedAt: r.reviewed_at,
       documents,
+      // Only present on a mount that opted in above; null on a case whose
+      // identity row is missing.
+      ...(discloseContactDetails ? {
+        victimName: r.full_name || null,
+        victimContactNumber: r.contact_number || null,
+        victimAddress: r.address || null,
+      } : {}),
     });
   });
 

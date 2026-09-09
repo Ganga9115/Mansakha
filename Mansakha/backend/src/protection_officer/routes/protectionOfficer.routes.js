@@ -60,7 +60,12 @@ router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
 // verified - FIR copy, police threat assessment) are the Protection
 // Officer's own to review. Jurisdiction-scoped, matching this role's own
 // existing scoped referral queue below - "nearby officer" reviews it too.
-mountInterventionReviewRoutes(router, { roleName: ROLE_NAME, interventionTypeNames: ['Witness Protection', 'Relocation'], jurisdictionScoped: true });
+// discloseContactDetails: this role is dispatched to a person, not to a file
+// - accepting a Relocation request means physically moving someone, which is
+// impossible from a docket number alone. See the flag's own comment in
+// interventionRequestReview.js, and loadOwnReferral below for the same
+// boundary applied to the Protection Registry.
+mountInterventionReviewRoutes(router, { roleName: ROLE_NAME, interventionTypeNames: ['Witness Protection', 'Relocation'], jurisdictionScoped: true, discloseContactDetails: true });
 
 router.get('/referrals', async (req, res) => {
   const { status } = req.query;

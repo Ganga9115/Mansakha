@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
-import { ChevronDown, ChevronUp, CheckCircle2, XCircle, FileText } from 'lucide-react';
+import { ChevronDown, ChevronUp, CheckCircle2, XCircle, FileText, User, Phone, Home } from 'lucide-react';
 import { useInterventionRequestsList, useInterventionRequestDetail, useReviewInterventionRequest } from '../services/hooks';
 
 // Protection Officer's own proof-verified review queue for Witness
@@ -18,6 +18,48 @@ const STATUS_BADGE = {
   Accepted: 'bg-emerald-100 text-emerald-700',
   Rejected: 'bg-rose-100 text-rose-700',
 };
+
+// The victim's name, number and address, so an officer who accepts a
+// Relocation or Witness Protection request can actually reach the person
+// they have just committed to move. Same disclosure boundary the Protection
+// Registry's Dispatch Details keeps: it only arrives with the expanded
+// detail fetch (never in the queue listing), and the backend audit-logs
+// every read of it.
+function ContactDetails({ d }) {
+  if (!d) return null;
+  if (!d.victimName && !d.victimContactNumber && !d.victimAddress) return null;
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2.5">
+      <div className="flex items-center gap-1.5">
+        <User size={13} className="text-[#3D5A80]" />
+        <p className="font-bold text-[#3D5A80] text-[11px] uppercase">Contact Details</p>
+      </div>
+      {d.victimName && (
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Name</span>
+          <span className="text-xs font-bold text-gray-800">{d.victimName}</span>
+        </div>
+      )}
+      {d.victimContactNumber && (
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
+          <a href={`tel:${d.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+            <Phone size={12} /> {d.victimContactNumber}
+          </a>
+        </div>
+      )}
+      {d.victimAddress && (
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Address</span>
+          <span className="flex items-start gap-1.5 text-xs text-gray-700 leading-relaxed">
+            <Home size={12} className="mt-0.5 shrink-0 text-gray-400" /> {d.victimAddress}
+          </span>
+        </div>
+      )}
+      <p className="text-[10px] text-gray-400 pt-0.5">Every view of these details is recorded in the audit log.</p>
+    </div>
+  );
+}
 
 function RequestRow({ r, onDecided }) {
   const [expanded, setExpanded] = useState(false);
@@ -117,6 +159,11 @@ function RequestRow({ r, onDecided }) {
 
       {expanded && (
         <div className="px-6 pb-5 text-xs text-gray-600 space-y-3">
+          {detailQuery.loading ? (
+            <p className="text-gray-400">Loading contact details...</p>
+          ) : (
+            <ContactDetails d={detailQuery.data} />
+          )}
           {r.description && (
             <div className="bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg p-3">
               <p className="font-bold text-[#3D5A80] text-[11px] uppercase mb-1">Victim's Description</p>
