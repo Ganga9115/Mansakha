@@ -2024,49 +2024,15 @@ router.post('/legal-aid-feedback', async (req, res) => {
   return ok(res, null, 'Feedback submitted. Kindly note that if you rate your counsel poorly, DLSA may reassign your case to a different lawyer.');
 });
 
-// ===== Threat (consolidated Protection Officer flow) =====
-// Victim-initiated, same self-referral pattern as legal aid - no case_stage
-// gate, a threat can arise at any point. Routed to Protection Officer,
-// jurisdiction-scoped ("nearby officer" = the officer assigned to the
-// victim's own district - see protectionOfficer.routes.js).
-router.post('/threat-report', async (req, res) => {
-  const { reason, location } = req.body;
-  if (!reason || !String(reason).trim()) return fail(res, 'reason is required - kindly describe the threat', 400);
-
-  const { rows: existing } = await pool.query(
-    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Protection Officer' and status = 'Open'`,
-    [req.auth.userId]
-  );
-  if (existing.length > 0) return fail(res, 'You already have an open protection request.', 400);
-
-  // Location is best-effort (the victim's device may not have granted
-  // permission, or may be a desktop with no GPS at all) - never blocks the
-  // report itself, since reporting the threat matters more than pinpointing it.
-  // originType distinguishes this from an emergency SOS in the Protection
-  // Registry's priority sort - a self-reported (non-emergency) threat still
-  // needs attention, but not ahead of an active "Get Help Now" case.
-  const metadata = { originType: 'self_reported_threat' };
-  if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
-    metadata.location = { lat: location.lat, lng: location.lng, capturedAt: new Date().toISOString() };
-  }
-
-  const { data, error } = await supabase
-    .from('agency_referrals')
-    .insert({
-      user_id: req.auth.userId,
-      referred_to_role: 'Protection Officer',
-      referred_by_user_id: req.auth.userId,
-      reason: String(reason).trim(),
-      metadata,
-    })
-    .select('referral_id')
-    .single();
-  if (error) return fail(res, `Could not submit threat report: ${error.message}`, 500);
-
-  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
-
-  return ok(res, { referralId: data.referral_id }, 'Threat report submitted - the Protection Officer assigned to your district has been notified', 201);
-});
+// ===== Protection status (Protection Officer flow) =====
+// POST /threat-report has been removed: "Report a Threat" duplicated the
+// Emergency Call's destination (the same jurisdiction-scoped Protection
+// Officer queue), only slower and without the emergency framing - which
+// forced a victim in danger to choose between two near-identical buttons.
+// A protection referral is now created either by POST /urgent-help (urgent)
+// or by an accepted Witness Protection / Relocation intervention request
+// (planned, proof-reviewed). This read-only status route serves whichever
+// of those is active.
 
 // Read-only status the victim's own app polls - whether protection is
 // active, and the Protection Officer's own logged updates (weekly
@@ -2223,7 +2189,7 @@ router.get('/investigation-progress', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
   const { rows } = await pool.query(
     `select ir.accused_status, ir.investigation_progress, ir.chargesheet_status, ir.chargesheet_filed_at,
-            ir.fir_document_path, ir.chargesheet_document_path
+            ir.investigation_complete_at, ir.fir_document_path, ir.chargesheet_document_path
      from users u
      left join investigation_records ir on ir.user_id = u.user_id
      where u.user_id = $1`,
@@ -2252,6 +2218,9 @@ router.get('/investigation-progress', async (req, res) => {
     investigationProgress: row.investigation_progress || null,
     chargesheetStatus: row.chargesheet_status || 'Not Filed',
     chargesheetFiledAt: row.chargesheet_filed_at || null,
+    // A real milestone for someone waiting on their own case - the victim
+    // had no way of learning the investigation had concluded.
+    investigationCompleteAt: row.investigation_complete_at || null,
     firDocumentUrl,
     chargesheetDocumentUrl,
   });

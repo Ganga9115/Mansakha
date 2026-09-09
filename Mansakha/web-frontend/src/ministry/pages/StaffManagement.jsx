@@ -11,6 +11,7 @@ import {
   useJurisdictionOptions,
   useRehabilitationProviderOptions,
   usePoliceStationOptions,
+  useDesignationOptions,
 } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
@@ -32,38 +33,10 @@ const JURISDICTION_LEVELS = ['district', 'state', 'national'];
 // Administration's National/State/District split).
 const JURISDICTION_SCOPED_ROLES = ['Administration', 'Protection Officer'];
 
-// migration_035 - mirrors backend/src/ministry/routes/ministry.routes.js's
-// PROTECTION_OFFICER_DESIGNATIONS exactly. Real-world grounding: the PoA
-// Act Rules leave "Protection Officer" appointment to state government
-// notification rather than one fixed post nationally - different states
-// have designated a DSP, an SDM, a Tehsildar, or a District Social Welfare
-// Officer. Deliberately district-scoped only (jurisdictionId above), never
-// a police station - every one of these is a sub-division/district-level
-// post, unlike Investigating Officer's genuinely station-level appointment.
-const PROTECTION_OFFICER_DESIGNATIONS = [
-  'Deputy Superintendent of Police (DSP)',
-  'Sub-Divisional Magistrate (SDM)',
-  'Tehsildar',
-  'District Social Welfare Officer (DSWO)',
-  'Additional District Magistrate (ADM)',
-];
-
-// migration_035 - mirrors the backend's INVESTIGATING_OFFICER_DESIGNATIONS.
-// Deliberately starts at DySP: Rule 7 of the SC/ST (PoA) Rules, 1995
-// requires an atrocity case to be investigated by an officer NOT BELOW the
-// rank of Deputy Superintendent of Police, so SI/Inspector - who would
-// handle an ordinary IPC case - legally cannot be the IO here.
-const INVESTIGATING_OFFICER_DESIGNATIONS = [
-  'Deputy Superintendent of Police (DySP)',
-  'Assistant Commissioner of Police (ACP)',
-  'Additional Superintendent of Police (Addl. SP)',
-  'Superintendent of Police (SP)',
-];
-
-const DESIGNATIONS_BY_ROLE = {
-  'Protection Officer': PROTECTION_OFFICER_DESIGNATIONS,
-  'Investigating Officer': INVESTIGATING_OFFICER_DESIGNATIONS,
-};
+// Designation lists are fetched from the server (see useDesignationOptions)
+// rather than duplicated here - the hardcoded copy that used to live at this
+// spot had already drifted out of sync with the real list, still offering
+// designations the backend would reject.
 
 const STATUS_BADGE = {
   active: 'bg-emerald-100 text-emerald-700',
@@ -131,6 +104,8 @@ export default function StaffManagement() {
   const updateStaff = useUpdateStaff();
   const updateStaffScope = useUpdateStaffScope();
   const deleteStaff = useDeleteStaff();
+  const designationOptionsQuery = useDesignationOptions();
+  const DESIGNATIONS_BY_ROLE = designationOptionsQuery.data?.options || {};
 
   const switchTab = (key) => { setActiveTab(key); setPage(1); };
 

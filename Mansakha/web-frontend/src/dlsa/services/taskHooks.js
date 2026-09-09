@@ -34,20 +34,8 @@ export function useTasksList(status) {
   }, [token, status]);
 }
 
-export function useCreateTask() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (userId, assignedToRole, action, dueAt, sourceReferralId) => {
-    setLoading(true);
-    try {
-      return await apiClient.post('/api/dlsa/tasks', { userId, assignedToRole, action, dueAt, sourceReferralId }, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
+// useCreateTask removed - this role cannot raise directives for other
+// offices (see its own routes.js for why). Only District Collector can.
 export function useCompleteTask() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

@@ -28,20 +28,8 @@ function useQuery(queryFn, deps) {
 // useTasksList removed along with the "My Tasks" page it backed - a
 // directive is listed and completed on the case it concerns instead
 // (useReferralTasks + useCompleteTask below).
-export function useCreateTask() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (userId, assignedToRole, action, dueAt, sourceReferralId) => {
-    setLoading(true);
-    try {
-      return await apiClient.post('/api/dwo/tasks', { userId, assignedToRole, action, dueAt, sourceReferralId }, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
+// useCreateTask removed - this role cannot raise directives for other
+// offices (see its own routes.js for why). Only District Collector can.
 // Every task raised against one specific case (across any role), for that
 // case's own Tasks page - not this role's global My Tasks queue.
 export function useReferralTasks(referralId) {

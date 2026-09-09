@@ -34,20 +34,8 @@ export function useTasksList(status) {
   }, [token, status]);
 }
 
-export function useCreateTask() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (userId, assignedToRole, action, dueAt, sourceReferralId) => {
-    setLoading(true);
-    try {
-      return await apiClient.post('/api/districtcollector/tasks', { userId, assignedToRole, action, dueAt, sourceReferralId }, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
+// useCreateTask removed - no role raises directives by hand any more. Only
+// the escalation checker writes agency_tasks, and it targets this role.
 export function useCompleteTask() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

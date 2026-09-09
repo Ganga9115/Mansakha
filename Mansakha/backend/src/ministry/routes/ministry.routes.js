@@ -72,6 +72,14 @@ async function checkJurisdictionLimit(roleName, jurisdictionId) {
 // (not supabase-js) because filtering the parent row by a condition on a
 // doubly-nested embed (official_roles -> jurisdictions.level) isn't
 // something PostgREST's embed syntax can express.
+// The designation lists Ministry's own Staff Management dropdown renders.
+// Served from the shared source (core/services/officialDesignations.js)
+// rather than duplicated in the frontend - a second hardcoded copy had
+// already drifted out of sync with the real one once.
+router.get('/designation-options', async (req, res) => {
+  return ok(res, { options: DESIGNATIONS_BY_ROLE });
+});
+
 router.get('/staff', async (req, res) => {
   const { role, level } = req.query;
   const pageSize = 30;

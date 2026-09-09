@@ -485,61 +485,20 @@ router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) =
   return ok(res, { newReferralId: rehabReferral.referral_id }, 'Handed off to Rehabilitation Officer', 201);
 });
 
-// ===== Structured tasks (migration_030_agency_tasks.sql) =====
-// Real action items - a specific role, a specific action, a due date, a
-// Pending/Completed status - instead of a free-text note only the reader
-// happens to see. THE TEMPLATE for the other 6 role route files' identical
-// 3 routes below. Any role can create a task targeting any role (not just
-// its own referrals' role) - e.g. District Collector directing Protection
-// Officer to act, or DWO flagging something for Rehabilitation Officer.
-const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
-];
 
 // No portal-wide task list here - the "My Tasks" page it backed has been
 // removed. A directive raised FOR this role is shown, and completed, on the
 // case it actually concerns (ReferralTasks.jsx), which is the only place it
 // carries any meaning.
-router.post('/tasks', async (req, res) => {
-  const { userId, assignedToRole, action, dueAt, sourceReferralId } = req.body;
-  if (!userId || !assignedToRole || !action || !String(action).trim()) {
-    return fail(res, 'userId, assignedToRole, and action are required', 400);
-  }
-  if (!TASK_ASSIGNABLE_ROLES.includes(assignedToRole)) {
-    return fail(res, `assignedToRole must be one of: ${TASK_ASSIGNABLE_ROLES.join(', ')}`, 400);
-  }
-
-  const { rows: userRows } = await pool.query('select user_id, case_stage from users where user_id = $1', [userId]);
-  if (!userRows[0]) return fail(res, 'Case not found', 404);
-  // migration_034: Rehabilitation Officer's mandate begins once the case
-  // reaches the Rehabilitation eCourt stage (same rule as
-  // hand-off-rehabilitation above and the victim's own opt-in route) - a
-  // task raised before that would sit in the officer's queue for a case
-  // they have no referral or case access to yet.
-  if (assignedToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Rehabilitation') {
-    return fail(res, "Rehabilitation Officer's role begins only once the case reaches the Rehabilitation stage. Kindly assign this to a different office, or raise it again once the case reaches that stage.", 400);
-  }
-
-  const { data, error } = await supabase
-    .from('agency_tasks')
-    .insert({
-      user_id: userId,
-      source_referral_id: sourceReferralId || null,
-      assigned_to_role: assignedToRole,
-      created_by_official_id: req.auth.officialId,
-      action: String(action).trim(),
-      due_at: dueAt || null,
-    })
-    .select('task_id')
-    .single();
-  if (error) return fail(res, `Could not create task: ${error.message}`, 500);
-
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'agency_task', entityId: data.task_id });
-
-  return ok(res, { taskId: data.task_id }, 'Task created', 201);
-});
-
+// ===== Structured tasks (migration_030_agency_tasks.sql) - INBOUND ONLY =====
+// POST /tasks removed: this role delivers a service on a case and has no
+// statutory authority to direct another department. Under the PoA Act the
+// district officer who CAN issue cross-departmental directives is the
+// District Collector (district executive head, chair of the Act's own
+// district-level vigilance and monitoring committee) - that role keeps it.
+// This capability was inherited from the shared role template rather than
+// chosen for this role. A directive raised FOR this role is still listed
+// and completed on the case it concerns.
 router.patch('/tasks/:taskId/complete', async (req, res) => {
   const { rows } = await pool.query(
     'select task_id, status from agency_tasks where task_id = $1 and assigned_to_role = $2',
