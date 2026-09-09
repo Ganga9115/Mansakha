@@ -14,7 +14,6 @@ import { useMe } from '../services/hooks';
 const NAV_ITEMS = [
   { name: 'Referral Queue', icon: HeartHandshake, path: '/dwo' },
   { name: 'Intervention Requests', icon: FileCheck2, path: '/dwo/intervention-requests' },
-  { name: 'My Tasks', icon: ClipboardList, path: '/dwo/tasks' },
   { name: 'Profile', icon: User, path: '/dwo/profile' },
 ];
 

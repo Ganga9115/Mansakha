@@ -97,7 +97,6 @@ import DwoReferralRelief from './dwo/pages/ReferralRelief';
 import DwoReferralCompensation from './dwo/pages/ReferralCompensation';
 import DwoReferralLog from './dwo/pages/ReferralLog';
 import DwoReferralTasks from './dwo/pages/ReferralTasks';
-import DwoMyTasks from './dwo/pages/MyTasks';
 import DwoInterventionRequests from './dwo/pages/InterventionRequests';
 import DwoProfile from './dwo/pages/Profile';
 import ProtectionOfficerRegistry from './protection_officer/pages/ProtectionRegistry';
@@ -239,7 +238,6 @@ export default function App() {
         <Route path="/dwo/referrals/:referralId/compensation" element={<RequireAuth loginPath="/signin"><DwoReferralCompensation /></RequireAuth>} />
         <Route path="/dwo/referrals/:referralId/log" element={<RequireAuth loginPath="/signin"><DwoReferralLog /></RequireAuth>} />
         <Route path="/dwo/referrals/:referralId/tasks" element={<RequireAuth loginPath="/signin"><DwoReferralTasks /></RequireAuth>} />
-        <Route path="/dwo/tasks" element={<RequireAuth loginPath="/signin"><DwoMyTasks /></RequireAuth>} />
         <Route path="/dwo/intervention-requests" element={<RequireAuth loginPath="/signin"><DwoInterventionRequests /></RequireAuth>} />
         <Route path="/dwo/profile" element={<RequireAuth loginPath="/signin"><DwoProfile /></RequireAuth>} />
         <Route path="/protectionofficer" element={<RequireAuth loginPath="/signin"><ProtectionOfficerRegistry /></RequireAuth>} />

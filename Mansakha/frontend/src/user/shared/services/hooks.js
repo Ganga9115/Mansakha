@@ -728,3 +728,26 @@ async function request(path, { method = 'GET', body, token } = {}) {
     throw error;
   }
 }
+
+// migration_038 - the bank account statutory compensation is disbursed
+// into (DBT). Held against the person, not one docket, so this takes no
+// caseUserId. Proof is optional supporting evidence, never a gate on
+// recording the account - same reasoning migration_036 applied to the
+// intervention types.
+export function useBankDetails() {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'bank-details'],
+    queryFn: () => apiClient.get('/api/user/bank-details', token),
+    enabled: !!token,
+  });
+}
+
+export function useSaveBankDetails() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (details) => apiClient.patch('/api/user/bank-details', details, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'bank-details'] }),
+  });
+}
