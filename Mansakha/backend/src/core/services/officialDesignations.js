@@ -11,18 +11,32 @@
 // officer holds, so the officer may set it themselves from their Profile,
 // constrained to these lists rather than free text.
 
-// The PoA Act Rules leave "Protection Officer" appointment to state
-// government notification rather than naming one fixed post nationally -
-// different states have designated a DSP, an SDM, a Tehsildar, or a
-// District Social Welfare Officer. Every one of these is a sub-division or
-// district-level post, which is why this role is district-scoped and never
-// tied to a single police station.
+// Under the SC/ST (PoA) Act there is no post literally named "Protection
+// Officer" - the protective function is split between the executive
+// magistracy (preventive measures, spot inspection, the district's relief
+// and protection duties) and the police (the SC/ST Protection Cell, and
+// DySP-and-above investigation). So this list is the executive-magistrate
+// and police ranks that actually carry that function at district or
+// sub-division level.
+//
+// Deliberately NOT included, and why:
+//   - Tehsildar: the Tehsildar-as-Protection-Officer convention comes from
+//     the Protection of Women from Domestic Violence Act, 2005, where states
+//     genuinely do appoint Tehsildars/CDPOs as statutory Protection
+//     Officers. It is the wrong statute. A Tehsildar also sits BELOW SDM in
+//     the revenue hierarchy, and the Act's closest district-level protective
+//     post must be not below Sub-Divisional Magistrate rank.
+//   - District Social Welfare Officer: a welfare/relief/rehabilitation
+//     functionary, which is the District Welfare Officer role in this
+//     system - not the physical-protection one.
+//
+// Every rank below is a sub-division or district-level post, which is why
+// this role is district-scoped and never tied to a single police station.
 const PROTECTION_OFFICER_DESIGNATIONS = [
   'Deputy Superintendent of Police (DSP)',
   'Sub-Divisional Magistrate (SDM)',
-  'Tehsildar',
-  'District Social Welfare Officer (DSWO)',
   'Additional District Magistrate (ADM)',
+  'Superintendent of Police (SP)',
 ];
 
 // Deliberately starts at DySP: Rule 7 of the SC/ST (Prevention of

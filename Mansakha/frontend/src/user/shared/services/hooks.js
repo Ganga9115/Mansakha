@@ -278,15 +278,11 @@ export function useThreatStatus() {
   });
 }
 
-export function useReportThreat() {
-  const token = useToken();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ reason, location }) => apiClient.post('/api/user/threat-report', { reason, location }, token),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'threat-status'] }),
-  });
-}
-
+// useReportThreat removed - "Report a Threat" was retired as a separate
+// victim action (it duplicated the Emergency Call's destination). Urgent
+// danger goes through useTriggerUrgentHelp; planned protection goes through
+// the Witness Protection / Relocation intervention request. useThreatStatus
+// below still reads whichever protection referral resulted.
 // DWO Financial Aid (Immediate Relief) - victim-initiated, no case_stage
 // gate, urgent need can arise at any point in the case.
 export function useFinancialAidStatus() {
@@ -748,6 +744,32 @@ export function useSaveBankDetails() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (details) => apiClient.patch('/api/user/bank-details', details, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'bank-details'] }),
+  });
+}
+
+// migration_038 - optional passbook / cancelled-cheque proof for the bank
+// account compensation is paid into. Deliberately optional: recording where
+// to send statutory relief should not be blocked behind paperwork (same
+// reasoning migration_036 applied to the intervention types) - the District
+// Welfare Officer verifies before actually disbursing. Mirrors
+// useUploadInterventionDocument's own web-vs-native FormData branch.
+export function useUploadBankProof() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ uri, mimeType }) => {
+      const formData = new FormData();
+      const type = mimeType || 'image/jpeg';
+      const ext = type.includes('png') ? 'png' : type.includes('pdf') ? 'pdf' : 'jpg';
+      if (Platform.OS === 'web') {
+        const blob = await fetch(uri).then((r) => r.blob());
+        formData.append('file', blob, `bank-proof.${ext}`);
+      } else {
+        formData.append('file', { uri, name: `bank-proof.${ext}`, type });
+      }
+      return apiClient.uploadFile('/api/user/bank-details/proof', formData, token);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'bank-details'] }),
   });
 }

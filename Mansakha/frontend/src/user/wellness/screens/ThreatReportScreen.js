@@ -1,77 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Platform, TextInput } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import * as Location from 'expo-location';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
 import { typography } from '../../shared/theme/typography';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import Card from '../../shared/components/Card';
-import Button from '../../shared/components/Button';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useUserDashboard, useThreatStatus, useReportThreat } from '../../shared/services/hooks';
+import { useUserDashboard, useThreatStatus } from '../../shared/services/hooks';
 
-// Threat - the consolidated Protection Officer flow. Location capture is
-// best-effort only: a denied permission, an unsupported platform (desktop
-// web has no GPS), or any failure never blocks the report itself - naming
-// the threat matters more than pinpointing it, and the backend already
-// treats location as optional.
-async function captureLocation() {
-  try {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') return null;
-    const position = await Location.getCurrentPositionAsync({});
-    return { lat: position.coords.latitude, lng: position.coords.longitude };
-  } catch {
-    return null;
-  }
-}
-
-function ReportForm() {
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState(null);
-  const reportThreat = useReportThreat();
-
-  const handleSubmit = async () => {
-    if (!reason.trim()) return;
-    setError(null);
-    try {
-      const location = await captureLocation();
-      await reportThreat.mutateAsync({ reason: reason.trim(), location });
-    } catch (err) {
-      setError(err.message || 'Could not submit your report.');
-    }
-  };
-
-  return (
-    <Card>
-      <View style={styles.alertIconRow}>
-        <Feather name="alert-triangle" size={20} color={colors.danger} />
-        <Text style={styles.cardTitle}>Report a Threat</Text>
-      </View>
-      <Text style={styles.introText}>
-        Kindly describe the threat you are facing. Your report is sent immediately to the Protection
-        Officer assigned to your district, along with your location if permitted.
-      </Text>
-      <TextInput
-        style={styles.textArea}
-        multiline
-        numberOfLines={4}
-        placeholder="e.g. I was followed and threatened near my home today..."
-        placeholderTextColor={colors.textSecondary}
-        value={reason}
-        onChangeText={setReason}
-      />
-      {error && <Text style={styles.errorText}>{error}</Text>}
-      <Button title="Submit Report" onPress={handleSubmit} loading={reportThreat.isPending} disabled={!reason.trim() || reportThreat.isPending} />
-    </Card>
-  );
-}
-
+// Protection status view. The reporting form that used to live here is
+// gone - see NoProtectionYet below for why.
 function StatusCard({ data }) {
   return (
     <>
@@ -116,6 +59,28 @@ function StatusCard({ data }) {
   );
 }
 
+// Nothing to report FROM here any more - "Report a Threat" was removed as a
+// separate victim action. It reached the same Protection Officer queue as
+// the Emergency Call, only slower and without the emergency framing, which
+// meant a victim in danger had to choose between two near-identical buttons.
+// Urgent danger goes through Get Help Now; a considered, planned request
+// goes through Request Assistance (Witness Protection / Relocation). This
+// screen is now purely the status view for whichever of those is active.
+function NoProtectionYet() {
+  return (
+    <Card>
+      <View style={styles.statusHeaderRow}>
+        <Text style={styles.cardTitle}>Your Protection Status</Text>
+      </View>
+      <Text style={styles.pendingText}>
+        No protection request is active right now. If you are in immediate danger, use Get Help Now - it alerts your
+        Protection Officer with your location straight away. For planned protection or relocation, apply through
+        Request Assistance.
+      </Text>
+    </Card>
+  );
+}
+
 export default function ThreatReportScreen({ navigation }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
@@ -154,7 +119,7 @@ export default function ThreatReportScreen({ navigation }) {
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={styles.body}>
           <QueryBoundary query={statusQuery}>
-            {(data) => (data?.hasReport ? <StatusCard data={data} /> : <ReportForm />)}
+            {(data) => (data?.hasReport ? <StatusCard data={data} /> : <NoProtectionYet />)}
           </QueryBoundary>
         </View>
       </ScrollView>

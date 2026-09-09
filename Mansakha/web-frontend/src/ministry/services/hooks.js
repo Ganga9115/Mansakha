@@ -484,3 +484,11 @@ export function useMailActions() {
     deleteThread: (threadId) => apiClient.delete(`/api/mail/threads/${threadId}`, token),
   };
 }
+
+// Designation lists come from the server (core/services/officialDesignations.js)
+// - deliberately NOT a second hardcoded copy here, which had already drifted
+// out of sync with the real list once.
+export function useDesignationOptions() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/designation-options', token), [token]);
+}

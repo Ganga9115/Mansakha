@@ -86,17 +86,44 @@ function NewRequestForm({ types }) {
     setSubmitError(null);
   };
 
+  // Documents are now picked BEFORE the request is created, not after. The
+  // old order submitted first and asked for proof afterwards, which meant a
+  // request could reach the reviewing officer with none of its required
+  // proof attached - and nothing ever forced the victim back to finish it.
+  // Anything still marked required in intervention_types (migration_036
+  // deliberately left only the few that genuinely gate a decision) must now
+  // be attached before Submit will fire.
+  const missingRequired = (selectedType?.requiredDocuments || [])
+    .filter((d) => d.required && !pendingDocs[d.label])
+    .map((d) => d.label);
+
   const handleSubmit = async () => {
     if (!selectedTypeId) return;
+    if (missingRequired.length > 0) {
+      setSubmitError(`Kindly attach: ${missingRequired.join(', ')}`);
+      return;
+    }
     setSubmitError(null);
     try {
       const result = await submitRequest.mutateAsync({ interventionTypeId: selectedTypeId, description });
+      // Upload everything picked, one at a time - same one-document-per-call
+      // convention the backend route already follows.
+      for (const [label, file] of Object.entries(pendingDocs)) {
+        setUploadingLabel(label);
+        await uploadDocument.mutateAsync({
+          requestId: result.requestId, documentLabel: label, uri: file.uri, mimeType: file.mimeType,
+        });
+      }
+      setUploadingLabel(null);
       setActiveRequestId(result.requestId);
     } catch (err) {
+      setUploadingLabel(null);
       setSubmitError(err.message || 'Could not submit your request.');
     }
   };
 
+  // Only stores the picked file - the actual upload happens on submit, once
+  // there is a request to attach it to.
   const handlePickDocument = async (label) => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
@@ -109,15 +136,8 @@ function NewRequestForm({ types }) {
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
-    setUploadingLabel(label);
-    try {
-      await uploadDocument.mutateAsync({ requestId: activeRequestId, documentLabel: label, uri: asset.uri, mimeType: asset.mimeType });
-      setPendingDocs((prev) => ({ ...prev, [label]: { uri: asset.uri } }));
-    } catch (err) {
-      Alert.alert('Upload failed', err.message || 'Could not upload this document.');
-    } finally {
-      setUploadingLabel(null);
-    }
+    setPendingDocs((prev) => ({ ...prev, [label]: { uri: asset.uri, mimeType: asset.mimeType } }));
+    setSubmitError(null);
   };
 
   return (
@@ -141,10 +161,6 @@ function NewRequestForm({ types }) {
 
           {selectedType && (
             <>
-              <Text style={styles.docsPreviewNote}>
-                This will require: {selectedType.requiredDocuments.map((d) => d.label).join(', ') || 'no documents'}
-              </Text>
-
               <Text style={styles.fieldLabel}>Tell us more (optional)</Text>
               <TextInput
                 style={styles.textArea}
@@ -156,12 +172,28 @@ function NewRequestForm({ types }) {
                 onChangeText={setDescription}
               />
 
+              {selectedType.requiredDocuments.length > 0 && (
+                <>
+                  <Text style={styles.fieldLabel}>Documents</Text>
+                  {selectedType.requiredDocuments.map((doc) => (
+                    <DocumentSlot
+                      key={doc.label}
+                      doc={doc}
+                      attached={!!pendingDocs[doc.label]}
+                      uploading={uploadingLabel === doc.label}
+                      onPick={() => handlePickDocument(doc.label)}
+                    />
+                  ))}
+                </>
+              )}
+
               {submitError && <Text style={styles.errorText}>{submitError}</Text>}
 
               <Button
                 title="Submit Request"
                 onPress={handleSubmit}
                 loading={submitRequest.isPending}
+                disabled={missingRequired.length > 0 || submitRequest.isPending}
                 style={{ marginTop: spacing.md }}
               />
             </>
@@ -171,20 +203,12 @@ function NewRequestForm({ types }) {
         <>
           <View style={styles.submittedBanner}>
             <Feather name="check-circle" size={18} color={colors.success} />
-            <Text style={styles.submittedText}>Request submitted. Now attach your proof documents below.</Text>
+            <Text style={styles.submittedText}>
+              Request submitted with your documents. You can track it below.
+            </Text>
           </View>
 
-          {selectedType.requiredDocuments.map((doc) => (
-            <DocumentSlot
-              key={doc.label}
-              doc={doc}
-              attached={!!pendingDocs[doc.label]}
-              uploading={uploadingLabel === doc.label}
-              onPick={() => handlePickDocument(doc.label)}
-            />
-          ))}
-
-          <Button title="Done - Submit Another" variant="outline" onPress={resetForm} style={{ marginTop: spacing.lg }} />
+          <Button title="Submit Another Request" variant="outline" onPress={resetForm} style={{ marginTop: spacing.lg }} />
         </>
       )}
     </Card>

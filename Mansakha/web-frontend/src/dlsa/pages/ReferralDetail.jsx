@@ -3,92 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import { ArrowLeft, CheckCircle2, Send, Gavel, UserCheck, ClipboardList } from 'lucide-react';
 import { useReferralDetail, useAddReferralNote, useResolveReferral, useAssignLawyer, useMarkTrialReady } from '../services/hooks';
-import { useCreateTask } from '../services/taskHooks';
+import {  } from '../services/taskHooks';
 
-// Roles a task may be assigned to - independent of this portal's own role,
-// so a directive can be raised for any concerned office, not only this one.
-const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
-];
 
 // Assign a structured, trackable action item to any concerned office for
 // this case - always-visible card on the Detail page (previously a toggled
 // disclosure buried inside the list row). Copied verbatim from
 // dwo/pages/ReferralDetail.jsx's identical component.
-function AssignTaskCard({ userId, referralId }) {
-  const [assignedToRole, setAssignedToRole] = useState(TASK_ASSIGNABLE_ROLES[0]);
-  const [action, setAction] = useState('');
-  const [dueAt, setDueAt] = useState('');
-  const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const createTask = useCreateTask();
-
-  const handleSubmit = async () => {
-    if (!action.trim()) return;
-    setError(null);
-    setSuccess(false);
-    try {
-      await createTask.mutate(userId, assignedToRole, action.trim(), dueAt ? new Date(dueAt).toISOString() : null, referralId);
-      setAction('');
-      setDueAt('');
-      setSuccess(true);
-    } catch (err) {
-      setError(err.message || 'Unable to assign this task. Kindly try again.');
-    }
-  };
-
-  return (
-    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-      <div className="flex items-center gap-1.5">
-        <ClipboardList size={15} className="text-[#3D5A80]" />
-        <h3 className="font-bold text-sm text-gray-800">Assign Action Item</h3>
-      </div>
-      <p className="text-[11px] text-gray-400">Raise a structured, due-dated directive for any concerned office on this case.</p>
-      <select
-        value={assignedToRole}
-        onChange={(e) => setAssignedToRole(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      >
-        {TASK_ASSIGNABLE_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
-      </select>
-      <textarea
-        value={action}
-        onChange={(e) => setAction(e.target.value)}
-        placeholder="Specify the action required..."
-        rows={3}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      />
-      <div>
-        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Due Date</label>
-        <input
-          type="date"
-          value={dueAt}
-          onChange={(e) => setDueAt(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-        />
-      </div>
-      <button
-        onClick={handleSubmit}
-        disabled={!action.trim() || createTask.loading}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
-      >
-        <Send size={13} />
-        {createTask.loading ? 'Submitting...' : 'Submit'}
-      </button>
-      {error && <p className="text-xs text-rose-600">{error}</p>}
-      {success && <p className="text-xs text-emerald-600">Action item assigned successfully.</p>}
-    </div>
-  );
-}
-
-// DLSA Coordinator's Referral Detail - the full case record for one
-// referral: context, the notes thread, and every action (Resolve, Assign
-// Lawyer, Mark Trial-Ready, Assign Task), laid out as proper sections
-// rather than crammed into an accordion. Mirrors
-// dwo/pages/ReferralDetail.jsx's structure (the template), with its own
-// role-specific Actions card in place of DWO's Forward-to-Rehab button.
-
+// No "Assign Action Item" here. This role delivers a service on a case - it
+// has no statutory authority to direct another department. Under the PoA
+// Act the district officer who CAN issue cross-departmental directives is
+// the District Collector (district executive head, chair of the Act's own
+// district-level vigilance and monitoring committee), and that role keeps
+// this capability. The card and the backend POST /tasks behind it were
+// inherited from the shared role template, not chosen for this role.
 const STATUS_BADGE = { Open: 'bg-amber-100 text-amber-700', Resolved: 'bg-emerald-100 text-emerald-700' };
 
 export default function ReferralDetail() {
@@ -298,7 +226,6 @@ export default function ReferralDetail() {
               </div>
             )}
 
-            {r.status === 'Open' && <AssignTaskCard userId={r.userId} referralId={referralId} />}
           </div>
         </div>
       </div>

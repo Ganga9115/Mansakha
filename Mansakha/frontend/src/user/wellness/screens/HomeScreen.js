@@ -251,22 +251,6 @@ export default function HomeScreen({ navigation }) {
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>
 
-                    {/* Report a Threat - the consolidated Protection Officer
-                        flow. See ThreatReportScreen.js. */}
-                    <Pressable
-                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('ThreatReport')}
-                    >
-                      <View style={styles.gridIconSquare}>
-                        <Feather name="alert-triangle" size={18} color={colors.danger} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.gridTitle}>Report a Threat</Text>
-                        <Text style={styles.gridSub}>Notify your nearest Protection Officer</Text>
-                      </View>
-                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                    </Pressable>
-
                     {/* Compensation - read-only view of the statutory
                         award and its 3-stage payment tracker. See
                         CompensationScreen.js. */}

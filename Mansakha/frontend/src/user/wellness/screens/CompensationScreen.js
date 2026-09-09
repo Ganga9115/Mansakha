@@ -11,7 +11,8 @@ import Card from '../../shared/components/Card';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useUserDashboard, useCompensationStatus, useBankDetails, useSaveBankDetails } from '../../shared/services/hooks';
+import * as ImagePicker from 'expo-image-picker';
+import { useUserDashboard, useCompensationStatus, useBankDetails, useSaveBankDetails, useUploadBankProof } from '../../shared/services/hooks';
 
 // Compensation Module - read-only for the victim. Auto-identifies the
 // applicable statutory category and suggested amount the moment a case is
@@ -93,6 +94,7 @@ function CompensationContent({ data }) {
 function BankDetailsCard() {
   const query = useBankDetails();
   const save = useSaveBankDetails();
+  const uploadProof = useUploadBankProof();
   const [accountName, setAccountName] = useState('');
   const [accountNumber, setAccountNumber] = useState('');
   const [ifsc, setIfsc] = useState('');
@@ -120,6 +122,18 @@ function BankDetailsCard() {
       setEditing(false);
     } catch (err) {
       setError(err.message || 'Could not save your bank details.');
+    }
+  };
+
+  const handlePickProof = async () => {
+    setError(null);
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.7 });
+      if (res.canceled || !res.assets?.[0]) return;
+      const asset = res.assets[0];
+      await uploadProof.mutateAsync({ uri: asset.uri, mimeType: asset.mimeType });
+    } catch (err) {
+      setError(err.message || 'Could not upload that file.');
     }
   };
 
@@ -188,6 +202,23 @@ function BankDetailsCard() {
           </Pressable>
         </>
       )}
+
+      {/* Optional supporting proof - a passbook page or cancelled cheque.
+          Never a gate on recording the account itself. */}
+      <View style={styles.bankProofRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.bankProofLabel}>Passbook / cancelled cheque (optional)</Text>
+          <Text style={styles.bankProofHint}>
+            {d?.proofUrl ? 'Uploaded - the Welfare Officer can view this.' : 'Helps the Welfare Officer verify your account faster.'}
+          </Text>
+        </View>
+        <Pressable style={styles.bankProofBtn} onPress={handlePickProof} disabled={uploadProof.isPending}>
+          <Feather name={d?.proofUrl ? 'refresh-cw' : 'upload'} size={13} color={colors.primaryDark} />
+          <Text style={styles.bankProofBtnText}>
+            {uploadProof.isPending ? 'Uploading...' : d?.proofUrl ? 'Replace' : 'Upload'}
+          </Text>
+        </Pressable>
+      </View>
 
       {saved && <Text style={styles.bankSaved}>Saved - your compensation will be paid into this account.</Text>}
     </Card>
@@ -269,6 +300,19 @@ const styles = StyleSheet.create({
   bankSaveBtnText: { color: colors.onPrimary, fontWeight: '700', fontSize: 14 },
   bankEditBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
   bankEditBtnText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
+  bankProofRow: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    marginTop: spacing.lg, paddingTop: spacing.md,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  bankProofLabel: { ...typography.caption, color: colors.textPrimary, fontWeight: '700' },
+  bankProofHint: { ...typography.caption, color: colors.textSecondary, fontSize: 11, marginTop: 2 },
+  bankProofBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.xs,
+    borderWidth: 1, borderColor: colors.primaryDark, borderRadius: radius.md,
+    paddingVertical: spacing.xs, paddingHorizontal: spacing.md,
+  },
+  bankProofBtnText: { ...typography.caption, color: colors.primaryDark, fontWeight: '700' },
   container: { flex: 1, backgroundColor: colors.background },
   scrollView: { flex: 1, backgroundColor: colors.background },
   topHeader: {

@@ -165,17 +165,6 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
   return ok(res, { referralId: referral.referral_id, status: 'Resolved' }, 'Referral resolved');
 });
 
-// ===== Structured tasks (migration_030_agency_tasks.sql) =====
-// Real action items - a specific role, a specific action, a due date, a
-// Pending/Completed status - instead of a free-text note only the reader
-// happens to see. Copied from dwo/routes/dwo.routes.js's template. Any role
-// can create a task targeting any role (not just its own referrals' role) -
-// e.g. District Collector directing Protection Officer to act, or DWO
-// flagging something for Rehabilitation Officer.
-const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
-];
 
 router.get('/tasks', async (req, res) => {
   const { status } = req.query;
@@ -217,37 +206,13 @@ router.get('/tasks', async (req, res) => {
   });
 });
 
-router.post('/tasks', async (req, res) => {
-  const { userId, assignedToRole, action, dueAt, sourceReferralId } = req.body;
-  if (!userId || !assignedToRole || !action || !String(action).trim()) {
-    return fail(res, 'userId, assignedToRole, and action are required', 400);
-  }
-  if (!TASK_ASSIGNABLE_ROLES.includes(assignedToRole)) {
-    return fail(res, `assignedToRole must be one of: ${TASK_ASSIGNABLE_ROLES.join(', ')}`, 400);
-  }
-
-  const { rows: userRows } = await pool.query('select user_id from users where user_id = $1', [userId]);
-  if (!userRows[0]) return fail(res, 'Case not found', 404);
-
-  const { data, error } = await supabase
-    .from('agency_tasks')
-    .insert({
-      user_id: userId,
-      source_referral_id: sourceReferralId || null,
-      assigned_to_role: assignedToRole,
-      created_by_official_id: req.auth.officialId,
-      action: String(action).trim(),
-      due_at: dueAt || null,
-    })
-    .select('task_id')
-    .single();
-  if (error) return fail(res, `Could not create task: ${error.message}`, 500);
-
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'agency_task', entityId: data.task_id });
-
-  return ok(res, { taskId: data.task_id }, 'Task created', 201);
-});
-
+// POST /tasks removed. This role's authority under the PoA Act runs through
+// the district Vigilance and Monitoring Committee it chairs - case reviewed,
+// decision recorded (GET/POST /referrals/:id/notes and /resolve above) - not
+// through ad-hoc directives typed at other offices. No role creates tasks by
+// hand any more; GET /tasks above remains this role's ESCALATION INBOX, fed
+// automatically by core/services/agencyEscalationChecker.js when a case
+// stalls, and PATCH below closes one out.
 router.patch('/tasks/:taskId/complete', async (req, res) => {
   const { rows } = await pool.query(
     'select task_id, status from agency_tasks where task_id = $1 and assigned_to_role = $2',
