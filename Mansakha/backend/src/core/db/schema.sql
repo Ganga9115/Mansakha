@@ -89,14 +89,28 @@ create table intervention_types (
   -- self-service path via users.opted_for_manual_counsellor).
   required_documents    jsonb not null default '[]'::jsonb
 );
+-- migration_036: required_documents grounded against the actual schemes -
+-- Medical is urgent care (Section 357C CrPC's mandatory free/immediate
+-- treatment duty - a victim can't hold a diagnosis report for treatment
+-- not yet received), Legal Aid is an automatic, unconditional entitlement
+-- for an SC/ST person (Section 12(c), Legal Services Authorities Act,
+-- 1987 - no means/merit test), and Financial Assistance/Witness Protection
+-- proof the case's own existing SC/ST-atrocity registration already
+-- implies - none of these should block on re-uploaded proof. Relocation
+-- stays proof-gated (a genuinely resource-intensive commitment). Deleted
+-- immediately below: 'Rehabilitation' is never actually reviewed by any
+-- role (only Legal Aid/Financial Assistance+Medical/Witness Protection+
+-- Relocation are mounted via mountInterventionReviewRoutes) - the real
+-- Rehabilitation flow is the dedicated, stage-gated opt-in
+-- (user.routes.js's POST /rehabilitation-opt-in, migration_034).
 insert into intervention_types (name, required_documents) values
   ('Counselling', '[]'::jsonb),
-  ('Medical', '[{"label":"Medical Certificate / Diagnosis Report","required":true},{"label":"Hospital Bill or Treatment Estimate","required":false}]'::jsonb),
-  ('Witness Protection', '[{"label":"FIR Copy / Case Reference","required":true},{"label":"Police Threat Assessment","required":false}]'::jsonb),
-  ('Relocation', '[{"label":"FIR Copy / Case Reference","required":true},{"label":"Police Threat Assessment or Recommendation","required":false},{"label":"Proof of Current Address","required":true}]'::jsonb),
-  ('Financial Assistance', '[{"label":"FIR Copy","required":true},{"label":"Caste Certificate (SC/ST Proof)","required":true},{"label":"Bank Passbook / Account Proof","required":true}]'::jsonb),
-  ('Legal Aid', '[{"label":"Caste Certificate (SC/ST Proof)","required":true},{"label":"FIR Copy / Case Reference","required":true},{"label":"Aadhaar or Photo ID","required":true}]'::jsonb),
-  ('Rehabilitation', '[{"label":"Caste Certificate (SC/ST Proof)","required":true},{"label":"Case Status Document (Chargesheet/Disposal)","required":false},{"label":"Bank Passbook / Account Proof","required":true}]'::jsonb);
+  ('Medical', '[{"label":"Medical Certificate / Diagnosis Report","required":false},{"label":"Hospital Bill or Treatment Estimate","required":false}]'::jsonb),
+  ('Witness Protection', '[{"label":"FIR Copy / Case Reference","required":false},{"label":"Police Threat Assessment","required":false}]'::jsonb),
+  ('Relocation', '[{"label":"FIR Copy / Case Reference","required":false},{"label":"Police Threat Assessment or Recommendation","required":false},{"label":"Proof of Current Address","required":true}]'::jsonb),
+  ('Financial Assistance', '[{"label":"FIR Copy","required":false},{"label":"Caste Certificate (SC/ST Proof)","required":false},{"label":"Bank Passbook / Account Proof","required":true}]'::jsonb),
+  ('Legal Aid', '[{"label":"Caste Certificate (SC/ST Proof)","required":false},{"label":"FIR Copy / Case Reference","required":false},{"label":"Aadhaar or Photo ID","required":false}]'::jsonb);
+-- No 'Rehabilitation' row - see the comment above.
 
 create table languages (
   language_id  uuid primary key default gen_random_uuid(),
@@ -172,7 +186,8 @@ create table official_roles (
   assigned_at          timestamptz not null default now(),
   revoked_at           timestamptz,
   provider_id          uuid references rehabilitation_providers(provider_id), -- migration_031: which centre a Rehabilitation Officer works for (mirrors jurisdiction_id's own pattern - scope lives on the role grant, not the account)
-  station_id           uuid references police_stations(station_id) -- migration_033: which police station an Investigating Officer works at (same pattern again)
+  station_id           uuid references police_stations(station_id), -- migration_033: which police station an Investigating Officer works at (same pattern again)
+  designation          text -- migration_035: e.g. DSP/SDM/Tehsildar/DSWO for Protection Officer - state-notification-dependent under the PoA Act Rules, set by Ministry at appointment, never self-selected
 );
 
 -- ===== Users & identity (depend on case_types, jurisdictions) =====

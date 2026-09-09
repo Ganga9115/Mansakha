@@ -84,11 +84,23 @@ function StatusCard({ data }) {
             </Text>
           </View>
         </View>
-        <Text style={styles.pendingText}>
-          {data.updates.length === 0
-            ? 'Your report has been received. The assigned Protection Officer will act on it shortly.'
-            : 'Latest updates from your assigned Protection Officer:'}
-        </Text>
+        {/* What the Protection Officer actually recorded on Mark Resolved -
+            not just a bare "Resolved" status with no explanation. */}
+        {data.status === 'Resolved' && data.outcome ? (
+          <View style={styles.outcomeBox}>
+            <Feather name="check-circle" size={16} color={colors.success} />
+            <View style={{ flex: 1, marginLeft: spacing.sm }}>
+              <Text style={styles.outcomeCategory}>{data.outcome.category}</Text>
+              {!!data.outcome.detail && <Text style={styles.outcomeDetail}>{data.outcome.detail}</Text>}
+            </View>
+          </View>
+        ) : (
+          <Text style={styles.pendingText}>
+            {data.updates.length === 0
+              ? 'Your report has been received. The assigned Protection Officer will act on it shortly.'
+              : 'Latest updates from your assigned Protection Officer:'}
+          </Text>
+        )}
       </Card>
 
       {data.updates.map((u, idx) => (
@@ -189,6 +201,9 @@ const styles = StyleSheet.create({
   statusPillTextOpen: { color: colors.warning },
   statusPillTextResolved: { color: colors.success },
   pendingText: { ...typography.bodySmall, color: colors.textSecondary, lineHeight: 20 },
+  outcomeBox: { flexDirection: 'row', alignItems: 'flex-start', backgroundColor: colors.successLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.sm },
+  outcomeCategory: { ...typography.bodyStrong, color: colors.success, fontSize: 14 },
+  outcomeDetail: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2, lineHeight: 18 },
 
   updateRow: { flexDirection: 'row', backgroundColor: colors.surface, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.border },
   updateText: { ...typography.bodySmall, color: colors.textPrimary, lineHeight: 19 },

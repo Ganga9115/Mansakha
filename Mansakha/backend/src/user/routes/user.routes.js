@@ -637,8 +637,18 @@ router.post('/urgent-help', async (req, res) => {
       // represents a real person's word) - a re-trigger just refreshes the
       // location and relies on the alert_notifications/dispatch below (sent
       // again either way) to actually re-notify the PO, rather than writing
-      // a note with no genuine author.
-      const nextMetadata = { ...existingReferral.metadata, ...(sosLocation ? { location: sosLocation, sosRetriggeredAt: new Date().toISOString() } : {}) };
+      // a note with no genuine author. originType is force-upgraded to
+      // 'sos_emergency' on every re-trigger regardless of what this case's
+      // open referral originally was (a self-reported threat, an IO alert) -
+      // an active "Get Help Now" tap right now is always the highest-
+      // priority fact about this case, and the Protection Registry's own
+      // sort order (protectionOfficer.routes.js) reads this field to decide
+      // what surfaces first.
+      const nextMetadata = {
+        ...existingReferral.metadata,
+        originType: 'sos_emergency',
+        ...(sosLocation ? { location: sosLocation, sosRetriggeredAt: new Date().toISOString() } : {}),
+      };
       await supabase.from('agency_referrals').update({ metadata: nextMetadata }).eq('referral_id', existingReferral.referral_id);
     } else {
       await supabase.from('agency_referrals').insert({
@@ -646,7 +656,9 @@ router.post('/urgent-help', async (req, res) => {
         referred_to_role: 'Protection Officer',
         referred_by_user_id: userId,
         reason: 'Emergency SOS triggered via "Get Help Now" - immediate attention required.',
-        metadata: sosLocation ? { location: sosLocation, sosTriggered: true } : { sosTriggered: true },
+        // originType drives the Protection Registry's priority sort - see
+        // protectionOfficer.routes.js's GET /referrals.
+        metadata: { originType: 'sos_emergency', sosTriggered: true, ...(sosLocation ? { location: sosLocation } : {}) },
       });
     }
   } else {
@@ -2030,7 +2042,10 @@ router.post('/threat-report', async (req, res) => {
   // Location is best-effort (the victim's device may not have granted
   // permission, or may be a desktop with no GPS at all) - never blocks the
   // report itself, since reporting the threat matters more than pinpointing it.
-  const metadata = {};
+  // originType distinguishes this from an emergency SOS in the Protection
+  // Registry's priority sort - a self-reported (non-emergency) threat still
+  // needs attention, but not ahead of an active "Get Help Now" case.
+  const metadata = { originType: 'self_reported_threat' };
   if (location && typeof location.lat === 'number' && typeof location.lng === 'number') {
     metadata.location = { lat: location.lat, lng: location.lng, capturedAt: new Date().toISOString() };
   }
@@ -2083,6 +2098,12 @@ router.get('/threat-status', async (req, res) => {
     createdAt: referral.created_at,
     resolvedAt: referral.resolved_at,
     updates: notes.map((n) => ({ noteText: n.note_text, createdAt: n.created_at })),
+    // The structured outcome the Protection Officer records on Mark
+    // Resolved (protectionOfficer.routes.js's PATCH /referrals/:id/resolve)
+    // - this is what actually closes the loop for the victim: "Resolved"
+    // alone says nothing about what was done. null until resolved with an
+    // outcome recorded.
+    outcome: referral.metadata?.outcome || null,
   });
 });
 

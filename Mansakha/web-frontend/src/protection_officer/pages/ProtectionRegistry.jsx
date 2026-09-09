@@ -1,8 +1,19 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, MapPin } from 'lucide-react';
 import { useReferralsList } from '../services/hooks';
+
+// Which of the 4 real paths brought this case here (see
+// protectionOfficer.routes.js's ORIGIN_PRIORITY, which sorts the list
+// itself - emergency SOS always surfaces first, regardless of when it was
+// created). A case with no originType predates this field.
+const ORIGIN_META = {
+  sos_emergency: { label: 'Emergency', className: 'bg-rose-100 text-rose-700' },
+  io_threat_alert: { label: 'IO Alert', className: 'bg-orange-100 text-orange-700' },
+  intervention_accepted: { label: 'WP/Relocation', className: 'bg-blue-100 text-blue-700' },
+  self_reported_threat: { label: 'Self-Reported', className: 'bg-amber-100 text-amber-700' },
+};
 
 // Protection Officer's Protection Registry - a clean, scannable list only.
 // Every action (verification log, resolve, task assignment) now lives on
@@ -66,6 +77,7 @@ export default function ProtectionRegistry() {
               <table className="w-full text-left min-w-[640px]">
                 <thead>
                   <tr className="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase">
+                    <th className="px-6 py-3">Origin</th>
                     <th className="px-6 py-3">Docket Number</th>
                     <th className="px-6 py-3">Case Type</th>
                     <th className="px-6 py-3">Referred On</th>
@@ -75,9 +87,24 @@ export default function ProtectionRegistry() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {referrals.map((r) => (
+                  {referrals.map((r) => {
+                    const origin = r.originType ? ORIGIN_META[r.originType] : null;
+                    const tier = r.manualThreatTier || r.threatTier;
+                    return (
                     <tr key={r.referralId} className="hover:bg-gray-50/70 transition">
-                      <td className="px-6 py-3.5 text-sm font-bold text-gray-800">{r.docketNumber}</td>
+                      <td className="px-6 py-3.5">
+                        {origin ? (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${origin.className}`}>{origin.label}</span>
+                        ) : (
+                          <span className="text-[10px] text-gray-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-3.5 text-sm font-bold text-gray-800">
+                        <div className="flex items-center gap-1.5">
+                          {r.docketNumber}
+                          {r.location && <MapPin size={13} className="text-[#519BCE]" aria-label="Live location available" />}
+                        </div>
+                      </td>
                       <td className="px-6 py-3.5 text-xs text-gray-500">{r.caseTypeName}</td>
                       <td className="px-6 py-3.5 text-xs text-gray-500">
                         {new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -86,8 +113,10 @@ export default function ProtectionRegistry() {
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
                       </td>
                       <td className="px-6 py-3.5">
-                        {r.threatTier ? (
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${THREAT_TIER_BADGE[r.threatTier] || 'bg-gray-100 text-gray-600'}`}>{r.threatTier}</span>
+                        {tier ? (
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${THREAT_TIER_BADGE[tier] || 'bg-gray-100 text-gray-600'}`}>
+                            {tier}{r.manualThreatTier ? ' (Officer)' : ''}
+                          </span>
                         ) : (
                           <span className="text-[10px] text-gray-400">Not yet assessed</span>
                         )}
@@ -101,7 +130,8 @@ export default function ProtectionRegistry() {
                         </button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )}

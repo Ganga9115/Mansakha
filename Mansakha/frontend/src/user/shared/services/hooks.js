@@ -338,9 +338,13 @@ export function useCompensationStatus(caseUserId) {
 // excluded from the type list the backend returns here (it has its own
 // simpler opt-in path, see useUpdateCounsellorPreference above). ---
 
-// The 6 eligible types (Medical, Witness Protection, Relocation, Financial
-// Assistance, Legal Aid, Rehabilitation) with their requiredDocuments -
-// drives the request form's type picker and per-type document checklist.
+// migration_036: 5 eligible types (Medical, Witness Protection, Relocation,
+// Financial Assistance, Legal Aid) with their requiredDocuments - drives the
+// request form's type picker and per-type document checklist. Rehabilitation
+// removed - it was never actually reviewed by any role's queue (a dead end
+// stuck at "Pending" forever); the real Rehabilitation flow is the
+// dedicated, stage-gated opt-in reachable once case_stage = 'Rehabilitation'
+// (see RehabilitationOptInScreen.js / RehabilitationDecisionGate.js).
 export function useInterventionTypes() {
   const token = useToken();
   return useQuery({

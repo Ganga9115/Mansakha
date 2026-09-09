@@ -39,15 +39,30 @@ router.get('/', verifyToken, async (req, res) => {
   // win confirmed on the admin dashboard routes, but with much broader reach.
   const { rows } = await pool.query(
     `select o.full_name, o.email, o.profile_image_url, o.phone, o.staff_id, o.whatsapp_number,
-            orr.jurisdiction_id, j.name as jurisdiction_name
+            orr.jurisdiction_id, orr.designation, r.role_name, j.name as jurisdiction_name, ps.name as station_name
      from officials o
      left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+     left join roles r on r.role_id = orr.role_id
      left join jurisdictions j on j.jurisdiction_id = orr.jurisdiction_id
+     left join police_stations ps on ps.station_id = orr.station_id
      where o.official_id = $1`,
     [req.auth.officialId]
   );
   const official = rows[0];
   const jurisdictionNameById = new Map(rows.filter((r) => r.jurisdiction_id).map((r) => [r.jurisdiction_id, r.jurisdiction_name]));
+  // migration_035 - Protection Officer's real-world title, set by Ministry
+  // at appointment (see ministry.routes.js's PROTECTION_OFFICER_DESIGNATIONS) -
+  // null for every other role, which don't use this column. Both maps are
+  // keyed by role name (not a stable per-grant id) since req.auth.roles
+  // (from the JWT/verifyToken) doesn't carry one - fine here because an
+  // official never holds the same role name twice.
+  const designationByRoleName = new Map(rows.filter((r) => r.designation && r.role_name).map((r) => [r.role_name, r.designation]));
+  // Generic (not Protection-Officer-specific) - in practice only ever
+  // populated for Investigating Officer, since ministry.routes.js only ever
+  // writes station_id for that role (a Protection Officer's real
+  // designations are all sub-division/district-level posts, never a
+  // single-station one - see that file's own comment).
+  const stationNameByRoleName = new Map(rows.filter((r) => r.station_name && r.role_name).map((r) => [r.role_name, r.station_name]));
 
   return ok(res, {
     type: 'official',
@@ -59,7 +74,12 @@ router.get('/', verifyToken, async (req, res) => {
     whatsappNumber: official?.whatsapp_number || null,
     staffId: official?.staff_id || null,
     mustChangePassword: req.auth.mustChangePassword,
-    roles: req.auth.roles.map((r) => ({ ...r, jurisdictionName: r.jurisdictionId ? jurisdictionNameById.get(r.jurisdictionId) || null : null })),
+    roles: req.auth.roles.map((r) => ({
+      ...r,
+      jurisdictionName: r.jurisdictionId ? jurisdictionNameById.get(r.jurisdictionId) || null : null,
+      designation: designationByRoleName.get(r.roleName) || null,
+      stationName: stationNameByRoleName.get(r.roleName) || null,
+    })),
   });
 });
 

@@ -175,7 +175,11 @@ function mountInterventionReviewRoutes(router, { roleName, interventionTypeNames
             referred_to_role: roleName,
             referred_by_official_id: req.auth.officialId,
             reason: target.description || `${target.intervention_type_name} request accepted with verified proof.`,
-            metadata: { interventionRequestId: target.request_id, interventionTypeName: target.intervention_type_name },
+            // originType lets a receiving role's own queue (e.g. Protection
+            // Officer's Protection Registry) distinguish this from an
+            // emergency/self-reported case for priority sorting - see
+            // protectionOfficer.routes.js's GET /referrals.
+            metadata: { originType: 'intervention_accepted', interventionRequestId: target.request_id, interventionTypeName: target.intervention_type_name },
           })
           .select('referral_id')
           .single();

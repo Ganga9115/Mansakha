@@ -257,6 +257,9 @@ router.post('/cases/:userId/alert-protection-officer', async (req, res) => {
       referred_to_role: 'Protection Officer',
       referred_by_official_id: req.auth.officialId,
       reason: String(reason).trim(),
+      // originType drives the Protection Registry's priority sort - see
+      // protectionOfficer.routes.js's GET /referrals.
+      metadata: { originType: 'io_threat_alert' },
     });
     if (insertError) return fail(res, `Could not alert Protection Officer: ${insertError.message}`, 500);
   }

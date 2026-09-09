@@ -1,127 +1,226 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowLeft, CheckCircle2, Send, ShieldCheck, ShieldAlert, ClipboardList } from 'lucide-react';
-import { useReferralDetail, useAddReferralNote, useResolveReferral } from '../services/hooks';
-import { useCreateTask } from '../services/taskHooks';
+import { ArrowLeft, CheckCircle2, Send, ShieldCheck, ShieldAlert, MapPin, AlertOctagon } from 'lucide-react';
+import { useReferralDetail, useAddReferralNote, useResolveReferral, useSetManualThreatTier, useCompleteDirective } from '../services/hooks';
 
 // Deliberately NOT the distress score's Low/Moderate/High/Critical palette -
 // Threat Tier is a different axis (external danger, not psychological
-// distress), assessed by Investigating Officer and read here, never set.
+// distress).
 const THREAT_TIER_BADGE = {
   Routine: 'bg-gray-100 text-gray-600',
   Guarded: 'bg-yellow-100 text-yellow-700',
   Elevated: 'bg-orange-100 text-orange-700',
   Severe: 'bg-rose-100 text-rose-700',
 };
+const THREAT_TIERS = ['Routine', 'Guarded', 'Elevated', 'Severe'];
 
-// Read-only - Protection Officer acts on Investigating Officer's assessment
-// (picks its own protection type accordingly) rather than setting a tier
-// itself. Backend looks this up via a cross-referral query on the same
-// case's Investigating Officer referral (see protectionOfficer.routes.js's
-// getThreatAssessment).
-function ThreatAssessmentCard({ r }) {
-  return (
-    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-2">
-      <div className="flex items-center gap-1.5">
-        <ShieldAlert size={15} className="text-[#3D5A80]" />
-        <h3 className="font-bold text-sm text-gray-800">Threat Assessment</h3>
-      </div>
-      <p className="text-[11px] text-gray-400">As assessed by Investigating Officer on this case. Read-only here - use it to decide protection type below.</p>
-      {r.threatTier ? (
-        <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${THREAT_TIER_BADGE[r.threatTier] || 'bg-gray-100 text-gray-600'}`}>
-          {r.threatTier}
-        </span>
-      ) : (
-        <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-500">Not yet assessed by Investigating Officer</span>
-      )}
-    </div>
-  );
-}
+// Origin badge - which of the 4 real paths brought this case into the
+// Protection Registry (see protectionOfficer.routes.js's ORIGIN_PRIORITY).
+// A case with no originType predates this field and simply shows nothing.
+const ORIGIN_META = {
+  sos_emergency: { label: 'Emergency SOS', className: 'bg-rose-100 text-rose-700' },
+  io_threat_alert: { label: 'IO Threat Alert', className: 'bg-orange-100 text-orange-700' },
+  intervention_accepted: { label: 'Witness Protection/Relocation', className: 'bg-blue-100 text-blue-700' },
+  self_reported_threat: { label: 'Self-Reported Threat', className: 'bg-amber-100 text-amber-700' },
+};
 
-// Roles a task may be assigned to - independent of this portal's own role,
-// so a directive can be raised for any concerned office, not only this one.
-const TASK_ASSIGNABLE_ROLES = [
-  'District Welfare Officer', 'Investigating Officer', 'Protection Officer',
-'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
-];
-
-// Assign a structured, trackable action item to any concerned office for
-// this case - always-visible card on the Detail page (previously a toggled
-// disclosure buried inside the list row). Copied verbatim from
-// dwo/pages/ReferralDetail.jsx (the template).
-function AssignTaskCard({ userId, referralId }) {
-  const [assignedToRole, setAssignedToRole] = useState(TASK_ASSIGNABLE_ROLES[0]);
-  const [action, setAction] = useState('');
-  const [dueAt, setDueAt] = useState('');
+// System-assessed (computed, from IO's own custody status + real SOS
+// history) and officer-assessed (this role's own manual judgment call) are
+// shown side by side, never one silently replacing the other - the
+// underlying IO/SOS signal must stay visible even after an override.
+function ThreatAssessmentCard({ r, onChanged }) {
+  const [manualTier, setManualTier] = useState(r.manualThreatTier || '');
   const [error, setError] = useState(null);
-  const [success, setSuccess] = useState(false);
-  const createTask = useCreateTask();
+  const setTier = useSetManualThreatTier();
 
-  const handleSubmit = async () => {
-    if (!action.trim()) return;
+  const handleSave = async () => {
     setError(null);
-    setSuccess(false);
     try {
-      await createTask.mutate(userId, assignedToRole, action.trim(), dueAt ? new Date(dueAt).toISOString() : null, referralId);
-      setAction('');
-      setDueAt('');
-      setSuccess(true);
+      await setTier.mutate(r.referralId, manualTier || null);
+      onChanged();
     } catch (err) {
-      setError(err.message || 'Unable to assign this task. Kindly try again.');
+      setError(err.message || 'Could not update Threat Tier. Kindly try again.');
     }
   };
 
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <ClipboardList size={15} className="text-[#3D5A80]" />
-        <h3 className="font-bold text-sm text-gray-800">Assign Action Item</h3>
+        <ShieldAlert size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Threat Assessment</h3>
       </div>
-      <p className="text-[11px] text-gray-400">Raise a structured, due-dated directive for any concerned office on this case.</p>
-      <select
-        value={assignedToRole}
-        onChange={(e) => setAssignedToRole(e.target.value)}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      >
-        {TASK_ASSIGNABLE_ROLES.map((role) => <option key={role} value={role}>{role}</option>)}
-      </select>
-      <textarea
-        value={action}
-        onChange={(e) => setAction(e.target.value)}
-        placeholder="Specify the action required..."
-        rows={3}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      />
+
       <div>
-        <label className="text-[10px] font-bold text-gray-500 uppercase block mb-1">Due Date</label>
-        <input
-          type="date"
-          value={dueAt}
-          onChange={(e) => setDueAt(e.target.value)}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-        />
+        <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">System-Assessed</span>
+        <p className="text-[11px] text-gray-400 mb-1.5">From Investigating Officer's custody status + real SOS history on this case.</p>
+        {r.threatTier ? (
+          <span className={`inline-block px-2.5 py-1 rounded-full text-[11px] font-bold ${THREAT_TIER_BADGE[r.threatTier] || 'bg-gray-100 text-gray-600'}`}>
+            {r.threatTier}
+          </span>
+        ) : (
+          <span className="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold bg-gray-100 text-gray-500">Not yet assessed</span>
+        )}
       </div>
-      <button
-        onClick={handleSubmit}
-        disabled={!action.trim() || createTask.loading}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
-      >
-        <Send size={13} />
-        {createTask.loading ? 'Submitting...' : 'Submit'}
-      </button>
+
+      <div className="pt-3 border-t border-gray-100">
+        <span className="text-[10px] font-bold text-gray-400 uppercase block mb-1">Officer-Assessed (Your Override)</span>
+        <p className="text-[11px] text-gray-400 mb-2">
+          Set this only if you know something the system can't see (e.g. a credible verbal threat with no SOS event yet). Never replaces the system assessment above - both are always kept visible.
+        </p>
+        <div className="flex items-center gap-2">
+          <select value={manualTier} onChange={(e) => setManualTier(e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white">
+            <option value="">No override</option>
+            {THREAT_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <button
+            onClick={handleSave}
+            disabled={setTier.loading || manualTier === (r.manualThreatTier || '')}
+            className="px-3 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 shrink-0"
+          >
+            {setTier.loading ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+        {r.manualThreatTierSetAt && (
+          <p className="text-[10px] text-gray-400 mt-1.5">Last set {new Date(r.manualThreatTierSetAt).toLocaleString()}</p>
+        )}
+        {error && <p className="text-xs text-rose-600 mt-1.5">{error}</p>}
+      </div>
+    </div>
+  );
+}
+
+// Inbound directives FOR this case from a concerned office (only District
+// Collector has statutory authority to direct Protection Officer - this
+// role has no outbound "Assign Action Item" of its own any more). Replaces
+// the old standalone "My Tasks" page/sidebar entry entirely - a directive
+// about a case belongs on that case's own record, not a separate portal-
+// wide list.
+function PendingDirectivesCard({ referralId, directives, onChanged }) {
+  const complete = useCompleteDirective();
+  const [completingId, setCompletingId] = useState(null);
+  const [error, setError] = useState(null);
+
+  if (!directives || directives.length === 0) return null;
+
+  const handleComplete = async (taskId) => {
+    setError(null);
+    setCompletingId(taskId);
+    try {
+      await complete.mutate(taskId);
+      onChanged();
+    } catch (err) {
+      setError(err.message || 'Could not update this directive. Kindly try again.');
+    } finally {
+      setCompletingId(null);
+    }
+  };
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
+      <div className="flex items-center gap-1.5">
+        <AlertOctagon size={15} className="text-amber-700" />
+        <h3 className="font-bold text-sm text-amber-800">Pending Directive{directives.length > 1 ? 's' : ''}</h3>
+      </div>
+      {directives.map((d) => (
+        <div key={d.taskId} className="bg-white border border-amber-200 rounded-lg p-3 space-y-1.5">
+          <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{d.action}</p>
+          <p className="text-[10px] text-gray-400">
+            From {d.createdByName}{d.dueAt ? ` - due ${new Date(d.dueAt).toLocaleDateString()}` : ''}
+          </p>
+          <button
+            onClick={() => handleComplete(d.taskId)}
+            disabled={completingId === d.taskId}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-md text-[11px] font-semibold transition disabled:opacity-60"
+          >
+            <CheckCircle2 size={12} />
+            {completingId === d.taskId ? 'Working...' : 'Mark Complete'}
+          </button>
+        </div>
+      ))}
       {error && <p className="text-xs text-rose-600">{error}</p>}
-      {success && <p className="text-xs text-emerald-600">Action item assigned successfully.</p>}
+    </div>
+  );
+}
+
+// Fixed, auditable picklist - mirrors backend/src/protection_officer/routes/
+// protectionOfficer.routes.js's RESOLUTION_OUTCOME_CATEGORIES exactly. This
+// is what actually closes the loop back to the victim (see
+// user.routes.js's GET /threat-status) - "Resolved" alone explains nothing.
+const OUTCOME_CATEGORIES = [
+  'Safe Shelter Coordinated',
+  'Relocation Facilitated',
+  'Police Escort Provided',
+  'Medical Support Arranged',
+  'Threat Neutralized - No Relocation Required',
+  'Other',
+];
+
+function ResolveDialog({ referralId, onResolved, onCancel }) {
+  const [category, setCategory] = useState('');
+  const [detail, setDetail] = useState('');
+  const [error, setError] = useState(null);
+  const resolve = useResolveReferral();
+
+  const handleSubmit = async () => {
+    if (!category) { setError('Kindly select an outcome.'); return; }
+    if (category === 'Other' && !detail.trim()) { setError('Kindly describe the outcome.'); return; }
+    setError(null);
+    try {
+      await resolve.mutate(referralId, category, detail.trim() || undefined);
+      onResolved();
+    } catch (err) {
+      setError(err.message || 'Could not resolve this referral. Kindly try again.');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <h3 className="text-base font-bold text-gray-800">Mark Resolved</h3>
+        <p className="text-xs text-gray-500">
+          Record what was actually done - this is what the victim sees on their own Case Details, not just a "Resolved" status.
+        </p>
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Outcome</label>
+          <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+            <option value="">Select...</option>
+            {OUTCOME_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
+            Detail {category === 'Other' ? '(required)' : '(optional)'}
+          </label>
+          <textarea
+            value={detail}
+            onChange={(e) => setDetail(e.target.value)}
+            rows={3}
+            placeholder="Additional context for the case record..."
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          />
+        </div>
+        {error && <p className="text-xs text-rose-600">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 transition">Cancel</button>
+          <button
+            onClick={handleSubmit}
+            disabled={resolve.loading}
+            className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition disabled:opacity-60"
+          >
+            {resolve.loading ? 'Resolving...' : 'Confirm Resolved'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // Protection Officer's Referral Detail - the full case record for one
-// referral: context, the weekly safety-verification log, and every action
-// (Resolve, Assign Task), laid out as proper sections rather than crammed
-// into an accordion. Mirrors dwo/pages/ReferralDetail.jsx (the template).
-// The most recent note's timestamp is surfaced as "Last verified" (backend
-// already computes lastVerifiedAt in the detail response).
+// referral: origin/location, the weekly safety-verification log, Threat
+// Assessment (system + officer), any pending directive, and Mark Resolved.
+// No "Assign Action Item" - this role has no statutory authority to raise
+// cross-departmental directives (only District Collector does).
 
 const STATUS_BADGE = { Open: 'bg-amber-100 text-amber-700', Resolved: 'bg-emerald-100 text-emerald-700' };
 
@@ -130,9 +229,9 @@ export default function ReferralDetail() {
   const navigate = useNavigate();
   const [noteText, setNoteText] = useState('');
   const [actionError, setActionError] = useState(null);
+  const [showResolveDialog, setShowResolveDialog] = useState(false);
   const detailQuery = useReferralDetail(referralId);
   const addNote = useAddReferralNote();
-  const resolve = useResolveReferral();
 
   const r = detailQuery.data;
 
@@ -160,15 +259,7 @@ export default function ReferralDetail() {
     }
   };
 
-  const handleResolve = async () => {
-    setActionError(null);
-    try {
-      await resolve.mutate(referralId);
-      navigate('/protectionofficer');
-    } catch (err) {
-      setActionError(err.message || 'Could not resolve this referral. Kindly try again.');
-    }
-  };
+  const origin = r.originType ? ORIGIN_META[r.originType] : null;
 
   return (
     <StaffLayout title="Referral Detail">
@@ -191,6 +282,12 @@ export default function ReferralDetail() {
               <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Status</span>
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
             </div>
+            {origin && (
+              <div>
+                <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Origin</span>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${origin.className}`}>{origin.label}</span>
+              </div>
+            )}
             <div>
               <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Referred On</span>
               <span className="text-xs font-bold text-gray-700">{new Date(r.createdAt).toLocaleString()}</span>
@@ -198,17 +295,37 @@ export default function ReferralDetail() {
           </div>
           {r.status === 'Open' && (
             <button
-              onClick={handleResolve}
-              disabled={resolve.loading}
-              className="flex items-center gap-1.5 px-4 py-2 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+              onClick={() => setShowResolveDialog(true)}
+              className="flex items-center gap-1.5 px-4 py-2 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-xs font-semibold transition shrink-0"
             >
               <CheckCircle2 size={14} />
-              {resolve.loading ? 'Working...' : 'Mark Resolved'}
+              Mark Resolved
             </button>
           )}
         </div>
 
+        {r.location && (
+          <a
+            href={`https://www.google.com/maps?q=${r.location.lat},${r.location.lng}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-[#519BCE] bg-[#EBF4FA] border border-[#D6E8F5] rounded-lg px-3 py-2 w-fit text-xs font-semibold hover:bg-[#D6E8F5] transition"
+          >
+            <MapPin size={14} /> View live location on map
+          </a>
+        )}
+
+        {r.status === 'Resolved' && r.outcome && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
+            <p className="text-xs font-bold text-emerald-800 uppercase tracking-wide mb-1">Resolution Outcome</p>
+            <p className="text-sm font-semibold text-emerald-800">{r.outcome.category}</p>
+            {r.outcome.detail && <p className="text-xs text-emerald-700 mt-1">{r.outcome.detail}</p>}
+          </div>
+        )}
+
         {actionError && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-4 py-3 rounded-lg">{actionError}</div>}
+
+        <PendingDirectivesCard referralId={referralId} directives={r.pendingDirectives} onChanged={detailQuery.refetch} />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
@@ -264,11 +381,18 @@ export default function ReferralDetail() {
           </div>
 
           <div className="space-y-6">
-            <ThreatAssessmentCard r={r} />
-            {r.status === 'Open' && <AssignTaskCard userId={r.userId} referralId={referralId} />}
+            <ThreatAssessmentCard r={r} onChanged={detailQuery.refetch} />
           </div>
         </div>
       </div>
+
+      {showResolveDialog && (
+        <ResolveDialog
+          referralId={referralId}
+          onCancel={() => setShowResolveDialog(false)}
+          onResolved={() => navigate('/protectionofficer')}
+        />
+      )}
     </StaffLayout>
   );
 }
