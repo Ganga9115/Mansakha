@@ -163,11 +163,11 @@ export default function CheckinScreen({ navigation }) {
   return (
     <View style={styles.screen}>
       <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {/* Dynamic Header */}
+        {/* Dynamic Header matched with HomeScreen */}
         <View
           style={[
             styles.topHeader,
-            isDesktop ? styles.topHeaderDesktop : styles.topHeaderMobile,
+            isDesktop && styles.topHeaderDesktop,
             !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
           ]}
         >
@@ -176,14 +176,14 @@ export default function CheckinScreen({ navigation }) {
               <Feather name="mic" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
             ) : (
               <View style={styles.avatarContainer}>
-                <Feather name="mic" size={20} color={colors.primary} />
+                <Feather name="mic" size={28} color={colors.primary} />
               </View>
             )}
             <View style={styles.headerInfo}>
               <Text style={styles.pageTitle}>Check-in</Text>
             </View>
           </View>
-          <View style={styles.headerRightRow}>
+          <View style={styles.headerRight}>
             {isDesktop ? (
               <DesktopHeaderActions
                 fullName={dashboardQuery.data?.fullName}
@@ -343,49 +343,34 @@ const styles = StyleSheet.create({
   },
   topHeader: {
     backgroundColor: colors.primaryLight,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingTop: spacing.xxxl,
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  topHeaderDesktop: {
+    height: 64,
+    paddingTop: 0,
+    paddingBottom: 0,
     alignItems: 'center',
   },
-  topHeaderDesktop: { 
-    height: 64, 
-    paddingHorizontal: 36,
-  },
-  topHeaderMobile: {
-    paddingHorizontal: spacing.md,
-  },
-  headerIconDesktop: { 
-    marginRight: spacing.sm 
-  },
-  headerLeft: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    flex: 1 
-  },
+  headerIconDesktop: { marginRight: spacing.sm },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarContainer: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    marginRight: spacing.md,
+    position: 'relative',
   },
-  headerInfo: { 
-    flex: 1 
-  },
-  pageTitle: {
-    ...typography.h1,
-    color: colors.primaryDark,
-    fontSize: 20,
-  },
-  headerRightRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: spacing.md 
-  },
+  headerInfo: { flex: 1 },
+  pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
+  headerRight: { marginLeft: spacing.md },
   
   contentBody: {
     flex: 1,
@@ -436,7 +421,6 @@ const styles = StyleSheet.create({
     ...shadow.sm,
     minHeight: 440,
   },
-  // Key Fix: Remove fixed minHeight on mobile so layout fits tightly naturally
   cardMobile: {
     minHeight: undefined,
     padding: spacing.md,
@@ -454,9 +438,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md 
   },
 
-  questionArea: { 
-    // Key Fix: Allow layout to determine height strictly without forcing flex-grow distortion
-  },
+  questionArea: {},
   cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -515,7 +497,6 @@ const styles = StyleSheet.create({
   optionsColumn: {
     flexDirection: 'column',
   },
-  // Key Fix: Strict width and height for 2x2 grid without stretching vertically
   optionCard: {
     width: '48%',
     backgroundColor: colors.surface,
@@ -529,7 +510,7 @@ const styles = StyleSheet.create({
   },
   optionCardMobile: {
     paddingVertical: spacing.md,
-    minHeight: 90, // Concise height so elements fit nicely inside
+    minHeight: 90,
   },
   optionCardFull: {
     width: '100%',
