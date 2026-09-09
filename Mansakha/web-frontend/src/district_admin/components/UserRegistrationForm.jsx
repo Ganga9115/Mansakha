@@ -18,6 +18,11 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
   const [caseTypeId, setCaseTypeId] = useState('');
   const [caseBackground, setCaseBackground] = useState('');
   const [aadhaarNumber, setAadhaarNumber] = useState('');
+  // Residential address, transcribed from the FIR - same field Data
+  // Operator's own copy of this form now collects (see its own comment).
+  // Editable afterward via this page's own "Edit User Record" panel below,
+  // which already has an Address field wired to PATCH /users/:userId.
+  const [address, setAddress] = useState('');
   const [stateId, setStateId] = useState('');
   const [districtId, setDistrictId] = useState('');
   const [error, setError] = useState(null);
@@ -47,6 +52,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
         caseTypeId,
         ...(caseBackground.trim() ? { caseBackground: caseBackground.trim() } : {}),
         ...(aadhaarNumber.trim() ? { aadhaarNumber: aadhaarNumber.trim() } : {}),
+        ...(address.trim() ? { address: address.trim() } : {}),
       });
       setCreated({
         docketNumber: result?.docketNumber || docketNumber.trim(),
@@ -59,6 +65,7 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
       setCaseTypeId('');
       setCaseBackground('');
       setAadhaarNumber('');
+      setAddress('');
       setStateId('');
       setDistrictId('');
     } catch (err) {
@@ -172,6 +179,21 @@ export default function UserRegistrationForm({ lockedJurisdictionId, lockedJuris
           placeholder="12-digit Aadhaar number"
         />
         <p className="text-[10px] text-gray-400 mt-1">Used to recognize if this person already has another case elsewhere.</p>
+      </div>
+
+      <div>
+        <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Residential Address (optional)</label>
+        <textarea
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          rows={2}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          placeholder="As recorded in the FIR"
+        />
+        <p className="text-[10px] text-gray-400 mt-1">
+          Shared only with the Protection Officer if this case is later referred to them for Relocation or Witness
+          Protection - never shown to any other role. Can be added or corrected later from Edit User Record.
+        </p>
       </div>
 
       <div>

@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ChevronDown, ChevronUp, CheckCircle2, XCircle, FileText, User, Phone, Home } from 'lucide-react';
-import { useInterventionRequestsList, useInterventionRequestDetail, useReviewInterventionRequest } from '../services/hooks';
+import { ArrowRight } from 'lucide-react';
+import { useInterventionRequestsList } from '../services/hooks';
 
 // Protection Officer's own proof-verified review queue for Witness
 // Protection and Relocation Request Assistance submissions - District
 // Admin no longer decides on these (see interventionRequestReview.js).
-// Adapted from district_admin/pages/InterventionRequests.jsx (the
-// structural template), minus jurisdiction gating in the UI itself - the
-// backend already scopes this to the officer's own district, same as this
-// role's own Protection Registry. Accepting here creates a real
-// agency_referral straight into the Protection Registry, carrying the
-// verified proof forward.
+// A clean, scannable list only - matching the list -> detail convention
+// ProtectionRegistry.jsx/ReferralDetail.jsx already use. Every action
+// (accept, reject, contact details, proof documents) now lives on the
+// dedicated InterventionRequestDetail.jsx page, replacing the inline
+// accordion this page used to share with district_admin's own copy.
 
 const STATUS_BADGE = {
   Pending: 'bg-amber-100 text-amber-700',
@@ -19,197 +19,8 @@ const STATUS_BADGE = {
   Rejected: 'bg-rose-100 text-rose-700',
 };
 
-// The victim's name, number and address, so an officer who accepts a
-// Relocation or Witness Protection request can actually reach the person
-// they have just committed to move. Same disclosure boundary the Protection
-// Registry's Dispatch Details keeps: it only arrives with the expanded
-// detail fetch (never in the queue listing), and the backend audit-logs
-// every read of it.
-function ContactDetails({ d }) {
-  if (!d) return null;
-  if (!d.victimName && !d.victimContactNumber && !d.victimAddress) return null;
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg p-3 space-y-2.5">
-      <div className="flex items-center gap-1.5">
-        <User size={13} className="text-[#3D5A80]" />
-        <p className="font-bold text-[#3D5A80] text-[11px] uppercase">Contact Details</p>
-      </div>
-      {d.victimName && (
-        <div>
-          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Name</span>
-          <span className="text-xs font-bold text-gray-800">{d.victimName}</span>
-        </div>
-      )}
-      {d.victimContactNumber && (
-        <div>
-          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
-          <a href={`tel:${d.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
-            <Phone size={12} /> {d.victimContactNumber}
-          </a>
-        </div>
-      )}
-      {d.victimAddress && (
-        <div>
-          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Address</span>
-          <span className="flex items-start gap-1.5 text-xs text-gray-700 leading-relaxed">
-            <Home size={12} className="mt-0.5 shrink-0 text-gray-400" /> {d.victimAddress}
-          </span>
-        </div>
-      )}
-      <p className="text-[10px] text-gray-400 pt-0.5">Every view of these details is recorded in the audit log.</p>
-    </div>
-  );
-}
-
-function RequestRow({ r, onDecided }) {
-  const [expanded, setExpanded] = useState(false);
-  const [showRejectReason, setShowRejectReason] = useState(false);
-  const [reason, setReason] = useState('');
-  const [actionError, setActionError] = useState(null);
-  const detailQuery = useInterventionRequestDetail(expanded ? r.requestId : null);
-  const review = useReviewInterventionRequest();
-
-  const handleAccept = async (e) => {
-    e.stopPropagation();
-    setActionError(null);
-    try {
-      await review.mutate(r.requestId, 'Accepted');
-      onDecided();
-    } catch (err) {
-      setActionError(err.message || 'Could not accept this request.');
-    }
-  };
-
-  const handleRejectConfirm = async (e) => {
-    e.stopPropagation();
-    if (!reason.trim()) return;
-    setActionError(null);
-    try {
-      await review.mutate(r.requestId, 'Rejected', reason.trim());
-      onDecided();
-    } catch (err) {
-      setActionError(err.message || 'Could not reject this request.');
-    }
-  };
-
-  return (
-    <div>
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center justify-between px-6 py-4 text-left hover:bg-gray-50/70 transition gap-3"
-      >
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-bold text-gray-800">{r.docketNumber}</p>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
-            <span className="text-[10px] text-gray-400">{r.interventionTypeName}</span>
-          </div>
-          <p className="text-xs text-gray-500">{r.caseTypeName} - requested {new Date(r.requestedAt).toLocaleString()}</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {r.status === 'Pending' && !showRejectReason && (
-            <>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={handleAccept}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-md text-[11px] font-semibold transition"
-              >
-                <CheckCircle2 size={13} />
-                {review.loading ? 'Working...' : 'Accept'}
-              </span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => { e.stopPropagation(); setShowRejectReason(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-md text-[11px] font-semibold transition"
-              >
-                <XCircle size={13} />
-                Reject
-              </span>
-            </>
-          )}
-          {expanded ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-        </div>
-      </button>
-
-      {showRejectReason && (
-        <div onClick={(e) => e.stopPropagation()} className="px-6 pb-4 -mt-2 flex items-center gap-2">
-          <input
-            type="text"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="Reason for rejection (required)"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs"
-          />
-          <button
-            onClick={handleRejectConfirm}
-            disabled={!reason.trim() || review.loading}
-            className="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
-          >
-            {review.loading ? 'Working...' : 'Confirm Reject'}
-          </button>
-          <button onClick={() => { setShowRejectReason(false); setReason(''); }} className="px-3 py-2 text-gray-500 text-xs">
-            Cancel
-          </button>
-        </div>
-      )}
-
-      {actionError && <div className="mx-6 mb-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3 py-2 rounded-lg">{actionError}</div>}
-
-      {expanded && (
-        <div className="px-6 pb-5 text-xs text-gray-600 space-y-3">
-          {detailQuery.loading ? (
-            <p className="text-gray-400">Loading contact details...</p>
-          ) : (
-            <ContactDetails d={detailQuery.data} />
-          )}
-          {r.description && (
-            <div className="bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg p-3">
-              <p className="font-bold text-[#3D5A80] text-[11px] uppercase mb-1">Victim's Description</p>
-              <p className="whitespace-pre-wrap">{r.description}</p>
-            </div>
-          )}
-          {r.status === 'Rejected' && r.decisionReason && (
-            <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
-              <p className="font-bold text-rose-700 text-[11px] uppercase mb-1">Rejection Reason</p>
-              <p>{r.decisionReason}</p>
-            </div>
-          )}
-          <div>
-            <p className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">Proof Documents</p>
-            {detailQuery.loading ? (
-              <p className="text-gray-400">Loading documents...</p>
-            ) : detailQuery.data?.documents?.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {detailQuery.data.documents.map((d, i) => (
-                  d.signedUrl ? (
-                    <a key={i} href={d.signedUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-50 transition">
-                      <FileText size={13} /> {d.documentLabel}
-                    </a>
-                  ) : (
-                    <span key={i} className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-400 rounded-md">
-                      <FileText size={13} /> {d.documentLabel} (unavailable)
-                    </span>
-                  )
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-400">No documents attached.</p>
-            )}
-          </div>
-          {r.status === 'Accepted' && (
-            <p className="text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-              Accepted - a referral has been created in your Protection Registry for follow-up.
-            </p>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function InterventionRequests() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState('Pending');
   const query = useInterventionRequestsList(tab);
   const requests = query.data?.requests || [];
@@ -244,7 +55,7 @@ export default function InterventionRequests() {
             ))}
           </div>
 
-          <div className="border border-gray-200/80 rounded-xl overflow-hidden">
+          <div className="border border-gray-200/80 rounded-xl overflow-hidden overflow-x-auto">
             {query.loading ? (
               <p className="text-sm text-gray-400 p-6">Loading...</p>
             ) : query.error ? (
@@ -252,11 +63,41 @@ export default function InterventionRequests() {
             ) : requests.length === 0 ? (
               <p className="text-sm text-gray-400 p-6">No {tab.toLowerCase()} requests.</p>
             ) : (
-              <div className="divide-y divide-gray-100">
-                {requests.map((r) => (
-                  <RequestRow key={r.requestId} r={r} onDecided={query.refetch} />
-                ))}
-              </div>
+              <table className="w-full text-left min-w-[640px]">
+                <thead>
+                  <tr className="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase">
+                    <th className="px-6 py-3">Docket Number</th>
+                    <th className="px-6 py-3">Intervention Type</th>
+                    <th className="px-6 py-3">Case Type</th>
+                    <th className="px-6 py-3">Requested On</th>
+                    <th className="px-6 py-3">Status</th>
+                    <th className="px-6 py-3 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {requests.map((r) => (
+                    <tr key={r.requestId} className="hover:bg-gray-50/70 transition">
+                      <td className="px-6 py-3.5 text-sm font-bold text-gray-800">{r.docketNumber}</td>
+                      <td className="px-6 py-3.5 text-xs text-gray-500">{r.interventionTypeName}</td>
+                      <td className="px-6 py-3.5 text-xs text-gray-500">{r.caseTypeName}</td>
+                      <td className="px-6 py-3.5 text-xs text-gray-500">
+                        {new Date(r.requestedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
+                      </td>
+                      <td className="px-6 py-3.5 text-right">
+                        <button
+                          onClick={() => navigate(`/protectionofficer/intervention-requests/${r.requestId}`)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                        >
+                          View <ArrowRight size={13} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
           </div>
         </div>

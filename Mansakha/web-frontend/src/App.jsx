@@ -102,6 +102,7 @@ import DwoProfile from './dwo/pages/Profile';
 import ProtectionOfficerRegistry from './protection_officer/pages/ProtectionRegistry';
 import ProtectionOfficerReferralDetail from './protection_officer/pages/ReferralDetail';
 import ProtectionOfficerInterventionRequests from './protection_officer/pages/InterventionRequests';
+import ProtectionOfficerInterventionRequestDetail from './protection_officer/pages/InterventionRequestDetail';
 import ProtectionOfficerProfile from './protection_officer/pages/Profile';
 import DlsaLegalAidQueue from './dlsa/pages/LegalAidQueue';
 import DlsaReferralDetail from './dlsa/pages/ReferralDetail';
@@ -243,6 +244,7 @@ export default function App() {
         <Route path="/protectionofficer" element={<RequireAuth loginPath="/signin"><ProtectionOfficerRegistry /></RequireAuth>} />
         <Route path="/protectionofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><ProtectionOfficerReferralDetail /></RequireAuth>} />
         <Route path="/protectionofficer/intervention-requests" element={<RequireAuth loginPath="/signin"><ProtectionOfficerInterventionRequests /></RequireAuth>} />
+        <Route path="/protectionofficer/intervention-requests/:requestId" element={<RequireAuth loginPath="/signin"><ProtectionOfficerInterventionRequestDetail /></RequireAuth>} />
         <Route path="/protectionofficer/profile" element={<RequireAuth loginPath="/signin"><ProtectionOfficerProfile /></RequireAuth>} />
         <Route path="/dlsa" element={<RequireAuth loginPath="/signin"><DlsaLegalAidQueue /></RequireAuth>} />
         <Route path="/dlsa/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DlsaReferralDetail /></RequireAuth>} />
