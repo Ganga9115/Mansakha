@@ -6,9 +6,12 @@ import { useCasesList } from '../services/hooks';
 
 // Investigating Officer's Case Queue - every case assigned to this
 // officer's own police station (not a District-Admin-created referral like
-// every other new-role portal). "Active" = still under investigation;
-// "Handed Off" = chargesheet already filed, case_stage moved to Trial or
-// beyond, kept visible read-only rather than disappearing from view.
+// every other new-role portal). "Active" = case_stage is still
+// Investigation; "Handed Off" = the (simulated) eCourt system has since
+// moved the case to Trial or beyond, kept visible read-only rather than
+// disappearing from view. migration_034: this split now tracks case_stage
+// directly, independent of whether IO has filed a chargesheet - filing one
+// no longer advances case_stage itself.
 
 const STAGE_BADGE = {
   Investigation: 'bg-amber-100 text-amber-700',

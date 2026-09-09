@@ -248,7 +248,29 @@ create table users (
   -- migration_033: which police station's Investigating Officer(s) this
   -- case is assigned to (the station where the FIR was filed) - set at
   -- intake, changeable later ("case transfer" is modeled as changing this).
-  station_id uuid references police_stations(station_id)
+  station_id uuid references police_stations(station_id),
+  -- migration_034: case_stage is exclusively eCourt-authoritative - no
+  -- staff role can set/advance/downgrade it after creation (always
+  -- 'Investigation' at creation). next_ecourt_stage_at is when the
+  -- (simulated) eCourt sync worker should next advance this case; null once
+  -- 'Case Closed' (terminal).
+  next_ecourt_stage_at timestamptz,
+  -- The victim's own decision to join rehabilitation support, independent
+  -- of case_stage - a case can be in the Rehabilitation stage (eCourt fact)
+  -- without the victim having opted in. Opting in never itself changes
+  -- case_stage.
+  rehabilitation_opted_in_at timestamptz,
+  -- Declined the rehabilitation offer for the current Rehabilitation stage -
+  -- so the mandatory decision gate doesn't ask again for the rest of it.
+  rehabilitation_declined_at timestamptz,
+  -- True exactly when eCourt closes a case that was in Rehabilitation AND
+  -- the victim had opted in - triggers the special "case closed - continue
+  -- Rehabilitation anyway?" popup. Cleared once answered either way.
+  rehabilitation_closure_pending_ack boolean not null default false,
+  -- Set true if the victim answers that popup "Yes" - keeps this docket's
+  -- Rehabilitation context alive despite case_stage now being 'Case Closed',
+  -- overriding the closed-docket-invalidation rule for this one case.
+  rehabilitation_continued_after_closure boolean not null default false
 );
 
 -- PII kept separate from the scoring/alert pipeline, which only ever touches `users`.

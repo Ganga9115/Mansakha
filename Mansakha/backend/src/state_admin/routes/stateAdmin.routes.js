@@ -842,10 +842,12 @@ router.post(
   generalApiLimiter,
   requireJurisdiction((req) => req.body.jurisdictionId),
   async (req, res) => {
-    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber } = req.body;
+    // migration_034: caseStage not accepted - every case starts at
+    // 'Investigation', only the (simulated) eCourt sync worker advances it.
+    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, address, caseBackground, password, aadhaarNumber } = req.body;
     try {
       const { userId, temporaryPassword } = await createUser({
-        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, address, caseBackground, password, aadhaarNumber,
+        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, address, caseBackground, password, aadhaarNumber,
         provisionedVia: 'district_admin',
       });
       await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });
@@ -872,11 +874,11 @@ router.patch(
   }),
   async (req, res) => {
     const { userId } = req.params;
-    const { caseStage, address, contactNumber } = req.body;
+    // migration_034: caseStage removed entirely - no staff role has any
+    // case-stage authority any more.
+    const { address, contactNumber } = req.body;
     try {
-      // canCloseCase omitted (defaults false) - District Admin cannot mark a
-      // case 'Case Closed', only Data Operator can (dataoperator/routes/dataoperator.routes.js).
-      await updateUser(userId, { caseStage, address, contactNumber });
+      await updateUser(userId, { address, contactNumber });
       await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'update', entityType: 'user', entityId: userId });
       return ok(res, null, 'User record updated');
     } catch (err) {

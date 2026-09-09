@@ -75,12 +75,17 @@ function ProviderTypeToggle({ value, onChange }) {
 
 // onOptedIn: called after a successful opt-in, instead of this component
 // deciding navigation itself - the standalone screen below passes a
-// navigation-based redirect; the mandatory gate passes nothing, since a
-// successful opt-in flips case_stage away from 'Case Closed' and the
-// gate's own eligibility query (invalidated by useOptInRehabilitation
+// navigation-based redirect; the mandatory gate passes nothing, since
+// opting in only records rehabilitation_opted_in_at against the specific
+// docket (migration_034 - case_stage itself stays exclusively eCourt's) and
+// the gate's own eligibility query (invalidated by useOptInRehabilitation
 // already) naturally stops showing this screen on its very next render.
-export function EligibleContent({ providers, onOptedIn }) {
-  const optIn = useOptInRehabilitation();
+// caseUserId: which docket in the caller's own family this decision is
+// FOR - required whenever this isn't the caller's own anchor case (e.g. the
+// mandatory Rehabilitation gate acting on a different family member's
+// Rehabilitation-stage docket).
+export function EligibleContent({ providers, onOptedIn, caseUserId }) {
+  const optIn = useOptInRehabilitation(caseUserId);
   const [chosenProviderId, setChosenProviderId] = useState(null);
   const [error, setError] = useState(null);
   const [typeFilter, setTypeFilter] = useState('All');
@@ -127,11 +132,16 @@ export function EligibleContent({ providers, onOptedIn }) {
   );
 }
 
-export default function RehabilitationOptInScreen({ navigation }) {
+export default function RehabilitationOptInScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const dashboardQuery = useUserDashboard();
-  const eligibilityQuery = useRehabilitationEligibility();
+  // Optional - which docket in the caller's own family this screen concerns
+  // (see the case switcher on HomeScreen.js); defaults to the caller's own
+  // anchor case when navigated to without one, same as every other hook
+  // here defaults when caseUserId is omitted.
+  const caseUserId = route?.params?.caseUserId;
+  const dashboardQuery = useUserDashboard(caseUserId);
+  const eligibilityQuery = useRehabilitationEligibility(caseUserId);
 
   return (
     <View style={styles.container}>
@@ -171,7 +181,7 @@ export default function RehabilitationOptInScreen({ navigation }) {
                   <EmptyState
                     icon="clock"
                     title="Not available yet"
-                    message={data?.reason || 'Rehabilitation becomes available once your case is closed.'}
+                    message={data?.reason || 'Rehabilitation becomes available once your case reaches the Rehabilitation stage.'}
                   />
                 );
               }
@@ -179,6 +189,7 @@ export default function RehabilitationOptInScreen({ navigation }) {
               return (
                 <EligibleContent
                   providers={data.providers || []}
+                  caseUserId={caseUserId}
                   onOptedIn={() => {
                     if (navigation?.canGoBack?.()) {
                       navigation.goBack();

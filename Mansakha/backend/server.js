@@ -4,6 +4,7 @@ const cors = require('cors');
 const { ok } = require('./src/core/services/responseEnvelope');
 const { startDispatchWorker } = require('./src/core/services/dispatchWorker');
 const { startAgencyEscalationChecker } = require('./src/core/services/agencyEscalationChecker');
+const { startECourtSyncWorker } = require('./src/core/services/ecourtStageSync');
 
 // Defense-in-depth, not a substitute for fixing individual routes: Express 4
 // doesn't await async route handlers or catch their rejected promises, so an
@@ -109,4 +110,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mansakha backend listening on port ${PORT}`);
   startDispatchWorker();
   startAgencyEscalationChecker();
+  startECourtSyncWorker();
 });

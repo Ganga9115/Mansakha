@@ -61,9 +61,21 @@ export function useGpsLookup() {
   return useMutation({ mutationFn: ({ lat, lng }) => apiClient.post('/api/auth/user/gps-lookup', { lat, lng }) });
 }
 
-export function useUserDashboard() {
+// migration_034: caseUserId (optional) scopes the docket-specific fields
+// (docketNumber, caseStatus, rehabilitation) to a SPECIFIC case in the
+// caller's own family - defaults to the anchor (today's exact behaviour)
+// when omitted. Wellness data (distress score, alerts) always stays
+// anchor-scoped regardless - see the backend route's own comment on why.
+export function useUserDashboard(caseUserId) {
   const token = useToken();
-  return useQuery({ queryKey: ['user', 'dashboard'], queryFn: () => apiClient.get('/api/user/dashboard', token), enabled: !!token });
+  return useQuery({
+    queryKey: ['user', 'dashboard', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/dashboard${qs}`, token);
+    },
+    enabled: !!token,
+  });
 }
 
 // Case Details (Quick Access) - simulated eCourts data for one of the
@@ -80,67 +92,149 @@ export function useCourtCaseDetails(userId) {
   });
 }
 
-// Rehabilitation Progress - long-term post-case-closure support (livelihood,
-// housing, schooling) run by a Rehabilitation Officer, always for the
-// caller's own docket (unlike useCourtCaseDetails, which supports switching
-// between multi-case linked dockets), so this takes no userId param.
-export function useRehabilitationProgress() {
+// Rehabilitation Progress - long-term support (livelihood, housing,
+// schooling) run by a Rehabilitation Officer. migration_034: accepts an
+// optional caseUserId so the isolated Rehabilitation context can scope this
+// to the SPECIFIC docket that's in Rehabilitation, not necessarily the
+// caller's own anchor.
+export function useRehabilitationProgress(caseUserId) {
   const token = useToken();
   return useQuery({
-    queryKey: ['user', 'rehabilitation-progress'],
-    queryFn: () => apiClient.get('/api/user/rehabilitation-progress', token),
+    queryKey: ['user', 'rehabilitation-progress', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/rehabilitation-progress${qs}`, token);
+    },
     enabled: !!token,
   });
 }
 
 // Investigation Progress - the Investigating Officer's own curated,
 // victim-safe summary (migration_033): accused custody status and
-// chargesheet status (both factual, never raw evidence), always for the
-// caller's own docket - same no-userId-param convention as
-// useRehabilitationProgress. Entirely separate from useCourtCaseDetails'
-// eCourts simulation above - this is the real record IO actually maintains.
-export function useInvestigationProgress() {
+// chargesheet status (both factual, never raw evidence). migration_034:
+// accepts an optional caseUserId, same reasoning as useRehabilitationProgress
+// above. Entirely separate from useCourtCaseDetails' eCourts simulation -
+// this is the real record IO actually maintains.
+export function useInvestigationProgress(caseUserId) {
   const token = useToken();
   return useQuery({
-    queryKey: ['user', 'investigation-progress'],
-    queryFn: () => apiClient.get('/api/user/investigation-progress', token),
+    queryKey: ['user', 'investigation-progress', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/investigation-progress${qs}`, token);
+    },
     enabled: !!token,
   });
 }
 
-// Rehabilitation eligibility/opt-in gate (migration_029) - rehabilitation is
-// only reachable once the case is Closed, and only after the victim picks a
-// real provider (government center or NGO) themselves. See
-// RehabilitationOptInScreen.js.
-export function useRehabilitationEligibility() {
+// Rehabilitation eligibility/opt-in gate (migration_034) - rehabilitation is
+// now a genuine mid-case eCourt stage (Investigation -> Trial ->
+// Rehabilitation -> Compensation -> Case Closed), reachable once a specific
+// case's own case_stage reaches it, independent of the victim's opt-in
+// (a separate fact). caseUserId scopes this to that specific docket - see
+// RehabilitationOptInScreen.js / RehabilitationDecisionGate.js.
+export function useRehabilitationEligibility(caseUserId) {
   const token = useToken();
   return useQuery({
-    queryKey: ['user', 'rehabilitation-eligibility'],
-    queryFn: () => apiClient.get('/api/user/rehabilitation-eligibility', token),
+    queryKey: ['user', 'rehabilitation-eligibility', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/rehabilitation-eligibility${qs}`, token);
+    },
     enabled: !!token,
   });
 }
 
-export function useOptInRehabilitation() {
+// migration_034: opting in no longer touches case_stage (eCourt owns that
+// exclusively) - it only records the victim's own decision
+// (rehabilitation_opted_in_at) against a SPECIFIC docket, so caseUserId is
+// required here whenever the decision concerns a case other than the
+// caller's own anchor (see RehabilitationDecisionGate.js).
+export function useOptInRehabilitation(caseUserId) {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (providerId) => apiClient.post('/api/user/rehabilitation-opt-in', { providerId }, token),
+    mutationFn: (providerId) => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.post(`/api/user/rehabilitation-opt-in${qs}`, { providerId }, token);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', 'rehabilitation-eligibility'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'rehabilitation-progress'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'dashboard'] });
     },
   });
 }
 
-// The mandatory decision gate's "No" answer - deactivates the account
-// outright (see RehabilitationDecisionGate.js). No cache invalidation
-// needed on success - the caller logs out immediately afterward, which
-// clears the whole session/query cache anyway.
-export function useDeclineRehabilitation() {
+// The Rehabilitation decision gate's "No" answer - migration_034: this no
+// longer deactivates the account. It only records
+// rehabilitation_declined_at against the specific docket; that case simply
+// continues under normal (non-isolated) tracking, and when it eventually
+// reaches Case Closed it's treated as an ordinary closed case, not a
+// rehabilitation one. See RehabilitationDecisionGate.js.
+export function useDeclineRehabilitation(caseUserId) {
   const token = useToken();
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiClient.post('/api/user/rehabilitation-decline', {}, token),
+    mutationFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.post(`/api/user/rehabilitation-decline${qs}`, {}, token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'rehabilitation-eligibility'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'dashboard'] });
+    },
+  });
+}
+
+// migration_034 - the special post-closure Rehabilitation continuation
+// flow: when a case that was in Rehabilitation (with the victim opted in)
+// gets marked Case Closed by eCourt, the victim is asked whether they still
+// want to continue using the app / continue Rehabilitation. See
+// RehabilitationClosureGate.js.
+export function useRehabilitationClosureStatus(caseUserId) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'rehabilitation-closure-status', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/rehabilitation-closure-status${qs}`, token);
+    },
+    enabled: !!token,
+  });
+}
+
+// "Yes" - continue using the app / continue Rehabilitation, treating the
+// court case itself as closed.
+export function useContinueRehabilitationAfterClosure(caseUserId) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.post(`/api/user/rehabilitation-closure-continue${qs}`, {}, token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'rehabilitation-closure-status'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'dashboard'] });
+    },
+  });
+}
+
+// "No" - end Rehabilitation access for this now-closed case; the app
+// returns to the victim's other remaining active-case context.
+export function useEndRehabilitationAfterClosure(caseUserId) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.post(`/api/user/rehabilitation-closure-end${qs}`, {}, token);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user', 'rehabilitation-closure-status'] });
+      queryClient.invalidateQueries({ queryKey: ['user', 'dashboard'] });
+    },
   });
 }
 
@@ -226,11 +320,14 @@ export function useConfirmFinancialAid() {
 // case is registered (auto-suggested category/amount), independent of any
 // DWO referral - once DWO verifies an exact figure, this reflects that
 // instead, with the live 3-stage payment tracker.
-export function useCompensationStatus() {
+export function useCompensationStatus(caseUserId) {
   const token = useToken();
   return useQuery({
-    queryKey: ['user', 'compensation-status'],
-    queryFn: () => apiClient.get('/api/user/compensation-status', token),
+    queryKey: ['user', 'compensation-status', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/compensation-status${qs}`, token);
+    },
     enabled: !!token,
   });
 }

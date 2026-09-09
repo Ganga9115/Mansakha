@@ -35,6 +35,33 @@ const PCR_NUMBER = '100';
 
 const router = express.Router();
 
+// Case-based multi-case scoping (migration_034's case-lifecycle rules) -
+// wellness/interaction data (distress scores, chat, check-ins) has always
+// lived on the anchor only (auth.user.routes.js's login resolves every
+// docket to one shared anchor identity/session, and every existing route
+// below already reads/writes req.auth.userId on that basis - unchanged).
+// What genuinely varies PER DOCKET is legal/case metadata: docket_number,
+// case_stage, and the stage-dependent features tied to it (rehabilitation,
+// compensation, investigation progress). Routes that are case-specific
+// accept an optional ?caseUserId= query param naming which docket in the
+// caller's own family to act on; this resolves and validates it, falling
+// back to the anchor itself (today's exact behaviour, unchanged) whenever
+// it's absent or doesn't actually belong to the caller - never trusting an
+// arbitrary user_id from the client without checking family membership
+// first, and never throwing on a bad one (a stale/mistyped caseUserId
+// silently degrades to "my own case" rather than erroring the whole page).
+async function resolveCaseUserId(req) {
+  const anchorUserId = req.auth.userId;
+  const requested = req.query.caseUserId;
+  if (!requested || requested === anchorUserId) return anchorUserId;
+
+  const { rows } = await pool.query(
+    `select user_id from users where user_id = $1 and (user_id = $2 or linked_to_user_id = $2)`,
+    [requested, anchorUserId]
+  );
+  return rows[0] ? requested : anchorUserId;
+}
+
 const NEXT_CHECKIN_CADENCE_DAYS = 7;
 // 15 questions/day x 7 days - see the weekly-score trigger in
 // POST /questionnaire/submit.
@@ -106,9 +133,16 @@ function requireUser(req, res, next) {
 router.use(verifyToken, requireUser, generalApiLimiter);
 
 router.get('/dashboard', async (req, res) => {
-  const userId = req.auth.userId;
+  const anchorUserId = req.auth.userId;
+  // Case-lifecycle isolation (migration_034): which docket's own case_stage/
+  // rehabilitation status this Home screen should reflect - defaults to the
+  // anchor (today's exact behaviour) unless a specific family member's
+  // docket is requested and actually belongs to this caller. Wellness data
+  // below stays anchor-scoped regardless - it always has (see
+  // resolveCaseUserId's own comment above).
+  const activeUserId = await resolveCaseUserId(req);
 
-  // These 6 reads are all keyed on userId alone - none depends on another's
+  // These 7 reads are all keyed on userId alone - none depends on another's
   // result - but ran one after another, each paying Supabase REST's own
   // ~500-650ms round-trip on top of the last. Confirmed live as the cause of
   // the Home screen sitting on its loading skeleton for several seconds; now
@@ -117,6 +151,7 @@ router.get('/dashboard', async (req, res) => {
   // pattern applied to their own N+1 loops.
   const [
     userResult,
+    activeCaseResult,
     identityResult,
     latestScoreResult,
     openAlertsResult,
@@ -124,11 +159,20 @@ router.get('/dashboard', async (req, res) => {
     caseFamilyResult,
   ] = await Promise.all([
     pool.query(
-      `select status, case_stage, preferred_language, docket_number, opted_for_manual_counsellor, sms_checkin_enabled, assigned_counsellor_id
+      `select status, preferred_language, opted_for_manual_counsellor, sms_checkin_enabled, assigned_counsellor_id
        from users where user_id = $1 limit 1`,
-      [userId]
+      [anchorUserId]
     ),
-    pool.query(`select full_name from user_identity where user_id = $1 limit 1`, [userId]),
+    // The ACTIVE case's own docket/stage/rehabilitation facts - a separate
+    // row from the anchor's own wellness fields above whenever a specific
+    // family member's docket is being viewed.
+    pool.query(
+      `select docket_number, case_stage, rehabilitation_opted_in_at, rehabilitation_declined_at,
+              rehabilitation_closure_pending_ack, rehabilitation_continued_after_closure
+       from users where user_id = $1 limit 1`,
+      [activeUserId]
+    ),
+    pool.query(`select full_name from user_identity where user_id = $1 limit 1`, [anchorUserId]),
     pool.query(
       `select ds.score_value, ds.risk_level_id, ds.computed_at, rl.name as risk_level_name
        from distress_scores ds
@@ -136,7 +180,7 @@ router.get('/dashboard', async (req, res) => {
        where ds.user_id = $1
        order by ds.computed_at desc
        limit 1`,
-      [userId]
+      [anchorUserId]
     ),
     pool.query(
       `select a.alert_id, a.triggered_at, ast.name as alert_status_name
@@ -144,24 +188,31 @@ router.get('/dashboard', async (req, res) => {
        join alert_statuses ast on ast.alert_status_id = a.alert_status_id
        where a.user_id = $1
        order by a.triggered_at desc`,
-      [userId]
+      [anchorUserId]
     ),
-    pool.query(`select occurred_at from interactions where user_id = $1 order by occurred_at desc limit 1`, [userId]),
-    // Multi-case support: userId here is always the anchor (see
+    pool.query(`select occurred_at from interactions where user_id = $1 order by occurred_at desc limit 1`, [anchorUserId]),
+    // Multi-case support: anchorUserId here is always the anchor (see
     // auth.user.routes.js's login), so every row sharing it - including the
-    // anchor's own case - is this person's full set of cases.
+    // anchor's own case - is this person's full set of cases. Rehabilitation
+    // fields included so the app-level gate can tell, for EVERY case in the
+    // family (not just whichever is currently active), whether one of them
+    // needs the isolated Rehabilitation context or the post-closure
+    // continuation popup - see UserGate.js.
     pool.query(
-      `select u.user_id, u.docket_number, u.case_stage, ct.name as case_type_name, j.name as jurisdiction_name
+      `select u.user_id, u.docket_number, u.case_stage, u.rehabilitation_opted_in_at, u.rehabilitation_declined_at,
+              u.rehabilitation_closure_pending_ack, u.rehabilitation_continued_after_closure,
+              ct.name as case_type_name, j.name as jurisdiction_name
        from users u
        left join case_types ct on ct.case_type_id = u.case_type_id
        left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
        where u.user_id = $1 or u.linked_to_user_id = $1`,
-      [userId]
+      [anchorUserId]
     ),
   ]);
 
   const user = userResult.rows[0];
-  if (!user) return fail(res, 'User record not found', 404);
+  const activeCase = activeCaseResult.rows[0];
+  if (!user || !activeCase) return fail(res, 'User record not found', 404);
   const identity = identityResult.rows[0];
   const latestScore = latestScoreResult.rows[0];
   const openAlerts = openAlertsResult.rows;
@@ -174,6 +225,10 @@ router.get('/dashboard', async (req, res) => {
     caseStage: c.case_stage,
     caseType: c.case_type_name || null,
     jurisdictionName: c.jurisdiction_name || null,
+    rehabilitationOptedIn: !!c.rehabilitation_opted_in_at,
+    rehabilitationDeclined: !!c.rehabilitation_declined_at,
+    rehabilitationClosurePendingAck: c.rehabilitation_closure_pending_ack,
+    rehabilitationContinuedAfterClosure: c.rehabilitation_continued_after_closure,
   }));
 
   // Red-dot indicator for the "Chat with counsellor" Home tile - a separate
@@ -183,7 +238,7 @@ router.get('/dashboard', async (req, res) => {
   if (user.assigned_counsellor_id) {
     const { rows: unreadRows } = await pool.query(
       `select count(*) as count from messages where user_id = $1 and official_id = $2 and sender_type = 'official' and read_at is null`,
-      [userId, user.assigned_counsellor_id]
+      [anchorUserId, user.assigned_counsellor_id]
     );
     hasUnreadCounsellorMessage = Number(unreadRows[0]?.count || 0) > 0;
   }
@@ -195,12 +250,22 @@ router.get('/dashboard', async (req, res) => {
     ? new Date(new Date(lastInteraction.occurred_at).getTime() + NEXT_CHECKIN_CADENCE_DAYS * 86400000)
     : new Date();
 
-  await writeAuditLog({ userId, action: 'read', entityType: 'user_dashboard', entityId: userId });
+  await writeAuditLog({ userId: anchorUserId, action: 'read', entityType: 'user_dashboard', entityId: activeUserId });
 
   return ok(res, {
     fullName: identity?.full_name || null,
-    docketNumber: user.docket_number,
-    caseStatus: { status: user.status, caseStage: user.case_stage },
+    // Case-specific (migration_034) - reflects whichever docket is
+    // currently active (defaults to the anchor's own), never a stale mix
+    // of one case's docket with another's stage.
+    userId: activeUserId,
+    docketNumber: activeCase.docket_number,
+    caseStatus: { status: user.status, caseStage: activeCase.case_stage },
+    rehabilitation: {
+      optedIn: !!activeCase.rehabilitation_opted_in_at,
+      declined: !!activeCase.rehabilitation_declined_at,
+      closurePendingAck: activeCase.rehabilitation_closure_pending_ack,
+      continuedAfterClosure: activeCase.rehabilitation_continued_after_closure,
+    },
     preferredLanguageId: user.preferred_language,
     optedForManualCounsellor: user.opted_for_manual_counsellor,
     smsCheckinEnabled: user.sms_checkin_enabled,
@@ -1646,21 +1711,26 @@ router.get('/intervention-requests/:requestId', async (req, res) => {
   });
 });
 
-// ===== Rehabilitation Progress (read-only) =====
-// Post-case-closure phase run by a government rehabilitation center or NGO
-// (see rehabilitation_officer/routes/rehabilitationOfficer.routes.js) -
-// referrals routed to that role are visible here as a plain-language
-// progress feed, own-case-scoped, no officials/roles concept leaked into
-// the victim-facing response (no referredByName, no other agencies' data -
-// see district_collector's own routes for where that cross-agency view
-// belongs instead). Read-only: nothing here writes to agency_referrals.
+// ===== Rehabilitation (migration_034) =====
+// Rehabilitation is now a genuine mid-case stage set exclusively by eCourt
+// (Investigation -> Trial -> Rehabilitation -> Compensation -> Case
+// Closed), no longer a post-closure phase the victim's own opt-in used to
+// trigger. Opting in is now a SEPARATE fact (rehabilitation_opted_in_at)
+// from case_stage itself - a case can be in the Rehabilitation stage
+// without the victim having opted in yet, and opting in never touches
+// case_stage (only core/services/ecourtStageSync.js ever does). Every
+// route below accepts ?caseUserId= (resolveCaseUserId, defined near the
+// top of this file) so a specific docket in the caller's own family can be
+// acted on - required for the isolated Rehabilitation context to work for
+// a docket that isn't the caller's anchor.
 router.get('/rehabilitation-progress', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
   const { rows } = await pool.query(
     `select referral_id, status, reason, created_at, resolved_at
      from agency_referrals
      where user_id = $1 and referred_to_role = 'Rehabilitation Officer'
      order by created_at desc`,
-    [req.auth.userId]
+    [activeUserId]
   );
 
   if (rows.length === 0) {
@@ -1692,26 +1762,29 @@ router.get('/rehabilitation-progress', async (req, res) => {
   });
 });
 
-// Rehabilitation is a post-case-closure phase, victim-initiated (migration_029) -
-// only reachable once case_stage = 'Case Closed', and only after the victim
-// themselves picks a real provider. Never automatic, never official-triggered
-// alone (DWO's own hand-off route enforces the same case_stage gate - see
-// dwo/routes/dwo.routes.js).
+// Eligible to be ASKED to opt in - the case's own eCourt stage is
+// 'Rehabilitation' and the victim hasn't already answered (opted in or
+// declined) for this stage instance yet. Never automatic, never official-
+// triggered alone (DWO's own hand-off route is a separate, official-
+// initiated path - this is specifically the victim's own mandatory-gate
+// decision).
 router.get('/rehabilitation-eligibility', async (req, res) => {
-  const { rows: userRows } = await pool.query('select case_stage, jurisdiction_id from users where user_id = $1', [req.auth.userId]);
+  const activeUserId = await resolveCaseUserId(req);
+  const { rows: userRows } = await pool.query(
+    'select case_stage, jurisdiction_id, rehabilitation_opted_in_at, rehabilitation_declined_at from users where user_id = $1',
+    [activeUserId]
+  );
   const user = userRows[0];
   if (!user) return fail(res, 'Case not found', 404);
 
-  const { rows: existing } = await pool.query(
-    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Rehabilitation Officer'`,
-    [req.auth.userId]
-  );
-
-  if (existing.length > 0) {
+  if (user.rehabilitation_opted_in_at) {
     return ok(res, { eligible: false, alreadyOptedIn: true, reason: 'You have already opted in to rehabilitation.', providers: [] });
   }
-  if (user.case_stage !== 'Case Closed') {
-    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'Rehabilitation becomes available once your case is closed.', providers: [] });
+  if (user.rehabilitation_declined_at) {
+    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'You already answered this for the current stage.', providers: [] });
+  }
+  if (user.case_stage !== 'Rehabilitation') {
+    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'Rehabilitation becomes available once your case reaches that stage.', providers: [] });
   }
 
   const { rows: providers } = await pool.query(
@@ -1731,25 +1804,20 @@ router.get('/rehabilitation-eligibility', async (req, res) => {
 });
 
 router.post('/rehabilitation-opt-in', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
   const { providerId } = req.body;
   if (!providerId) return fail(res, 'providerId is required', 400);
 
-  const { rows: userRows } = await pool.query('select case_stage from users where user_id = $1', [req.auth.userId]);
+  const { rows: userRows } = await pool.query(
+    'select case_stage, rehabilitation_opted_in_at, rehabilitation_declined_at from users where user_id = $1',
+    [activeUserId]
+  );
   const user = userRows[0];
   if (!user) return fail(res, 'Case not found', 404);
-
-  // Checked before the case_stage gate below - once opted in, case_stage is
-  // already 'Rehabilitation' (not 'Case Closed' any more), so checking
-  // case_stage first would misreport a duplicate attempt as "case not
-  // closed" instead of "already opted in".
-  const { rows: existing } = await pool.query(
-    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Rehabilitation Officer'`,
-    [req.auth.userId]
-  );
-  if (existing.length > 0) return fail(res, 'You have already opted in to rehabilitation.', 400);
-
-  if (user.case_stage !== 'Case Closed') {
-    return fail(res, 'Rehabilitation is only available once your case is closed.', 400);
+  if (user.rehabilitation_opted_in_at) return fail(res, 'You have already opted in to rehabilitation.', 400);
+  if (user.rehabilitation_declined_at) return fail(res, 'You already answered this for the current stage.', 400);
+  if (user.case_stage !== 'Rehabilitation') {
+    return fail(res, 'Rehabilitation is only available once your case reaches that stage.', 400);
   }
 
   const { rows: providerRows } = await pool.query(
@@ -1762,12 +1830,14 @@ router.post('/rehabilitation-opt-in', async (req, res) => {
   let referralId;
   try {
     referralId = await withTransaction(async (client) => {
-      await client.query(`update users set case_stage = 'Rehabilitation' where user_id = $1`, [req.auth.userId]);
+      // Opting in is now purely a rehabilitation_opted_in_at flag - it never
+      // touches case_stage, which stays exclusively eCourt's to set.
+      await client.query(`update users set rehabilitation_opted_in_at = now() where user_id = $1`, [activeUserId]);
       const { rows } = await client.query(
         `insert into agency_referrals (user_id, referred_to_role, referred_by_user_id, reason, metadata)
          values ($1, 'Rehabilitation Officer', $1, $2, $3)
          returning referral_id`,
-        [req.auth.userId, `Victim opted in to rehabilitation with ${provider.name}.`, JSON.stringify({ providerId: provider.provider_id, providerName: provider.name })]
+        [activeUserId, `Victim opted in to rehabilitation with ${provider.name}.`, JSON.stringify({ providerId: provider.provider_id, providerName: provider.name })]
       );
       return rows[0].referral_id;
     });
@@ -1775,39 +1845,101 @@ router.post('/rehabilitation-opt-in', async (req, res) => {
     return fail(res, `Could not opt in: ${err.message}`, 500);
   }
 
-  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: referralId });
+  await writeAuditLog({ userId: activeUserId, action: 'create', entityType: 'agency_referral', entityId: referralId });
 
   return ok(res, { referralId }, 'Opted in to rehabilitation', 201);
 });
 
-// Self-service decline - the mandatory app-open gate's "No" answer. Same two
-// guards as GET /rehabilitation-eligibility (already opted in / case not yet
-// closed), so this can't be called out of turn. Sets users.status =
-// 'inactive' directly (the same flag Data Operator's own account-management
-// page already uses) - enforced immediately by verifyToken.js's per-request
-// check, and at login by auth.user.routes.js, so the account is genuinely
-// unusable from this point on, not just hidden client-side.
+// Self-service decline - the mandatory app-open gate's "No" answer. Unlike
+// before migration_034, this case is NOT closed (Rehabilitation now sits
+// mid-lifecycle, before Compensation/Case Closed) - declining just records
+// the answer and lets the case continue under completely normal tracking;
+// it no longer deactivates the account. If the victim has not opted in,
+// this case simply never enters the isolated Rehabilitation workflow, and
+// when it later reaches Case Closed it's treated as an ordinary closure.
 router.post('/rehabilitation-decline', async (req, res) => {
-  const { rows: userRows } = await pool.query('select case_stage from users where user_id = $1', [req.auth.userId]);
+  const activeUserId = await resolveCaseUserId(req);
+  const { rows: userRows } = await pool.query(
+    'select case_stage, rehabilitation_opted_in_at, rehabilitation_declined_at from users where user_id = $1',
+    [activeUserId]
+  );
   const user = userRows[0];
   if (!user) return fail(res, 'Case not found', 404);
-
-  const { rows: existing } = await pool.query(
-    `select referral_id from agency_referrals where user_id = $1 and referred_to_role = 'Rehabilitation Officer'`,
-    [req.auth.userId]
-  );
-  if (existing.length > 0) return fail(res, 'You have already opted in to rehabilitation.', 400);
-
-  if (user.case_stage !== 'Case Closed') {
-    return fail(res, 'This decision is only available once your case is closed.', 400);
+  if (user.rehabilitation_opted_in_at) return fail(res, 'You have already opted in to rehabilitation.', 400);
+  if (user.rehabilitation_declined_at) return fail(res, 'You already answered this for the current stage.', 400);
+  if (user.case_stage !== 'Rehabilitation') {
+    return fail(res, 'This decision is only available once your case reaches the Rehabilitation stage.', 400);
   }
 
-  const { error } = await supabase.from('users').update({ status: 'inactive' }).eq('user_id', req.auth.userId);
+  const { error } = await supabase.from('users').update({ rehabilitation_declined_at: new Date().toISOString() }).eq('user_id', activeUserId);
   if (error) return fail(res, `Could not process this request: ${error.message}`, 500);
 
-  await writeAuditLog({ userId: req.auth.userId, action: 'update', entityType: 'user', entityId: req.auth.userId });
+  await writeAuditLog({ userId: activeUserId, action: 'update', entityType: 'user', entityId: activeUserId });
 
-  return ok(res, null, 'Your account has been deactivated as requested.');
+  return ok(res, null, 'Understood - your case will continue under normal tracking.');
+});
+
+// ===== Rehabilitation post-closure continuation (migration_034) =====
+// The special flow: a case that was in Rehabilitation WITH the victim
+// already opted in, then closed by eCourt, arms
+// rehabilitation_closure_pending_ack (see ecourtStageSync.js's own
+// transition logic) - this pair of routes is how the victim answers the
+// resulting popup. Scoped by ?caseUserId= like every route above, since
+// the docket in question may not be the caller's own anchor.
+router.get('/rehabilitation-closure-status', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
+  const { rows } = await pool.query(
+    'select docket_number, rehabilitation_closure_pending_ack from users where user_id = $1',
+    [activeUserId]
+  );
+  const user = rows[0];
+  if (!user) return fail(res, 'Case not found', 404);
+  return ok(res, { pending: user.rehabilitation_closure_pending_ack, docketNumber: user.docket_number });
+});
+
+// "Yes, continue Rehabilitation" - the court case itself stays Closed (that
+// fact never changes), but this docket's Rehabilitation context and
+// application access stay alive despite the closed-docket rule that would
+// otherwise apply (see auth.user.routes.js's login check).
+router.post('/rehabilitation-closure-continue', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
+  const { rows } = await pool.query(
+    'select rehabilitation_closure_pending_ack from users where user_id = $1',
+    [activeUserId]
+  );
+  if (!rows[0]) return fail(res, 'Case not found', 404);
+  if (!rows[0].rehabilitation_closure_pending_ack) return fail(res, 'There is no pending closure decision for this case.', 400);
+
+  const { error } = await supabase
+    .from('users')
+    .update({ rehabilitation_closure_pending_ack: false, rehabilitation_continued_after_closure: true })
+    .eq('user_id', activeUserId);
+  if (error) return fail(res, `Could not process this request: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: activeUserId, action: 'update', entityType: 'user', entityId: activeUserId });
+  return ok(res, null, 'Continuing your Rehabilitation support.');
+});
+
+// "No" - ends this docket's Rehabilitation access; the app returns the
+// victim to whichever of their other cases remains active (UserGate.js's
+// own concern, not this route's).
+router.post('/rehabilitation-closure-end', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
+  const { rows } = await pool.query(
+    'select rehabilitation_closure_pending_ack from users where user_id = $1',
+    [activeUserId]
+  );
+  if (!rows[0]) return fail(res, 'Case not found', 404);
+  if (!rows[0].rehabilitation_closure_pending_ack) return fail(res, 'There is no pending closure decision for this case.', 400);
+
+  const { error } = await supabase
+    .from('users')
+    .update({ rehabilitation_closure_pending_ack: false, rehabilitation_continued_after_closure: false })
+    .eq('user_id', activeUserId);
+  if (error) return fail(res, `Could not process this request: ${error.message}`, 500);
+
+  await writeAuditLog({ userId: activeUserId, action: 'update', entityType: 'user', entityId: activeUserId });
+  return ok(res, null, 'Rehabilitation access ended for this case.');
 });
 
 // ===== Legal Aid (consolidated DLSA flow) =====
@@ -2024,19 +2156,20 @@ router.post('/financial-aid-confirm', async (req, res) => {
 // that verified figure and live stage tracker take over from the
 // auto-suggested one.
 router.get('/compensation-status', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
   const { rows: userRows } = await pool.query(
     `select u.case_stage, ct.name as case_type_name
      from users u
      join case_types ct on ct.case_type_id = u.case_type_id
      where u.user_id = $1`,
-    [req.auth.userId]
+    [activeUserId]
   );
   const user = userRows[0];
   if (!user) return fail(res, 'Case not found', 404);
 
   const { rows: referralRows } = await pool.query(
     `select metadata from agency_referrals where user_id = $1 and referred_to_role = 'District Welfare Officer' order by created_at desc limit 1`,
-    [req.auth.userId]
+    [activeUserId]
   );
   const compensation = referralRows[0]?.metadata?.compensation || null;
 
@@ -2066,12 +2199,13 @@ router.get('/compensation-status', async (req, res) => {
 // courtCaseSimulation.js) - that stays a decorative, deterministic fixture,
 // this is the real record IO actually maintains.
 router.get('/investigation-progress', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
   const { rows } = await pool.query(
     `select ir.accused_status, ir.investigation_progress, ir.chargesheet_status, ir.chargesheet_filed_at
      from users u
      left join investigation_records ir on ir.user_id = u.user_id
      where u.user_id = $1`,
-    [req.auth.userId]
+    [activeUserId]
   );
   const row = rows[0];
   if (!row) return fail(res, 'Case not found', 404);

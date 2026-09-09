@@ -102,8 +102,10 @@ export function useSetInvestigationProgress() {
   return { mutate, loading };
 }
 
-// The one write path into the shared case_stage from this role - advances
-// Investigation to Trial (and unlocks DWO's Compensation Stage 2).
+// migration_034: this no longer touches the shared case_stage at all - it
+// only records chargesheetStatus/chargesheetFiledAt on this case's own
+// investigation record. case_stage is set exclusively by the (simulated)
+// eCourt sync worker.
 export function useFileChargesheet() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

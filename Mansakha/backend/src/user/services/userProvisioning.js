@@ -1,33 +1,30 @@
 const bcrypt = require('bcrypt');
 const { supabase } = require('../../core/db/supabaseClient');
 const { withTransaction } = require('../../core/db/pgPool');
+const { STAGE_INTERVAL_MS } = require('../../core/services/ecourtStageSync');
 
-// 'Case Closed' is terminal-for-the-legal-case, settable only by Data
-// Operator (dataoperator/routes/dataoperator.routes.js) - District Admin's
-// case_stage edits (district_admin/routes/districtAdmin.routes.js) stay
-// restricted to the open 3, enforced below via updateUser's `canCloseCase`
-// flag. 'Rehabilitation' is deliberately NOT in CASE_STAGES_OPEN (migration_029) -
-// it's a post-closure phase reachable only via the victim's own opt-in
-// (user.routes.js's POST /rehabilitation-opt-in), not a normal mid-case
-// stage anyone can set - still included in VALID_CASE_STAGES so Data
-// Operator's canCloseCase override and direct createUser calls (e.g. seed
-// data) can still set it directly if needed.
-const CASE_STAGES_OPEN = ['Investigation', 'Trial', 'Compensation'];
-const VALID_CASE_STAGES = [...CASE_STAGES_OPEN, 'Case Closed', 'Rehabilitation'];
+// migration_034: case_stage is now EXCLUSIVELY eCourt-authoritative (see
+// core/services/ecourtStageSync.js, the only other code path allowed to
+// write it). No staff role - not Data Operator, not Administration, not
+// Investigating Officer - may create, modify, advance, downgrade, or
+// otherwise set it after case creation; createUser below always forces
+// 'Investigation' regardless of any caseStage a caller might still send,
+// and updateUser no longer accepts a caseStage field at all. Strict order:
+// Investigation -> Trial -> Rehabilitation -> Compensation -> Case Closed.
+const VALID_CASE_STAGES = ['Investigation', 'Trial', 'Rehabilitation', 'Compensation', 'Case Closed'];
 const VALID_STATUSES = ['active', 'inactive'];
 
 // Automated counsellor-assignment scoring (services/stressResponse.js) - each
-// case stage's point value. 'Case Closed' and 'Rehabilitation' both score 0
-// so neither distorts the tie-break sum - a case past closure (including
-// into its post-closure rehabilitation phase) is no longer part of a
-// Counsellor's active caseload either way, see stressResponse.js's own
-// activeCountByOfficial check.
+// case stage's point value. Rehabilitation is now a real, ongoing mid-case
+// stage (not a post-closure phase), so it counts toward active caseload
+// like any other open stage; only 'Case Closed' scores 0 - see
+// stressResponse.js's own activeCountByOfficial check.
 const CASE_STAGE_SCORES = {
   Investigation: 1,
   Trial: 2,
-  Compensation: 3,
+  Rehabilitation: 3,
+  Compensation: 4,
   'Case Closed': 0,
-  Rehabilitation: 0,
 };
 // Every user's password on creation - fixed, not admin-chosen, per explicit
 // request. must_change_password (default true) forces a real one on first
@@ -81,7 +78,7 @@ class ProvisioningError extends Error {
 // 'Investigation') - per explicit request, stage is something the operator
 // sets later via the Users list's editable dropdown (PATCH .../users/:id
 // below), not a decision made at intake time.
-async function createUser({ docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, caseStage, provisionedVia, address = null, caseBackground = null, password = null, aadhaarNumber = null, stationId = null }) {
+async function createUser({ docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, provisionedVia, address = null, caseBackground = null, password = null, aadhaarNumber = null, stationId = null }) {
   if (!docketNumber || !fullName || !contactNumber || !jurisdictionId || !caseTypeId) {
     throw new ProvisioningError('docketNumber, fullName, contactNumber, jurisdictionId, and caseTypeId are required', 400);
   }
@@ -95,10 +92,11 @@ async function createUser({ docketNumber, fullName, contactNumber, jurisdictionI
   // would not.
   const normalizedAadhaar = aadhaarNumber && String(aadhaarNumber).trim() ? String(aadhaarNumber).trim() : null;
 
-  const resolvedCaseStage = caseStage || VALID_CASE_STAGES[0];
-  if (!VALID_CASE_STAGES.includes(resolvedCaseStage)) {
-    throw new ProvisioningError(`caseStage must be one of: ${VALID_CASE_STAGES.join(', ')}`, 400);
-  }
+  // migration_034: no caller (Data Operator, District Admin, anyone) gets a
+  // say in the initial stage any more - every case starts at 'Investigation'
+  // and only the eCourt sync worker ever advances it from there.
+  const resolvedCaseStage = VALID_CASE_STAGES[0];
+  const nextEcourtStageAt = new Date(Date.now() + STAGE_INTERVAL_MS).toISOString();
 
   const { data: existing } = await supabase.from('users').select('user_id').eq('docket_number', docketNumber.trim()).maybeSingle();
   if (existing) throw new ProvisioningError('A user with this docket number already exists', 409);
@@ -118,10 +116,10 @@ async function createUser({ docketNumber, fullName, contactNumber, jurisdictionI
       // stays valid unchanged; a case created without one simply has no IO
       // assigned yet.
       const { rows } = await client.query(
-        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, station_id)
-         values ($1, $2, $3, $4, $5, $6, $7, true, $8)
+        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, station_id, next_ecourt_stage_at)
+         values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9)
          returning user_id`,
-        [docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash, stationId]
+        [docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash, stationId, nextEcourtStageAt]
       );
       const id = rows[0].user_id;
       await client.query(
@@ -145,46 +143,31 @@ async function createUser({ docketNumber, fullName, contactNumber, jurisdictionI
   return { userId, docketNumber: docketNumber.trim(), temporaryPassword: initialPassword };
 }
 
-// Case stage / status / contact detail updates only - docket number, name, and
+// Status / contact detail updates only - docket number, name, and
 // jurisdiction are the login credential and stay immutable here (changing
 // them would lock the user out or move them into someone else's
 // jurisdiction scope without a deliberate transfer flow).
 //
-// canCloseCase: District Admin's route (district_admin/routes/districtAdmin.routes.js) always passes false
-// (case_stage stays restricted to the 4 open stages there); Data Operator's
-// route (dataoperator/routes/dataoperator.routes.js) passes true - marking a case closed is
-// explicitly a Data Operator action, per request.
-async function updateUser(userId, { caseStage, status, address, contactNumber }, { canCloseCase = false } = {}) {
-  if (caseStage === undefined && status === undefined && address === undefined && contactNumber === undefined) {
-    throw new ProvisioningError('caseStage, status, address, or contactNumber is required', 400);
-  }
-  if (caseStage !== undefined) {
-    const allowedStages = canCloseCase ? VALID_CASE_STAGES : CASE_STAGES_OPEN;
-    if (!allowedStages.includes(caseStage)) {
-      throw new ProvisioningError(
-        canCloseCase
-          ? `caseStage must be one of: ${VALID_CASE_STAGES.join(', ')}`
-          : `caseStage must be one of: ${CASE_STAGES_OPEN.join(', ')} (only Data Operator can mark a case closed)`,
-        canCloseCase ? 400 : 403
-      );
-    }
+// migration_034: caseStage removed entirely - no staff caller (Data
+// Operator, District/State/National Admin) may set it any more, only
+// core/services/ecourtStageSync.js can. This function's signature used to
+// take a canCloseCase flag gating that; it's gone along with the field it
+// gated.
+async function updateUser(userId, { status, address, contactNumber }) {
+  if (status === undefined && address === undefined && contactNumber === undefined) {
+    throw new ProvisioningError('status, address, or contactNumber is required', 400);
   }
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     throw new ProvisioningError(`status must be one of: ${VALID_STATUSES.join(', ')}`, 400);
   }
 
   // Both patches (when both are present) run in one transaction - a caller that
-  // sends caseStage/status alongside address/contactNumber must not end up with
+  // sends status alongside address/contactNumber must not end up with
   // only one side applied if the other fails.
   try {
     await withTransaction(async (client) => {
-      if (caseStage !== undefined || status !== undefined) {
-        const sets = [];
-        const values = [];
-        if (caseStage !== undefined) { values.push(caseStage); sets.push(`case_stage = $${values.length}`); }
-        if (status !== undefined) { values.push(status); sets.push(`status = $${values.length}`); }
-        values.push(userId);
-        await client.query(`update users set ${sets.join(', ')} where user_id = $${values.length}`, values);
+      if (status !== undefined) {
+        await client.query(`update users set status = $1 where user_id = $2`, [status, userId]);
       }
 
       if (address !== undefined || contactNumber !== undefined) {
@@ -331,15 +314,15 @@ async function linkExistingCase(userId, linkToUserId) {
 // temp password/must_change_password, exactly like createUser, since there's
 // no way to know the person's real password from here (see auth.user.routes.js's
 // login mechanics for how that first login and password change resolve).
-async function createLinkedCase({ docketNumber, caseTypeId, jurisdictionId, caseStage, caseBackground = null, linkToUserId, provisionedVia }) {
+async function createLinkedCase({ docketNumber, caseTypeId, jurisdictionId, caseBackground = null, linkToUserId, provisionedVia }) {
   if (!docketNumber || !caseTypeId || !jurisdictionId || !linkToUserId) {
     throw new ProvisioningError('docketNumber, caseTypeId, jurisdictionId, and linkToUserId are required', 400);
   }
 
-  const resolvedCaseStage = caseStage || VALID_CASE_STAGES[0];
-  if (!VALID_CASE_STAGES.includes(resolvedCaseStage)) {
-    throw new ProvisioningError(`caseStage must be one of: ${VALID_CASE_STAGES.join(', ')}`, 400);
-  }
+  // migration_034: same as createUser - always 'Investigation', no caller
+  // input accepted.
+  const resolvedCaseStage = VALID_CASE_STAGES[0];
+  const nextEcourtStageAt = new Date(Date.now() + STAGE_INTERVAL_MS).toISOString();
 
   const { data: existing } = await supabase.from('users').select('user_id').eq('docket_number', docketNumber.trim()).maybeSingle();
   if (existing) throw new ProvisioningError('A user with this docket number already exists', 409);
@@ -368,12 +351,12 @@ async function createLinkedCase({ docketNumber, caseTypeId, jurisdictionId, case
   try {
     userId = await withTransaction(async (client) => {
       const { rows } = await client.query(
-        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, linked_to_user_id, assigned_counsellor_id, opted_for_manual_counsellor)
-         values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
+        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, linked_to_user_id, assigned_counsellor_id, opted_for_manual_counsellor, next_ecourt_stage_at)
+         values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11)
          returning user_id`,
         [
           docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash,
-          anchorUserId, anchorAssignment?.assigned_counsellor_id || null, anchorAssignment?.opted_for_manual_counsellor || false,
+          anchorUserId, anchorAssignment?.assigned_counsellor_id || null, anchorAssignment?.opted_for_manual_counsellor || false, nextEcourtStageAt,
         ]
       );
       return rows[0].user_id;
@@ -411,5 +394,5 @@ async function propagateCounsellorAssignment(anchorUserId, { counsellorId, opted
 
 module.exports = {
   createUser, updateUser, deleteUser, linkExistingCase, createLinkedCase, propagateCounsellorAssignment, ProvisioningError,
-  VALID_CASE_STAGES, CASE_STAGES_OPEN, VALID_STATUSES, CASE_STAGE_SCORES,
+  VALID_CASE_STAGES, VALID_STATUSES, CASE_STAGE_SCORES,
 };

@@ -186,13 +186,15 @@ router.patch('/cases/:userId/investigation-progress', async (req, res) => {
   return ok(res, { userId: c.user_id }, 'Investigation progress updated');
 });
 
-// The one write path from this role into the shared case_stage - marking
-// the chargesheet filed is what actually advances the case from
-// Investigation to Trial (see the case-lifecycle flowchart), which in turn
-// is exactly what unlocks the Compensation Module's Stage 2 (DWO's own
-// compensationSchedule.js already reads case_stage live, no change needed
-// there). Idempotent - filing again once already Filed is a no-op error,
-// not a duplicate advance.
+// migration_034: no longer touches users.case_stage - case_stage is now
+// EXCLUSIVELY eCourt-authoritative (core/services/ecourtStageSync.js is the
+// only writer anywhere in the backend). This still records IO's own real
+// chargesheet_status/chargesheet_filed_at fact on investigation_records
+// (genuinely IO's to know and log), it just no longer advances the shared
+// case stage as a side effect - that transition now happens on its own
+// simulated eCourt schedule, independent of when IO happens to log this.
+// Idempotent - filing again once already Filed is a no-op error, not a
+// duplicate write.
 router.patch('/cases/:userId/chargesheet', async (req, res) => {
   const c = await loadOwnCase(req.params.userId, req, res);
   if (!c) return;
@@ -202,14 +204,9 @@ router.patch('/cases/:userId/chargesheet', async (req, res) => {
   const { error } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { chargesheet_status: 'Filed', chargesheet_filed_at: filedAt });
   if (error) return fail(res, `Could not update chargesheet status: ${error.message}`, 500);
 
-  if (c.case_stage === 'Investigation') {
-    const { error: stageError } = await supabase.from('users').update({ case_stage: 'Trial' }).eq('user_id', c.user_id);
-    if (stageError) return fail(res, `Chargesheet recorded but could not advance the case stage: ${stageError.message}`, 500);
-  }
-
   await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
 
-  return ok(res, { userId: c.user_id, chargesheetStatus: 'Filed', caseStageAdvanced: c.case_stage === 'Investigation' }, 'Chargesheet marked as filed');
+  return ok(res, { userId: c.user_id, chargesheetStatus: 'Filed' }, 'Chargesheet marked as filed');
 });
 
 // A bookkeeping close-out distinct from the chargesheet/case_stage

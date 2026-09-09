@@ -96,7 +96,6 @@ export default function FetchCase() {
               <div className="flex justify-between"><span className="text-gray-500">Mobile Number</span><span className="font-semibold text-gray-800">{result.suggestedContactNumber}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Aadhaar Number</span><span className="font-semibold text-gray-800">{result.suggestedAadhaarNumber}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Case Type</span><span className="font-semibold text-gray-800">{result.suggestedCaseType}</span></div>
-              <div className="flex justify-between"><span className="text-gray-500">Case Stage</span><span className="font-semibold text-gray-800">{result.suggestedCaseStage}</span></div>
               <div className="flex justify-between"><span className="text-gray-500">Jurisdiction</span><span className="font-semibold text-gray-800">{result.suggestedDistrictName}, {result.suggestedStateName}</span></div>
               <div>
                 <span className="text-gray-500 block mb-1">Case Background</span>
