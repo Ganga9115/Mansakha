@@ -166,6 +166,25 @@ export function useUpdateStaff() {
   return { mutate, loading };
 }
 
+// Updates the scope (jurisdiction/provider/station) on an official's
+// EXISTING active grant of one role, in place - distinct from
+// useCreateStaff/POST staff/:id/roles, which always inserts a fresh grant.
+// See ministry.routes.js's own comment on why this had to be a separate
+// route rather than reusing that one.
+export function useUpdateStaffScope() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (officialId, roleName, payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/ministry/staff/${officialId}/roles/${encodeURIComponent(roleName)}/scope`, payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 export function useDeleteStaff() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
