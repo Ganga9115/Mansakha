@@ -369,11 +369,14 @@ router.post('/tasks', async (req, res) => {
 
   const { rows: userRows } = await pool.query('select user_id, case_stage from users where user_id = $1', [userId]);
   if (!userRows[0]) return fail(res, 'Case not found', 404);
-  // Rehabilitation Officer's mandate only begins after case closure (same
-  // rule as dwo.routes.js's hand-off-rehabilitation) - a task raised before
-  // that would sit in the officer's queue for a case they have no access to.
-  if (assignedToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Case Closed') {
-    return fail(res, "Rehabilitation Officer's role begins only once the case is closed. Kindly assign this to a different office, or raise it again after closure.", 400);
+  // migration_034: Rehabilitation Officer's mandate begins once the case
+  // reaches the Rehabilitation eCourt stage (same rule as
+  // dwo.routes.js's hand-off-rehabilitation) - a task raised before that
+  // would sit in the officer's queue for a case they have no access to.
+  // (This route is currently unmounted/unreachable - SPP was retired as a
+  // separate login - kept consistent anyway in case it's ever revived.)
+  if (assignedToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Rehabilitation') {
+    return fail(res, "Rehabilitation Officer's role begins only once the case reaches the Rehabilitation stage. Kindly assign this to a different office, or raise it again once the case reaches that stage.", 400);
   }
 
   const { data, error } = await supabase

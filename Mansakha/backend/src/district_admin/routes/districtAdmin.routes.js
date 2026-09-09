@@ -2058,16 +2058,16 @@ router.post(
       return fail(res, `referredToRole must be one of: ${AGENCY_REFERRAL_ROLES.join(', ')}`, 400);
     }
 
-    const { rows: userRows } = await pool.query('select jurisdiction_id, case_stage from users where user_id = $1', [userId]);
+    const { rows: userRows } = await pool.query('select jurisdiction_id, case_stage, rehabilitation_opted_in_at from users where user_id = $1', [userId]);
     if (!userRows[0]) return fail(res, 'Case not found', 404);
 
     const jurisdictionCheck = await requireJurisdictionInline(req, userRows[0].jurisdiction_id);
     if (jurisdictionCheck) return fail(res, jurisdictionCheck, 403);
 
-    // Rehabilitation is a post-case-closure phase (migration_029) - same
-    // gate as DWO's own hand-off route and the victim's opt-in route.
-    if (referredToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Case Closed') {
-      return fail(res, 'Rehabilitation referrals are only available once the case is closed.', 400);
+    // migration_034: Rehabilitation is now a genuine mid-case eCourt stage -
+    // same gate as DWO's own hand-off route and the victim's opt-in route.
+    if (referredToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Rehabilitation') {
+      return fail(res, 'Rehabilitation referrals are only available once the case reaches the Rehabilitation stage.', 400);
     }
 
     const { data, error } = await supabase
@@ -2076,6 +2076,19 @@ router.post(
       .select('referral_id')
       .single();
     if (error) return fail(res, `Could not create referral: ${error.message}`, 500);
+
+    // Same reasoning as DWO's hand-off-rehabilitation - a referral to
+    // Rehabilitation Officer created through this general-purpose route
+    // must also mark the case as opted in, or it would never actually get
+    // isolated into its own Rehabilitation context. Only set once - never
+    // overwrites an existing opt-in timestamp.
+    if (referredToRole === 'Rehabilitation Officer' && !userRows[0].rehabilitation_opted_in_at) {
+      const { error: optInError } = await supabase
+        .from('users')
+        .update({ rehabilitation_opted_in_at: new Date().toISOString() })
+        .eq('user_id', userId);
+      if (optInError) console.error('agency-referrals: could not set rehabilitation_opted_in_at', optInError.message);
+    }
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });
 
