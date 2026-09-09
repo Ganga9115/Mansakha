@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
-import { IndianRupee, CircleCheck, Lock, Landmark } from 'lucide-react';
+import { IndianRupee, CircleCheck, Lock, Landmark, FileText, AlertCircle } from 'lucide-react';
 import { useReferralDetail, useResolveReferral, useVerifyCompensation, useMarkCompensationStagePaid } from '../services/hooks';
 
 // District Welfare Officer's Compensation Module - its own dedicated page,
@@ -104,6 +104,77 @@ function CompensationCard({ r, referralId, onChanged }) {
   );
 }
 
+// migration_038 - the account a payment stage is actually disbursed into.
+// Compensation under the Act is paid by direct transfer, so "Mark Paid" is
+// refused server-side while this is missing - without showing it here, the
+// officer would hit that refusal with no way to see why, or where the money
+// is meant to go.
+function BankDetailsCard({ r }) {
+  const b = r.bankDetails;
+
+  if (!b) {
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-2">
+        <div className="flex items-center gap-1.5">
+          <AlertCircle size={15} className="text-amber-700" />
+          <h3 className="font-bold text-sm text-amber-800">No Bank Account on Record</h3>
+        </div>
+        <p className="text-[11px] text-amber-700 leading-relaxed">
+          Compensation is disbursed by direct transfer, so no payment stage can be marked paid until this victim
+          adds an account. They can do that themselves under Compensation in their own app.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+      <div className="flex items-center gap-1.5">
+        <Landmark size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Disbursement Account</h3>
+      </div>
+      <p className="text-[11px] text-gray-400">
+        Provided by the victim. Kindly verify against the proof below before releasing a payment stage.
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Account Holder</span>
+          <span className="text-xs font-bold text-gray-800">{b.accountName}</span>
+        </div>
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Account Number</span>
+          <span className="text-xs font-bold text-gray-800 tabular-nums">{b.accountNumber}</span>
+        </div>
+        <div>
+          <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">IFSC</span>
+          <span className="text-xs font-bold text-gray-800">{b.ifsc}</span>
+        </div>
+        {b.bankName && (
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Bank</span>
+            <span className="text-xs font-bold text-gray-800">{b.bankName}</span>
+          </div>
+        )}
+      </div>
+      {b.proofUrl ? (
+        <a
+          href={b.proofUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#EBF4FA] rounded-md text-[11px] font-semibold transition"
+        >
+          <FileText size={12} /> View passbook / cheque proof
+        </a>
+      ) : (
+        <p className="text-[11px] text-gray-400">No proof document attached - optional, but useful before releasing funds.</p>
+      )}
+      {b.updatedAt && (
+        <p className="text-[10px] text-gray-400">Last updated {new Date(b.updatedAt).toLocaleString()}</p>
+      )}
+    </div>
+  );
+}
+
 export default function ReferralCompensation() {
   const { referralId } = useParams();
   const navigate = useNavigate();
@@ -144,8 +215,9 @@ export default function ReferralCompensation() {
 
         {actionError && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-4 py-3 rounded-lg">{actionError}</div>}
 
-        <div className="pt-2">
+        <div className="pt-2 space-y-4">
           <CompensationCard r={r} referralId={referralId} onChanged={detailQuery.refetch} />
+          <BankDetailsCard r={r} />
         </div>
       </div>
     </StaffLayout>

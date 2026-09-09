@@ -359,12 +359,19 @@ export function useMyInterventionRequests() {
   });
 }
 
-export function useSubmitInterventionRequest() {
+// caseUserId matters here: the reviewing officer's queue is
+// jurisdiction-scoped, so a request must be filed against the case whose
+// district it actually concerns. Filing everything against the anchor meant
+// a victim with cases in two districts had requests land on the wrong one,
+// where the officer for the relevant district never saw them.
+export function useSubmitInterventionRequest(caseUserId) {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ interventionTypeId, description }) =>
-      apiClient.post('/api/user/intervention-requests', { interventionTypeId, description }, token),
+    mutationFn: ({ interventionTypeId, description }) => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.post(`/api/user/intervention-requests${qs}`, { interventionTypeId, description }, token);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'intervention-requests'] }),
   });
 }

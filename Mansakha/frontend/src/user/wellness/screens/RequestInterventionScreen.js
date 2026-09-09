@@ -64,7 +64,7 @@ function DocumentSlot({ doc, attached, uploading, onPick }) {
   );
 }
 
-function NewRequestForm({ types }) {
+function NewRequestForm({ types, caseUserId }) {
   const [selectedTypeId, setSelectedTypeId] = useState(null);
   const [description, setDescription] = useState('');
   const [pendingDocs, setPendingDocs] = useState({}); // label -> {uri, mimeType}
@@ -72,7 +72,7 @@ function NewRequestForm({ types }) {
   const [uploadingLabel, setUploadingLabel] = useState(null);
   const [submitError, setSubmitError] = useState(null);
 
-  const submitRequest = useSubmitInterventionRequest();
+  const submitRequest = useSubmitInterventionRequest(caseUserId);
   const uploadDocument = useUploadInterventionDocument();
 
   const selectedType = types.find((t) => t.interventionTypeId === selectedTypeId);
@@ -236,7 +236,10 @@ function RequestHistoryItem({ r, navigation }) {
   return (
     <View style={styles.historyItem}>
       <View style={styles.historyTopRow}>
-        <Text style={styles.historyType}>{r.interventionTypeName}</Text>
+        <Text style={styles.historyType}>
+          {r.interventionTypeName}
+          {!!r.docketNumber && <Text style={styles.historyDocket}>  ·  Docket {r.docketNumber}</Text>}
+        </Text>
         <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
           <Feather name={meta.icon} size={11} color={meta.color} />
           <Text style={[styles.statusPillText, { color: meta.color }]}>{r.status}</Text>
@@ -265,10 +268,14 @@ function RequestHistoryItem({ r, navigation }) {
   );
 }
 
-export default function RequestInterventionScreen({ navigation }) {
+export default function RequestInterventionScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const dashboardQuery = useUserDashboard();
+  const dashboardQuery = useUserDashboard(route?.params?.caseUserId);
+  // Which docket a new request is filed against - the officer who reviews it
+  // is scoped to that case's district, so this has to be the case the victim
+  // is actually acting on, not always their anchor.
+  const activeUserId = dashboardQuery.data?.userId;
   const typesQuery = useInterventionTypes();
   const requestsQuery = useMyInterventionRequests();
   const requests = requestsQuery.data?.requests || [];
@@ -305,7 +312,7 @@ export default function RequestInterventionScreen({ navigation }) {
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={styles.body}>
           <QueryBoundary query={typesQuery}>
-            {(typesData) => <NewRequestForm types={typesData?.interventionTypes || []} />}
+            {(typesData) => <NewRequestForm types={typesData?.interventionTypes || []} caseUserId={activeUserId} />}
           </QueryBoundary>
 
           <Text style={styles.sectionTitle}>My Requests</Text>
@@ -405,6 +412,7 @@ const styles = StyleSheet.create({
   historyItem: {},
   historyTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   historyType: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14 },
+  historyDocket: { ...typography.caption, color: colors.textSecondary, fontWeight: '400' },
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: spacing.sm, borderRadius: radius.pill },
   statusPillText: { ...typography.caption, fontWeight: '700', fontSize: 10 },
   historyDate: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
