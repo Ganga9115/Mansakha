@@ -25,7 +25,7 @@ const ACCUSED_STATUS_TONE = {
 };
 
 function InvestigationProgressCard({ data }) {
-  if (!data || (!data.accusedStatus && !data.investigationProgress && data.chargesheetStatus === 'Not Filed')) return null;
+  if (!data || (!data.accusedStatus && !data.investigationProgress && data.chargesheetStatus === 'Not Filed' && !data.investigationCompleteAt)) return null;
   const tone = ACCUSED_STATUS_TONE[data.accusedStatus];
   return (
     <Card headerTitle="Investigation Progress">
@@ -38,6 +38,12 @@ function InvestigationProgressCard({ data }) {
         </View>
       )}
       <Row label="Chargesheet" value={data.chargesheetStatus === 'Filed' ? `Filed ${formatDate(data.chargesheetFiledAt)}` : 'Not yet filed'} />
+      {/* A real milestone for someone waiting on their own case - the victim
+          previously had no way of learning the investigation had concluded. */}
+      <Row
+        label="Investigation"
+        value={data.investigationCompleteAt ? `Completed ${formatDate(data.investigationCompleteAt)}` : 'Ongoing'}
+      />
       {data.investigationProgress && (
         <Text style={styles.progressText}>{data.investigationProgress}</Text>
       )}

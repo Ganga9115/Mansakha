@@ -327,8 +327,8 @@ export default function RequestInterventionScreen({ navigation }) {
 
           <Text style={styles.disclaimer}>
             Requests are reviewed by the office best placed to verify your proof - the District Welfare Officer
-            for Financial Assistance and Medical, DLSA for Legal Aid, your Protection Officer for Witness
-            Protection and Relocation, and District Administration for Rehabilitation.
+            for Financial Assistance and Medical, DLSA for Legal Aid, and your Protection Officer for Witness
+            Protection and Relocation.
           </Text>
         </View>
       </ScrollView>
