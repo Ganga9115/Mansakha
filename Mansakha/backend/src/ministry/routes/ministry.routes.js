@@ -100,13 +100,16 @@ router.get('/staff', async (req, res) => {
       ),
       pool.query(
         `select o.official_id, o.full_name, o.email, o.phone, o.whatsapp_number, o.staff_id, o.must_change_password,
-                r.role_name, j.name as jurisdiction_name, rp.name as provider_name, ps.name as station_name
+                r.role_name, orl.jurisdiction_id, orl.provider_id, orl.station_id,
+                j.name as jurisdiction_name, rp.name as provider_name, ps.name as station_name,
+                ps.jurisdiction_id as station_jurisdiction_id, sd.parent_id as station_state_id
          from officials o
          join official_roles orl on orl.official_id = o.official_id
          join roles r on r.role_id = orl.role_id
          left join jurisdictions j on j.jurisdiction_id = orl.jurisdiction_id
          left join rehabilitation_providers rp on rp.provider_id = orl.provider_id
          left join police_stations ps on ps.station_id = orl.station_id
+         left join jurisdictions sd on sd.jurisdiction_id = ps.jurisdiction_id
          where ${whereClause}
          order by o.full_name
          limit ${pageSize} offset ${offset}`,
@@ -126,10 +129,18 @@ router.get('/staff', async (req, res) => {
       // Whichever scope this role actually uses - jurisdiction (Administration,
       // Protection Officer), provider (Rehabilitation Officer), or station
       // (Investigating Officer) - null for roles with none (DWO, DLSA,
-      // District Collector aren't scoped at all today).
+      // District Collector aren't scoped at all today). IDs (not just names)
+      // so the edit panel's picker can pre-select the current value; the
+      // station's own district/state are surfaced too so that picker's
+      // State -> District -> Station cascade can be pre-populated correctly.
+      jurisdictionId: o.jurisdiction_id,
       jurisdictionName: o.jurisdiction_name,
+      providerId: o.provider_id,
       providerName: o.provider_name,
+      stationId: o.station_id,
       stationName: o.station_name,
+      stationDistrictId: o.station_jurisdiction_id,
+      stationStateId: o.station_state_id,
       status: 'active', // the join above only matches unrevoked role rows
     }));
 
@@ -431,6 +442,54 @@ router.post('/staff/:officialId/roles', async (req, res) => {
   await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'official_role', entityId: data.official_role_id });
 
   return ok(res, { officialRoleId: data.official_role_id }, 'Role assigned', 201);
+});
+
+// Updates the scope (jurisdiction/provider/station) on an official's own
+// EXISTING active grant of one role, in place. Deliberately separate from
+// POST /staff/:officialId/roles above - that route always INSERTs a new
+// official_roles row (right for "grant a second, different role" or
+// "re-grant after a revoke"), so reusing it here to fix an unscoped
+// account would leave TWO active rows for the same role - the original
+// (unscoped) row and the new one - and which one req.auth.roles[] resolves
+// to first would be ambiguous. This instead updates the one existing row
+// directly, so a reassignment (a new jurisdiction, a new centre, a new
+// station) takes effect immediately and unambiguously, matching the "no
+// re-login required" behaviour already true of every other jurisdiction/
+// provider/station change in this app.
+router.patch('/staff/:officialId/roles/:roleName/scope', async (req, res) => {
+  const { officialId, roleName } = req.params;
+  const { jurisdictionId, providerId, stationId } = req.body;
+
+  if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
+  if ((roleName === 'Administration' || roleName === 'Protection Officer') && !jurisdictionId) {
+    return fail(res, `jurisdictionId is required for ${roleName} accounts`, 400);
+  }
+  if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
+  if (roleName === 'Investigating Officer' && !stationId) return fail(res, 'stationId is required for Investigating Officer accounts', 400);
+
+  const limitError = await checkJurisdictionLimit(roleName, jurisdictionId);
+  if (limitError) return fail(res, limitError, 409);
+
+  const { rows } = await pool.query(
+    `select orr.official_role_id
+     from official_roles orr
+     join roles r on r.role_id = orr.role_id
+     where orr.official_id = $1 and r.role_name = $2 and orr.revoked_at is null
+     limit 1`,
+    [officialId, roleName]
+  );
+  const grant = rows[0];
+  if (!grant) return fail(res, `This account has no active ${roleName} role to update`, 404);
+
+  const { error } = await supabase
+    .from('official_roles')
+    .update({ jurisdiction_id: jurisdictionId || null, provider_id: providerId || null, station_id: stationId || null })
+    .eq('official_role_id', grant.official_role_id);
+  if (error) return fail(res, `Could not update scope: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'official_role', entityId: grant.official_role_id });
+
+  return ok(res, { officialRoleId: grant.official_role_id }, 'Scope updated');
 });
 
 // Not a hard delete: `officials` has live FK references (interventions,

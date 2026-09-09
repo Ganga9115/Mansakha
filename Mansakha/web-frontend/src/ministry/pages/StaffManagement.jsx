@@ -6,6 +6,7 @@ import {
   useMinistryUsers,
   useCreateStaff,
   useUpdateStaff,
+  useUpdateStaffScope,
   useDeleteStaff,
   useJurisdictionOptions,
   useRehabilitationProviderOptions,
@@ -95,6 +96,7 @@ export default function StaffManagement() {
   const usersQuery = useMinistryUsers(page);
   const createStaff = useCreateStaff();
   const updateStaff = useUpdateStaff();
+  const updateStaffScope = useUpdateStaffScope();
   const deleteStaff = useDeleteStaff();
 
   const switchTab = (key) => { setActiveTab(key); setPage(1); };
@@ -119,6 +121,14 @@ export default function StaffManagement() {
   const [editStaffId, setEditStaffId] = useState('');
   const [editNewPassword, setEditNewPassword] = useState('');
   const [showEditNewPassword, setShowEditNewPassword] = useState(false);
+  // Scope reassignment (District/Centre/Station) on the row currently being
+  // edited - kept fully separate from the Create form's own state above so
+  // both can be open at once without cross-contaminating each other.
+  const [editJurisdictionId, setEditJurisdictionId] = useState('');
+  const [editProviderId, setEditProviderId] = useState('');
+  const [editStationStateId, setEditStationStateId] = useState('');
+  const [editStationDistrictId, setEditStationDistrictId] = useState('');
+  const [editStationId, setEditStationId] = useState('');
 
   const jurisdictionQuery = useJurisdictionOptions(
     roleName === 'Administration' ? jurisdictionLevel : JURISDICTION_SCOPED_ROLES.includes(roleName) ? 'district' : undefined
@@ -143,6 +153,18 @@ export default function StaffManagement() {
   const users = usersQuery.data?.users || [];
   const usersTotal = usersQuery.data?.total || 0;
   const usersPageSize = usersQuery.data?.pageSize || 30;
+
+  // Same cascade as Create's own, bound to the Edit panel's own state.
+  const editingStaffRow = editingId ? staff.find((s) => s.officialId === editingId) : null;
+  const editingRole = editingStaffRow?.roleName;
+  const editJurisdictionQuery = useJurisdictionOptions(editingRole === 'Protection Officer' ? 'district' : undefined);
+  const editJurisdictionOptions = editJurisdictionQuery.data?.jurisdictions || [];
+  const editStationStateQuery = useJurisdictionOptions(editingRole === 'Investigating Officer' ? 'state' : undefined);
+  const editStationDistrictQuery = useJurisdictionOptions(editingRole === 'Investigating Officer' ? 'district' : undefined, editStationStateId);
+  const editStationQuery = usePoliceStationOptions(editStationDistrictId);
+  const editStationStateOptions = editStationStateQuery.data?.jurisdictions || [];
+  const editStationDistrictOptions = editStationDistrictQuery.data?.jurisdictions || [];
+  const editStationOptions = editStationQuery.data?.stations || [];
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -183,14 +205,38 @@ export default function StaffManagement() {
     setEditStaffId(s.staffId || '');
     setEditNewPassword('');
     setShowEditNewPassword(false);
+    // Pre-fill the scope picker with this account's current assignment (or
+    // blank if it has none yet - exactly the "-" case that started this).
+    setEditJurisdictionId(s.jurisdictionId || '');
+    setEditProviderId(s.providerId || '');
+    setEditStationStateId(s.stationStateId || '');
+    setEditStationDistrictId(s.stationDistrictId || '');
+    setEditStationId(s.stationId || '');
   };
 
   const cancelEdit = () => setEditingId(null);
+
+  // Roles whose scope can be reassigned from this panel - the 3 with a
+  // "fail-closed, must not be silently empty" design (an account created or
+  // left without one just sits with a permanently empty queue).
+  const SCOPE_EDITABLE_ROLES = ['Protection Officer', 'Rehabilitation Officer', 'Investigating Officer'];
 
   const handleSaveEdit = async (officialId) => {
     if (editNewPassword && editNewPassword.length < 8) {
       toast.error('New password must be at least 8 characters.');
       return;
+    }
+    const role = editingStaffRow?.roleName;
+    if (SCOPE_EDITABLE_ROLES.includes(role)) {
+      const scopePayload =
+        role === 'Protection Officer' ? { jurisdictionId: editJurisdictionId } :
+        role === 'Rehabilitation Officer' ? { providerId: editProviderId } :
+        { stationId: editStationId };
+      const missing = Object.values(scopePayload).every((v) => !v);
+      if (missing) {
+        toast.error(`Kindly select a ${role === 'Protection Officer' ? 'district' : role === 'Rehabilitation Officer' ? 'rehabilitation centre' : 'police station'} before saving.`);
+        return;
+      }
     }
     try {
       await updateStaff.mutate(officialId, {
@@ -203,6 +249,13 @@ export default function StaffManagement() {
         // true), same as a brand-new account.
         ...(editNewPassword ? { newPassword: editNewPassword } : {}),
       });
+      if (SCOPE_EDITABLE_ROLES.includes(role)) {
+        await updateStaffScope.mutate(officialId, role, {
+          jurisdictionId: role === 'Protection Officer' ? editJurisdictionId : undefined,
+          providerId: role === 'Rehabilitation Officer' ? editProviderId : undefined,
+          stationId: role === 'Investigating Officer' ? editStationId : undefined,
+        });
+      }
       setEditingId(null);
       refetch();
     } catch (err) {
@@ -498,6 +551,76 @@ export default function StaffManagement() {
                               </div>
                             </div>
                           </div>
+
+                          {/* Scope reassignment - Protection Officer/Rehabilitation
+                              Officer/Investigating Officer only, the 3 roles whose
+                              queue is fail-closed empty without one. */}
+                          {SCOPE_EDITABLE_ROLES.includes(s.roleName) && (
+                            <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl">
+                              {s.roleName === 'Protection Officer' && (
+                                <div>
+                                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
+                                  <select value={editJurisdictionId} onChange={(e) => setEditJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                    <option value="">{s.jurisdictionName ? `Currently: ${s.jurisdictionName}` : 'Not yet assigned - select...'}</option>
+                                    {editJurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
+                                  </select>
+                                </div>
+                              )}
+                              {s.roleName === 'Rehabilitation Officer' && (
+                                <div>
+                                  <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Rehabilitation Centre</label>
+                                  <select value={editProviderId} onChange={(e) => setEditProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
+                                    <option value="">{s.providerName ? `Currently: ${s.providerName}` : 'Not yet assigned - select...'}</option>
+                                    {providerOptions.map((p) => <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>)}
+                                  </select>
+                                </div>
+                              )}
+                              {s.roleName === 'Investigating Officer' && (
+                                <>
+                                  <div>
+                                    <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">State</label>
+                                    <select
+                                      value={editStationStateId}
+                                      onChange={(e) => { setEditStationStateId(e.target.value); setEditStationDistrictId(''); setEditStationId(''); }}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
+                                    >
+                                      <option value="">Select...</option>
+                                      {[...editStationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((st) => (
+                                        <option key={st.jurisdictionId} value={st.jurisdictionId}>{st.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
+                                    <select
+                                      value={editStationDistrictId}
+                                      onChange={(e) => { setEditStationDistrictId(e.target.value); setEditStationId(''); }}
+                                      disabled={!editStationStateId}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
+                                    >
+                                      <option value="">{editStationStateId ? 'Select...' : 'Select a state first'}</option>
+                                      {[...editStationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
+                                        <option key={d.jurisdictionId} value={d.jurisdictionId}>{d.name}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Police Station</label>
+                                    <select
+                                      value={editStationId}
+                                      onChange={(e) => setEditStationId(e.target.value)}
+                                      disabled={!editStationDistrictId}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
+                                    >
+                                      <option value="">{s.stationName && !editStationDistrictId ? `Currently: ${s.stationName}` : editStationDistrictId ? (editStationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}</option>
+                                      {editStationOptions.map((st) => <option key={st.stationId} value={st.stationId}>{st.name}</option>)}
+                                    </select>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )}
+
                           <div className="mt-4 flex items-center gap-3">
                             <button
                               onClick={() => handleSaveEdit(s.officialId)}
