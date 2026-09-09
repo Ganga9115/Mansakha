@@ -62,6 +62,19 @@ async function resolveCaseUserId(req) {
   return rows[0] ? requested : anchorUserId;
 }
 
+// True when the given case belongs to the caller's own family (their anchor
+// or any docket linked to it). resolveCaseUserId above silently falls back
+// on a bad id, which is right for a display route; an ownership CHECK has to
+// answer yes/no instead.
+async function isOwnCase(req, caseUserId) {
+  if (caseUserId === req.auth.userId) return true;
+  const { rows } = await pool.query(
+    `select 1 from users where user_id = $1 and (user_id = $2 or linked_to_user_id = $2)`,
+    [caseUserId, req.auth.userId]
+  );
+  return rows.length > 0;
+}
+
 const NEXT_CHECKIN_CADENCE_DAYS = 7;
 // 15 questions/day x 7 days - see the weekly-score trigger in
 // POST /questionnaire/submit.
@@ -1601,7 +1614,14 @@ router.get('/intervention-types', async (req, res) => {
   });
 });
 
+// migration_034 scoping, extended here: a request is filed against the
+// ACTIVE case, not always the anchor. This was a real bug - the reviewing
+// officer's queue is jurisdiction-scoped, so a victim with cases in two
+// districts who raised a request while working their second docket had it
+// filed against the first one, and the officer for the district it actually
+// concerned never saw it.
 router.post('/intervention-requests', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
   const { interventionTypeId, description } = req.body;
   if (!interventionTypeId) return fail(res, 'interventionTypeId is required', 400);
 
@@ -1614,10 +1634,10 @@ router.post('/intervention-requests', async (req, res) => {
   const { rows } = await pool.query(
     `insert into intervention_requests (user_id, intervention_type_id, description)
      values ($1, $2, $3) returning request_id, status, requested_at`,
-    [req.auth.userId, interventionTypeId, description ? String(description).trim() || null : null]
+    [activeUserId, interventionTypeId, description ? String(description).trim() || null : null]
   );
 
-  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'intervention_request', entityId: rows[0].request_id });
+  await writeAuditLog({ userId: activeUserId, action: 'create', entityType: 'intervention_request', entityId: rows[0].request_id });
 
   return ok(res, { requestId: rows[0].request_id, status: rows[0].status, requestedAt: rows[0].requested_at }, 'Request submitted', 201);
 });
@@ -1634,11 +1654,11 @@ router.post('/intervention-requests/:requestId/documents', interventionDocumentU
 
   const { rows } = await pool.query('select user_id, status from intervention_requests where request_id = $1', [requestId]);
   if (!rows[0]) return fail(res, 'Request not found', 404);
-  if (rows[0].user_id !== req.auth.userId) return fail(res, 'Not your request', 403);
+  if (!(await isOwnCase(req, rows[0].user_id))) return fail(res, 'Not your request', 403);
   if (rows[0].status !== 'Pending') return fail(res, 'Cannot attach a document to a request that has already been decided', 400);
 
   const documentId = crypto.randomUUID();
-  const storagePath = `${req.auth.userId}/${requestId}/${documentId}-${sanitizeDocumentFileName(req.file.originalname)}`;
+  const storagePath = `${rows[0].user_id}/${requestId}/${documentId}-${sanitizeDocumentFileName(req.file.originalname)}`;
 
   const { error: uploadError } = await supabase.storage.from('intervention-proofs').upload(storagePath, req.file.buffer, { contentType: req.file.mimetype });
   if (uploadError) return fail(res, `Could not upload document: ${uploadError.message}`, 500);
@@ -1658,13 +1678,19 @@ router.post('/intervention-requests/:requestId/documents', interventionDocumentU
 // stay separate, same "per literal case, not resolved through the anchor"
 // convention as case_notes/interventions themselves (migration_027's own
 // comment explains why).
+// "My Requests" is the victim's own personal list, so it spans EVERY docket
+// in their family - deliberately NOT scoped to the active case the way
+// filing one is. Scoping the list too would mean switching cases silently
+// hid requests the person had actually made, losing sight of their own
+// status. Each row carries its docket so it is clear which case it concerns.
 router.get('/intervention-requests', async (req, res) => {
   const { rows } = await pool.query(
     `select ir.request_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
-            it.name as intervention_type_name
+            it.name as intervention_type_name, u.docket_number
      from intervention_requests ir
      join intervention_types it on it.intervention_type_id = ir.intervention_type_id
-     where ir.user_id = $1
+     join users u on u.user_id = ir.user_id
+     where u.user_id = $1 or u.linked_to_user_id = $1
      order by ir.requested_at desc`,
     [req.auth.userId]
   );
@@ -1680,6 +1706,7 @@ router.get('/intervention-requests', async (req, res) => {
 
   return ok(res, {
     requests: rows.map((r) => ({
+        docketNumber: r.docket_number,
       requestId: r.request_id,
       interventionTypeName: r.intervention_type_name,
       description: r.description,
@@ -1703,7 +1730,7 @@ router.get('/intervention-requests/:requestId', async (req, res) => {
     [requestId]
   );
   if (!rows[0]) return fail(res, 'Request not found', 404);
-  if (rows[0].user_id !== req.auth.userId) return fail(res, 'Not your request', 403);
+  if (!(await isOwnCase(req, rows[0].user_id))) return fail(res, 'Not your request', 403);
 
   const { rows: docRows } = await pool.query(
     'select document_label from intervention_request_documents where request_id = $1',
