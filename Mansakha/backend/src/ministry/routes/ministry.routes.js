@@ -10,6 +10,7 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { getDescendantJurisdictionIds } = require('../../core/services/jurisdictionTree');
 const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
+const { generateSimulatedStationName } = require('../../core/services/policeStationSimulation');
 
 const router = express.Router();
 
@@ -784,6 +785,91 @@ router.delete('/channels/:channelId', async (req, res) => {
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'delete', entityType: 'channel', entityId: channelId });
   return ok(res, null, 'Channel removed');
+});
+
+// ===== Police Stations (migration_033) =====
+// Unlike the four flat name-only lists above, a station also needs a
+// district - so this isn't a drop-in fit for makeConfigResource's own
+// generic shape, hence its own small set of routes here instead. Growing
+// this list is expected to happen via the "Fetch Station" simulated lookup
+// below (same honesty discipline as courtCaseSimulation.js and Data
+// Operator's own POST /fetch-case - no free/official police-station
+// registry exists to plug into), reviewed and adjusted before saving, but
+// POST /police-stations also accepts a name typed in directly, so this
+// works as a plain manual-entry list too.
+router.post('/police-stations/fetch', async (req, res) => {
+  const { stationCode, jurisdictionId } = req.body;
+  if (!stationCode || !String(stationCode).trim()) return fail(res, 'stationCode is required', 400);
+  if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
+
+  const { rows } = await pool.query('select name, level from jurisdictions where jurisdiction_id = $1', [jurisdictionId]);
+  const district = rows[0];
+  if (!district || district.level !== 'district') return fail(res, 'jurisdictionId must be a district', 400);
+
+  const suggestedName = generateSimulatedStationName({ stationCode: String(stationCode).trim(), districtName: district.name });
+  return ok(res, {
+    suggestedName,
+    districtName: district.name,
+    note: 'Simulated data - no free/official police station registry API exists. Kindly verify and edit before saving if inaccurate.',
+  });
+});
+
+router.get('/police-stations', async (req, res) => {
+  const { jurisdictionId } = req.query;
+  if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
+  const { rows } = await pool.query(
+    'select station_id, name from police_stations where jurisdiction_id = $1 and deleted_at is null order by name',
+    [jurisdictionId]
+  );
+  return ok(res, { stations: rows.map((s) => ({ stationId: s.station_id, name: s.name })) });
+});
+
+router.post('/police-stations', async (req, res) => {
+  const { name, jurisdictionId } = req.body;
+  if (!name || !String(name).trim()) return fail(res, 'name is required', 400);
+  if (!jurisdictionId) return fail(res, 'jurisdictionId is required', 400);
+
+  let stationId;
+  try {
+    const { rows } = await pool.query(
+      'insert into police_stations (name, jurisdiction_id) values ($1, $2) returning station_id',
+      [String(name).trim(), jurisdictionId]
+    );
+    stationId = rows[0].station_id;
+  } catch (err) {
+    return fail(res, `Could not add police station: ${err.message}`, 500);
+  }
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'police_station', entityId: stationId });
+  return ok(res, { stationId }, 'Police station added', 201);
+});
+
+router.patch('/police-stations/:stationId', async (req, res) => {
+  const { stationId } = req.params;
+  const { name } = req.body;
+  if (!name || !String(name).trim()) return fail(res, 'name is required', 400);
+
+  try {
+    await pool.query('update police_stations set name = $1 where station_id = $2', [String(name).trim(), stationId]);
+  } catch (err) {
+    return fail(res, `Could not update police station: ${err.message}`, 500);
+  }
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'police_station', entityId: stationId });
+  return ok(res, null, 'Police station updated');
+});
+
+router.delete('/police-stations/:stationId', async (req, res) => {
+  const { stationId } = req.params;
+
+  try {
+    await pool.query('update police_stations set deleted_at = $1 where station_id = $2', [new Date().toISOString(), stationId]);
+  } catch (err) {
+    return fail(res, `Could not remove police station: ${err.message}`, 500);
+  }
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'delete', entityType: 'police_station', entityId: stationId });
+  return ok(res, null, 'Police station removed');
 });
 
 // ===== Feature Catalog Section 6.3 =====

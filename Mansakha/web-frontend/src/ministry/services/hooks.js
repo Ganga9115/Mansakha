@@ -262,6 +262,77 @@ export const languagesResource = makeConfigResource('languages', 'languages');
 // channels" configuration.
 export const channelsResource = makeConfigResource('channels', 'channels');
 
+// --- Ministry: Police Stations (migration_033) - not a drop-in fit for
+// makeConfigResource above (a station also needs a district), so its own
+// small hook set instead. ---
+
+export function usePoliceStationsForDistrict(jurisdictionId) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve({ stations: [] });
+    return apiClient.get(`/api/ministry/police-stations?jurisdictionId=${jurisdictionId}`, token);
+  }, [token, jurisdictionId]);
+}
+
+// Simulated lookup by station code - same honesty discipline as
+// courtCaseSimulation.js/Fetch Case: review the suggested name before
+// actually saving it with useCreatePoliceStation below.
+export function useFetchPoliceStation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/ministry/police-stations/fetch', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useCreatePoliceStation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/ministry/police-stations', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useUpdatePoliceStation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (stationId, payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/ministry/police-stations/${stationId}`, payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useDeletePoliceStation() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (stationId) => {
+    setLoading(true);
+    try {
+      return await apiClient.delete(`/api/ministry/police-stations/${stationId}`, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
 // --- Ministry: Oversight ---
 
 export function useAuditLog(page) {
