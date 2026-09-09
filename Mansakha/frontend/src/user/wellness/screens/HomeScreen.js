@@ -233,37 +233,6 @@ export default function HomeScreen({ navigation }) {
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>
 
-                    <Pressable
-                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('wellbeing')}
-                    >
-                      <View style={styles.gridIconSquare}>
-                        <Feather name="trending-up" size={18} color={colors.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.gridTitle}>My Well-being</Text>
-                        <Text style={styles.gridSub}>Check your history</Text>
-                      </View>
-                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                    </Pressable>
-
-                    {hasAssignedCounsellor && (
-                      <Pressable
-                        style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                        onPress={() => navigation?.navigate('mycounsellor')}
-                      >
-                        {!!data.hasUnreadCounsellorMessage && <View style={styles.unreadDot} />}
-                        <View style={styles.gridIconSquare}>
-                          <Feather name="message-square" size={18} color={colors.primary} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.gridTitle}>Chat with counsellor</Text>
-                          <Text style={styles.gridSub}>Chat directly</Text>
-                        </View>
-                        <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                      </Pressable>
-                    )}
-
                     {/* Request Assistance - victim-initiated intervention
                         requests (User -> District Admin), replacing the old
                         Counsellor-recommended flow entirely. See

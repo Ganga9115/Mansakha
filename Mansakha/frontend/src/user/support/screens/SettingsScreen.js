@@ -41,7 +41,7 @@ const INDIAN_LANGUAGES = [
   { value: 'ml', label: 'Malayalam (മലയാളം)' },
   { value: 'mni', label: 'Manipuri (মৈতৈলোন্)' },
   { value: 'mr', label: 'Marathi (મરાઠી)' },
-  { value: 'ne', label: 'Nepali (নেपाली)' },
+  { value: 'ne', label: 'Nepali (ਨੇपाली)' },
   { value: 'or', label: 'Odia (ଓଡ଼ିଆ)' },
   { value: 'pa', label: 'Punjabi (ਪੰਜਾਬੀ)' },
   { value: 'sa', label: 'Sanskrit (সংસ્કૃતમ્)' },
@@ -142,24 +142,23 @@ export default function SettingsScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Sticky Blue Header Section */}
+      {/* Dynamic Header matched with HomeScreen */}
       <View
         style={[
           styles.topHeader,
           isDesktop && styles.topHeaderDesktop,
-          !isDesktop && styles.topHeaderMobile,
-          !isDesktop && { paddingTop: insets.top + spacing.xs },
+          !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
         ]}
       >
         <View style={styles.headerLeft}>
           {isDesktop ? (
-            <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop}/>
+            <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
               {profileImageUri ? (
                 <Image source={{ uri: profileImageUri }} style={styles.headerAvatarImage} />
               ) : (
-                <Feather color={colors.primary} name="user" size={28}/>
+                <Feather color={colors.primary} name="user" size={28} />
               )}
             </View>
           )}
@@ -171,9 +170,13 @@ export default function SettingsScreen({ navigation }) {
 
         <View style={styles.headerRight}>
           {isDesktop ? (
-            <DesktopHeaderActions alertCount={0} fullName={userName} onBellPress={() => {}}/>
+            <DesktopHeaderActions
+              fullName={dashboardQuery.data?.fullName || userName}
+              alertCount={dashboardQuery.data?.alerts?.length || 0}
+              onBellPress={() => {}}
+            />
           ) : (
-            <TopRightActions/>
+            <TopRightActions />
           )}
         </View>
       </View>
@@ -477,22 +480,17 @@ const styles = StyleSheet.create({
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
-    paddingBottom: spacing.lg,
-    paddingHorizontal: 36,
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.xl,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    zIndex: 10,
   },
   topHeaderDesktop: {
     height: 64,
     paddingTop: 0,
     paddingBottom: 0,
     alignItems: 'center',
-  },
-  topHeaderMobile: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.sm,
   },
   headerIconDesktop: { 
     marginRight: spacing.sm 
@@ -509,7 +507,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: spacing.sm,
+    marginRight: spacing.md,
     overflow: 'hidden',
   },
   headerAvatarImage: {
@@ -521,10 +519,12 @@ const styles = StyleSheet.create({
   },
   pageTitle: { 
     ...typography.h1, 
-    color: colors.primaryDark 
+    color: colors.primaryDark,
+    fontSize: 24,
+    fontWeight: '700',
   },
   headerRight: { 
-    marginLeft: spacing.sm 
+    marginLeft: spacing.md 
   },
   contentBody: {
     backgroundColor: colors.background,
