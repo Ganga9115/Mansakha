@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, BarChart3, FileText, Bell, User, LogOut, Menu, X, Mail, Users2 } from 'lucide-react';
+import { LayoutDashboard, BarChart, FileText, Bell, User, LogOut, Menu, X, Mail, Users2 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -12,7 +12,7 @@ import NotificationBell from '../components/NotificationBell';
 // explicit product placement.
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/stateadmin' },
-  { name: 'Analysis', icon: BarChart3, path: '/stateadmin/analysis' },
+  { name: 'Analysis', icon: BarChart, path: '/stateadmin/analysis' },
   { name: 'Coordination Roster', icon: Users2, path: '/stateadmin/coordination-roster' },
   { name: 'Alerts', icon: Bell, path: '/stateadmin/alerts' },
   { name: 'Reports', icon: FileText, path: '/stateadmin/reports' },
@@ -176,3 +176,4 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
     </div>
   );
 }
+
