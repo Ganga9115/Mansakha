@@ -4,7 +4,7 @@ import { Briefcase, Gavel, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
-// Legal Representative's own dedicated shell (migration_040) - copied from
+// Public Prosecutor's own dedicated shell (migration_040) - copied from
 // protection_officer/layouts/StaffLayout.jsx (the template), 3-item sidebar
 // per the role's own scope: only their own assigned cases and hearings, no
 // DLSA-level assignment/reassignment controls.
@@ -79,7 +79,7 @@ export default function StaffLayout({ children, title = 'My Cases' }) {
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">
             <div className="text-xs hidden sm:block text-right">
               <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
-              <p className="text-[#3D5A80]/70">Legal Representative</p>
+              <p className="text-[#3D5A80]/70">Public Prosecutor</p>
             </div>
 
             <button

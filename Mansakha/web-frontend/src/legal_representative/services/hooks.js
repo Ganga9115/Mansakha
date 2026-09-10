@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from './apiClient';
 import { getToken } from './auth';
 
-// Legal Representative's own copy of the data-hooks pattern (per-role,
+// Public Prosecutor's own copy of the data-hooks pattern (per-role,
 // no-shared-imports rule) - every /api/legalrepresentative/* call hits this
 // role's own mount (see backend/src/legal_representative/routes/legalRepresentative.routes.js).
 

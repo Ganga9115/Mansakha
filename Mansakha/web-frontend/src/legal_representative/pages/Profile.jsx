@@ -5,7 +5,7 @@ import { getToken } from '../services/auth';
 import { useMe, useDesignationOptions, useUpdateDesignation } from '../services/hooks';
 import { Eye, EyeOff, User } from 'lucide-react';
 
-// Legal Representative's own copy of the shared Settings/Profile screen -
+// Public Prosecutor's own copy of the shared Settings/Profile screen -
 // mirrors protection_officer/pages/Profile.jsx (the template):
 // /api/auth/staff/change-password and /api/me/profile-photo are both
 // role-agnostic, and /api/me/designation-options + /api/me/designation
@@ -69,7 +69,7 @@ export default function Profile() {
     }
   };
 
-  const jobTitle = 'Legal Representative';
+  const jobTitle = 'Public Prosecutor';
   // migration_040 - designation (Panel Lawyer/Retainer Lawyer) is self-
   // editable, same "descriptive, not an authorization boundary" reasoning as
   // every other role's designation. District IS the authorization boundary

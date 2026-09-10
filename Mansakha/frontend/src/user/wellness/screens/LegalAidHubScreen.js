@@ -27,7 +27,7 @@ const STEPS = [
   { title: 'Under Review', context: 'DLSA is reviewing your request.' },
   { title: 'Verified', context: 'Your request has been verified.' },
   { title: 'Approved', context: 'Your request has been approved for legal aid.' },
-  { title: 'Representative Assigned', context: 'A legal representative has been assigned to your case.' },
+  { title: 'Public Prosecutor Assigned', context: 'A Public Prosecutor has been assigned to your case.' },
   { title: 'Completed', context: 'Your Legal Aid case has been completed.' },
 ];
 const STEP_BY_STATUS = { Submitted: 1, 'Under Review': 2, Verified: 3, Approved: 4, Active: 5, Completed: 6 };
@@ -89,7 +89,7 @@ function RequestCard({ requestId, status, reason, rejectionReason, navigation })
       {(status === 'Active' || status === 'Completed') && (
         <Pressable style={styles.linkRow} onPress={() => navigation.navigate('LegalAidRepresentative')}>
           <Feather name="user-check" size={16} color={colors.primary} />
-          <Text style={styles.linkRowText}>View Assigned Representative</Text>
+          <Text style={styles.linkRowText}>View Assigned Public Prosecutor</Text>
           <Feather name="chevron-right" size={16} color={colors.textSecondary} />
         </Pressable>
       )}

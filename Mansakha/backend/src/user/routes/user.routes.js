@@ -2059,7 +2059,7 @@ router.post('/legal-aid-feedback', async (req, res) => {
 // A dedicated legal_aid_requests row carries a real 7-stage lifecycle
 // (Submitted -> Under Review -> Verified -> Approved -> Active -> Completed,
 // or Under Review -> Rejected), reviewed by a jurisdiction-scoped DLSA
-// Coordinator (dlsa.routes.js) and served by a real Legal Representative
+// Coordinator (dlsa.routes.js) and served by a real Public Prosecutor
 // account (legal_representative/routes/legalRepresentative.routes.js) once
 // assigned - not a free-text lawyer name. The routes above are untouched and
 // stay live read-only, so a case already accepted under the old flow keeps
@@ -2285,7 +2285,7 @@ router.get('/legal-aid-requests/:requestId/representative', async (req, res) => 
      from legal_aid_assignments laa
      join officials o on o.official_id = laa.representative_official_id
      left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
-     left join roles r on r.role_id = orr.role_id and r.role_name = 'Legal Representative'
+     left join roles r on r.role_id = orr.role_id and r.role_name = 'Public Prosecutor'
      where laa.request_id = $1
      order by laa.assigned_at desc limit 1`,
     [requestId]
@@ -2372,7 +2372,7 @@ router.post('/legal-aid-requests/:requestId/hearings/:hearingId/feedback', async
     await notifyJurisdictionalDlsa(reqRows[0].user_id, reqRows[0].jurisdiction_id, 'urgent');
   }
 
-  return ok(res, { feedbackId: feedback.feedback_id }, 'Feedback submitted. Kindly note that if you rate your representative poorly, DLSA may reassign your case.', 201);
+  return ok(res, { feedbackId: feedback.feedback_id }, 'Feedback submitted. Kindly note that if you rate your Public Prosecutor poorly, DLSA may reassign your case.', 201);
 });
 
 // ===== Protection status (Protection Officer flow) =====

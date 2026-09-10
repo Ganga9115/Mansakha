@@ -342,7 +342,7 @@ router.get('/legal-aid-requests/:requestId', async (req, res) => {
      from legal_aid_assignments laa
      join officials o on o.official_id = laa.representative_official_id
      left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
-     left join roles r on r.role_id = orr.role_id and r.role_name = 'Legal Representative'
+     left join roles r on r.role_id = orr.role_id and r.role_name = 'Public Prosecutor'
      where laa.request_id = $1
      order by laa.assigned_at asc`,
     [request.request_id]
@@ -482,7 +482,7 @@ router.patch('/legal-aid-requests/:requestId/approve', async (req, res) => {
   return ok(res, { requestId: request.request_id, status: 'Approved' }, 'Request approved');
 });
 
-// Active Legal Representative officials in this request's own jurisdiction,
+// Active Public Prosecutor officials in this request's own jurisdiction,
 // with their current Active caseload - the assign/reassign UI's picker.
 router.get('/legal-aid-requests/:requestId/eligible-representatives', async (req, res) => {
   const request = await loadOwnLegalAidRequest(req, res);
@@ -494,7 +494,7 @@ router.get('/legal-aid-requests/:requestId/eligible-representatives', async (req
      from officials o
      join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
      join roles r on r.role_id = orr.role_id
-     where r.role_name = 'Legal Representative' and orr.jurisdiction_id = $1
+     where r.role_name = 'Public Prosecutor' and orr.jurisdiction_id = $1
      order by o.full_name`,
     [request.jurisdiction_id]
   );
@@ -513,7 +513,7 @@ async function isEligibleRepresentative(officialId, jurisdictionId) {
   const { rows } = await pool.query(
     `select 1 from official_roles orr
      join roles r on r.role_id = orr.role_id
-     where orr.official_id = $1 and orr.revoked_at is null and r.role_name = 'Legal Representative' and orr.jurisdiction_id = $2`,
+     where orr.official_id = $1 and orr.revoked_at is null and r.role_name = 'Public Prosecutor' and orr.jurisdiction_id = $2`,
     [officialId, jurisdictionId]
   );
   return rows.length > 0;
@@ -531,7 +531,7 @@ router.post('/legal-aid-requests/:requestId/assign-representative', async (req, 
   const { representativeOfficialId } = req.body;
   if (!representativeOfficialId) return fail(res, 'representativeOfficialId is required', 400);
   if (!(await isEligibleRepresentative(representativeOfficialId, request.jurisdiction_id))) {
-    return fail(res, 'That official is not an active Legal Representative in this jurisdiction', 400);
+    return fail(res, 'That official is not an active Public Prosecutor in this jurisdiction', 400);
   }
 
   let assignmentId;
@@ -554,14 +554,14 @@ router.post('/legal-aid-requests/:requestId/assign-representative', async (req, 
 
   await writeAuditLog({
     officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_request', entityId: request.request_id,
-    details: { fromStatus: 'Approved', toStatus: 'Active', note: 'Representative Assigned' },
+    details: { fromStatus: 'Approved', toStatus: 'Active', note: 'Public Prosecutor Assigned' },
   });
   await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'legal_aid_assignment', entityId: assignmentId });
 
   const { error: notifyError } = await supabase.from('alert_notifications').insert({ user_id: request.user_id, official_id: representativeOfficialId, source: 'legal_aid', priority: 'normal' });
   if (notifyError) console.error('assign-representative: could not notify representative', notifyError.message, { assignmentId });
 
-  return ok(res, { requestId: request.request_id, status: 'Active', assignmentId }, 'Representative assigned');
+  return ok(res, { requestId: request.request_id, status: 'Active', assignmentId }, 'Public Prosecutor assigned');
 });
 
 // Reassignment within an Active request - does not change the request's own
@@ -577,7 +577,7 @@ router.post('/legal-aid-requests/:requestId/reassign', async (req, res) => {
   if (!newRepresentativeOfficialId) return fail(res, 'newRepresentativeOfficialId is required', 400);
   if (!endedReason || !String(endedReason).trim()) return fail(res, 'endedReason is required', 400);
   if (!(await isEligibleRepresentative(newRepresentativeOfficialId, request.jurisdiction_id))) {
-    return fail(res, 'That official is not an active Legal Representative in this jurisdiction', 400);
+    return fail(res, 'That official is not an active Public Prosecutor in this jurisdiction', 400);
   }
 
   let result;
@@ -607,7 +607,7 @@ router.post('/legal-aid-requests/:requestId/reassign', async (req, res) => {
       return { oldAssignmentId: current.assignment_id, newAssignmentId: newRows[0].assignment_id, oldRepresentativeOfficialId: current.representative_official_id };
     });
   } catch (err) {
-    return fail(res, `Could not reassign representative: ${err.message}`, 400);
+    return fail(res, `Could not reassign Public Prosecutor: ${err.message}`, 400);
   }
 
   await writeAuditLog({
@@ -621,7 +621,7 @@ router.post('/legal-aid-requests/:requestId/reassign', async (req, res) => {
   ]);
   if (notifyError) console.error('reassign: could not notify representatives', notifyError.message, { requestId: request.request_id });
 
-  return ok(res, { requestId: request.request_id, newAssignmentId: result.newAssignmentId }, 'Representative reassigned');
+  return ok(res, { requestId: request.request_id, newAssignmentId: result.newAssignmentId }, 'Public Prosecutor reassigned');
 });
 
 // "Continue" arm of the poor-feedback review loop - DLSA has looked at it
@@ -639,7 +639,7 @@ router.patch('/legal-aid-requests/:requestId/feedback/:feedbackId/continue', asy
 
   await writeAuditLog({ officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_feedback', entityId: rows[0].feedback_id, details: { note: 'DLSA continued current representative' } });
 
-  return ok(res, { feedbackId: rows[0].feedback_id }, 'Marked as reviewed - representative continues');
+  return ok(res, { feedbackId: rows[0].feedback_id }, 'Marked as reviewed - Public Prosecutor continues');
 });
 
 // Active -> Completed. Also flips the current assignment to 'Completed' in

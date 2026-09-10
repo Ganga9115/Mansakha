@@ -7,13 +7,13 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { loadRequestDocuments } = require('../../core/services/legalAidDocuments');
 
-// Legal Representative (migration_040) - the real DLSA-assigned advocate
+// Public Prosecutor (migration_040) - the real DLSA-assigned advocate
 // role for the dedicated Legal Aid pipeline. Every route here filters by
 // DIRECT ASSIGNMENT (legal_aid_assignments.representative_official_id = the
 // caller's own id), not by jurisdiction - jurisdictionId only matters at
 // DLSA's own assignment-time (dlsa.routes.js's eligible-representatives
 // picker), it plays no part in any query this role runs on its own cases.
-const ROLE_NAME = 'Legal Representative';
+const ROLE_NAME = 'Public Prosecutor';
 
 const router = express.Router();
 

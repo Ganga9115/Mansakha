@@ -21,12 +21,12 @@ router.use(verifyToken, requireRole(['Ministry']), generalApiLimiter);
 // Investigating Officer is REINSTATED (migration_033) with real substance -
 // station-scoped, its own investigation_records - after having briefly been
 // retired under the earlier Legal Aid/Threat consolidation.
-// Legal Representative (migration_040) - the DLSA-assigned advocate role for
+// Public Prosecutor (migration_040) - the DLSA-assigned advocate role for
 // the dedicated Legal Aid pipeline, jurisdiction-scoped like Protection
 // Officer (see the jurisdictionId checks below).
 const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator',
   'Investigating Officer', 'District Welfare Officer', 'Protection Officer',
-  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer', 'Legal Representative'];
+  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer', 'Public Prosecutor'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
 // migration_035 - designation lists live in one shared place so Ministry's
@@ -241,11 +241,11 @@ router.post('/staff', async (req, res) => {
   // required here too, same fail-closed reasoning as Rehabilitation Officer's
   // providerId and Investigating Officer's stationId below: an account created
   // without one would just sit with a permanently empty queue. DLSA
-  // Coordinator (migration_040) and Legal Representative join this same
+  // Coordinator (migration_040) and Public Prosecutor join this same
   // check - the real DLSA structure is one authority per district, and a
   // representative's own case list is populated at DLSA's assignment time
   // from this same jurisdiction, so both need one for the same reason.
-  if (['Protection Officer', 'DLSA Coordinator', 'Legal Representative'].includes(roleName) && !jurisdictionId) {
+  if (['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'].includes(roleName) && !jurisdictionId) {
     return fail(res, `jurisdictionId is required for ${roleName} accounts`, 400);
   }
   // migration_035 - optional (Ministry may not know it yet), but must be a
@@ -453,7 +453,7 @@ router.post('/staff/:officialId/roles', async (req, res) => {
   if (!roleName) return fail(res, 'roleName is required', 400);
   if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
   if (roleName === 'Administration' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Administration accounts', 400);
-  if (['Protection Officer', 'DLSA Coordinator', 'Legal Representative'].includes(roleName) && !jurisdictionId) {
+  if (['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'].includes(roleName) && !jurisdictionId) {
     return fail(res, `jurisdictionId is required for ${roleName} accounts`, 400);
   }
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
@@ -513,7 +513,7 @@ router.patch('/staff/:officialId/roles/:roleName/scope', async (req, res) => {
   const { jurisdictionId, providerId, stationId, designation } = req.body;
 
   if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
-  if (['Administration', 'Protection Officer', 'DLSA Coordinator', 'Legal Representative'].includes(roleName) && !jurisdictionId) {
+  if (['Administration', 'Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'].includes(roleName) && !jurisdictionId) {
     return fail(res, `jurisdictionId is required for ${roleName} accounts`, 400);
   }
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);

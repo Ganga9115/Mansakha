@@ -250,7 +250,7 @@ export default function CaseDetail() {
 
         {!canRecord && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-3 rounded-lg">
-            You are no longer the active representative on this case ({r.myAssignmentStatus}). This view is read-only.
+            You are no longer the active Public Prosecutor on this case ({r.myAssignmentStatus}). This view is read-only.
           </div>
         )}
 

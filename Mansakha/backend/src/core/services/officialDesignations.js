@@ -66,40 +66,37 @@ const INVESTIGATING_OFFICER_DESIGNATIONS = [
   'Superintendent of Police (SP)',
 ];
 
-// Section 12(c) of the Legal Services Authorities Act, 1987 entitles every
-// SC/ST person to free legal aid unconditionally - Mansakha's Legal Aid
-// workflow represents the VICTIM (the SC/ST atrocity complainant), never an
-// accused person. NALSA's real-world advocate categories who directly
-// represent a legal-aid beneficiary in court are Panel Lawyers/Panel
-// Advocates (empanelled by the DLSA under NALSA's Panel Lawyer scheme, the
-// general-purpose category most legal aid cases are assigned to) and
-// Retainer Lawyers (engaged by the DLSA on a standing retainer basis,
-// commonly for earlier-stage/police-station-level representation).
+// migration_042: renamed from "Legal Representative" to "Public Prosecutor" -
+// Section 15 of the SC/ST (Prevention of Atrocities) Act, 1989 is what
+// actually names this post: for every Special Court, "the State Government
+// shall... specify a Public Prosecutor or appoint" an advocate of 7+ years'
+// practice "as a Special Public Prosecutor for the purpose of conducting
+// cases in that Court" - and, for an Exclusive Special Court, an Exclusive
+// Special Public Prosecutor by the same mechanism. These three ARE the real
+// designations this post can hold; the previous list here (Panel Lawyer/
+// Retainer Lawyer) was NALSA legal-aid-counsel terminology, a different real
+// post entirely, kept only until this rename corrected it.
 //
-// Deliberately NOT included, and why:
-//   - Legal Aid Defence Counsel (LADCS, NALSA's Central Sector Scheme since
-//     FY 2023-24): this system exists specifically to defend indigent
-//     ACCUSED persons in criminal trials - the opposite side of the docket
-//     from who this role represents. Including it here would misrepresent
-//     what this app's Legal Representative actually does.
-//   - Remand Lawyer: a real NALSA category, but scoped to the remand/police-
-//     custody stage of an accused person's case - same reason as LADCS,
-//     not a victim-representation post.
-const LEGAL_REPRESENTATIVE_DESIGNATIONS = [
-  'Panel Lawyer / Panel Advocate',
-  'Retainer Lawyer',
+// Disclosed simplification, not one this list can fix: Section 15 vests the
+// appointment in the STATE GOVERNMENT, not DLSA - this app's own workflow
+// (DLSA reviews a Legal Aid request and assigns this role) is a deliberate
+// product simplification, unchanged by this rename.
+const PUBLIC_PROSECUTOR_DESIGNATIONS = [
+  'Public Prosecutor',
+  'Special Public Prosecutor',
+  'Exclusive Special Public Prosecutor',
 ];
 
 // Roles absent from this map don't carry a designation at all.
 const DESIGNATIONS_BY_ROLE = {
   'Protection Officer': PROTECTION_OFFICER_DESIGNATIONS,
   'Investigating Officer': INVESTIGATING_OFFICER_DESIGNATIONS,
-  'Legal Representative': LEGAL_REPRESENTATIVE_DESIGNATIONS,
+  'Public Prosecutor': PUBLIC_PROSECUTOR_DESIGNATIONS,
 };
 
 module.exports = {
   PROTECTION_OFFICER_DESIGNATIONS,
   INVESTIGATING_OFFICER_DESIGNATIONS,
-  LEGAL_REPRESENTATIVE_DESIGNATIONS,
+  PUBLIC_PROSECUTOR_DESIGNATIONS,
   DESIGNATIONS_BY_ROLE,
 };

@@ -30,7 +30,7 @@ function RepresentativeCard({ rep }) {
   if (!rep?.hasRepresentative) {
     return (
       <Card>
-        <Text style={styles.pendingText}>A representative has not been assigned to your case yet.</Text>
+        <Text style={styles.pendingText}>A Public Prosecutor has not been assigned to your case yet.</Text>
       </Card>
     );
   }
@@ -43,7 +43,7 @@ function RepresentativeCard({ rep }) {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.repName}>{rep.fullName}</Text>
-          <Text style={styles.repDesignation}>{rep.designation || 'Legal Representative'}</Text>
+          <Text style={styles.repDesignation}>{rep.designation || 'Public Prosecutor'}</Text>
         </View>
       </View>
       {rep.phone && (
@@ -118,7 +118,7 @@ export default function LegalAidRepresentativeScreen({ navigation }) {
           <View style={styles.headerIconTile}>
             <Feather name="user-check" size={22} color={colors.primaryDark} />
           </View>
-          <Text style={styles.headerTitle}>Assigned Representative</Text>
+          <Text style={styles.headerTitle}>Assigned Public Prosecutor</Text>
         </View>
         <View style={styles.headerRight}>
           {isDesktop ? (

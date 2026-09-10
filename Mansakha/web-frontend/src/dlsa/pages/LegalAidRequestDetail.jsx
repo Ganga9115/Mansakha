@@ -94,7 +94,7 @@ function AssignmentHistoryCard({ assignments }) {
   if (!assignments?.length) return null;
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-      <h3 className="font-bold text-sm text-gray-800">Representative Assignment History</h3>
+      <h3 className="font-bold text-sm text-gray-800">Public Prosecutor Assignment History</h3>
       <div className="space-y-2">
         {assignments.map((a) => (
           <div key={a.assignmentId} className="flex items-center justify-between text-xs border border-gray-100 rounded-lg px-3 py-2">
@@ -193,7 +193,7 @@ function PendingFeedbackCard({ feedback, requestId, onDecided }) {
           {showReassign === f.feedbackId ? (
             <div className="space-y-2 pt-1">
               <select value={newRepId} onChange={(e) => setNewRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-                <option value="">Select a new representative...</option>
+                <option value="">Select a new Public Prosecutor...</option>
                 {(eligible.data?.representatives || []).map((rep) => (
                   <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
                 ))}
@@ -209,10 +209,10 @@ function PendingFeedbackCard({ feedback, requestId, onDecided }) {
           ) : (
             <div className="flex gap-2 pt-1">
               <button onClick={() => handleContinue(f.feedbackId)} disabled={continueRep.loading} className="px-3 py-1.5 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-xs font-semibold transition disabled:opacity-60">
-                Continue with current representative
+                Continue with current Public Prosecutor
               </button>
               <button onClick={() => setShowReassign(f.feedbackId)} className="px-3 py-1.5 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold transition">
-                Reassign representative
+                Reassign Public Prosecutor
               </button>
             </div>
           )}
@@ -316,7 +316,7 @@ export default function LegalAidRequestDetail() {
             )}
             {r.status === 'Approved' && !showAssign && (
               <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition">
-                Assign Representative
+                Assign Public Prosecutor
               </button>
             )}
             {r.status === 'Active' && (
@@ -346,14 +346,14 @@ export default function LegalAidRequestDetail() {
 
         {showAssign && (
           <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-            <h3 className="font-bold text-sm text-gray-800">Assign a Legal Representative</h3>
+            <h3 className="font-bold text-sm text-gray-800">Assign a Public Prosecutor</h3>
             {eligible.loading ? (
-              <p className="text-xs text-gray-400">Loading eligible representatives...</p>
+              <p className="text-xs text-gray-400">Loading eligible Public Prosecutors...</p>
             ) : (eligible.data?.representatives || []).length === 0 ? (
-              <p className="text-xs text-gray-400">No active Legal Representatives are assigned to this jurisdiction yet.</p>
+              <p className="text-xs text-gray-400">No active Public Prosecutors are assigned to this jurisdiction yet.</p>
             ) : (
               <select value={repId} onChange={(e) => setRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-                <option value="">Select a representative...</option>
+                <option value="">Select a Public Prosecutor...</option>
                 {eligible.data.representatives.map((rep) => (
                   <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
                 ))}

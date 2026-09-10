@@ -1,7 +1,7 @@
 const { pool } = require('../db/pgPool');
 const { supabase } = require('../db/supabaseClient');
 
-// Shared by DLSA Coordinator and Legal Representative's own detail routes -
+// Shared by DLSA Coordinator and Public Prosecutor's own detail routes -
 // both need the identical "resolve every document attached to a Legal Aid
 // request, whichever of the three possible sources it came from, into a
 // downloadable signed URL" logic, so it lives here once rather than being

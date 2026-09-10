@@ -248,8 +248,13 @@ export default function HomeScreen({ navigation }) {
 
                     {/* Request Assistance - victim-initiated intervention
                         requests (User -> District Admin), replacing the old
-                        Counsellor-recommended flow entirely. See
-                        RequestInterventionScreen.js. */}
+                        Counsellor-recommended flow entirely. Legal Aid moved
+                        back under this umbrella (it's one of the assistance
+                        types, not a separate top-level entry point) - its
+                        own dedicated pipeline (Submitted -> DLSA review ->
+                        Public Prosecutor assignment) still runs unchanged,
+                        it's just reached via this tile's own type grid now.
+                        See RequestInterventionScreen.js. */}
                     <Pressable
                       style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
                       onPress={() => navigation?.navigate('RequestIntervention')}
@@ -259,26 +264,7 @@ export default function HomeScreen({ navigation }) {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.gridTitle}>Request Assistance</Text>
-                        <Text style={styles.gridSub}>Medical, financial help & more</Text>
-                      </View>
-                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
-                    </Pressable>
-
-                    {/* Legal Aid (migration_040) - its own dedicated pipeline,
-                        no longer submitted through Request Assistance above
-                        (that generic intake type is retired). Unconditional -
-                        available at any case stage, same as the old
-                        LegalAidScreen's own scoping. See LegalAidHubScreen.js. */}
-                    <Pressable
-                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('LegalAidHub')}
-                    >
-                      <View style={styles.gridIconSquare}>
-                        <Feather name="briefcase" size={18} color={colors.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.gridTitle}>Legal Aid</Text>
-                        <Text style={styles.gridSub}>Request a legal representative for your case</Text>
+                        <Text style={styles.gridSub}>Medical, legal aid, financial help & more</Text>
                       </View>
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>

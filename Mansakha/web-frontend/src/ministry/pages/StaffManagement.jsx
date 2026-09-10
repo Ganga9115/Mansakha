@@ -19,19 +19,29 @@ import { useToast } from '../../shared/context/ToastContext';
 // the other 6 coordination roles built this session were, until now, only
 // ever creatable via direct API calls - never actually reachable from this
 // page, despite CREATABLE_ROLES already allowing every one of them
-// server-side.
+// server-side. Public Prosecutor (migration_040) - the DLSA-assigned
+// advocate role for the dedicated Legal Aid pipeline - joins the same way.
 const ROLE_OPTIONS = [
   'Counsellor', 'Administration', 'Data Operator',
   'Investigating Officer', 'District Welfare Officer', 'Protection Officer',
   'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
+  'Public Prosecutor',
 ];
 const JURISDICTION_LEVELS = ['district', 'state', 'national'];
 
 // Roles whose queue is jurisdiction-scoped the same way Administration's own
 // is (Protection Officer - "nearby officer" means "assigned to the victim's
 // own district", same jurisdiction_id column, just not tiered by level like
-// Administration's National/State/District split).
-const JURISDICTION_SCOPED_ROLES = ['Administration', 'Protection Officer'];
+// Administration's National/State/District split). DLSA Coordinator
+// (migration_040) and Public Prosecutor join this same list - both are
+// backend-required to have one (ministry.routes.js's own jurisdictionId
+// checks), so without this the Create form silently omitted the field
+// entirely and every attempt to create either failed with a 400 the form
+// gave no way to fix.
+const JURISDICTION_SCOPED_ROLES = ['Administration', 'Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'];
+// Same set minus Administration, whose jurisdiction is fixed at creation and
+// never reassigned from this scope-editing panel (SCOPE_EDITABLE_ROLES below).
+const JURISDICTION_SCOPED_ROLES_EXCL_ADMIN = ['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'];
 
 // Designation lists are fetched from the server (see useDesignationOptions)
 // rather than duplicated here - the hardcoded copy that used to live at this
@@ -58,6 +68,7 @@ const STAFF_TABS = [
   { key: 'dwo', label: 'Welfare Officers', role: 'District Welfare Officer', level: undefined },
   { key: 'po', label: 'Protection Officers', role: 'Protection Officer', level: undefined },
   { key: 'dlsa', label: 'DLSA Coordinators', role: 'DLSA Coordinator', level: undefined },
+  { key: 'legalrep', label: 'Public Prosecutors', role: 'Public Prosecutor', level: undefined },
   { key: 'dc', label: 'District Collectors', role: 'District Collector', level: undefined },
   { key: 'rehab', label: 'Rehabilitation Officers', role: 'Rehabilitation Officer', level: undefined },
 ];
@@ -167,7 +178,7 @@ export default function StaffManagement() {
   // Same cascade as Create's own, bound to the Edit panel's own state.
   const editingStaffRow = editingId ? staff.find((s) => s.officialId === editingId) : null;
   const editingRole = editingStaffRow?.roleName;
-  const editJurisdictionQuery = useJurisdictionOptions(editingRole === 'Protection Officer' ? 'district' : undefined);
+  const editJurisdictionQuery = useJurisdictionOptions(JURISDICTION_SCOPED_ROLES_EXCL_ADMIN.includes(editingRole) ? 'district' : undefined);
   const editJurisdictionOptions = editJurisdictionQuery.data?.jurisdictions || [];
   const editStationStateQuery = useJurisdictionOptions(editingRole === 'Investigating Officer' ? 'state' : undefined);
   const editStationDistrictQuery = useJurisdictionOptions(editingRole === 'Investigating Officer' ? 'district' : undefined, editStationStateId);
@@ -229,10 +240,11 @@ export default function StaffManagement() {
 
   const cancelEdit = () => setEditingId(null);
 
-  // Roles whose scope can be reassigned from this panel - the 3 with a
-  // "fail-closed, must not be silently empty" design (an account created or
-  // left without one just sits with a permanently empty queue).
-  const SCOPE_EDITABLE_ROLES = ['Protection Officer', 'Rehabilitation Officer', 'Investigating Officer'];
+  // Roles whose scope can be reassigned from this panel - the "fail-closed,
+  // must not be silently empty" design (an account created or left without
+  // one just sits with a permanently empty queue). DLSA Coordinator and
+  // Public Prosecutor share Protection Officer's own jurisdictionId shape.
+  const SCOPE_EDITABLE_ROLES = ['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor', 'Rehabilitation Officer', 'Investigating Officer'];
 
   const handleSaveEdit = async (officialId) => {
     if (editNewPassword && editNewPassword.length < 8) {
@@ -242,12 +254,12 @@ export default function StaffManagement() {
     const role = editingStaffRow?.roleName;
     if (SCOPE_EDITABLE_ROLES.includes(role)) {
       const scopePayload =
-        role === 'Protection Officer' ? { jurisdictionId: editJurisdictionId } :
+        JURISDICTION_SCOPED_ROLES_EXCL_ADMIN.includes(role) ? { jurisdictionId: editJurisdictionId } :
         role === 'Rehabilitation Officer' ? { providerId: editProviderId } :
         { stationId: editStationId };
       const missing = Object.values(scopePayload).every((v) => !v);
       if (missing) {
-        toast.error(`Kindly select a ${role === 'Protection Officer' ? 'district' : role === 'Rehabilitation Officer' ? 'rehabilitation centre' : 'police station'} before saving.`);
+        toast.error(`Kindly select a ${JURISDICTION_SCOPED_ROLES_EXCL_ADMIN.includes(role) ? 'district' : role === 'Rehabilitation Officer' ? 'rehabilitation centre' : 'police station'} before saving.`);
         return;
       }
     }
@@ -264,7 +276,7 @@ export default function StaffManagement() {
       });
       if (SCOPE_EDITABLE_ROLES.includes(role)) {
         await updateStaffScope.mutate(officialId, role, {
-          jurisdictionId: role === 'Protection Officer' ? editJurisdictionId : undefined,
+          jurisdictionId: JURISDICTION_SCOPED_ROLES_EXCL_ADMIN.includes(role) ? editJurisdictionId : undefined,
           designation: DESIGNATIONS_BY_ROLE[role] ? editDesignation || undefined : undefined,
           providerId: role === 'Rehabilitation Officer' ? editProviderId : undefined,
           stationId: role === 'Investigating Officer' ? editStationId : undefined,
@@ -401,8 +413,11 @@ export default function StaffManagement() {
             )}
             {/* Protection Officer's "nearby officer" is jurisdiction-scoped
                 the same way Administration's own queue is - just one flat
-                district, not tiered by level. */}
-            {roleName === 'Protection Officer' && (
+                district, not tiered by level. DLSA Coordinator (the real
+                DLSA structure is one authority per district) and Legal
+                Representative (assigned by DLSA out of their own district's
+                pool) are the same shape. */}
+            {['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'].includes(roleName) && (
               <>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
@@ -594,7 +609,7 @@ export default function StaffManagement() {
                               queue is fail-closed empty without one. */}
                           {SCOPE_EDITABLE_ROLES.includes(s.roleName) && (
                             <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 max-w-4xl">
-                              {s.roleName === 'Protection Officer' && (
+                              {JURISDICTION_SCOPED_ROLES_EXCL_ADMIN.includes(s.roleName) && (
                                 <>
                                   <div>
                                     <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>

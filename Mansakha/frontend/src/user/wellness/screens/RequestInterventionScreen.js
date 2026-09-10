@@ -150,19 +150,22 @@ function NewRequestForm({ types, caseUserId, navigation }) {
       {!submitted ? (
         <>
           <View style={styles.typeGrid}>
-            {/* Legal Aid (migration_040) has its own dedicated pipeline - not
-                a submittable type here (intervention_types' own row for it is
-                soft-deleted, see this file's STATUS_SCREEN_BY_TYPE comment) -
-                but it belongs in this list so a victim looking for help finds
-                every kind of assistance in one place. Tapping it hands off to
-                the real Legal Aid hub instead of the generic proof-upload
-                flow below. */}
+            {/* Legal Aid (migration_040) - moved back under Request Assistance
+                as one of the assistance types, since it IS one, rather than
+                its own separate Home Screen entry point. Not part of the
+                server-driven `types` list below (that intervention type is
+                deliberately retired - Legal Aid has its own dedicated
+                7-stage pipeline now), so it's a static tile that routes
+                straight into that pipeline instead of the generic
+                select-type-then-submit flow every other tile here follows.
+                Submitting from there still reaches DLSA -> Public Prosecutor
+                assignment exactly as before - only the entry point moved. */}
             <Pressable
               style={styles.typeCard}
               onPress={() => navigation?.navigate('LegalAidHub')}
             >
               <View style={styles.typeIconBox}>
-                <Feather name={getTypeIcon('Legal Aid')} size={20} color={colors.textSecondary} />
+                <Feather name="briefcase" size={20} color={colors.textSecondary} />
               </View>
               <Text style={styles.typeCardText}>Legal Aid</Text>
             </Pressable>
