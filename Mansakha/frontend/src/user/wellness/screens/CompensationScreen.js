@@ -21,7 +21,7 @@ function StageRow({ stage }) {
   const isPaid = stage.status === 'Paid';
   return (
     <View style={[styles.stageRow, isPaid && styles.stageRowPaid, !stage.unlocked && styles.stageRowLocked]}>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, paddingRight: spacing.xs }}>
         <Text style={styles.stageName}>{stage.stage}</Text>
         <Text style={styles.stageMeta}>
           {inr(stage.amount)} ({stage.percentage}%){isPaid && stage.paidAt ? ` • paid ${new Date(stage.paidAt).toLocaleDateString('en-IN')}` : ''}
@@ -47,21 +47,27 @@ function StageRow({ stage }) {
 }
 
 function CompensationContent({ data }) {
+  const { isDesktop } = useResponsive();
+
   return (
     <>
       <View style={styles.cardContainer}>
-        <View style={styles.cardHeaderTop}>
+        <View style={[styles.cardHeaderTop, !isDesktop && styles.cardHeaderTopMobile]}>
           <View style={styles.cardHeaderLeft}>
             <View style={styles.blueIconTile}>
               <Feather name="credit-card" size={18} color={colors.primaryDark} />
             </View>
-            <View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>Statutory Compensation</Text>
               <Text style={styles.categoryText}>{data.statutoryCategory}</Text>
             </View>
           </View>
 
-          <View style={[styles.statusPill, data.verified ? styles.verifiedPill : styles.pendingPill]}>
+          <View style={[
+            styles.statusPill,
+            data.verified ? styles.verifiedPill : styles.pendingPill,
+            !isDesktop && styles.statusPillMobile
+          ]}>
             <View style={[styles.statusDot, data.verified ? styles.verifiedDot : styles.pendingDot]} />
             <Text style={[styles.statusPillText, data.verified ? styles.verifiedText : styles.pendingText]}>
               {data.verified ? 'Verified' : 'Pending Verification'}
@@ -102,6 +108,7 @@ function CompensationContent({ data }) {
 }
 
 function BankDetailsCard() {
+  const { isDesktop } = useResponsive();
   const query = useBankDetails();
   const save = useSaveBankDetails();
   const uploadProof = useUploadBankProof();
@@ -167,7 +174,7 @@ function BankDetailsCard() {
 
       {hasDetails && !editing ? (
         <View style={styles.savedDetailsBox}>
-          <View style={styles.bankGridRow}>
+          <View style={[styles.bankGridRow, !isDesktop && styles.bankGridRowMobile]}>
             <View style={styles.bankGridCell}>
               <Text style={styles.bankFieldLabel}>Account Holder Name</Text>
               <Text style={styles.bankDisplayValue}>{d.accountName}</Text>
@@ -178,7 +185,7 @@ function BankDetailsCard() {
             </View>
           </View>
 
-          <View style={styles.bankGridRow}>
+          <View style={[styles.bankGridRow, !isDesktop && styles.bankGridRowMobile]}>
             <View style={styles.bankGridCell}>
               <Text style={styles.bankFieldLabel}>IFSC Code</Text>
               <Text style={styles.bankDisplayValue}>{d.ifsc}</Text>
@@ -207,7 +214,7 @@ function BankDetailsCard() {
             </View>
           )}
 
-          <View style={styles.bankGridRow}>
+          <View style={[styles.bankGridRow, !isDesktop && styles.bankGridRowMobile]}>
             <View style={styles.bankGridCell}>
               <Text style={styles.bankFieldLabel}>Account Holder Name</Text>
               <View style={styles.inputWrapper}>
@@ -216,7 +223,7 @@ function BankDetailsCard() {
                   style={styles.bankInput}
                   value={accountName}
                   onChangeText={setAccountName}
-                  placeholder="As printed in your passbook"
+                  placeholder="As printed in passbook"
                   placeholderTextColor={colors.textSecondary || '#94A3B8'}
                 />
               </View>
@@ -238,7 +245,7 @@ function BankDetailsCard() {
             </View>
           </View>
 
-          <View style={styles.bankGridRow}>
+          <View style={[styles.bankGridRow, !isDesktop && styles.bankGridRowMobile]}>
             <View style={styles.bankGridCell}>
               <Text style={styles.bankFieldLabel}>IFSC Code</Text>
               <View style={styles.inputWrapper}>
@@ -282,7 +289,7 @@ function BankDetailsCard() {
         </>
       )}
 
-      <View style={styles.bankProofRow}>
+      <View style={[styles.bankProofRow, !isDesktop && styles.bankProofRowMobile]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.bankProofLabel}>Passbook / cancelled cheque (optional)</Text>
           <Text style={styles.bankProofHint}>
@@ -331,7 +338,7 @@ export default function CompensationScreen({ navigation, route }) {
         </View>
         <View style={styles.headerRight}>
           {isDesktop ? (
-            <DesktopHeaderActions fullName={dashboardQuery.data?.fullName} alertCount={dashboardQuery.data?.alerts?.length || 0} onBellPress={() => {}} />
+            <DesktopHeaderActions fullName={dashboardQuery.data?.fullName} alertCount={dashboardQuery.data?.alerts?.length || 0} onBellPress={() => { }} />
           ) : (
             <TopRightActions />
           )}
@@ -355,28 +362,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
     paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0 },
+  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, paddingHorizontal: spacing.xl },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  headerRight: { marginLeft: spacing.md },
-  backBtn: { marginRight: spacing.sm, padding: spacing.xs },
-  headerIconTile: { alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
-  headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 20, fontWeight: '700' },
-  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 1080, alignSelf: 'center' },
+  headerRight: { marginLeft: spacing.sm },
+  backBtn: { marginRight: spacing.xs, padding: spacing.xs },
+  headerIconTile: { alignItems: 'center', justifyContent: 'center', marginRight: spacing.xs },
+  headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 18, fontWeight: '700' },
+  body: { width: '100%', paddingHorizontal: spacing.md, paddingVertical: spacing.md, maxWidth: 1080, alignSelf: 'center' },
 
   cardContainer: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg || 16,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.xl,
-    marginBottom: spacing.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
   },
   cardHeaderTop: {
     flexDirection: 'row',
@@ -384,10 +391,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: spacing.xs,
   },
+  cardHeaderTopMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
   cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.xs,
     flex: 1,
   },
   blueIconTile: {
@@ -400,7 +412,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     ...typography.h3,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: colors.textPrimary,
   },
@@ -418,6 +430,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
+  },
+  statusPillMobile: {
+    marginTop: 4,
+    alignSelf: 'flex-start',
   },
   pendingPill: {
     backgroundColor: colors.successLight || '#E6F4EA',
@@ -452,7 +468,7 @@ const styles = StyleSheet.create({
 
   amountText: {
     ...typography.h1,
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: colors.primaryDark,
     marginTop: spacing.xs,
@@ -467,20 +483,21 @@ const styles = StyleSheet.create({
 
   infoBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: colors.primaryLight,
     padding: spacing.md,
     borderRadius: radius.md,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+    gap: spacing.xs,
+    marginBottom: spacing.md,
   },
   infoIconTile: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 2,
   },
   infoBannerText: {
     ...typography.caption,
@@ -494,7 +511,7 @@ const styles = StyleSheet.create({
   bankCardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: spacing.md,
+    gap: spacing.xs,
     marginBottom: spacing.md,
   },
   bankIntro: {
@@ -506,13 +523,13 @@ const styles = StyleSheet.create({
   },
   bankWarning: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     backgroundColor: colors.warningLight || '#FEF8E7',
     borderRadius: radius.md,
     paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: spacing.lg,
-    gap: 10,
+    paddingHorizontal: 12,
+    marginBottom: spacing.md,
+    gap: 8,
   },
   warningIconCircle: {
     width: 20,
@@ -521,6 +538,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    marginTop: 1,
   },
   bankWarningText: {
     ...typography.caption,
@@ -528,12 +546,18 @@ const styles = StyleSheet.create({
     color: colors.warning || '#D97706',
     flex: 1,
     fontWeight: '500',
+    lineHeight: 16,
   },
 
   bankGridRow: {
     flexDirection: 'row',
     gap: spacing.md,
     marginBottom: spacing.md,
+  },
+  bankGridRowMobile: {
+    flexDirection: 'column',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   bankGridCell: {
     flex: 1,
@@ -552,15 +576,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
   },
   inputIcon: {
-    marginRight: 8,
+    marginRight: 6,
   },
   bankInput: {
     ...typography.body,
     flex: 1,
-    paddingVertical: spacing.sm + 2,
+    paddingVertical: spacing.sm,
     fontSize: 13,
     color: colors.textPrimary,
     fontWeight: '500',
@@ -570,7 +594,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: colors.textPrimary,
-    marginTop: 4,
+    marginTop: 2,
   },
   savedDetailsBox: {
     marginTop: spacing.xs,
@@ -588,29 +612,36 @@ const styles = StyleSheet.create({
   bankSaveBtnDisabled: { opacity: 0.6 },
   bankSaveBtnText: { color: colors.onPrimary || '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
-  bankEditBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.md },
+  bankEditBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm },
   bankEditBtnText: { ...typography.caption, fontSize: 12, color: colors.primaryDark, fontWeight: '700' },
 
   bankProofRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+  },
+  bankProofRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: spacing.xs,
   },
   bankProofLabel: { ...typography.caption, fontSize: 12, color: colors.textPrimary, fontWeight: '700' },
   bankProofHint: { ...typography.caption, fontSize: 11, color: colors.textSecondary, marginTop: 2 },
   bankProofBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.primaryDark,
     borderRadius: radius.md,
-    paddingVertical: 6,
+    paddingVertical: 8,
     paddingHorizontal: 12,
+    marginTop: spacing.xs,
   },
   bankProofBtnText: { ...typography.caption, fontSize: 12, color: colors.primaryDark, fontWeight: '700' },
 
