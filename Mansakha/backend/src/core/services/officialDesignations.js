@@ -66,14 +66,40 @@ const INVESTIGATING_OFFICER_DESIGNATIONS = [
   'Superintendent of Police (SP)',
 ];
 
+// Section 12(c) of the Legal Services Authorities Act, 1987 entitles every
+// SC/ST person to free legal aid unconditionally - Mansakha's Legal Aid
+// workflow represents the VICTIM (the SC/ST atrocity complainant), never an
+// accused person. NALSA's real-world advocate categories who directly
+// represent a legal-aid beneficiary in court are Panel Lawyers/Panel
+// Advocates (empanelled by the DLSA under NALSA's Panel Lawyer scheme, the
+// general-purpose category most legal aid cases are assigned to) and
+// Retainer Lawyers (engaged by the DLSA on a standing retainer basis,
+// commonly for earlier-stage/police-station-level representation).
+//
+// Deliberately NOT included, and why:
+//   - Legal Aid Defence Counsel (LADCS, NALSA's Central Sector Scheme since
+//     FY 2023-24): this system exists specifically to defend indigent
+//     ACCUSED persons in criminal trials - the opposite side of the docket
+//     from who this role represents. Including it here would misrepresent
+//     what this app's Legal Representative actually does.
+//   - Remand Lawyer: a real NALSA category, but scoped to the remand/police-
+//     custody stage of an accused person's case - same reason as LADCS,
+//     not a victim-representation post.
+const LEGAL_REPRESENTATIVE_DESIGNATIONS = [
+  'Panel Lawyer / Panel Advocate',
+  'Retainer Lawyer',
+];
+
 // Roles absent from this map don't carry a designation at all.
 const DESIGNATIONS_BY_ROLE = {
   'Protection Officer': PROTECTION_OFFICER_DESIGNATIONS,
   'Investigating Officer': INVESTIGATING_OFFICER_DESIGNATIONS,
+  'Legal Representative': LEGAL_REPRESENTATIVE_DESIGNATIONS,
 };
 
 module.exports = {
   PROTECTION_OFFICER_DESIGNATIONS,
   INVESTIGATING_OFFICER_DESIGNATIONS,
+  LEGAL_REPRESENTATIVE_DESIGNATIONS,
   DESIGNATIONS_BY_ROLE,
 };

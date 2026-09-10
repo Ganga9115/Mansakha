@@ -15,6 +15,7 @@ const { propagateCounsellorAssignment } = require('../services/userProvisioning'
 const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = require('../../ai/ollama');
 const { isCourtCaseEligible, generateCnrNumber, generateSimulatedCourtCaseDetails } = require('../../core/services/courtCaseSimulation');
 const { getCompensationSchedule, withLiveCompensationView } = require('../../core/services/compensationSchedule');
+const { POOR_FEEDBACK_RATING_THRESHOLD } = require('../../core/services/legalAidConstants');
 
 // Case Details (Quick Access) - how stale a simulated snapshot can get
 // before being silently regenerated on next read. No real eCourts source
@@ -2049,6 +2050,326 @@ router.post('/legal-aid-feedback', async (req, res) => {
   await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'agency_referral', entityId: referral.referral_id });
 
   return ok(res, null, 'Feedback submitted. Kindly note that if you rate your counsel poorly, DLSA may reassign your case to a different lawyer.');
+});
+
+// ===== Legal Aid (dedicated pipeline, migration_040) =====
+// Replaces the consolidated flow above for every NEW request - Legal Aid no
+// longer rides through the generic Request Assistance intake at all
+// (intervention_types' 'Legal Aid' row is soft-deleted by migration_040).
+// A dedicated legal_aid_requests row carries a real 7-stage lifecycle
+// (Submitted -> Under Review -> Verified -> Approved -> Active -> Completed,
+// or Under Review -> Rejected), reviewed by a jurisdiction-scoped DLSA
+// Coordinator (dlsa.routes.js) and served by a real Legal Representative
+// account (legal_representative/routes/legalRepresentative.routes.js) once
+// assigned - not a free-text lawyer name. The routes above are untouched and
+// stay live read-only, so a case already accepted under the old flow keeps
+// working; GET .../current below additionally surfaces a legacyRequestFound
+// flag so nobody's existing in-flight request silently disappears from the UI.
+
+const legalAidDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 }, // matches interventionDocumentUpload's own limit
+  fileFilter: (req, file, cb) => {
+    const allowed = ['application/pdf', 'image/png', 'image/jpeg'];
+    if (!allowed.includes(file.mimetype)) return cb(new Error('Only PDF, PNG, or JPEG files are allowed for Legal Aid documents'));
+    cb(null, true);
+  },
+});
+
+// Best-effort staff notification, shared by submission (below) and poor
+// feedback (further down) - same user_id-only alert_notifications shape
+// already used for 'disengagement'/'weekly_review', never blocks the
+// caller's own response on failure.
+async function notifyJurisdictionalDlsa(caseUserId, jurisdictionId, priority) {
+  try {
+    const { rows: dlsaOfficials } = await pool.query(
+      `select o.official_id from officials o
+       join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+       join roles r on r.role_id = orr.role_id
+       where r.role_name = 'DLSA Coordinator' and orr.jurisdiction_id = $1`,
+      [jurisdictionId]
+    );
+    if (dlsaOfficials.length === 0) return;
+    const { error } = await supabase.from('alert_notifications').insert(
+      dlsaOfficials.map((d) => ({ user_id: caseUserId, official_id: d.official_id, source: 'legal_aid', priority }))
+    );
+    if (error) console.error('notifyJurisdictionalDlsa: insert failed', error.message, { caseUserId, jurisdictionId });
+  } catch (err) {
+    console.error('notifyJurisdictionalDlsa: failed', err.message, { caseUserId, jurisdictionId });
+  }
+}
+
+// Filed against the literal ACTIVE case, never the anchor - same convention
+// intervention_requests already follows (see its own POST route's comment).
+router.post('/legal-aid-requests', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
+  const { reason, description } = req.body;
+  if (!reason || !String(reason).trim()) return fail(res, 'reason is required', 400);
+
+  const { rows: caseRows } = await pool.query('select jurisdiction_id from users where user_id = $1', [activeUserId]);
+  if (!caseRows[0]) return fail(res, 'Case not found', 404);
+
+  let request;
+  try {
+    const { rows } = await pool.query(
+      `insert into legal_aid_requests (user_id, reason, description)
+       values ($1, $2, $3) returning request_id, status, created_at`,
+      [activeUserId, String(reason).trim(), description ? String(description).trim() || null : null]
+    );
+    request = rows[0];
+  } catch (err) {
+    if (err.code === '23505' && err.constraint === 'idx_legal_aid_requests_one_open_per_case') {
+      return fail(res, 'You already have an active Legal Aid request for this case', 409);
+    }
+    return fail(res, `Could not submit Legal Aid request: ${err.message}`, 500);
+  }
+
+  // Best-effort - the request itself has already committed above. Auto-links
+  // whatever documents this case already has on file rather than making the
+  // victim re-upload a caste certificate/FIR/ID they've already provided
+  // elsewhere: every prior proof document from ANY of this case's own past
+  // intervention requests, plus the IO's own filed FIR/chargesheet if present.
+  try {
+    const { rows: priorDocs } = await pool.query(
+      `select ird.document_id, ird.document_label, ird.content_type
+       from intervention_request_documents ird
+       join intervention_requests ir on ir.request_id = ird.request_id
+       where ir.user_id = $1`,
+      [activeUserId]
+    );
+    const { rows: investigationRows } = await pool.query(
+      `select investigation_id, fir_document_path, chargesheet_document_path from investigation_records where user_id = $1`,
+      [activeUserId]
+    );
+
+    const linkRows = priorDocs.map((d) => ({
+      request_id: request.request_id,
+      source: 'existing_case_document',
+      document_label: d.document_label,
+      linked_intervention_request_document_id: d.document_id,
+      content_type: d.content_type,
+    }));
+    const investigation = investigationRows[0];
+    if (investigation?.fir_document_path) {
+      linkRows.push({ request_id: request.request_id, source: 'existing_case_document', document_label: 'FIR Copy', linked_investigation_record_id: investigation.investigation_id, content_type: 'application/pdf' });
+    }
+    if (investigation?.chargesheet_document_path) {
+      linkRows.push({ request_id: request.request_id, source: 'existing_case_document', document_label: 'Chargesheet', linked_investigation_record_id: investigation.investigation_id, content_type: 'application/pdf' });
+    }
+    if (linkRows.length > 0) {
+      const { error: linkError } = await supabase.from('legal_aid_request_documents').insert(linkRows);
+      if (linkError) console.error('POST /legal-aid-requests: could not auto-link existing documents', linkError.message, { requestId: request.request_id });
+    }
+  } catch (err) {
+    console.error('POST /legal-aid-requests: auto-link step failed', err.message, { requestId: request.request_id });
+  }
+
+  await writeAuditLog({ userId: activeUserId, action: 'create', entityType: 'legal_aid_request', entityId: request.request_id });
+  await notifyJurisdictionalDlsa(activeUserId, caseRows[0].jurisdiction_id, 'normal');
+
+  return ok(res, { requestId: request.request_id, status: request.status, createdAt: request.created_at }, 'Legal Aid request submitted', 201);
+});
+
+// Allowed at any non-terminal status, unlike intervention_request_documents'
+// Pending-only rule - Legal Aid is a long-running relationship, a victim may
+// reasonably need to add a document well after intake (e.g. once Active).
+router.post('/legal-aid-requests/:requestId/documents', legalAidDocumentUpload.single('file'), async (req, res) => {
+  const { requestId } = req.params;
+  const { documentLabel } = req.body;
+  if (!req.file) return fail(res, 'file is required', 400);
+  if (!documentLabel) return fail(res, 'documentLabel is required', 400);
+
+  const { rows } = await pool.query('select user_id, status from legal_aid_requests where request_id = $1', [requestId]);
+  if (!rows[0]) return fail(res, 'Request not found', 404);
+  if (!(await isOwnCase(req, rows[0].user_id))) return fail(res, 'Not your request', 403);
+  if (['Rejected', 'Completed'].includes(rows[0].status)) return fail(res, 'This request has already been closed', 400);
+
+  const documentId = crypto.randomUUID();
+  const storagePath = `${rows[0].user_id}/${requestId}/${documentId}-${sanitizeDocumentFileName(req.file.originalname)}`;
+
+  const { error: uploadError } = await supabase.storage.from('legal-aid-documents').upload(storagePath, req.file.buffer, { contentType: req.file.mimetype });
+  if (uploadError) return fail(res, `Could not upload document: ${uploadError.message}`, 500);
+
+  await pool.query(
+    `insert into legal_aid_request_documents (document_id, request_id, source, document_label, storage_path, storage_bucket, content_type)
+     values ($1, $2, 'uploaded', $3, $4, 'legal-aid-documents', $5)`,
+    [documentId, requestId, documentLabel, storagePath, req.file.mimetype]
+  );
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'legal_aid_request_document', entityId: documentId });
+
+  return ok(res, { documentId }, 'Document uploaded', 201);
+});
+
+// "My Legal Aid Requests" - spans the whole case family, same duality as
+// GET /intervention-requests (filed per literal case, listed across the family).
+router.get('/legal-aid-requests', async (req, res) => {
+  const { rows } = await pool.query(
+    `select lar.request_id, lar.reason, lar.description, lar.status, lar.rejection_reason, lar.created_at, lar.updated_at, u.docket_number
+     from legal_aid_requests lar
+     join users u on u.user_id = lar.user_id
+     where u.user_id = $1 or u.linked_to_user_id = $1
+     order by lar.created_at desc`,
+    [req.auth.userId]
+  );
+  return ok(res, {
+    requests: rows.map((r) => ({
+      requestId: r.request_id,
+      docketNumber: r.docket_number,
+      reason: r.reason,
+      description: r.description,
+      status: r.status,
+      rejectionReason: r.rejection_reason,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    })),
+  });
+});
+
+// Single-object convenience for the Legal Aid hub screen, scoped to the
+// active/selected case (?caseUserId=, resolveCaseUserId) - mirrors the old
+// GET /legal-aid-status's single-object contract. legacyRequestFound flags
+// whether this case's ANCHOR has a pre-existing referral under the old
+// consolidated flow (the only shape that flow ever used), so the hub can
+// show a read-only "legacy request" banner rather than silently dropping it.
+router.get('/legal-aid-requests/current', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
+
+  const { rows } = await pool.query(
+    `select request_id, reason, description, status, rejection_reason, created_at, updated_at
+     from legal_aid_requests where user_id = $1 order by created_at desc limit 1`,
+    [activeUserId]
+  );
+  const { rows: legacyRows } = await pool.query(
+    `select 1 from agency_referrals where user_id = $1 and referred_to_role = 'DLSA Coordinator' limit 1`,
+    [req.auth.userId]
+  );
+  const legacyRequestFound = legacyRows.length > 0;
+
+  const request = rows[0];
+  if (!request) return ok(res, { hasRequest: false, legacyRequestFound });
+
+  const { rows: docRows } = await pool.query(
+    'select document_id, document_label, source from legal_aid_request_documents where request_id = $1 order by uploaded_at',
+    [request.request_id]
+  );
+
+  return ok(res, {
+    hasRequest: true,
+    requestId: request.request_id,
+    status: request.status,
+    reason: request.reason,
+    description: request.description,
+    rejectionReason: request.rejection_reason,
+    documents: docRows.map((d) => ({ documentId: d.document_id, documentLabel: d.document_label, source: d.source })),
+    createdAt: request.created_at,
+    updatedAt: request.updated_at,
+    legacyRequestFound,
+  });
+});
+
+// Representatives are directly contactable by their own client, same
+// disclosure level as GET /assigned-counsellor above (not the docket-only
+// convention Protection Officer's own contact routes use elsewhere).
+router.get('/legal-aid-requests/:requestId/representative', async (req, res) => {
+  const { requestId } = req.params;
+  const { rows: reqRows } = await pool.query('select user_id from legal_aid_requests where request_id = $1', [requestId]);
+  if (!reqRows[0]) return fail(res, 'Request not found', 404);
+  if (!(await isOwnCase(req, reqRows[0].user_id))) return fail(res, 'Not your request', 403);
+
+  const { rows } = await pool.query(
+    `select laa.status as assignment_status, o.full_name, o.phone, o.whatsapp_number, orr.designation
+     from legal_aid_assignments laa
+     join officials o on o.official_id = laa.representative_official_id
+     left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+     left join roles r on r.role_id = orr.role_id and r.role_name = 'Legal Representative'
+     where laa.request_id = $1
+     order by laa.assigned_at desc limit 1`,
+    [requestId]
+  );
+  const rep = rows[0];
+  if (!rep) return ok(res, { hasRepresentative: false });
+
+  return ok(res, {
+    hasRepresentative: true,
+    fullName: rep.full_name,
+    designation: rep.designation,
+    phone: rep.phone,
+    whatsappNumber: rep.whatsapp_number,
+    assignmentStatus: rep.assignment_status,
+  });
+});
+
+// Official hearing records only - never legal_aid_private_notes, enforced by
+// table choice alone (that table is never queried from this router).
+router.get('/legal-aid-requests/:requestId/hearings', async (req, res) => {
+  const { requestId } = req.params;
+  const { rows: reqRows } = await pool.query('select user_id from legal_aid_requests where request_id = $1', [requestId]);
+  if (!reqRows[0]) return fail(res, 'Request not found', 404);
+  if (!(await isOwnCase(req, reqRows[0].user_id))) return fail(res, 'Not your request', 403);
+
+  const { rows } = await pool.query(
+    `select h.hearing_id, h.hearing_date, h.court, h.hearing_type, h.outcome, h.next_hearing_date, h.notes, h.created_at,
+            (f.feedback_id is not null) as feedback_given
+     from legal_aid_hearings h
+     left join legal_aid_feedback f on f.hearing_id = h.hearing_id
+     where h.request_id = $1
+     order by h.hearing_date desc`,
+    [requestId]
+  );
+  return ok(res, {
+    hearings: rows.map((h) => ({
+      hearingId: h.hearing_id,
+      hearingDate: h.hearing_date,
+      court: h.court,
+      hearingType: h.hearing_type,
+      outcome: h.outcome,
+      nextHearingDate: h.next_hearing_date,
+      notes: h.notes,
+      createdAt: h.created_at,
+      feedbackGiven: h.feedback_given,
+    })),
+  });
+});
+
+// One feedback per hearing (DB-enforced) - a victim can never edit another
+// victim's feedback because every write here is scoped to
+// submitted_by_user_id = the caller's own id, and can't overwrite their own
+// either, by the same unique index.
+router.post('/legal-aid-requests/:requestId/hearings/:hearingId/feedback', async (req, res) => {
+  const { requestId, hearingId } = req.params;
+  const { rating, comment } = req.body;
+  if (!rating || rating < 1 || rating > 5) return fail(res, 'rating is required (1-5)', 400);
+
+  const { rows: reqRows } = await pool.query('select lar.user_id, u.jurisdiction_id from legal_aid_requests lar join users u on u.user_id = lar.user_id where lar.request_id = $1', [requestId]);
+  if (!reqRows[0]) return fail(res, 'Request not found', 404);
+  if (!(await isOwnCase(req, reqRows[0].user_id))) return fail(res, 'Not your request', 403);
+
+  const { rows: hearingRows } = await pool.query('select assignment_id from legal_aid_hearings where hearing_id = $1 and request_id = $2', [hearingId, requestId]);
+  if (!hearingRows[0]) return fail(res, 'Hearing not found', 404);
+
+  let feedback;
+  try {
+    const { rows } = await pool.query(
+      `insert into legal_aid_feedback (request_id, assignment_id, hearing_id, submitted_by_user_id, rating, comment)
+       values ($1, $2, $3, $4, $5, $6) returning feedback_id`,
+      [requestId, hearingRows[0].assignment_id, hearingId, req.auth.userId, rating, comment ? String(comment).trim() || null : null]
+    );
+    feedback = rows[0];
+  } catch (err) {
+    if (err.code === '23505' && err.constraint === 'idx_legal_aid_feedback_one_per_hearing') {
+      return fail(res, 'Feedback already submitted for this hearing', 409);
+    }
+    return fail(res, `Could not submit feedback: ${err.message}`, 500);
+  }
+
+  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'legal_aid_feedback', entityId: feedback.feedback_id });
+
+  if (rating <= POOR_FEEDBACK_RATING_THRESHOLD) {
+    await notifyJurisdictionalDlsa(reqRows[0].user_id, reqRows[0].jurisdiction_id, 'urgent');
+  }
+
+  return ok(res, { feedbackId: feedback.feedback_id }, 'Feedback submitted. Kindly note that if you rate your representative poorly, DLSA may reassign your case.', 201);
 });
 
 // ===== Protection status (Protection Officer flow) =====

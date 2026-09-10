@@ -105,10 +105,16 @@ import ProtectionOfficerInterventionRequests from './protection_officer/pages/In
 import ProtectionOfficerInterventionRequestDetail from './protection_officer/pages/InterventionRequestDetail';
 import ProtectionOfficerProfile from './protection_officer/pages/Profile';
 import DlsaLegalAidQueue from './dlsa/pages/LegalAidQueue';
+import DlsaLegalAidRequestDetail from './dlsa/pages/LegalAidRequestDetail';
+import DlsaAssignedCases from './dlsa/pages/AssignedCases';
 import DlsaReferralDetail from './dlsa/pages/ReferralDetail';
 import DlsaMyTasks from './dlsa/pages/MyTasks';
 import DlsaInterventionRequests from './dlsa/pages/InterventionRequests';
 import DlsaProfile from './dlsa/pages/Profile';
+import LegalRepresentativeMyCases from './legal_representative/pages/MyCases';
+import LegalRepresentativeCaseDetail from './legal_representative/pages/CaseDetail';
+import LegalRepresentativeHearings from './legal_representative/pages/Hearings';
+import LegalRepresentativeProfile from './legal_representative/pages/Profile';
 import DistrictCollectorCommitteeReview from './district_collector/pages/CommitteeReview';
 import DistrictCollectorReviewDetail from './district_collector/pages/ReviewDetail';
 import DistrictCollectorMyTasks from './district_collector/pages/MyTasks';
@@ -247,10 +253,20 @@ export default function App() {
         <Route path="/protectionofficer/intervention-requests/:requestId" element={<RequireAuth loginPath="/signin"><ProtectionOfficerInterventionRequestDetail /></RequireAuth>} />
         <Route path="/protectionofficer/profile" element={<RequireAuth loginPath="/signin"><ProtectionOfficerProfile /></RequireAuth>} />
         <Route path="/dlsa" element={<RequireAuth loginPath="/signin"><DlsaLegalAidQueue /></RequireAuth>} />
+        <Route path="/dlsa/legal-aid-requests/:requestId" element={<RequireAuth loginPath="/signin"><DlsaLegalAidRequestDetail /></RequireAuth>} />
+        <Route path="/dlsa/assigned-cases" element={<RequireAuth loginPath="/signin"><DlsaAssignedCases /></RequireAuth>} />
+        <Route path="/dlsa/profile" element={<RequireAuth loginPath="/signin"><DlsaProfile /></RequireAuth>} />
+        {/* migration_040: unlinked from the DLSA sidebar (which now shows only
+            Legal Aid Requests / Assigned Cases / Profile), but left mounted
+            and reachable by direct URL - the legacy agency_referrals-backed
+            flow these serve still has to work for any pre-existing case. */}
         <Route path="/dlsa/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DlsaReferralDetail /></RequireAuth>} />
         <Route path="/dlsa/tasks" element={<RequireAuth loginPath="/signin"><DlsaMyTasks /></RequireAuth>} />
         <Route path="/dlsa/intervention-requests" element={<RequireAuth loginPath="/signin"><DlsaInterventionRequests /></RequireAuth>} />
-        <Route path="/dlsa/profile" element={<RequireAuth loginPath="/signin"><DlsaProfile /></RequireAuth>} />
+        <Route path="/legalrepresentative" element={<RequireAuth loginPath="/signin"><LegalRepresentativeMyCases /></RequireAuth>} />
+        <Route path="/legalrepresentative/cases/:requestId" element={<RequireAuth loginPath="/signin"><LegalRepresentativeCaseDetail /></RequireAuth>} />
+        <Route path="/legalrepresentative/hearings" element={<RequireAuth loginPath="/signin"><LegalRepresentativeHearings /></RequireAuth>} />
+        <Route path="/legalrepresentative/profile" element={<RequireAuth loginPath="/signin"><LegalRepresentativeProfile /></RequireAuth>} />
         <Route path="/districtcollector" element={<RequireAuth loginPath="/signin"><DistrictCollectorCommitteeReview /></RequireAuth>} />
         <Route path="/districtcollector/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DistrictCollectorReviewDetail /></RequireAuth>} />
         <Route path="/districtcollector/tasks" element={<RequireAuth loginPath="/signin"><DistrictCollectorMyTasks /></RequireAuth>} />

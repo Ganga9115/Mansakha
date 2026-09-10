@@ -259,7 +259,26 @@ export default function HomeScreen({ navigation }) {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.gridTitle}>Request Assistance</Text>
-                        <Text style={styles.gridSub}>Medical, legal aid, financial help & more</Text>
+                        <Text style={styles.gridSub}>Medical, financial help & more</Text>
+                      </View>
+                      <Feather name="chevron-right" size={16} color={colors.textSecondary} />
+                    </Pressable>
+
+                    {/* Legal Aid (migration_040) - its own dedicated pipeline,
+                        no longer submitted through Request Assistance above
+                        (that generic intake type is retired). Unconditional -
+                        available at any case stage, same as the old
+                        LegalAidScreen's own scoping. See LegalAidHubScreen.js. */}
+                    <Pressable
+                      style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
+                      onPress={() => navigation?.navigate('LegalAidHub')}
+                    >
+                      <View style={styles.gridIconSquare}>
+                        <Feather name="briefcase" size={18} color={colors.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.gridTitle}>Legal Aid</Text>
+                        <Text style={styles.gridSub}>Request a legal representative for your case</Text>
                       </View>
                       <Feather name="chevron-right" size={16} color={colors.textSecondary} />
                     </Pressable>

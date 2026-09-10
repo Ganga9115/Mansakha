@@ -18,7 +18,7 @@ const LAST_SEEN_KEY = 'mansakha_notifications_last_seen';
 // message -> the in-app chat with the counsellor; session -> Home, which is
 // the only screen that actually shows upcoming sessions today (no dedicated
 // sessions screen exists to deep-link into instead).
-const ROUTE_BY_TYPE = { message: 'mycounsellor', session: 'home' };
+const ROUTE_BY_TYPE = { message: 'mycounsellor', session: 'home', legal_aid_status: 'LegalAidHub', legal_aid_hearing: 'LegalAidRepresentative' };
 
 // Notifications mix two kinds of timestamps: a message's `sent_at` (always
 // in the past) and an upcoming session's `scheduled_at` (usually in the
@@ -38,7 +38,7 @@ function timeAgo(iso) {
   return isFuture ? `in ${days}d` : `${days}d ago`;
 }
 
-const ICON_BY_TYPE = { message: 'message-circle', session: 'calendar' };
+const ICON_BY_TYPE = { message: 'message-circle', session: 'calendar', legal_aid_status: 'briefcase', legal_aid_hearing: 'user-check' };
 
 // A dropdown panel, not a full-screen navigation - matches the counsellor
 // web app's own NotificationBell (bell icon -> small panel anchored under

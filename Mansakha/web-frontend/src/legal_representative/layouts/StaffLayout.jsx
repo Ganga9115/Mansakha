@@ -1,25 +1,20 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Scale, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
+import { Briefcase, Gavel, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
-// DLSA Coordinator's own dedicated shell - copied from
-// dwo/layouts/StaffLayout.jsx (itself copied from district_admin's
-// template).
-//
-// migration_040: trimmed to exactly the 3 items the real Legal Aid workflow
-// needs (Legal Aid Requests, Assigned Cases, Profile) - the old Intervention
-// Requests/My Tasks/Referral Detail pages are UNLINKED here but not deleted
-// (still reachable by direct URL, see App.jsx), matching the backend's own
-// "leave the legacy routes mounted, just not surfaced" call.
+// Legal Representative's own dedicated shell (migration_040) - copied from
+// protection_officer/layouts/StaffLayout.jsx (the template), 3-item sidebar
+// per the role's own scope: only their own assigned cases and hearings, no
+// DLSA-level assignment/reassignment controls.
 const NAV_ITEMS = [
-  { name: 'Legal Aid Requests', icon: Scale, path: '/dlsa' },
-  { name: 'Assigned Cases', icon: ClipboardList, path: '/dlsa/assigned-cases' },
-  { name: 'Profile', icon: User, path: '/dlsa/profile' },
+  { name: 'My Cases', icon: Briefcase, path: '/legalrepresentative' },
+  { name: 'Hearings', icon: Gavel, path: '/legalrepresentative/hearings' },
+  { name: 'Profile', icon: User, path: '/legalrepresentative/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Legal Aid Requests' }) {
+export default function StaffLayout({ children, title = 'My Cases' }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -84,7 +79,7 @@ export default function StaffLayout({ children, title = 'Legal Aid Requests' }) 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">
             <div className="text-xs hidden sm:block text-right">
               <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
-              <p className="text-[#3D5A80]/70">DLSA Coordinator</p>
+              <p className="text-[#3D5A80]/70">Legal Representative</p>
             </div>
 
             <button

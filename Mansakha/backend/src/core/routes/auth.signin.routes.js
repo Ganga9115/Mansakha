@@ -30,6 +30,9 @@ const router = express.Router();
 // Investigating Officer is REINSTATED (migration_033, see server.js's own
 // comment on the same change) with real substance - station-scoped, its own
 // investigation_records.
+// Legal Representative (migration_040) - the real DLSA-assigned advocate
+// role for the dedicated Legal Aid pipeline (backend/src/legal_representative/),
+// jurisdiction-scoped the same way Protection Officer already is.
 const SIGNIN_ROLES = [
   'Investigating Officer',
   'District Welfare Officer',
@@ -37,6 +40,7 @@ const SIGNIN_ROLES = [
   'DLSA Coordinator',
   'District Collector',
   'Rehabilitation Officer',
+  'Legal Representative',
 ];
 
 router.post('/login', staffLoginLimiter, async (req, res) => {

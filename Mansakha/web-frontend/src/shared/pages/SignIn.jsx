@@ -24,6 +24,7 @@ const SIGNIN_ROLES = [
   'DLSA Coordinator',
   'District Collector',
   'Rehabilitation Officer',
+  'Legal Representative',
 ];
 
 const ROLE_HOME_PATH = {
@@ -33,6 +34,7 @@ const ROLE_HOME_PATH = {
   'DLSA Coordinator': '/dlsa',
   'District Collector': '/districtcollector',
   'Rehabilitation Officer': '/rehabilitationofficer',
+  'Legal Representative': '/legalrepresentative',
 };
 
 export default function SignIn() {

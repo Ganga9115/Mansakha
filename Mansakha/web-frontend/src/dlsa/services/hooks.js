@@ -135,3 +135,82 @@ export function useReviewInterventionRequest() {
   };
   return { mutate, loading };
 }
+
+// ===== Legal Aid Requests (migration_040, dedicated pipeline) =====
+// The real DLSA workflow - jurisdiction-scoped, 7-stage lifecycle. Separate
+// from useReferralsList/useInterventionRequestsList above, which stay
+// pointed at the old, now-unlinked-from-nav legacy pages.
+
+export function useLegalAidRequestsList(status) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    return apiClient.get(`/api/dlsa/legal-aid-requests?${params.toString()}`, token);
+  }, [token, status]);
+}
+
+export function useLegalAidRequestDetail(requestId) {
+  const token = getToken();
+  return useQuery(
+    () => (requestId ? apiClient.get(`/api/dlsa/legal-aid-requests/${requestId}`, token) : Promise.resolve(null)),
+    [token, requestId]
+  );
+}
+
+export function useEligibleRepresentatives(requestId) {
+  const token = getToken();
+  return useQuery(
+    () => (requestId ? apiClient.get(`/api/dlsa/legal-aid-requests/${requestId}/eligible-representatives`, token) : Promise.resolve(null)),
+    [token, requestId]
+  );
+}
+
+function useLegalAidAction(buildPath, method = 'PATCH') {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (requestId, body = {}) => {
+    setLoading(true);
+    try {
+      return await apiClient[method === 'PATCH' ? 'patch' : 'post'](buildPath(requestId), body, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useStartLegalAidReview() {
+  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/start-review`);
+}
+export function useVerifyLegalAidRequest() {
+  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/verify`);
+}
+export function useRejectLegalAidRequest() {
+  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/reject`);
+}
+export function useApproveLegalAidRequest() {
+  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/approve`);
+}
+export function useAssignRepresentative() {
+  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/assign-representative`, 'POST');
+}
+export function useReassignRepresentative() {
+  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/reassign`, 'POST');
+}
+export function useContinueLegalAidFeedback() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (requestId, feedbackId) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/dlsa/legal-aid-requests/${requestId}/feedback/${feedbackId}/continue`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+export function useCompleteLegalAidRequest() {
+  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/complete`);
+}

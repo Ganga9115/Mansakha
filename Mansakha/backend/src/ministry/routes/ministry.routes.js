@@ -21,9 +21,12 @@ router.use(verifyToken, requireRole(['Ministry']), generalApiLimiter);
 // Investigating Officer is REINSTATED (migration_033) with real substance -
 // station-scoped, its own investigation_records - after having briefly been
 // retired under the earlier Legal Aid/Threat consolidation.
+// Legal Representative (migration_040) - the DLSA-assigned advocate role for
+// the dedicated Legal Aid pipeline, jurisdiction-scoped like Protection
+// Officer (see the jurisdictionId checks below).
 const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator',
   'Investigating Officer', 'District Welfare Officer', 'Protection Officer',
-  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer'];
+  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer', 'Legal Representative'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
 // migration_035 - designation lists live in one shared place so Ministry's
@@ -237,9 +240,13 @@ router.post('/staff', async (req, res) => {
   // A Protection Officer's queue is jurisdiction-scoped (protectionOfficer.routes.js) -
   // required here too, same fail-closed reasoning as Rehabilitation Officer's
   // providerId and Investigating Officer's stationId below: an account created
-  // without one would just sit with a permanently empty queue.
-  if (roleName === 'Protection Officer' && !jurisdictionId) {
-    return fail(res, 'jurisdictionId is required for Protection Officer accounts', 400);
+  // without one would just sit with a permanently empty queue. DLSA
+  // Coordinator (migration_040) and Legal Representative join this same
+  // check - the real DLSA structure is one authority per district, and a
+  // representative's own case list is populated at DLSA's assignment time
+  // from this same jurisdiction, so both need one for the same reason.
+  if (['Protection Officer', 'DLSA Coordinator', 'Legal Representative'].includes(roleName) && !jurisdictionId) {
+    return fail(res, `jurisdictionId is required for ${roleName} accounts`, 400);
   }
   // migration_035 - optional (Ministry may not know it yet), but must be a
   // real, recognized title when given - never free text. Deliberately no
@@ -446,7 +453,9 @@ router.post('/staff/:officialId/roles', async (req, res) => {
   if (!roleName) return fail(res, 'roleName is required', 400);
   if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
   if (roleName === 'Administration' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Administration accounts', 400);
-  if (roleName === 'Protection Officer' && !jurisdictionId) return fail(res, 'jurisdictionId is required for Protection Officer accounts', 400);
+  if (['Protection Officer', 'DLSA Coordinator', 'Legal Representative'].includes(roleName) && !jurisdictionId) {
+    return fail(res, `jurisdictionId is required for ${roleName} accounts`, 400);
+  }
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
   if (roleName === 'Investigating Officer' && !stationId) return fail(res, 'stationId is required for Investigating Officer accounts', 400);
   if (designation && DESIGNATIONS_BY_ROLE[roleName] && !DESIGNATIONS_BY_ROLE[roleName].includes(designation)) {
@@ -504,7 +513,7 @@ router.patch('/staff/:officialId/roles/:roleName/scope', async (req, res) => {
   const { jurisdictionId, providerId, stationId, designation } = req.body;
 
   if (!CREATABLE_ROLES.includes(roleName)) return fail(res, `roleName must be one of: ${CREATABLE_ROLES.join(', ')}`, 400);
-  if ((roleName === 'Administration' || roleName === 'Protection Officer') && !jurisdictionId) {
+  if (['Administration', 'Protection Officer', 'DLSA Coordinator', 'Legal Representative'].includes(roleName) && !jurisdictionId) {
     return fail(res, `jurisdictionId is required for ${roleName} accounts`, 400);
   }
   if (roleName === 'Rehabilitation Officer' && !providerId) return fail(res, 'providerId is required for Rehabilitation Officer accounts', 400);
@@ -561,6 +570,42 @@ router.patch('/staff/:officialId/revoke', async (req, res) => {
   if (error) return fail(res, 'Could not revoke account', 500);
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'revoke', entityType: 'official', entityId: officialId });
+
+  // migration_040 - a revoked account can still be an ACTIVE Legal
+  // Representative on one or more cases; revoking login access here has no
+  // cascading effect on legal_aid_assignments (a case is never silently
+  // unassigned), so the jurisdictional DLSA for every such case is notified
+  // to review and reassign - otherwise a case could sit "Active" indefinitely
+  // under a representative who can no longer log in. Best-effort, same
+  // non-blocking convention as every other post-write notification in this
+  // app - a failure here must never make the revoke itself appear to fail.
+  try {
+    const { rows: activeCases } = await pool.query(
+      `select laa.request_id, lar.user_id, u.jurisdiction_id
+       from legal_aid_assignments laa
+       join legal_aid_requests lar on lar.request_id = laa.request_id
+       join users u on u.user_id = lar.user_id
+       where laa.representative_official_id = $1 and laa.status = 'Active'`,
+      [officialId]
+    );
+    for (const c of activeCases) {
+      const { rows: dlsaOfficials } = await pool.query(
+        `select o.official_id from officials o
+         join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+         join roles r on r.role_id = orr.role_id
+         where r.role_name = 'DLSA Coordinator' and orr.jurisdiction_id = $1`,
+        [c.jurisdiction_id]
+      );
+      if (dlsaOfficials.length > 0) {
+        const { error: notifyError } = await supabase.from('alert_notifications').insert(
+          dlsaOfficials.map((d) => ({ user_id: c.user_id, official_id: d.official_id, source: 'legal_aid', priority: 'urgent' }))
+        );
+        if (notifyError) console.error('revoke: could not notify DLSA of orphaned Legal Aid assignment', notifyError.message, { requestId: c.request_id });
+      }
+    }
+  } catch (err) {
+    console.error('revoke: Legal Aid orphaned-assignment check failed', err.message, { officialId });
+  }
 
   return ok(res, null, 'Account access revoked');
 });

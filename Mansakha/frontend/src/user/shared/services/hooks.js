@@ -267,6 +267,88 @@ export function useSubmitLegalAidFeedback() {
   });
 }
 
+// Legal Aid (migration_040, dedicated pipeline) - replaces the consolidated
+// flow above for NEW requests (the 3 hooks above stay, unmodified, purely to
+// power the legacyRequestFound fallback banner on a case whose Legal Aid was
+// already accepted under the old flow). Real 7-stage lifecycle, existing
+// case documents auto-linked server-side (not re-uploaded), a real assigned
+// representative (not a free-text name), and feedback tied to a specific
+// hearing.
+
+export function useMyLegalAidRequestCurrent(caseUserId) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'legal-aid-requests', 'current', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/legal-aid-requests/current${qs}`, token);
+    },
+    enabled: !!token,
+  });
+}
+
+export function useSubmitLegalAidRequest(caseUserId) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reason, description }) => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.post(`/api/user/legal-aid-requests${qs}`, { reason, description }, token);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-requests'] }),
+  });
+}
+
+// Same web/native FormData branch as useUploadInterventionDocument above.
+export function useUploadLegalAidDocument() {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ requestId, documentLabel, uri, mimeType }) => {
+      const formData = new FormData();
+      const type = mimeType || 'image/jpeg';
+      const ext = type.includes('png') ? 'png' : type.includes('pdf') ? 'pdf' : 'jpg';
+      if (Platform.OS === 'web') {
+        const blob = await fetch(uri).then((r) => r.blob());
+        formData.append('file', blob, `document.${ext}`);
+      } else {
+        formData.append('file', { uri, name: `document.${ext}`, type });
+      }
+      formData.append('documentLabel', documentLabel);
+      return apiClient.uploadFile(`/api/user/legal-aid-requests/${requestId}/documents`, formData, token);
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-requests'] }),
+  });
+}
+
+export function useLegalAidRepresentative(requestId) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'legal-aid-requests', requestId, 'representative'],
+    queryFn: () => apiClient.get(`/api/user/legal-aid-requests/${requestId}/representative`, token),
+    enabled: !!token && !!requestId,
+  });
+}
+
+export function useLegalAidHearings(requestId) {
+  const token = useToken();
+  return useQuery({
+    queryKey: ['user', 'legal-aid-requests', requestId, 'hearings'],
+    queryFn: () => apiClient.get(`/api/user/legal-aid-requests/${requestId}/hearings`, token),
+    enabled: !!token && !!requestId,
+  });
+}
+
+export function useSubmitLegalAidHearingFeedback(requestId) {
+  const token = useToken();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ hearingId, rating, comment }) =>
+      apiClient.post(`/api/user/legal-aid-requests/${requestId}/hearings/${hearingId}/feedback`, { rating, comment }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-requests', requestId, 'hearings'] }),
+  });
+}
+
 // Threat (consolidated Protection Officer flow) - victim-initiated, no
 // case_stage gate, jurisdiction-routed to "the nearby officer" server-side.
 export function useThreatStatus() {

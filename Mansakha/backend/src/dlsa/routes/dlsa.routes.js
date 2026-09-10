@@ -1,12 +1,14 @@
 const express = require('express');
 const { supabase } = require('../../core/db/supabaseClient');
-const { pool } = require('../../core/db/pgPool');
+const { pool, withTransaction } = require('../../core/db/pgPool');
 const { writeAuditLog } = require('../../core/services/auditLog');
 const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { mountInterventionReviewRoutes } = require('../../core/services/interventionRequestReview');
+const { loadRequestDocuments } = require('../../core/services/legalAidDocuments');
+const { POOR_FEEDBACK_RATING_THRESHOLD } = require('../../core/services/legalAidConstants');
 
 const router = express.Router();
 
@@ -232,6 +234,433 @@ router.patch('/tasks/:taskId/complete', async (req, res) => {
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_task', entityId: task.task_id });
 
   return ok(res, { taskId: task.task_id, status: 'Completed' }, 'Task marked complete');
+});
+
+// ===== Legal Aid Requests (migration_040, dedicated pipeline) =====
+// Everything above (the generic intervention-review mount, /referrals*,
+// /tasks*) is UNTOUCHED and stays exactly as it was - a case accepted under
+// the old consolidated flow keeps working. This section is the real DLSA
+// workflow: a 7-stage request lifecycle, jurisdiction-scoped (unlike the
+// unscoped section above), representative assignment/reassignment with full
+// history, and DLSA's own review of poor victim feedback.
+//
+// Jurisdiction-scoped the same way Protection Officer's own queue already
+// is - self-filtered by the caller's own grant, never requireJurisdiction
+// (that middleware resolves a TARGET resource's jurisdiction against the
+// caller; this instead filters the caller's own queue, the same shape
+// interventionRequestReview.js's jurisdictionScoped option already uses).
+// An account with no jurisdiction assigned yet (pre-migration_040 accounts,
+// until Ministry edits them one) sees an empty queue rather than an error -
+// same graceful fallback that option already establishes.
+function getOwnJurisdictionId(req) {
+  const role = req.auth.roles.find((r) => r.roleName === ROLE_NAME);
+  return role?.jurisdictionId || null;
+}
+
+const LEGAL_AID_STATUSES = ['Submitted', 'Under Review', 'Verified', 'Rejected', 'Approved', 'Active', 'Completed'];
+
+async function loadOwnLegalAidRequest(req, res) {
+  const jurisdictionId = getOwnJurisdictionId(req);
+  if (!jurisdictionId) {
+    fail(res, 'Request not found', 404);
+    return null;
+  }
+  const { rows } = await pool.query(
+    `select lar.request_id, lar.user_id, lar.reason, lar.description, lar.status, lar.rejection_reason,
+            lar.reviewed_by_official_id, lar.reviewed_at, lar.created_at, lar.updated_at,
+            u.docket_number, u.jurisdiction_id, u.case_stage, ct.name as case_type_name
+     from legal_aid_requests lar
+     join users u on u.user_id = lar.user_id
+     join case_types ct on ct.case_type_id = u.case_type_id
+     where lar.request_id = $1`,
+    [req.params.requestId]
+  );
+  const r = rows[0];
+  if (!r || r.jurisdiction_id !== jurisdictionId) {
+    fail(res, 'Request not found', 404);
+    return null;
+  }
+  return r;
+}
+
+router.get('/legal-aid-requests', async (req, res) => {
+  const { status } = req.query;
+  if (status && !LEGAL_AID_STATUSES.includes(status)) return fail(res, `status must be one of: ${LEGAL_AID_STATUSES.join(', ')}`, 400);
+
+  const jurisdictionId = getOwnJurisdictionId(req);
+  if (!jurisdictionId) return ok(res, { requests: [], jurisdictionAssigned: false });
+
+  const params = [jurisdictionId];
+  let where = 'u.jurisdiction_id = $1';
+  if (status) { params.push(status); where += ` and lar.status = $${params.length}`; }
+
+  const { rows } = await pool.query(
+    `select lar.request_id, lar.reason, lar.status, lar.created_at, lar.updated_at,
+            u.docket_number, u.case_stage, ct.name as case_type_name, ui.full_name as victim_name
+     from legal_aid_requests lar
+     join users u on u.user_id = lar.user_id
+     join case_types ct on ct.case_type_id = u.case_type_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     where ${where}
+     order by lar.created_at desc`,
+    params
+  );
+
+  return ok(res, {
+    jurisdictionAssigned: true,
+    requests: rows.map((r) => ({
+      requestId: r.request_id,
+      docketNumber: r.docket_number,
+      victimName: r.victim_name || null,
+      caseTypeName: r.case_type_name,
+      caseStage: r.case_stage,
+      reason: r.reason,
+      status: r.status,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    })),
+  });
+});
+
+router.get('/legal-aid-requests/:requestId', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+
+  const { rows: identityRows } = await pool.query(
+    `select ui.full_name, ui.contact_number, ui.address
+     from users u left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     where u.user_id = $1`,
+    [request.user_id]
+  );
+  const identity = identityRows[0] || {};
+
+  const documents = await loadRequestDocuments(request.request_id);
+
+  const { rows: assignments } = await pool.query(
+    `select laa.assignment_id, laa.status, laa.assigned_at, laa.ended_at, laa.ended_reason,
+            o.full_name as representative_name, orr.designation
+     from legal_aid_assignments laa
+     join officials o on o.official_id = laa.representative_official_id
+     left join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+     left join roles r on r.role_id = orr.role_id and r.role_name = 'Legal Representative'
+     where laa.request_id = $1
+     order by laa.assigned_at asc`,
+    [request.request_id]
+  );
+
+  const { rows: hearings } = await pool.query(
+    `select hearing_id, hearing_date, court, hearing_type, outcome, next_hearing_date, notes, created_at
+     from legal_aid_hearings where request_id = $1 order by hearing_date desc`,
+    [request.request_id]
+  );
+
+  const { rows: pendingFeedback } = await pool.query(
+    `select f.feedback_id, f.rating, f.comment, f.created_at, h.hearing_date, h.outcome
+     from legal_aid_feedback f
+     join legal_aid_hearings h on h.hearing_id = f.hearing_id
+     where f.request_id = $1 and f.rating <= $2 and f.dlsa_reviewed_at is null
+     order by f.created_at desc`,
+    [request.request_id, POOR_FEEDBACK_RATING_THRESHOLD]
+  );
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'legal_aid_request', entityId: request.request_id });
+  await writeAuditLog({ officialId: req.auth.officialId, userId: request.user_id, action: 'read', entityType: 'victim_contact_details', entityId: request.request_id });
+
+  return ok(res, {
+    requestId: request.request_id,
+    docketNumber: request.docket_number,
+    caseTypeName: request.case_type_name,
+    caseStage: request.case_stage,
+    reason: request.reason,
+    description: request.description,
+    status: request.status,
+    rejectionReason: request.rejection_reason,
+    createdAt: request.created_at,
+    updatedAt: request.updated_at,
+    victimName: identity.full_name || null,
+    victimContactNumber: identity.contact_number || null,
+    victimAddress: identity.address || null,
+    documents,
+    assignments: assignments.map((a) => ({
+      assignmentId: a.assignment_id,
+      status: a.status,
+      representativeName: a.representative_name,
+      designation: a.designation,
+      assignedAt: a.assigned_at,
+      endedAt: a.ended_at,
+      endedReason: a.ended_reason,
+    })),
+    hearings: hearings.map((h) => ({
+      hearingId: h.hearing_id,
+      hearingDate: h.hearing_date,
+      court: h.court,
+      hearingType: h.hearing_type,
+      outcome: h.outcome,
+      nextHearingDate: h.next_hearing_date,
+      notes: h.notes,
+      createdAt: h.created_at,
+    })),
+    pendingFeedbackReview: pendingFeedback.map((f) => ({
+      feedbackId: f.feedback_id,
+      rating: f.rating,
+      comment: f.comment,
+      hearingDate: f.hearing_date,
+      hearingOutcome: f.outcome,
+      createdAt: f.created_at,
+    })),
+  });
+});
+
+// Shared by every PATCH transition below - validates current status, applies
+// the update, stamps reviewed_by/reviewed_at + updated_at, and writes the
+// audit trail entry (the real per-transition history - see migration_040's
+// own comment on why the request row's reviewed_by/reviewed_at can only ever
+// hold the MOST RECENT of these).
+async function applyLegalAidTransition(req, res, request, { fromStatus, toStatus, extraSet = {}, extraParams = [], note }) {
+  if (request.status !== fromStatus) {
+    fail(res, `This request must be '${fromStatus}' for this action (currently '${request.status}')`, 400);
+    return false;
+  }
+  const setClauses = ['status = $1', 'reviewed_by_official_id = $2', 'reviewed_at = now()', 'updated_at = now()'];
+  const params = [toStatus, req.auth.officialId];
+  let i = params.length;
+  for (const [col, val] of Object.entries(extraSet)) {
+    i += 1;
+    setClauses.push(`${col} = $${i}`);
+    params.push(val);
+  }
+  params.push(request.request_id);
+  await pool.query(`update legal_aid_requests set ${setClauses.join(', ')} where request_id = $${params.length}`, params);
+
+  await writeAuditLog({
+    officialId: req.auth.officialId,
+    userId: request.user_id,
+    action: 'update',
+    entityType: 'legal_aid_request',
+    entityId: request.request_id,
+    details: { fromStatus, toStatus, note: note || null },
+  });
+  return true;
+}
+
+router.patch('/legal-aid-requests/:requestId/start-review', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+  const applied = await applyLegalAidTransition(req, res, request, { fromStatus: 'Submitted', toStatus: 'Under Review' });
+  if (!applied) return;
+  return ok(res, { requestId: request.request_id, status: 'Under Review' }, 'Review started');
+});
+
+router.patch('/legal-aid-requests/:requestId/verify', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+  const applied = await applyLegalAidTransition(req, res, request, { fromStatus: 'Under Review', toStatus: 'Verified' });
+  if (!applied) return;
+  return ok(res, { requestId: request.request_id, status: 'Verified' }, 'Request verified');
+});
+
+// Only reachable from 'Under Review', matching the spec's rejection path
+// exactly (Submitted -> Under Review -> Rejected) - never from 'Verified'.
+router.patch('/legal-aid-requests/:requestId/reject', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+  const { reason } = req.body;
+  if (!reason || !String(reason).trim()) return fail(res, 'A reason is required to reject a request', 400);
+  const applied = await applyLegalAidTransition(req, res, request, {
+    fromStatus: 'Under Review', toStatus: 'Rejected',
+    extraSet: { rejection_reason: String(reason).trim() },
+  });
+  if (!applied) return;
+  return ok(res, { requestId: request.request_id, status: 'Rejected' }, 'Request rejected');
+});
+
+router.patch('/legal-aid-requests/:requestId/approve', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+  const applied = await applyLegalAidTransition(req, res, request, { fromStatus: 'Verified', toStatus: 'Approved' });
+  if (!applied) return;
+  return ok(res, { requestId: request.request_id, status: 'Approved' }, 'Request approved');
+});
+
+// Active Legal Representative officials in this request's own jurisdiction,
+// with their current Active caseload - the assign/reassign UI's picker.
+router.get('/legal-aid-requests/:requestId/eligible-representatives', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+
+  const { rows } = await pool.query(
+    `select o.official_id, o.full_name, orr.designation,
+            (select count(*) from legal_aid_assignments laa where laa.representative_official_id = o.official_id and laa.status = 'Active') as active_case_count
+     from officials o
+     join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+     join roles r on r.role_id = orr.role_id
+     where r.role_name = 'Legal Representative' and orr.jurisdiction_id = $1
+     order by o.full_name`,
+    [request.jurisdiction_id]
+  );
+
+  return ok(res, {
+    representatives: rows.map((r) => ({
+      officialId: r.official_id,
+      fullName: r.full_name,
+      designation: r.designation,
+      activeCaseCount: Number(r.active_case_count),
+    })),
+  });
+});
+
+async function isEligibleRepresentative(officialId, jurisdictionId) {
+  const { rows } = await pool.query(
+    `select 1 from official_roles orr
+     join roles r on r.role_id = orr.role_id
+     where orr.official_id = $1 and orr.revoked_at is null and r.role_name = 'Legal Representative' and orr.jurisdiction_id = $2`,
+    [officialId, jurisdictionId]
+  );
+  return rows.length > 0;
+}
+
+// Approved -> Active, in one transaction with the first assignment row.
+// "Representative Assigned" is not a persisted DB state (see migration_040's
+// own comment - there is no distinct actor/trigger separating it from
+// Active) - the audit_log entry still names that conceptual sub-step.
+router.post('/legal-aid-requests/:requestId/assign-representative', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+  if (request.status !== 'Approved') return fail(res, `This request must be 'Approved' for this action (currently '${request.status}')`, 400);
+
+  const { representativeOfficialId } = req.body;
+  if (!representativeOfficialId) return fail(res, 'representativeOfficialId is required', 400);
+  if (!(await isEligibleRepresentative(representativeOfficialId, request.jurisdiction_id))) {
+    return fail(res, 'That official is not an active Legal Representative in this jurisdiction', 400);
+  }
+
+  let assignmentId;
+  try {
+    assignmentId = await withTransaction(async (client) => {
+      await client.query(
+        `update legal_aid_requests set status = 'Active', reviewed_by_official_id = $1, reviewed_at = now(), updated_at = now() where request_id = $2`,
+        [req.auth.officialId, request.request_id]
+      );
+      const { rows } = await client.query(
+        `insert into legal_aid_assignments (request_id, representative_official_id, assigned_by_official_id)
+         values ($1, $2, $3) returning assignment_id`,
+        [request.request_id, representativeOfficialId, req.auth.officialId]
+      );
+      return rows[0].assignment_id;
+    });
+  } catch (err) {
+    return fail(res, `Could not assign representative: ${err.message}`, 500);
+  }
+
+  await writeAuditLog({
+    officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_request', entityId: request.request_id,
+    details: { fromStatus: 'Approved', toStatus: 'Active', note: 'Representative Assigned' },
+  });
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'legal_aid_assignment', entityId: assignmentId });
+
+  const { error: notifyError } = await supabase.from('alert_notifications').insert({ user_id: request.user_id, official_id: representativeOfficialId, source: 'legal_aid', priority: 'normal' });
+  if (notifyError) console.error('assign-representative: could not notify representative', notifyError.message, { assignmentId });
+
+  return ok(res, { requestId: request.request_id, status: 'Active', assignmentId }, 'Representative assigned');
+});
+
+// Reassignment within an Active request - does not change the request's own
+// status. Usable standalone (not only from the poor-feedback loop below) -
+// also how a representative whose account has been revoked mid-case gets
+// replaced (see ministry.routes.js's own revoke-time notification).
+router.post('/legal-aid-requests/:requestId/reassign', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+  if (request.status !== 'Active') return fail(res, `This request must be 'Active' to reassign a representative (currently '${request.status}')`, 400);
+
+  const { newRepresentativeOfficialId, endedReason, feedbackId } = req.body;
+  if (!newRepresentativeOfficialId) return fail(res, 'newRepresentativeOfficialId is required', 400);
+  if (!endedReason || !String(endedReason).trim()) return fail(res, 'endedReason is required', 400);
+  if (!(await isEligibleRepresentative(newRepresentativeOfficialId, request.jurisdiction_id))) {
+    return fail(res, 'That official is not an active Legal Representative in this jurisdiction', 400);
+  }
+
+  let result;
+  try {
+    result = await withTransaction(async (client) => {
+      const { rows: currentRows } = await client.query(
+        `select assignment_id, representative_official_id from legal_aid_assignments where request_id = $1 and status = 'Active' for update`,
+        [request.request_id]
+      );
+      const current = currentRows[0];
+      if (!current) throw new Error('No active representative found to reassign');
+      if (current.representative_official_id === newRepresentativeOfficialId) throw new Error('That representative is already assigned to this case');
+
+      await client.query(
+        `update legal_aid_assignments set status = 'Reassigned', ended_reason = $1, ended_at = now() where assignment_id = $2`,
+        [String(endedReason).trim(), current.assignment_id]
+      );
+      const { rows: newRows } = await client.query(
+        `insert into legal_aid_assignments (request_id, representative_official_id, assigned_by_official_id)
+         values ($1, $2, $3) returning assignment_id`,
+        [request.request_id, newRepresentativeOfficialId, req.auth.officialId]
+      );
+      if (feedbackId) {
+        await client.query(`update legal_aid_feedback set dlsa_reviewed_at = now() where feedback_id = $1 and request_id = $2`, [feedbackId, request.request_id]);
+      }
+      await client.query(`update legal_aid_requests set updated_at = now() where request_id = $1`, [request.request_id]);
+      return { oldAssignmentId: current.assignment_id, newAssignmentId: newRows[0].assignment_id, oldRepresentativeOfficialId: current.representative_official_id };
+    });
+  } catch (err) {
+    return fail(res, `Could not reassign representative: ${err.message}`, 400);
+  }
+
+  await writeAuditLog({
+    officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_assignment', entityId: result.newAssignmentId,
+    details: { note: 'Reassigned', oldAssignmentId: result.oldAssignmentId, reason: String(endedReason).trim() },
+  });
+
+  const { error: notifyError } = await supabase.from('alert_notifications').insert([
+    { user_id: request.user_id, official_id: newRepresentativeOfficialId, source: 'legal_aid', priority: 'normal' },
+    { user_id: request.user_id, official_id: result.oldRepresentativeOfficialId, source: 'legal_aid', priority: 'normal' },
+  ]);
+  if (notifyError) console.error('reassign: could not notify representatives', notifyError.message, { requestId: request.request_id });
+
+  return ok(res, { requestId: request.request_id, newAssignmentId: result.newAssignmentId }, 'Representative reassigned');
+});
+
+// "Continue" arm of the poor-feedback review loop - DLSA has looked at it
+// and decided the current representative should carry on. No assignment
+// change; "Reassign" (above) is the other arm.
+router.patch('/legal-aid-requests/:requestId/feedback/:feedbackId/continue', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+
+  const { rows } = await pool.query(
+    `update legal_aid_feedback set dlsa_reviewed_at = now() where feedback_id = $1 and request_id = $2 and dlsa_reviewed_at is null returning feedback_id`,
+    [req.params.feedbackId, request.request_id]
+  );
+  if (!rows[0]) return fail(res, 'Feedback not found or already reviewed', 404);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_feedback', entityId: rows[0].feedback_id, details: { note: 'DLSA continued current representative' } });
+
+  return ok(res, { feedbackId: rows[0].feedback_id }, 'Marked as reviewed - representative continues');
+});
+
+// Active -> Completed. Also flips the current assignment to 'Completed' in
+// the same transaction, so a closed request never leaves an assignment
+// permanently sitting 'Active'.
+router.patch('/legal-aid-requests/:requestId/complete', async (req, res) => {
+  const request = await loadOwnLegalAidRequest(req, res);
+  if (!request) return;
+  if (request.status !== 'Active') return fail(res, `This request must be 'Active' for this action (currently '${request.status}')`, 400);
+
+  await withTransaction(async (client) => {
+    await client.query(`update legal_aid_requests set status = 'Completed', updated_at = now() where request_id = $1`, [request.request_id]);
+    await client.query(`update legal_aid_assignments set status = 'Completed' where request_id = $1 and status = 'Active'`, [request.request_id]);
+  });
+
+  await writeAuditLog({
+    officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_request', entityId: request.request_id,
+    details: { fromStatus: 'Active', toStatus: 'Completed' },
+  });
+
+  return ok(res, { requestId: request.request_id, status: 'Completed' }, 'Legal Aid request marked complete');
 });
 
 module.exports = router;

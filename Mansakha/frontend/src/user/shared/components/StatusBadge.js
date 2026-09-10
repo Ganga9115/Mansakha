@@ -23,6 +23,16 @@ const STATUS_META = {
   Deactivated: { color: colors.danger, icon: 'user-x' },
   Light: { color: colors.low, icon: 'check-circle' },
   Heavy: { color: colors.danger, icon: 'alert-triangle' },
+  // Legal Aid's own 7-stage lifecycle (migration_040) - 'Active' and
+  // 'Pending' above are reused as-is; 'Rejected' is normally shown as its
+  // own terminal banner (see LegalAidHubScreen.js) rather than fed into
+  // Stepper, but still gets an entry here for any compact inline use.
+  Submitted: { color: colors.moderate, icon: 'send' },
+  'Under Review': { color: colors.moderate, icon: 'search' },
+  Verified: { color: colors.primary, icon: 'shield' },
+  Approved: { color: colors.primary, icon: 'check-circle' },
+  Completed: { color: colors.low, icon: 'check-circle' },
+  Rejected: { color: colors.danger, icon: 'x-circle' },
   // Audit-log action types (writeAuditLog()'s actual action strings).
   create: { color: colors.success, icon: 'plus-circle' },
   revoke: { color: colors.danger, icon: 'user-x' },

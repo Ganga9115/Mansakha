@@ -230,7 +230,11 @@ function NewRequestForm({ types, caseUserId }) {
 }
 
 const STATUS_SCREEN_BY_TYPE = {
-  'Legal Aid': 'LegalAid',
+  // migration_040: 'Legal Aid' is retired from this intake (no new request of
+  // this type can be submitted here any more), but a pre-existing accepted
+  // one still needs somewhere to go - the new Legal Aid hub shows a
+  // read-only "legacy request" banner for exactly this case.
+  'Legal Aid': 'LegalAidHub',
   'Financial Assistance': 'FinancialAid',
   Medical: 'FinancialAid',
   'Witness Protection': 'ThreatReport',

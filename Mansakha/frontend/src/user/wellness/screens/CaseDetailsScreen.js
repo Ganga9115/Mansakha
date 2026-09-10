@@ -110,12 +110,12 @@ function PartyList({ icon, title, pillBg, pillFg, parties, isLast }) {
   );
 }
 
-function HearingGridCell({ icon, label, value, isLast }) {
+function HearingGridCell({ icon, label, value, isLast, iconColor }) {
   if (value == null || value === '') return null;
   return (
     <View style={[styles.hearingCell, isLast && { borderRightWidth: 0 }]}>
       <View style={styles.hearingIconTile}>
-        <Feather name={icon} size={16} color="#3B82F6" />
+        <Feather name={icon} size={16} color={iconColor || '#3B82F6'} />
       </View>
       <View style={styles.hearingTextContainer}>
         <Text style={styles.hearingLabel}>{label}</Text>
@@ -168,7 +168,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
       </View>
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
-        <View style={styles.body}>
+        <View style={[styles.body, isDesktop && styles.bodyDesktop]}>
           {linkedCases.length > 1 && (
             <View style={styles.switcherRow}>
               {linkedCases.map((c, index) => (
@@ -215,7 +215,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                       <Text style={styles.overviewHeaderTitle}>CASE OVERVIEW</Text>
 
                       <View style={styles.overviewContainer}>
-                        <View style={styles.overviewGridRow}>
+                        <View style={[styles.overviewGridRow, !isDesktop && styles.overviewGridRowMobile]}>
                           <View style={styles.overviewGridCell}>
                             <Text style={styles.overviewLabel}>CNR Number</Text>
                             <Text style={styles.overviewValue}>{data.cnrNumber}</Text>
@@ -230,7 +230,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                           </View>
                         </View>
 
-                        <View style={styles.overviewGridRow}>
+                        <View style={[styles.overviewGridRow, !isDesktop && styles.overviewGridRowMobile]}>
                           <View style={styles.overviewGridCell}>
                             <Text style={styles.overviewLabel}>Filing No. / Date</Text>
                             <Text style={styles.overviewValue}>
@@ -249,7 +249,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                           </View>
                         </View>
 
-                        <View style={styles.overviewGridRow}>
+                        <View style={[styles.overviewGridRow, !isDesktop && styles.overviewGridRowMobile]}>
                           <View style={styles.overviewGridCell}>
                             <Text style={styles.overviewLabel}>Court Establishment</Text>
                             <Text style={styles.overviewValue}>{data.courtEstablishment}</Text>
@@ -264,7 +264,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                           </View>
                         </View>
 
-                        <View style={styles.overviewGridRow}>
+                        <View style={[styles.overviewGridRow, !isDesktop && styles.overviewGridRowMobile]}>
                           <View style={styles.overviewGridCell}>
                             <Text style={styles.overviewLabel}>Case Stage</Text>
                             <Text style={styles.overviewValue}>{data.caseStageLabel}</Text>
@@ -284,7 +284,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         </View>
 
                         {data.caseStatus === 'Disposed' && (
-                          <View style={styles.overviewGridRow}>
+                          <View style={[styles.overviewGridRow, !isDesktop && styles.overviewGridRowMobile]}>
                             <View style={styles.overviewGridCell}>
                               <Text style={styles.overviewLabel}>Disposal Nature</Text>
                               <Text style={styles.overviewValue}>{data.disposalNature}</Text>
@@ -311,7 +311,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                       </View>
                       <View style={styles.cardContent}>
                         <View style={styles.innerPanelContainer}>
-                          <View style={isDesktop ? styles.partiesGrid : styles.fullWidth}>
+                          <View style={isDesktop ? styles.partiesGrid : styles.partiesGridMobile}>
                             <PartyList icon="home" title="Petitioner" pillBg="#DBEAFE" pillFg="#1E40AF" parties={data.petitionerNames} />
                             <PartyList icon="user" title="Respondent" pillBg="#F3E8FF" pillFg="#6B21A8" parties={data.respondentNames} />
                             <PartyList icon="users" title="Advocates" pillBg="#DCFCE7" pillFg="#15803D" parties={data.advocateNames} isLast />
@@ -326,7 +326,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         <View style={styles.cardHeaderRow}>
                           <View style={styles.cardHeaderLeft}>
                             <View style={styles.cardHeaderIconTile}>
-                              <Feather name="calendar" size={18} color="#3B82F6" />
+                              <Feather name="calendar" size={18} color={colors.sidebarAccent} />
                             </View>
                             <View>
                               <Text style={styles.cardTitle}>Next Hearing</Text>
@@ -336,13 +336,13 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         </View>
                         <View style={styles.cardContent}>
                           <View style={styles.innerPanelContainer}>
-                            <View style={styles.hearingGridRow}>
-                              <HearingGridCell icon="calendar" label="Date" value={formatDate(data.nextHearingDate)} />
-                              <HearingGridCell icon="clock" label="First Hearing" value={formatDate(data.firstHearingDate)} isLast />
+                            <View style={[styles.hearingGridRow, !isDesktop && styles.hearingGridRowMobile]}>
+                              <HearingGridCell icon="calendar" label="Date" value={formatDate(data.nextHearingDate)} iconColor={colors.sidebarAccent} />
+                              <HearingGridCell icon="clock" label="First Hearing" value={formatDate(data.firstHearingDate)} isLast iconColor={colors.sidebarAccent} />
                             </View>
-                            <View style={[styles.hearingGridRow, { borderTopWidth: 1, borderTopColor: '#EBF1F6' }]}>
-                              <HearingGridCell icon="help-circle" label="Purpose" value={data.nextHearingPurpose} />
-                              <HearingGridCell icon="video" label="Hearing Mode" value={data.hearingMode} isLast />
+                            <View style={[styles.hearingGridRow, { borderTopWidth: 1, borderTopColor: '#EBF1F6' }, !isDesktop && styles.hearingGridRowMobile]}>
+                              <HearingGridCell icon="help-circle" label="Purpose" value={data.nextHearingPurpose} iconColor={colors.sidebarAccent} />
+                              <HearingGridCell icon="video" label="Hearing Mode" value={data.hearingMode} isLast iconColor={colors.sidebarAccent} />
                             </View>
                           </View>
                         </View>
@@ -369,7 +369,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                               <Text key={i} style={styles.listItem}>{'•'} {a}</Text>
                             ))}
                           </View>
-                          <View style={styles.firGridRow}>
+                          <View style={[styles.firGridRow, !isDesktop && styles.firGridRowMobile]}>
                             <HearingGridCell icon="shield" label="Police Station" value={data.firPoliceStation} />
                             <HearingGridCell icon="file-text" label="FIR Number" value={data.firNumber} />
                             <HearingGridCell icon="calendar" label="FIR Year" value={data.firYear} isLast />
@@ -504,20 +504,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primaryLight,
     paddingTop: Platform.OS === 'ios' ? 48 : spacing.lg,
     paddingBottom: spacing.lg,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0 },
+  topHeaderDesktop: { height: 64, paddingTop: 0, paddingBottom: 0, paddingHorizontal: spacing.xl },
   headerLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  headerRight: { marginLeft: spacing.md },
-  backBtn: { marginRight: spacing.sm, padding: spacing.xs },
-  headerIconTile: { alignItems: 'center', justifyContent: 'center', marginRight: spacing.sm },
-  headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 20, fontWeight: '700' },
-  body: { width: '100%', paddingHorizontal: spacing.xl, paddingVertical: spacing.lg, maxWidth: 1080, alignSelf: 'center' },
+  headerRight: { marginLeft: spacing.sm },
+  backBtn: { marginRight: spacing.xs, padding: spacing.xs },
+  headerIconTile: { alignItems: 'center', justifyContent: 'center', marginRight: spacing.xs },
+  headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 18, fontWeight: '700' },
+  body: { width: '100%', paddingHorizontal: spacing.md, paddingVertical: spacing.md, maxWidth: 1080, alignSelf: 'center' },
+  bodyDesktop: { paddingHorizontal: spacing.xl, paddingVertical: spacing.lg },
 
   switcherRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg, flexWrap: 'wrap' },
   switcherPill: {
@@ -547,8 +548,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: '#EBF1F6',
-    marginBottom: spacing.lg,
-    padding: 24,
+    marginBottom: spacing.md,
+    padding: spacing.md,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.03,
@@ -567,7 +568,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F8FF',
     borderRadius: 16,
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#E8F0FE',
   },
@@ -578,6 +579,10 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E8EEF9',
   },
+  overviewGridRowMobile: {
+    flexDirection: 'column',
+    gap: 8,
+  },
   overviewGridCell: {
     flex: 1,
     paddingRight: 8,
@@ -586,12 +591,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#8E9BAE',
     fontWeight: '500',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   overviewValue: {
     fontSize: 13,
     fontWeight: '700',
     color: '#3B5998',
+    flexWrap: 'wrap',
   },
 
   /* Section Cards */
@@ -612,8 +618,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
     paddingBottom: spacing.sm,
   },
   cardHeaderLeft: {
@@ -640,8 +646,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   cardContent: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
     paddingTop: spacing.xs,
   },
 
@@ -697,22 +703,25 @@ const styles = StyleSheet.create({
   hearingGridRow: {
     flexDirection: 'row',
   },
+  hearingGridRowMobile: {
+    flexDirection: 'column',
+  },
   hearingCell: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: 12,
     borderRightWidth: 1,
     borderRightColor: '#EBF1F6',
   },
   hearingIconTile: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     borderRadius: 8,
     backgroundColor: '#EFF6FF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12,
+    marginRight: 10,
   },
   hearingTextContainer: {
     flex: 1,
@@ -731,12 +740,15 @@ const styles = StyleSheet.create({
 
   /* Acts & FIR */
   actsListSection: {
-    padding: 16,
+    padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#EBF1F6',
   },
   firGridRow: {
     flexDirection: 'row',
+  },
+  firGridRowMobile: {
+    flexDirection: 'column',
   },
 
   row: {
@@ -790,6 +802,9 @@ const styles = StyleSheet.create({
     color: '#3B5998',
   },
   fullWidth: {
+    width: '100%',
+  },
+  partiesGridMobile: {
     width: '100%',
   },
   listItem: {

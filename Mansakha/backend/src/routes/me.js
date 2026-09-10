@@ -102,7 +102,7 @@ router.get('/', verifyToken, async (req, res) => {
 // counsellor messages + upcoming scheduled sessions, the two things a user
 // actually needs a heads-up about).
 async function getUserNotifications(userId) {
-  const [{ rows: unreadMessages }, { rows: sessions }] = await Promise.all([
+  const [{ rows: unreadMessages }, { rows: sessions }, { rows: legalAidRequests }, { rows: legalAidHearings }] = await Promise.all([
     pool.query(
       `select m.message_id, m.sent_at, o.full_name
        from messages m
@@ -121,6 +121,30 @@ async function getUserNotifications(userId) {
        limit 5`,
       [userId]
     ),
+    // migration_040 - Legal Aid has no dedicated notification-event row (unlike
+    // messages' sent_at/read_at), so this mirrors the two sources above exactly:
+    // recent status changes on any case in the caller's OWN family (never just
+    // the anchor - a request is filed against the literal docket, not always
+    // the anchor), no server-side unread tracking.
+    pool.query(
+      `select lar.request_id, lar.status, lar.updated_at
+       from legal_aid_requests lar
+       join users u on u.user_id = lar.user_id
+       where u.user_id = $1 or u.linked_to_user_id = $1
+       order by lar.updated_at desc
+       limit 5`,
+      [userId]
+    ),
+    pool.query(
+      `select h.hearing_id, h.created_at
+       from legal_aid_hearings h
+       join legal_aid_requests lar on lar.request_id = h.request_id
+       join users u on u.user_id = lar.user_id
+       where u.user_id = $1 or u.linked_to_user_id = $1
+       order by h.created_at desc
+       limit 5`,
+      [userId]
+    ),
   ]);
 
   const notifications = [
@@ -135,6 +159,18 @@ async function getUserNotifications(userId) {
       notifiedAt: s.scheduled_at,
       type: 'session',
       message: `Upcoming session with ${s.full_name || 'your counsellor'} on ${new Date(s.scheduled_at).toLocaleString()}`,
+    })),
+    ...legalAidRequests.map((r) => ({
+      notificationId: r.request_id,
+      notifiedAt: r.updated_at,
+      type: 'legal_aid_status',
+      message: `Your Legal Aid request is now ${r.status}`,
+    })),
+    ...legalAidHearings.map((h) => ({
+      notificationId: h.hearing_id,
+      notifiedAt: h.created_at,
+      type: 'legal_aid_hearing',
+      message: 'A hearing outcome was recorded for your Legal Aid case',
     })),
   ].sort((a, b) => new Date(b.notifiedAt).getTime() - new Date(a.notifiedAt).getTime());
 

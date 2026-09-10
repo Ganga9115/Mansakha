@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, Linking, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, Linking, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import EmojiPicker from 'rn-emoji-keyboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -29,23 +31,8 @@ import {
   useSendTypingPing,
 } from '../../shared/services/hooks';
 
-// Minimum gap between "user is typing" pings sent to the backend while
-// composing - avoids firing one per keystroke.
 const TYPING_PING_THROTTLE_MS = 1500;
 
-// Frequently used emojis for quick selection
-const QUICK_EMOJIS = [
-  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
-  '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
-  '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
-  '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
-  '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
-  '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗',
-  '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯',
-  '👍', '👎', '👏', '🙌', '🙏', '❤️', '💖', '✨', '🔥', '🎉'
-];
-
-// Formats a whole/fractional number of seconds as WhatsApp-style "m:ss".
 function formatDuration(totalSeconds) {
   const s = Math.max(0, Math.floor(totalSeconds || 0));
   const m = Math.floor(s / 60);
@@ -60,16 +47,44 @@ function formatTimestamp(sentAt) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-// Lightweight static "waveform" decoration - not a real render of the
-// audio's amplitude, just a few bars of varying height for visual texture.
+function getDateLabel(sentAt) {
+  if (!sentAt) return 'Today';
+  const d = new Date(sentAt);
+  if (Number.isNaN(d.getTime())) return 'Today';
+
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  const isSameDay = (d1, d2) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+
+  if (isSameDay(d, today)) return 'Today';
+  if (isSameDay(d, yesterday)) return 'Yesterday';
+
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function groupMessagesByDate(messages) {
+  const groups = [];
+  let currentGroup = null;
+
+  messages.forEach((msg) => {
+    const label = getDateLabel(msg.sentAt);
+    if (!currentGroup || currentGroup.label !== label) {
+      currentGroup = { label, data: [] };
+      groups.push(currentGroup);
+    }
+    currentGroup.data.push(msg);
+  });
+
+  return groups;
+}
+
 const WAVEFORM_BAR_HEIGHTS = [6, 12, 8, 16, 10, 14, 7, 11];
 
-// WhatsApp-style "typing..." indicator, rendered as a real received-message
-// bubble (same avatar/bubble shape as any other counsellor message) at the
-// bottom of the thread rather than static text above the composer - driven
-// entirely by `otherPartyTyping`, which the messages poll already surfaces
-// server-side (see useCounsellorMessages/the typing-ping backend route), so
-// this only changes how that real state is presented, not what drives it.
 function TypingBubble() {
   const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
 
@@ -123,13 +138,23 @@ export default function CounsellorChatScreen({ navigation }) {
   const sendMessage = useSendCounsellorMessage();
   const sendTypingPing = useSendTypingPing();
   const sendVoiceMessage = useSendCounsellorVoiceMessage();
+
   const [draft, setDraft] = useState('');
   const [isSendingVoice, setIsSendingVoice] = useState(false);
   const [playingMessageId, setPlayingMessageId] = useState(null);
   const [isPaused, setIsPaused] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  const [showScrollBottomBtn, setShowScrollBottomBtn] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const scrollRef = useRef(null);
   const lastTypingPingAtRef = useRef(0);
+  const isAtBottomRef = useRef(true);
+
+  // Persist unread count to AsyncStorage
+  useEffect(() => {
+    AsyncStorage.setItem('counsellorUnreadCount', String(unreadCount));
+  }, [unreadCount]);
 
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 200);
@@ -140,25 +165,47 @@ export default function CounsellorChatScreen({ navigation }) {
   const messages = messagesQuery.data?.messages || [];
   const otherPartyTyping = !!messagesQuery.data?.otherPartyTyping;
 
+  const groupedMessages = groupMessagesByDate(messages);
+
   useEffect(() => {
-    scrollRef.current?.scrollToEnd({ animated: true });
+    if (isAtBottomRef.current) {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    } else {
+      setUnreadCount((prev) => prev + 1);
+    }
   }, [messages.length]);
 
-  // Reset the play/pause icon back to "play" once a voice note finishes.
   useEffect(() => {
     if (playingMessageId && playerStatus.didJustFinish) {
       setPlayingMessageId(null);
     }
   }, [playerStatus.didJustFinish, playingMessageId]);
 
+  const handleScroll = (event) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    const paddingToBottom = 60;
+    const isBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom;
+
+    isAtBottomRef.current = isBottom;
+    setShowScrollBottomBtn(!isBottom);
+
+    if (isBottom) {
+      setUnreadCount(0);
+    }
+  };
+
+  const scrollToBottom = () => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+    setUnreadCount(0);
+    setShowScrollBottomBtn(false);
+    isAtBottomRef.current = true;
+  };
+
   const handleCall = () => {
     if (!counsellor?.phone) return;
     Linking.openURL(`tel:${counsellor.phone}`).catch(() => toast.error('Could not start a call on this device.'));
   };
 
-  // Accepts an optional override so the "Enter/Send" native-keyboard path
-  // below can send the just-typed text directly instead of round-tripping
-  // through `draft` state (which hasn't re-rendered yet at that point).
   const handleSend = async (overrideText) => {
     if (recorderState.isRecording || isPaused) {
       handleFinishVoiceRecording();
@@ -171,19 +218,13 @@ export default function CounsellorChatScreen({ navigation }) {
     setShowEmojiPicker(false);
     try {
       await sendMessage.mutateAsync(text);
+      scrollToBottom();
     } catch (err) {
       toast.error(err.message || 'Could not send that message.');
     }
   };
 
   const handleDraftChange = (text) => {
-    // On Android/iOS, a multiline TextInput inserts a literal "\n" when the
-    // keyboard's own Enter/Send key is pressed - there's no reliable way to
-    // intercept and suppress that before it commits (unlike the web path in
-    // handleComposerKeyPress below, which can call preventDefault). Treating
-    // a newly-typed trailing newline as "Send" mirrors this screen's
-    // existing web Enter-to-send behaviour on mobile too, so the keyboard's
-    // Send/Enter key works exactly like tapping the Send button.
     if (Platform.OS !== 'web' && text.endsWith('\n') && !draft.endsWith('\n')) {
       handleSend(text.slice(0, -1));
       return;
@@ -196,8 +237,8 @@ export default function CounsellorChatScreen({ navigation }) {
     }
   };
 
-  const handleSelectEmoji = (emoji) => {
-    handleDraftChange(draft + emoji);
+  const handleSelectEmoji = (emojiObject) => {
+    handleDraftChange(draft + emojiObject.emoji);
   };
 
   const handleComposerKeyPress = (e) => {
@@ -245,7 +286,7 @@ export default function CounsellorChatScreen({ navigation }) {
     try {
       await recorder.stop();
     } catch (err) {
-      // Ignore cleanup error on cancel
+      // Ignore cleanup error
     } finally {
       setIsPaused(false);
     }
@@ -267,6 +308,7 @@ export default function CounsellorChatScreen({ navigation }) {
     setIsSendingVoice(true);
     try {
       await sendVoiceMessage.mutateAsync({ uri, durationSeconds });
+      scrollToBottom();
     } catch (err) {
       toast.error(err.message || 'Could not send that voice message.');
     } finally {
@@ -290,8 +332,8 @@ export default function CounsellorChatScreen({ navigation }) {
   const sendDisabled = (!draft.trim() && !isRecordingActive) || sendMessage.isPending || isSendingVoice;
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container} 
+    <KeyboardAvoidingView
+      style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={[styles.topHeader, !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm }]}>
@@ -302,10 +344,10 @@ export default function CounsellorChatScreen({ navigation }) {
         )}
         <View style={styles.headerLeft}>
           {isDesktop ? (
-            <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop}/>
+            <Feather color={colors.primaryDark} name="user" size={24} style={styles.headerIconDesktop} />
           ) : (
             <View style={styles.avatarContainer}>
-              <Feather color={colors.primaryDark} name="user" size={28}/>
+              <Feather color={colors.primaryDark} name="user" size={28} />
             </View>
           )}
 
@@ -315,7 +357,6 @@ export default function CounsellorChatScreen({ navigation }) {
           </View>
         </View>
         <View style={{ flex: 1 }} />
-        {/* Single Green Call Button for Counsellor */}
         {!!counsellor && (
           <Pressable onPress={handleCall} style={styles.callIconBtn} hitSlop={8} accessibilityLabel="Call counsellor">
             <Feather name="phone" size={18} color={colors.success} />
@@ -336,100 +377,129 @@ export default function CounsellorChatScreen({ navigation }) {
             <Text style={styles.heroText}>You do not currently have a counsellor assigned.</Text>
           </View>
         ) : (
-          <>
+          <View style={styles.chatAreaWrapper}>
             <ScrollView
               ref={scrollRef}
               style={styles.thread}
               contentContainerStyle={styles.threadContent}
-              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
               showsVerticalScrollIndicator={false}
             >
-              <View style={styles.dateBadgeContainer}>
-                <View style={styles.dateBadge}>
-                  <Text style={styles.dateBadgeText}>Today</Text>
-                </View>
-              </View>
-
-              {messages.length === 0 ? (
+              {groupedMessages.length === 0 ? (
                 <Text style={styles.emptyText}>No messages yet - say hello.</Text>
               ) : (
-                messages.map((m) => {
-                  const isUser = m.senderType === 'user';
-                  const isVoice = m.messageType === 'voice';
-                  const isThisPlaying = isVoice && playingMessageId === m.messageId && playerStatus.playing;
-                  return (
-                    <View key={m.messageId} style={[styles.bubbleRow, isUser ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
-                      {!isUser && (
-                        <View style={styles.avatarTile}>
-                          <Feather name="user" size={16} color={colors.primary} />
-                        </View>
-                      )}
-                      <View style={[styles.bubbleColumn, isUser ? styles.bubbleColumnRight : styles.bubbleColumnLeft]}>
-                        {isVoice ? (
-                          <Pressable
-                            onPress={() => handleToggleVoicePlayback(m)}
-                            style={[styles.bubble, styles.voiceBubble, isUser ? styles.bubbleUser : styles.bubbleOfficial]}
-                            accessibilityRole="button"
-                            accessibilityLabel={isThisPlaying ? 'Pause voice message' : 'Play voice message'}
-                          >
-                            <View style={[styles.voicePlayBtn, isUser ? styles.voicePlayBtnUser : styles.voicePlayBtnOfficial]}>
-                              <Feather name={isThisPlaying ? 'pause' : 'play'} size={14} color={isUser ? colors.primary : colors.white} />
-                            </View>
-                            <View style={styles.waveform}>
-                              {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
-                                <View
-                                  key={idx}
-                                  style={[styles.waveformBar, { height: h }, isUser ? styles.waveformBarUser : styles.waveformBarOfficial]}
-                                />
-                              ))}
-                            </View>
-                            <Text style={[styles.voiceDuration, isUser && styles.bubbleTextUser]}>
-                              {formatDuration(m.durationSeconds)}
-                            </Text>
-                          </Pressable>
-                        ) : (
-                          <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleOfficial]}>
-                            <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{m.body}</Text>
-                          </View>
-                        )}
-                        <View style={styles.metaRow}>
-                          <Text style={styles.timestamp}>{formatTimestamp(m.sentAt)}</Text>
-                          {isUser && <Feather name="check-circle" size={10} color={colors.primary} style={styles.readIcon} />}
-                        </View>
+                groupedMessages.map((group) => (
+                  <View key={group.label} style={styles.dateGroup}>
+                    <View style={styles.dateBadgeContainer}>
+                      <View style={styles.dateBadge}>
+                        <Text style={styles.dateBadgeText}>{group.label}</Text>
                       </View>
-                      {isUser && (
-                        <View style={[styles.avatarTile, styles.userAvatarTile]}>
-                          <Feather name="user" size={16} color={colors.white} />
-                        </View>
-                      )}
                     </View>
-                  );
-                })
+
+                    {group.data.map((m) => {
+                      const isUser = m.senderType === 'user';
+                      const isVoice = m.messageType === 'voice';
+                      const isThisPlaying = isVoice && playingMessageId === m.messageId && playerStatus.playing;
+                      return (
+                        <View key={m.messageId} style={[styles.bubbleRow, isUser ? styles.bubbleRowRight : styles.bubbleRowLeft]}>
+                          {!isUser && (
+                            <View style={styles.avatarTile}>
+                              <Feather name="user" size={16} color={colors.primary} />
+                            </View>
+                          )}
+                          <View style={[styles.bubbleColumn, isUser ? styles.bubbleColumnRight : styles.bubbleColumnLeft]}>
+                            {isVoice ? (
+                              <Pressable
+                                onPress={() => handleToggleVoicePlayback(m)}
+                                style={[styles.bubble, styles.voiceBubble, isUser ? styles.bubbleUser : styles.bubbleOfficial]}
+                                accessibilityRole="button"
+                                accessibilityLabel={isThisPlaying ? 'Pause voice message' : 'Play voice message'}
+                              >
+                                <View style={[styles.voicePlayBtn, isUser ? styles.voicePlayBtnUser : styles.voicePlayBtnOfficial]}>
+                                  <Feather name={isThisPlaying ? 'pause' : 'play'} size={14} color={isUser ? colors.primary : colors.white} />
+                                </View>
+                                <View style={styles.waveform}>
+                                  {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
+                                    <View
+                                      key={idx}
+                                      style={[styles.waveformBar, { height: h }, isUser ? styles.waveformBarUser : styles.waveformBarOfficial]}
+                                    />
+                                  ))}
+                                </View>
+                                <Text style={[styles.voiceDuration, isUser && styles.bubbleTextUser]}>
+                                  {formatDuration(m.durationSeconds)}
+                                </Text>
+                              </Pressable>
+                            ) : (
+                              <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleOfficial]}>
+                                <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{m.body}</Text>
+                              </View>
+                            )}
+                            <View style={styles.metaRow}>
+                              <Text style={styles.timestamp}>{formatTimestamp(m.sentAt)}</Text>
+                              {isUser && <Feather name="check-circle" size={10} color={colors.primary} style={styles.readIcon} />}
+                            </View>
+                          </View>
+                          {isUser && (
+                            <View style={[styles.avatarTile, styles.userAvatarTile]}>
+                              <Feather name="user" size={16} color={colors.white} />
+                            </View>
+                          )}
+                        </View>
+                      );
+                    })}
+                  </View>
+                ))
               )}
 
               {otherPartyTyping && <TypingBubble />}
             </ScrollView>
 
-            {/* Emoji Selection Grid Popup */}
+            {showScrollBottomBtn && (
+              <Pressable
+                style={styles.scrollToBottomBtn}
+                onPress={scrollToBottom}
+                accessibilityRole="button"
+                accessibilityLabel="Scroll to bottom"
+              >
+                <Feather name="chevron-down" size={22} color={colors.primary} />
+                {unreadCount > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
+                  </View>
+                )}
+              </Pressable>
+            )}
+
+            {/* Small inline emoji picker positioned just above the input */}
             {showEmojiPicker && (
-              <View style={styles.emojiPickerContainer}>
-                <View style={styles.emojiHeader}>
-                  <Text style={styles.emojiHeaderText}>Select Emoji</Text>
-                  <Pressable onPress={() => setShowEmojiPicker(false)} hitSlop={8}>
-                    <Feather name="x" size={18} color={colors.textSecondary} />
-                  </Pressable>
-                </View>
-                <ScrollView contentContainerStyle={styles.emojiGrid} keyboardShouldPersistTaps="handled">
-                  {QUICK_EMOJIS.map((emoji, index) => (
-                    <Pressable
-                      key={index}
-                      style={styles.emojiItem}
-                      onPress={() => handleSelectEmoji(emoji)}
-                    >
-                      <Text style={styles.emojiText}>{emoji}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
+              <View style={styles.emojiPickerPopup}>
+                <EmojiPicker
+                  onEmojiSelected={handleSelectEmoji}
+                  open={showEmojiPicker}
+                  onClose={() => setShowEmojiPicker(false)}
+                  enableModal={false}
+                  enableSearchBar
+                  theme={{
+                    backdrop: 'transparent',
+                    container: '#FFFFFF',
+                    header: '#4A5568',
+                    skinTonesContainer: '#EDF2F5',
+                    category: {
+                      icon: '#718096',
+                      iconActive: colors.primary,
+                      container: '#F7FAFC',
+                      containerActive: '#E2E8F0',
+                    },
+                    search: {
+                      background: '#F7FAFC',
+                      text: '#1A202C',
+                      placeholder: '#A0AEC0',
+                      icon: '#718096',
+                    },
+                  }}
+                />
               </View>
             )}
 
@@ -503,7 +573,7 @@ export default function CounsellorChatScreen({ navigation }) {
                 </Pressable>
               </View>
             </View>
-          </>
+          </View>
         )}
       </View>
     </KeyboardAvoidingView>
@@ -555,11 +625,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   body: { flex: 1, width: '100%' },
+  chatAreaWrapper: { flex: 1, position: 'relative' },
   content: { flex: 1, padding: spacing.xl },
   heroText: { ...typography.body, color: colors.textSecondary, textAlign: 'center', lineHeight: 24 },
   thread: { flex: 1 },
   threadContent: { padding: spacing.lg, gap: spacing.md, flexGrow: 1 },
   emptyText: { ...typography.caption, color: colors.textSecondary, textAlign: 'center', marginTop: spacing.xl },
+  dateGroup: { gap: spacing.md },
   dateBadgeContainer: { alignItems: 'center', marginVertical: spacing.xs },
   dateBadge: {
     backgroundColor: colors.surface,
@@ -583,7 +655,7 @@ const styles = StyleSheet.create({
   userAvatarTile: { backgroundColor: colors.primary },
   bubbleColumn: { maxWidth: '75%' },
   bubbleColumnLeft: { alignItems: 'flex-start' },
-  bubbleColumnRight: { alignItems: 'flex-end' },
+  bubbleColumnRight: { alignItems: 'end' },
   bubble: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -615,8 +687,6 @@ const styles = StyleSheet.create({
   waveformBarOfficial: { backgroundColor: colors.border },
   waveformBarUser: { backgroundColor: colors.primary },
   voiceDuration: { ...typography.caption, color: colors.textPrimary },
-  // WhatsApp-style typing bubble - same bubble shape as a real message, just
-  // three animated dots instead of text.
   typingBubble: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -628,6 +698,43 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     backgroundColor: colors.textSecondary,
+  },
+  scrollToBottomBtn: {
+    position: 'absolute',
+    bottom: 70,
+    right: spacing.lg,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadow.card,
+    zIndex: 10,
+  },
+  emojiPickerPopup: {
+    position: 'absolute',
+    bottom: 90,
+    right: spacing.lg,
+    width: 280,
+    height: 360,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.lg,
+    ...shadow.card,
+    zIndex: 10,
+    overflow: 'hidden',
+  },
+  unreadBadgeText: {
+    color: colors.white,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  inlineEmojiPickerWrapper: {
+    height: 280,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    overflow: 'hidden',
   },
   composerContainer: {
     paddingHorizontal: spacing.lg,
@@ -680,40 +787,4 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   sendBtnDisabled: { opacity: 0.5 },
-  emojiPickerContainer: {
-    maxHeight: 200,
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  emojiHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
-  emojiHeaderText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontWeight: '600',
-  },
-  emojiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'flex-start',
-  },
-  emojiItem: {
-    width: '10%',
-    aspectRatio: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  emojiText: {
-    fontSize: 22,
-  },
 });

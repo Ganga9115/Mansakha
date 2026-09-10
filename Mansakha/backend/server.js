@@ -94,6 +94,10 @@ app.use('/api/protectionofficer', require('./src/protection_officer/routes/prote
 app.use('/api/dlsa', require('./src/dlsa/routes/dlsa.routes'));
 app.use('/api/districtcollector', require('./src/district_collector/routes/districtCollector.routes'));
 app.use('/api/rehabilitationofficer', require('./src/rehabilitation_officer/routes/rehabilitationOfficer.routes'));
+// Legal Representative (migration_040) - the DLSA-assigned advocate role for
+// the dedicated Legal Aid pipeline (see dlsa.routes.js's own Legal Aid
+// Requests section for the assignment side).
+app.use('/api/legalrepresentative', require('./src/legal_representative/routes/legalRepresentative.routes'));
 
 app.use((req, res) => {
   res.status(404).json({ success: false, data: null, message: 'Not found' });
