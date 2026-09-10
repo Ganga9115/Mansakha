@@ -12,6 +12,11 @@ const { getDescendantJurisdictionIds } = require('../../core/services/jurisdicti
 const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
 const { generateSimulatedStationName } = require('../../core/services/policeStationSimulation');
 const { DESIGNATIONS_BY_ROLE } = require('../../core/services/officialDesignations');
+// Coordination Roster's own "is this open referral already overdue" flag
+// reuses the SAME threshold agencyEscalationChecker.js's real automatic
+// escalation already fires on - not a second, potentially-drifting copy of
+// the number 7.
+const { STALE_REFERRAL_DAYS } = require('../../core/services/agencyEscalationChecker');
 
 const router = express.Router();
 
@@ -987,8 +992,15 @@ const COORDINATION_ROLES_JURISDICTION_SCOPED_MINISTRY = ['Protection Officer', '
 router.get('/coordination-roles/performance', async (req, res) => {
   // Jurisdiction/station-scoped roles (5) - same coalesce-onto-station's-own-
   // jurisdiction trick the admin-tier version uses, just with no
-  // jurisdictionIds filter at all (Ministry sees everyone).
-  const [{ rows: officialRows }, { rows: queueRows }, { rows: providerOfficialRows }, { rows: providerQueueRows }] = await Promise.all([
+  // jurisdictionIds filter at all (Ministry sees everyone). The two
+  // row-level queries (openReferralRows/providerOpenReferralRows) are what
+  // turn a bare open count into an actual worklist - same addition the
+  // admin-tier version of this route already carries, just also covering
+  // Rehabilitation Officer's own provider-scoped queue here.
+  const [
+    { rows: officialRows }, { rows: queueRows }, { rows: openReferralRows },
+    { rows: providerOfficialRows }, { rows: providerQueueRows }, { rows: providerOpenReferralRows },
+  ] = await Promise.all([
     pool.query(
       `select o.official_id, o.full_name, r.role_name, orr.designation, orr.station_id, ps.name as station_name,
               coalesce(orr.jurisdiction_id, ps.jurisdiction_id) as effective_jurisdiction_id,
@@ -1013,6 +1025,22 @@ router.get('/coordination-roles/performance', async (req, res) => {
        group by ar.referred_to_role, u.jurisdiction_id`,
       [ALL_COORDINATION_ROLES]
     ),
+    pool.query(
+      `select ar.referral_id, ar.referred_to_role as role_name, u.jurisdiction_id, ar.created_at,
+              u.docket_number, ct.name as case_type_name, rl.name as risk_level_name
+       from agency_referrals ar
+       join users u on u.user_id = ar.user_id
+       join case_types ct on ct.case_type_id = u.case_type_id
+       left join lateral (
+         select risk_level_id from distress_scores
+         where user_id = coalesce(u.linked_to_user_id, u.user_id)
+         order by computed_at desc limit 1
+       ) ds on true
+       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where ar.referred_to_role = any($1::text[]) and ar.status = 'Open'
+       order by ar.created_at asc`,
+      [ALL_COORDINATION_ROLES]
+    ),
     // Rehabilitation Officer - provider-scoped (migration_031's provider_id
     // column), not jurisdiction-scoped at all.
     pool.query(
@@ -1032,11 +1060,51 @@ router.get('/coordination-roles/performance', async (req, res) => {
        from agency_referrals ar
        where ar.referred_to_role = 'Rehabilitation Officer'`
     ),
+    pool.query(
+      `select ar.referral_id, ar.created_at, ar.metadata->>'providerId' as provider_id,
+              u.docket_number, ct.name as case_type_name, rl.name as risk_level_name
+       from agency_referrals ar
+       join users u on u.user_id = ar.user_id
+       join case_types ct on ct.case_type_id = u.case_type_id
+       left join lateral (
+         select risk_level_id from distress_scores
+         where user_id = coalesce(u.linked_to_user_id, u.user_id)
+         order by computed_at desc limit 1
+       ) ds on true
+       left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+       where ar.referred_to_role = 'Rehabilitation Officer' and ar.status = 'Open'
+       order by ar.created_at asc`
+    ),
   ]);
 
+  // Same real 7-day threshold agencyEscalationChecker.js's own automatic
+  // District Collector escalation fires on - "overdue" here means exactly
+  // what the system already treats as overdue, not a separately-invented
+  // UI-only number.
+  const toOpenReferralEntry = (r) => {
+    const daysOpen = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86400000);
+    return {
+      referralId: r.referral_id,
+      docketNumber: r.docket_number,
+      caseType: r.case_type_name,
+      riskLevel: r.risk_level_name,
+      daysOpen,
+      overdue: daysOpen >= STALE_REFERRAL_DAYS,
+    };
+  };
+
   const queueByKey = new Map(queueRows.map((r) => [`${r.role_name}::${r.jurisdiction_id}`, r]));
+  const openReferralsByKey = new Map();
+  for (const r of openReferralRows) {
+    const key = `${r.role_name}::${r.jurisdiction_id}`;
+    if (!openReferralsByKey.has(key)) openReferralsByKey.set(key, []);
+    openReferralsByKey.get(key).push(toOpenReferralEntry(r));
+  }
+
   const officials = officialRows.map((o) => {
-    const q = queueByKey.get(`${o.role_name}::${o.effective_jurisdiction_id}`);
+    const key = `${o.role_name}::${o.effective_jurisdiction_id}`;
+    const q = queueByKey.get(key);
+    const openReferrals = openReferralsByKey.get(key) || [];
     return {
       officialId: o.official_id,
       fullName: o.full_name,
@@ -1049,6 +1117,8 @@ router.get('/coordination-roles/performance', async (req, res) => {
       openReferralCount: q ? Number(q.open_count) : 0,
       resolvedReferralCount: q ? Number(q.resolved_count) : 0,
       avgResolveDays: q && q.avg_resolve_days !== null ? Math.round(Number(q.avg_resolve_days) * 10) / 10 : null,
+      openReferrals,
+      overdueOpenCount: openReferrals.filter((r) => r.overdue).length,
     };
   });
 
@@ -1067,8 +1137,16 @@ router.get('/coordination-roles/performance', async (req, res) => {
     providerQueueByProviderId.set(r.provider_id, bucket);
   }
 
+  const providerOpenReferralsByProviderId = new Map();
+  for (const r of providerOpenReferralRows) {
+    if (!r.provider_id) continue;
+    if (!providerOpenReferralsByProviderId.has(r.provider_id)) providerOpenReferralsByProviderId.set(r.provider_id, []);
+    providerOpenReferralsByProviderId.get(r.provider_id).push(toOpenReferralEntry(r));
+  }
+
   const rehabilitationOfficials = providerOfficialRows.map((o) => {
     const q = providerQueueByProviderId.get(o.provider_id);
+    const openReferrals = providerOpenReferralsByProviderId.get(o.provider_id) || [];
     return {
       officialId: o.official_id,
       fullName: o.full_name,
@@ -1081,6 +1159,8 @@ router.get('/coordination-roles/performance', async (req, res) => {
       openReferralCount: q ? q.open : 0,
       resolvedReferralCount: q ? q.resolved : 0,
       avgResolveDays: q && q.resolveDaysCount > 0 ? Math.round((q.resolveDaysSum / q.resolveDaysCount) * 10) / 10 : null,
+      openReferrals,
+      overdueOpenCount: openReferrals.filter((r) => r.overdue).length,
     };
   });
 
@@ -1093,7 +1173,7 @@ router.get('/coordination-roles/performance', async (req, res) => {
 // providers (migration_029, Ministry-manageable) have no Rehabilitation
 // Officer assigned yet.
 router.get('/coordination-roles/staffing-gaps', async (req, res) => {
-  const [roleGapResults, { rows: stationGaps }, { rows: providerGaps }] = await Promise.all([
+  const [roleGapResults, { rows: stationGaps }, { rows: providerGaps }, { rows: totalDistrictRows }, { rows: totalStationRows }, { rows: totalProviderRows }] = await Promise.all([
     Promise.all(
       COORDINATION_ROLES_JURISDICTION_SCOPED_MINISTRY.map(async (roleName) => {
         const { rows } = await pool.query(
@@ -1134,12 +1214,39 @@ router.get('/coordination-roles/staffing-gaps', async (req, res) => {
          )
        order by rp.name`
     ),
+    // Coverage denominators - "6 unstaffed" reads very differently against
+    // 8 districts than against 700+, so both counts below turn the raw gap
+    // list into an actual percentage, same addition the admin-tier version
+    // of this route already carries.
+    pool.query(`select count(*) as count from jurisdictions where level = 'district'`),
+    pool.query(`select count(*) as count from police_stations where deleted_at is null`),
+    pool.query(`select count(*) as count from rehabilitation_providers where deleted_at is null`),
   ]);
 
+  const totalDistricts = Number(totalDistrictRows[0].count);
+  const totalStations = Number(totalStationRows[0].count);
+  const totalProviders = Number(totalProviderRows[0].count);
+  const roleGaps = roleGapResults.map((g) => ({
+    ...g,
+    totalDistricts,
+    staffedCount: totalDistricts - g.unassignedJurisdictions.length,
+    coveragePct: totalDistricts > 0 ? Math.round(((totalDistricts - g.unassignedJurisdictions.length) / totalDistricts) * 1000) / 10 : null,
+  }));
+
   return ok(res, {
-    roleGaps: roleGapResults,
+    roleGaps,
     stationGaps: stationGaps.map((s) => ({ stationId: s.station_id, name: s.name, jurisdictionName: s.jurisdiction_name })),
     providerGaps: providerGaps.map((p) => ({ providerId: p.provider_id, name: p.name, providerType: p.provider_type })),
+    stationCoverage: {
+      totalStations,
+      staffedCount: totalStations - stationGaps.length,
+      coveragePct: totalStations > 0 ? Math.round(((totalStations - stationGaps.length) / totalStations) * 1000) / 10 : null,
+    },
+    providerCoverage: {
+      totalProviders,
+      staffedCount: totalProviders - providerGaps.length,
+      coveragePct: totalProviders > 0 ? Math.round(((totalProviders - providerGaps.length) / totalProviders) * 1000) / 10 : null,
+    },
   });
 });
 

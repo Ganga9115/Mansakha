@@ -26,6 +26,11 @@ const {
   computeLegalAidFunnel,
 } = require('../../core/services/reportSnapshot');
 const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
+// Coordination Roster's own "is this open referral already overdue" flag
+// reuses the SAME threshold agencyEscalationChecker.js's real automatic
+// escalation already fires on - not a second, potentially-drifting copy of
+// the number 7.
+const { STALE_REFERRAL_DAYS } = require('../../core/services/agencyEscalationChecker');
 
 // How far back to look when predicting escalation risk across a whole
 // jurisdiction subtree - predictEscalationRisk itself further caps each
@@ -1228,25 +1233,76 @@ router.get(
 
     if (officialRows.length === 0) return ok(res, { officials: [] });
 
-    // One grouped query for every role+jurisdiction's queue health, not one
-    // query per official - same "single round trip regardless of roster
-    // size" fix the counsellor-performance route above already applies.
-    const { rows: queueRows } = await pool.query(
-      `select ar.referred_to_role as role_name, u.jurisdiction_id,
-              count(*) filter (where ar.status = 'Open') as open_count,
-              count(*) filter (where ar.status = 'Resolved') as resolved_count,
-              avg(extract(epoch from (ar.resolved_at - ar.created_at)) / 86400) filter (where ar.resolved_at is not null) as avg_resolve_days
-       from agency_referrals ar
-       join users u on u.user_id = ar.user_id
-       where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
-         and u.jurisdiction_id = any($1::uuid[])
-       group by ar.referred_to_role, u.jurisdiction_id`,
-      [jurisdictionIds]
-    );
+    // One grouped query for every role+jurisdiction's queue health, plus one
+    // row-level query for the actual open referrals behind those counts -
+    // both single round trips regardless of roster size, same "no query per
+    // official" fix the counsellor-performance route above already applies.
+    // The row-level query is what turns a bare "6 open" into an actual
+    // worklist (docket number, case type, current risk level, days open)
+    // instead of a dead end - the same "cap the box height, never the data"
+    // philosophy the Staffing Gaps list below already follows.
+    const [{ rows: queueRows }, { rows: openReferralRows }] = await Promise.all([
+      pool.query(
+        `select ar.referred_to_role as role_name, u.jurisdiction_id,
+                count(*) filter (where ar.status = 'Open') as open_count,
+                count(*) filter (where ar.status = 'Resolved') as resolved_count,
+                avg(extract(epoch from (ar.resolved_at - ar.created_at)) / 86400) filter (where ar.resolved_at is not null) as avg_resolve_days
+         from agency_referrals ar
+         join users u on u.user_id = ar.user_id
+         where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
+           and u.jurisdiction_id = any($1::uuid[])
+         group by ar.referred_to_role, u.jurisdiction_id`,
+        [jurisdictionIds]
+      ),
+      pool.query(
+        `select ar.referral_id, ar.referred_to_role as role_name, u.jurisdiction_id, ar.created_at,
+                u.docket_number, ct.name as case_type_name, rl.name as risk_level_name
+         from agency_referrals ar
+         join users u on u.user_id = ar.user_id
+         join case_types ct on ct.case_type_id = u.case_type_id
+         left join lateral (
+           select risk_level_id from distress_scores
+           where user_id = coalesce(u.linked_to_user_id, u.user_id)
+           order by computed_at desc limit 1
+         ) ds on true
+         left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+         where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
+           and u.jurisdiction_id = any($1::uuid[]) and ar.status = 'Open'
+         order by ar.created_at asc`,
+        [jurisdictionIds]
+      ),
+    ]);
     const queueByKey = new Map(queueRows.map((r) => [`${r.role_name}::${r.jurisdiction_id}`, r]));
 
+    // Grouped by the SAME role+jurisdiction key queueByKey uses - an open
+    // referral is scoped to a role within a jurisdiction, not to a specific
+    // official (see this route's own header comment), so two officials who
+    // genuinely share a scope correctly see the identical worklist rather
+    // than an arbitrary split of it.
+    const openReferralsByKey = new Map();
+    for (const r of openReferralRows) {
+      const key = `${r.role_name}::${r.jurisdiction_id}`;
+      const daysOpen = Math.floor((Date.now() - new Date(r.created_at).getTime()) / 86400000);
+      const entry = {
+        referralId: r.referral_id,
+        docketNumber: r.docket_number,
+        caseType: r.case_type_name,
+        riskLevel: r.risk_level_name,
+        daysOpen,
+        // Same real 7-day threshold agencyEscalationChecker.js's own
+        // automatic District Collector escalation fires on - "overdue" here
+        // means exactly what the system already treats as overdue, not a
+        // separately-invented UI-only number.
+        overdue: daysOpen >= STALE_REFERRAL_DAYS,
+      };
+      if (!openReferralsByKey.has(key)) openReferralsByKey.set(key, []);
+      openReferralsByKey.get(key).push(entry);
+    }
+
     const officials = officialRows.map((o) => {
-      const q = queueByKey.get(`${o.role_name}::${o.effective_jurisdiction_id}`);
+      const key = `${o.role_name}::${o.effective_jurisdiction_id}`;
+      const q = queueByKey.get(key);
+      const openReferrals = openReferralsByKey.get(key) || [];
       return {
         officialId: o.official_id,
         fullName: o.full_name,
@@ -1258,6 +1314,8 @@ router.get(
         openReferralCount: q ? Number(q.open_count) : 0,
         resolvedReferralCount: q ? Number(q.resolved_count) : 0,
         avgResolveDays: q && q.avg_resolve_days !== null ? Math.round(Number(q.avg_resolve_days) * 10) / 10 : null,
+        openReferrals,
+        overdueOpenCount: openReferrals.filter((r) => r.overdue).length,
       };
     });
 
@@ -1282,7 +1340,7 @@ router.get(
     const { jurisdictionId } = req.params;
     const jurisdictionIds = await getDescendantJurisdictionIds(jurisdictionId);
 
-    const [roleGapResults, { rows: stationGaps }] = await Promise.all([
+    const [roleGapResults, { rows: stationGaps }, { rows: totalDistrictRows }, { rows: totalStationRows }] = await Promise.all([
       Promise.all(
         COORDINATION_ROLES_JURISDICTION_SCOPED.map(async (roleName) => {
           const { rows } = await pool.query(
@@ -1313,11 +1371,31 @@ router.get(
          order by j.name, ps.name`,
         [jurisdictionIds]
       ),
+      // Coverage denominators - "6 unstaffed" reads very differently against
+      // 8 districts than against 400, so both counts below turn the raw gap
+      // list into an actual percentage instead of leaving the reader to
+      // guess the size of the subtree it's drawn from.
+      pool.query(`select count(*) as count from jurisdictions where jurisdiction_id = any($1::uuid[]) and level = 'district'`, [jurisdictionIds]),
+      pool.query(`select count(*) as count from police_stations where jurisdiction_id = any($1::uuid[]) and deleted_at is null`, [jurisdictionIds]),
     ]);
 
+    const totalDistricts = Number(totalDistrictRows[0].count);
+    const totalStations = Number(totalStationRows[0].count);
+    const roleGaps = roleGapResults.map((g) => ({
+      ...g,
+      totalDistricts,
+      staffedCount: totalDistricts - g.unassignedJurisdictions.length,
+      coveragePct: totalDistricts > 0 ? Math.round(((totalDistricts - g.unassignedJurisdictions.length) / totalDistricts) * 1000) / 10 : null,
+    }));
+
     return ok(res, {
-      roleGaps: roleGapResults,
+      roleGaps,
       stationGaps: stationGaps.map((s) => ({ stationId: s.station_id, name: s.name, jurisdictionName: s.jurisdiction_name })),
+      stationCoverage: {
+        totalStations,
+        staffedCount: totalStations - stationGaps.length,
+        coveragePct: totalStations > 0 ? Math.round(((totalStations - stationGaps.length) / totalStations) * 1000) / 10 : null,
+      },
     });
   }
 );

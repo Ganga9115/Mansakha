@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import MinistryLayout from '../layouts/MinistryLayout';
-import { useJurisdictionOptions, useAdminDashboard } from '../services/hooks';
+import { useJurisdictionOptions, useAdminDashboard, useHeatmap } from '../services/hooks';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 
@@ -9,6 +9,65 @@ function StatCard({ title, value, tone }) {
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-1">
       <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">{title}</span>
       <span className={`text-2xl font-bold block ${tone || 'text-gray-800'}`}>{value}</span>
+    </div>
+  );
+}
+
+// Color intensity by average distress score (the primary metric); user
+// count shown as secondary text on each card. A grid of cards, not a real
+// map - no mapping library is a dependency here, and one card per state/UT
+// says everything a choropleth would for this data's granularity. Moved
+// here from the retired standalone Analysis/Heatmap page - this is the
+// single most important piece of it ("which states need attention right
+// now"), so it lives on the Dashboard itself instead of behind its own nav
+// item; the fuller bar-chart/donut breakdown moved to National Admin's own
+// Analysis page instead (see that page's own header comment).
+function intensityClass(avgScore) {
+  if (avgScore == null) return 'bg-gray-50 border-gray-200 text-gray-400';
+  if (avgScore >= 80) return 'bg-purple-600 border-purple-700 text-white';
+  if (avgScore >= 60) return 'bg-rose-500 border-rose-600 text-white';
+  if (avgScore >= 40) return 'bg-amber-400 border-amber-500 text-gray-900';
+  return 'bg-emerald-400 border-emerald-500 text-gray-900';
+}
+
+function CriticalHeatmap() {
+  const { data, loading, error } = useHeatmap();
+  const [showAll, setShowAll] = useState(false);
+  const regions = data?.heatmap || [];
+  const sortedRegions = [...regions].sort((a, b) => (b.averageScore || 0) - (a.averageScore || 0));
+  const displayedRegions = showAll ? sortedRegions : sortedRegions.slice(0, 6);
+
+  return (
+    <div>
+      <div className="flex justify-between items-end mb-4">
+        <div>
+          <h3 className="font-bold text-sm text-gray-800">Critical Heatmap</h3>
+          <p className="text-[11px] text-gray-400 mt-1">
+            {loading ? 'Loading...' : `Showing ${showAll ? 'all states' : 'top 6 worst-affected states'}, by average distress score.`}
+          </p>
+        </div>
+        {regions.length > 6 && (
+          <button onClick={() => setShowAll(!showAll)} className="text-xs font-semibold text-rose-600 hover:text-rose-700 shrink-0">
+            {showAll ? 'Show less' : 'See all states →'}
+          </button>
+        )}
+      </div>
+      {loading ? null : error ? (
+        <p className="text-xs text-rose-600">{error}</p>
+      ) : regions.length === 0 ? (
+        <p className="text-xs text-gray-400">No regional data yet.</p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {displayedRegions.map((r) => (
+            <div key={r.jurisdictionId} className={`p-4 rounded-xl border ${intensityClass(r.averageScore)}`}>
+              <p className="font-bold text-sm">{r.name}</p>
+              <p className="text-2xl font-bold mt-2">{r.averageScore != null ? r.averageScore.toFixed(0) : '-'}</p>
+              <p className="text-[11px] opacity-80 mt-1">avg. distress score</p>
+              <p className="text-[11px] opacity-80">{r.userCount} users</p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -122,6 +181,8 @@ export default function MinistryDashboard() {
           <StatCard title="High-Risk Cases" value={data?.highRisk ?? '-'} tone="text-rose-600" />
           <StatCard title="Critical Cases" value={data?.critical ?? '-'} tone="text-purple-700" />
         </div>
+
+        <CriticalHeatmap />
 
         {/* Coordination-role at-a-glance counts - see district_admin's own
             AdminDashboard.jsx for the full rationale comment. Ministry rides

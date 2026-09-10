@@ -1295,6 +1295,57 @@ async function computeAgencyReferralVolumeByChild(jurisdictionId, groupByParent,
   });
 }
 
+// Per-child average distress score + risk-tier composition - the same
+// aggregation Ministry's own '/heatmap' route already computes nationwide
+// (unrestricted, Ministry-only), generalized here so a properly
+// jurisdiction-scoped tier (National Admin's own Analysis page) can show
+// the same "which states are worst-affected, and by how much" view without
+// depending on a Ministry-only endpoint it has no role access to. Dependent
+// cases' scores are recorded under their anchor (Multi-Case-Per-Person
+// Support), so the lateral coalesces onto linked_to_user_id like every
+// other per-user risk lookup in this file already does - Ministry's own
+// original query does not do this coalesce, a pre-existing minor gap this
+// new copy doesn't repeat.
+async function computeRiskCompositionByChild(jurisdictionId, groupByParent) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const [allDescendantIds, children] = await Promise.all([
+    getDescendantJurisdictionIds(jurisdictionId),
+    getChildJurisdictions(jurisdictionId),
+  ]);
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            count(distinct u.user_id) as user_count,
+            avg(ds.score_value) as avg_score,
+            count(distinct u.user_id) filter (where rl.name = 'Moderate') as vulnerable,
+            count(distinct u.user_id) filter (where rl.name = 'High') as high_risk,
+            count(distinct u.user_id) filter (where rl.name = 'Critical') as critical
+     from users u
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join lateral (
+       select score_value, risk_level_id from distress_scores
+       where user_id = coalesce(u.linked_to_user_id, u.user_id)
+       order by computed_at desc limit 1
+     ) ds on true
+     left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
+     where u.jurisdiction_id = any($1::uuid[])
+     group by ${groupExpr}`,
+    [allDescendantIds]
+  );
+  const byGroup = new Map(rows.map((r) => [r.group_id, r]));
+  return children.map((c) => {
+    const g = byGroup.get(c.jurisdiction_id);
+    return {
+      jurisdictionId: c.jurisdiction_id,
+      name: c.name,
+      userCount: g ? Number(g.user_count) : 0,
+      averageScore: g && g.avg_score !== null ? Math.round(Number(g.avg_score) * 10) / 10 : null,
+      vulnerable: g ? Number(g.vulnerable) : 0,
+      highRisk: g ? Number(g.high_risk) : 0,
+      critical: g ? Number(g.critical) : 0,
+    };
+  });
+}
+
 // Extends Case Type Distribution (already a whole-subtree aggregate table)
 // with the single most common case type PER CHILD, attached to the
 // districts/states comparison row - a full child x case-type matrix (9+
@@ -1764,6 +1815,7 @@ module.exports = {
   computeCompensationReliefSummary,
   computeAgencyReferralVolume,
   computeAgencyReferralVolumeByChild,
+  computeRiskCompositionByChild,
   computeLegalAidFunnel,
   computeTrendDirection,
   computeReportingCompliance,

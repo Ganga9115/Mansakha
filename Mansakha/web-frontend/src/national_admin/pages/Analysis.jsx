@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
 import { Download } from 'lucide-react';
 import BarChart from '../components/BarChart';
+import DonutChart from '../components/DonutChart';
 import { useMyJurisdiction, useAdminDashboard, useExportReportCsv, useReportsAnalytics } from '../services/hooks';
 
 // National Admin's Analysis page - cross-state comparison bars (below),
@@ -71,6 +72,21 @@ export default function Analysis() {
   // the Cross-State Comparison section below (not the Coordination & Case
   // Handling one, which stays a flat jurisdiction-wide aggregate).
   const agencyReferralVolumeByState = analyticsData?.agencyReferralVolumeByState || [];
+  // Average distress score + risk-tier composition per state - moved here
+  // from Ministry's own retired Analysis/Heatmap page (Ministry now shows
+  // only the single most-critical-states-at-a-glance widget on its own
+  // Dashboard; this is the fuller, National-Admin-scoped breakdown).
+  const stateRiskComposition = analyticsData?.stateRiskComposition || [];
+  const nationwideRiskSegments = [
+    { label: 'Critical', value: stateRiskComposition.reduce((sum, r) => sum + r.critical, 0), color: '#9333EA' },
+    { label: 'High Risk', value: stateRiskComposition.reduce((sum, r) => sum + r.highRisk, 0), color: '#F43F5E' },
+    { label: 'Vulnerable', value: stateRiskComposition.reduce((sum, r) => sum + r.vulnerable, 0), color: '#F59E0B' },
+    {
+      label: 'Low / unscored',
+      value: stateRiskComposition.reduce((sum, r) => sum + Math.max(0, r.userCount - r.critical - r.highRisk - r.vulnerable), 0),
+      color: '#10B981',
+    },
+  ];
 
   const total = data?.totalCases || data?.total || 0;
   const high = data?.highRiskCases || data?.high || 0;
@@ -334,6 +350,28 @@ export default function Analysis() {
                     )}
                   </>
                 )}
+              </div>
+
+              {/* Moved here from Ministry's own retired Analysis/Heatmap page
+                  - Ministry now shows only the single most-critical-states
+                  widget on its own Dashboard; this fuller breakdown (which
+                  state's average score is worst, and the nationwide risk-tier
+                  split behind it) lives on National Admin's own Analysis page
+                  instead, properly jurisdiction-scoped like everything else here. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <BarChart
+                  title="Average Distress Score by State"
+                  subtitle="Highest first - where cases are, on average, most severe."
+                  items={stateRiskComposition.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.averageScore }))}
+                  valueLabel="pts"
+                  barColor="bg-rose-500"
+                  formatValue={(v) => v.toFixed(0)}
+                />
+                <DonutChart
+                  title="Nationwide Risk Composition"
+                  subtitle="Share of all users at each risk tier, right now."
+                  segments={nationwideRiskSegments}
+                />
               </div>
             </div>
           </ChartStatus>

@@ -150,4 +150,13 @@ function startAgencyEscalationChecker(intervalMs = 60 * 60 * 1000) {
   return setInterval(tick, intervalMs);
 }
 
-module.exports = { escalateStaleReferrals, escalateMissedSlas, escalateUnpaidCompensation, startAgencyEscalationChecker };
+module.exports = {
+  escalateStaleReferrals,
+  escalateMissedSlas,
+  escalateUnpaidCompensation,
+  startAgencyEscalationChecker,
+  // Exported so other read-only views (Coordination Roster's own drill-down)
+  // can flag a referral as "already overdue by the system's own real
+  // definition" instead of hardcoding a second copy of the same number.
+  STALE_REFERRAL_DAYS,
+};

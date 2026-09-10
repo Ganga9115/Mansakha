@@ -68,7 +68,6 @@ import CounsellorPerformance from './ministry/pages/CounsellorPerformance';
 import MinistryCoordinationRolePerformance from './ministry/pages/CoordinationRolePerformance';
 import SystemConfig from './ministry/pages/SystemConfig';
 import AuditLog from './ministry/pages/AuditLog';
-import Heatmap from './ministry/pages/Heatmap';
 import ReportsInbox from './ministry/pages/ReportsInbox';
 import MinistrySettings from './ministry/pages/Settings';
 import MinistryMailInbox from './ministry/pages/MailInbox';
@@ -213,7 +212,6 @@ export default function App() {
         <Route path="/ministry/coordination-roster" element={<RequireAuth loginPath="/ministry/login"><MinistryCoordinationRolePerformance /></RequireAuth>} />
         <Route path="/ministry/system-config" element={<RequireAuth loginPath="/ministry/login"><SystemConfig /></RequireAuth>} />
         <Route path="/ministry/audit-log" element={<RequireAuth loginPath="/ministry/login"><AuditLog /></RequireAuth>} />
-        <Route path="/ministry/heatmap" element={<RequireAuth loginPath="/ministry/login"><Heatmap /></RequireAuth>} />
         <Route path="/ministry/reports" element={<RequireAuth loginPath="/ministry/login"><ReportsInbox /></RequireAuth>} />
         <Route path="/ministry/mail" element={<RequireAuth loginPath="/ministry/login"><MinistryMailInbox /></RequireAuth>} />
         <Route path="/ministry/mail/sent" element={<RequireAuth loginPath="/ministry/login"><MinistryMailSent /></RequireAuth>} />

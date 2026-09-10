@@ -3,7 +3,9 @@ import React from 'react';
 // A composition/proportion chart is a different question than the ranked
 // bar charts next to it ("what share of cases are Critical?" vs "which
 // state has the most Critical cases?") - plain SVG arcs, same no-charting-
-// library approach as BarChart. Ministry's own copy, used by Heatmap.jsx.
+// library approach as BarChart. National Admin's own copy, used by
+// Analysis.jsx's Nationwide Risk Composition chart (moved here from
+// Ministry's retired Analysis/Heatmap page).
 export default function DonutChart({ title, subtitle, segments }) {
   const total = segments.reduce((sum, s) => sum + s.value, 0);
   const radius = 60;

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import MinistryLayout from '../layouts/MinistryLayout';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCoordinationRolePerformanceMinistry, useCoordinationStaffingGapsMinistry } from '../services/hooks';
 
 // Section B (workforce data) - Ministry's own fuller version of District/
@@ -28,6 +28,39 @@ function GapList({ names }) {
   );
 }
 
+// "X/Y staffed (Z%)" - the raw gap list above answers "which ones", this
+// answers "how bad is it" without making the reader count the list or guess
+// the size of the subtree it's drawn from.
+function CoverageBadge({ staffedCount, total, pct }) {
+  if (total === 0) return null;
+  const tone = pct === 100 ? 'text-emerald-600' : pct >= 50 ? 'text-amber-600' : 'text-rose-600';
+  return <span className={`text-[10px] font-bold ${tone}`}>{staffedCount}/{total} staffed ({pct}%)</span>;
+}
+
+// A bare "6 open" is a dead end - this turns it into the actual worklist
+// behind the count (docket number, case type, current risk level, days
+// open), with anything past the system's own real 7-day escalation
+// threshold flagged, not a separately-invented number.
+function OpenReferralsDrilldown({ openReferrals }) {
+  if (openReferrals.length === 0) {
+    return <p className="text-xs text-gray-400 py-3 px-6">No open referrals in this queue.</p>;
+  }
+  return (
+    <div className="px-6 py-3 space-y-1.5 max-h-64 overflow-y-auto">
+      {openReferrals.map((r) => (
+        <div key={r.referralId} className={`flex items-center gap-3 text-xs px-3 py-2 rounded-lg ${r.overdue ? 'bg-rose-50' : 'bg-gray-50'}`}>
+          <span className="font-bold text-gray-700 w-24 shrink-0 truncate">Docket {r.docketNumber}</span>
+          <span className="text-gray-600 flex-1 min-w-0 truncate">{r.caseType}</span>
+          {r.riskLevel && <span className="text-gray-500 shrink-0">{r.riskLevel} risk</span>}
+          <span className={`shrink-0 font-semibold ${r.overdue ? 'text-rose-600' : 'text-gray-500'}`}>
+            {r.daysOpen === 0 ? 'Opened today' : `${r.daysOpen}d open`}{r.overdue ? ' · overdue' : ''}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function CoordinationRolePerformance() {
   const perfQuery = useCoordinationRolePerformanceMinistry();
   const gapsQuery = useCoordinationStaffingGapsMinistry();
@@ -35,6 +68,9 @@ export default function CoordinationRolePerformance() {
   const roleGaps = gapsQuery.data?.roleGaps || [];
   const stationGaps = gapsQuery.data?.stationGaps || [];
   const providerGaps = gapsQuery.data?.providerGaps || [];
+  const stationCoverage = gapsQuery.data?.stationCoverage || { totalStations: 0, staffedCount: 0, coveragePct: null };
+  const providerCoverage = gapsQuery.data?.providerCoverage || { totalProviders: 0, staffedCount: 0, coveragePct: null };
+  const [expandedId, setExpandedId] = useState(null);
 
   return (
     <MinistryLayout title="Coordination Roster">
@@ -44,7 +80,7 @@ export default function CoordinationRolePerformance() {
           <p className="text-[11px] text-gray-400 mt-1">
             Which officials hold each of the 6 coordination roles nationwide - Protection Officer, District Welfare
             Officer, DLSA Coordinator, District Collector, Investigating Officer and Rehabilitation Officer - and how
-            their own referral queue is actually moving.
+            their own referral queue is actually moving. Click a row to see the actual open cases behind its count.
           </p>
         </div>
 
@@ -53,7 +89,8 @@ export default function CoordinationRolePerformance() {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
-                  <th className="py-3.5 px-6">Official</th>
+                  <th className="py-3.5 px-6 w-8"></th>
+                  <th className="py-3.5 px-2">Official</th>
                   <th className="py-3.5 px-4">Role</th>
                   <th className="py-3.5 px-4">Scope</th>
                   <th className="py-3.5 px-4">Open</th>
@@ -63,26 +100,45 @@ export default function CoordinationRolePerformance() {
               </thead>
               <tbody className="divide-y divide-gray-100 text-xs">
                 {perfQuery.loading ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-gray-400">Loading...</td></tr>
+                  <tr><td colSpan={7} className="py-8 text-center text-gray-400">Loading...</td></tr>
                 ) : perfQuery.error ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-rose-600">{perfQuery.error}</td></tr>
+                  <tr><td colSpan={7} className="py-8 text-center text-rose-600">{perfQuery.error}</td></tr>
                 ) : officials.length === 0 ? (
-                  <tr><td colSpan={6} className="py-8 text-center text-gray-400">No coordination-role officials assigned yet.</td></tr>
-                ) : officials.map((o) => (
-                  <tr key={o.officialId} className="hover:bg-gray-50/70 transition">
-                    <td className="py-4 px-6 font-bold text-gray-800">
-                      {o.fullName}
-                      {o.designation && <span className="block text-[10px] font-normal text-gray-400">{o.designation}</span>}
-                    </td>
-                    <td className="py-4 px-4 text-gray-700">{o.roleName}</td>
-                    <td className="py-4 px-4 text-gray-600">{o.stationName || o.providerName || o.jurisdictionName || '-'}</td>
-                    <td className="py-4 px-4">
-                      <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${o.openReferralCount > 0 ? 'bg-amber-100 text-amber-700' : 'text-gray-500'}`}>{o.openReferralCount}</span>
-                    </td>
-                    <td className="py-4 px-4 text-gray-700">{o.resolvedReferralCount}</td>
-                    <td className="py-4 px-6 text-gray-700">{o.avgResolveDays !== null ? `${o.avgResolveDays}d` : <span className="text-gray-400">No data yet</span>}</td>
-                  </tr>
-                ))}
+                  <tr><td colSpan={7} className="py-8 text-center text-gray-400">No coordination-role officials assigned yet.</td></tr>
+                ) : officials.map((o) => {
+                  const isExpanded = expandedId === o.officialId;
+                  return (
+                    <React.Fragment key={o.officialId}>
+                      <tr
+                        className="hover:bg-gray-50/70 transition cursor-pointer"
+                        onClick={() => setExpandedId(isExpanded ? null : o.officialId)}
+                      >
+                        <td className="py-4 px-6 text-gray-400">
+                          {o.openReferralCount > 0 && (isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />)}
+                        </td>
+                        <td className="py-4 px-2 font-bold text-gray-800">
+                          {o.fullName}
+                          {o.designation && <span className="block text-[10px] font-normal text-gray-400">{o.designation}</span>}
+                        </td>
+                        <td className="py-4 px-4 text-gray-700">{o.roleName}</td>
+                        <td className="py-4 px-4 text-gray-600">{o.stationName || o.providerName || o.jurisdictionName || '-'}</td>
+                        <td className="py-4 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[11px] font-bold ${o.openReferralCount > 0 ? 'bg-amber-100 text-amber-700' : 'text-gray-500'}`}>{o.openReferralCount}</span>
+                          {o.overdueOpenCount > 0 && <span className="ml-1.5 text-[11px] font-bold text-rose-600">{o.overdueOpenCount} overdue</span>}
+                        </td>
+                        <td className="py-4 px-4 text-gray-700">{o.resolvedReferralCount}</td>
+                        <td className="py-4 px-6 text-gray-700">{o.avgResolveDays !== null ? `${o.avgResolveDays}d` : <span className="text-gray-400">No data yet</span>}</td>
+                      </tr>
+                      {isExpanded && (
+                        <tr>
+                          <td colSpan={7} className="bg-gray-50/60 border-t border-gray-100">
+                            <OpenReferralsDrilldown openReferrals={o.openReferrals || []} />
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -105,15 +161,18 @@ export default function CoordinationRolePerformance() {
                 <div key={g.roleName} className="flex items-start gap-2">
                   <span className="w-48 shrink-0 font-semibold text-gray-700">{g.roleName}</span>
                   <GapList names={g.unassignedJurisdictions.map((j) => j.name)} />
+                  <CoverageBadge staffedCount={g.staffedCount} total={g.totalDistricts} pct={g.coveragePct} />
                 </div>
               ))}
               <div className="flex items-start gap-2 pt-2 border-t border-gray-100">
                 <span className="w-48 shrink-0 font-semibold text-gray-700">Investigating Officer (stations)</span>
                 <GapList names={stationGaps.map((s) => `${s.name} (${s.jurisdictionName})`)} />
+                <CoverageBadge staffedCount={stationCoverage.staffedCount} total={stationCoverage.totalStations} pct={stationCoverage.coveragePct} />
               </div>
               <div className="flex items-start gap-2 pt-2 border-t border-gray-100">
                 <span className="w-48 shrink-0 font-semibold text-gray-700">Rehabilitation Officer (providers)</span>
                 <GapList names={providerGaps.map((p) => `${p.name} (${p.providerType})`)} />
+                <CoverageBadge staffedCount={providerCoverage.staffedCount} total={providerCoverage.totalProviders} pct={providerCoverage.coveragePct} />
               </div>
             </div>
           )}

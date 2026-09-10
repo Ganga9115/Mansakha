@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, FileText, BarChart, Inbox, LogOut, User, Trophy, Menu, X, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, FileText, Inbox, LogOut, User, Trophy, Menu, X, Mail } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -13,7 +13,6 @@ const NAV_ITEMS = [
   { name: 'Coordination Roster', icon: Users, path: '/ministry/coordination-roster' },
   { name: 'System Configuration', icon: Settings, path: '/ministry/system-config' },
   { name: 'Audit Log', icon: FileText, path: '/ministry/audit-log' },
-  { name: 'Analysis', icon: BarChart, path: '/ministry/heatmap' },
   { name: 'Reports Inbox', icon: Inbox, path: '/ministry/reports' },
   { name: 'Mail', icon: Mail, path: '/ministry/mail' },
   { name: 'Profile', icon: User, path: '/ministry/profile' },
