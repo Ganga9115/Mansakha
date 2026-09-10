@@ -17,7 +17,13 @@ const { resolveDateWindow, bucketize } = require('../../core/services/reportBuck
 // across the 3 admin route files, unlike the route files themselves - see
 // reportSnapshot.js's own header comment for why).
 const { resolveReportPeriod } = require('../../core/services/reportPeriods');
-const { computeCaseWiseSnapshot } = require('../../core/services/reportSnapshot');
+const {
+  computeCaseWiseSnapshot,
+  computeInvestigationProgress,
+  computeThreatProtectionSummary,
+  computeCompensationReliefSummary,
+  computeAgencyReferralVolume,
+} = require('../../core/services/reportSnapshot');
 const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
 
 // How far back to look when predicting escalation risk across a whole
@@ -240,6 +246,43 @@ async function countPredictedEscalations(jurisdictionIds) {
   return count;
 }
 
+// Two cheap, current-state counts for the live dashboard - deliberately NOT
+// the full periodic-report computation (reportSnapshot.js's own
+// computeThreatProtectionSummary/computeCompensationReliefSummary are
+// multi-second, whole-subtree aggregations, too heavy for a page load).
+// Open Protection Referrals: cases a Protection Officer hasn't yet
+// resolved. Compensation Pending: cases whose compensation has been
+// verified but at least one payment stage still isn't Paid - a single
+// jsonb_array_elements EXISTS check, still one query.
+async function countNewRoleDashboardStats(jurisdictionIds) {
+  const [{ rows: protectionRows }, { rows: compensationRows }] = await Promise.all([
+    pool.query(
+      `select count(*) as count
+       from agency_referrals ar
+       join users u on u.user_id = ar.user_id
+       where ar.referred_to_role = 'Protection Officer' and ar.status = 'Open' and u.jurisdiction_id = any($1::uuid[])`,
+      [jurisdictionIds]
+    ),
+    pool.query(
+      `select count(*) as count
+       from agency_referrals ar
+       join users u on u.user_id = ar.user_id
+       where ar.referred_to_role = 'District Welfare Officer'
+         and ar.metadata->'compensation'->>'verifiedAt' is not null
+         and exists (
+           select 1 from jsonb_array_elements(ar.metadata->'compensation'->'stages') s
+           where s->>'status' != 'Paid'
+         )
+         and u.jurisdiction_id = any($1::uuid[])`,
+      [jurisdictionIds]
+    ),
+  ]);
+  return {
+    openProtectionReferrals: Number(protectionRows[0].count),
+    compensationPendingCount: Number(compensationRows[0].count),
+  };
+}
+
 // Reports page's 3 charts (trend line, severity-distribution stacked bars,
 // intervention-phase donut) - previously all hardcoded/static markup in
 // Reports.jsx regardless of tier, with a time-range filter that only
@@ -319,7 +362,20 @@ router.get(
       else interventionPhases.planned += 1;
     }
 
-    return ok(res, { trend, severityDistribution, interventionPhases });
+    // Coordination-role activity across the SAME jurisdiction subtree and
+    // time window as the wellness charts above - a flat aggregate over
+    // whatever this admin can see (not a per-child breakdown; that
+    // comparison already exists on the Dashboard's own trends table). Reuses
+    // reportSnapshot.js's own Report-building functions unmodified - see
+    // their own header comments for the real-world grounding on each.
+    const [investigationProgress, threatProtection, compensationRelief, agencyReferralVolume] = await Promise.all([
+      computeInvestigationProgress(jurisdictionIds),
+      computeThreatProtectionSummary(jurisdictionIds, since, until),
+      computeCompensationReliefSummary(jurisdictionIds),
+      computeAgencyReferralVolume(jurisdictionIds, since, until),
+    ]);
+
+    return ok(res, { trend, severityDistribution, interventionPhases, investigationProgress, threatProtection, compensationRelief, agencyReferralVolume });
   }
 );
 
@@ -357,13 +413,14 @@ router.get(
         // Section 4.5. `counts` stay computed over the full district (not just
         // the current page) - only the case list itself is paginated, so a
         // district with thousands of cases doesn't load them all at once.
-        const [{ counts, caseRows }, predictedEscalations] = await Promise.all([
+        const [{ counts, caseRows }, predictedEscalations, newRoleStats] = await Promise.all([
           countUsersByRisk([jurisdictionId]),
           countPredictedEscalations([jurisdictionId]),
+          countNewRoleDashboardStats([jurisdictionId]),
         ]);
         const total = caseRows.length;
         const cases = caseRows.slice(offset, offset + pageSize);
-        return ok(res, { tier: 'district', ...counts, predictedEscalations, trends: null, cases, total });
+        return ok(res, { tier: 'district', ...counts, predictedEscalations, ...newRoleStats, trends: null, cases, total });
       }
 
       // State/National: aggregate-with-drill-down is the default, not case-level -
@@ -375,6 +432,7 @@ router.get(
       // a single headline stat ("N cases predicted to escalate soon") rather
       // than adding a column to every child's row.
       const predictedEscalations = await countPredictedEscalations(allDescendantIds);
+      const newRoleStats = await countNewRoleDashboardStats(allDescendantIds);
 
       // One grouped query gets every child's counts at once (see
       // countUsersByRiskGroupedByChild's comment) instead of one query per
@@ -417,7 +475,7 @@ router.get(
         };
       }));
 
-      return ok(res, { tier: jurisdiction.level, ...counts, predictedEscalations, trends: breakdown });
+      return ok(res, { tier: jurisdiction.level, ...counts, predictedEscalations, ...newRoleStats, trends: breakdown });
     } catch (err) {
       return fail(res, `Could not load dashboard: ${err.message}`, 500);
     }
@@ -627,10 +685,14 @@ router.get(
   }
 );
 
-// Feature Catalog Section 5.2 "Policy-input trend lines" - a longitudinal
-// time series distinct from the current-snapshot stat tiles above. National/
+// Feature Catalog Section 5.2 "Distress trend lines" - a longitudinal time
+// series distinct from the current-snapshot stat tiles above. National/
 // State tiers only makes sense here (District's own DistressHistoryScreen-
 // style per-case detail already exists via Counsellor's case detail).
+// Used to also overlay "policy launch" markers (Ministry Analytics &
+// Workflow spec Task 2B) - that feature (and Task 2C Emergency Broadcast)
+// was retired as not appropriate for this system's real scope, so this now
+// returns just the score trend it always genuinely computed.
 router.get(
   '/dashboard/:jurisdictionId/trend',
   verifyToken,
@@ -642,38 +704,18 @@ router.get(
     const months = Math.min(Math.max(Number(req.query.months) || 6, 1), 24);
 
     const now = new Date();
-    const windowStart = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1).toISOString();
 
-    // Score history and policies are independent (different tables, neither
-    // depends on the other's result) and both go straight to Postgres - the
-    // ID-chunked Supabase REST calls this used to make were both slow (REST's
-    // own per-call overhead) and, for a jurisdiction with a very large
-    // descendant set, exactly the kind of unbounded fan-out fixed elsewhere
-    // this session.
+    // Raw pg with `= any($1::uuid[])`, not selectInChunks/Supabase REST -
+    // avoids ID-chunked PostgREST's own per-call overhead on what can be a
+    // large jurisdiction subtree.
     const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
-    const [{ rows: scoreRows }, { rows: policyRows }] = await Promise.all([
-      pool.query(
-        `select ds.score_value, ds.computed_at
-         from distress_scores ds
-         join users u on u.user_id = ds.user_id
-         where u.jurisdiction_id = any($1::uuid[])`,
-        [allDescendantIds]
-      ),
-      // Ministry Analytics & Workflow spec Task 2B "Policy Impact Tracker" -
-      // overlays this SAME jurisdiction's own launched policies (not its
-      // descendant subtree - a policy is understood as authored by/scoped to
-      // exactly the jurisdiction it was created under, unlike the score
-      // aggregation above) onto the identical [windowStart, now] window the
-      // trend line already covers, so the frontend can plot a marker at each
-      // policy's launched_at against the score line without a second
-      // months-to-dates computation.
-      pool.query(
-        `select policy_id, title, launched_at from policies
-         where jurisdiction_id = $1 and launched_at >= $2 and launched_at <= $3
-         order by launched_at desc`,
-        [jurisdictionId, windowStart, now.toISOString()]
-      ),
-    ]);
+    const { rows: scoreRows } = await pool.query(
+      `select ds.score_value, ds.computed_at
+       from distress_scores ds
+       join users u on u.user_id = ds.user_id
+       where u.jurisdiction_id = any($1::uuid[])`,
+      [allDescendantIds]
+    );
 
     const scoresByMonth = new Map(); // 'YYYY-MM' -> { sum, count }
     for (const s of scoreRows) {
@@ -692,78 +734,7 @@ router.get(
       points.push({ month: monthKey, averageScore: bucket ? Math.round((bucket.sum / bucket.count) * 10) / 10 : null });
     }
 
-    const policies = policyRows.map((p) => ({ policyId: p.policy_id, title: p.title, launchedAt: p.launched_at }));
-
-    return ok(res, { points, policies });
-  }
-);
-
-// Ministry Analytics & Workflow spec Task 2B "Policy Impact Tracker" -
-// create/list a strategic intervention a National/State/District admin
-// launches, so its effect on the distress trend line above can be visually
-// compared. jurisdiction-scoped on the BODY's jurisdictionId (a new
-// resource, same reasoning as POST /users above).
-router.post(
-  '/policies',
-  verifyToken,
-  requireRole(['Administration', 'Ministry']),
-  generalApiLimiter,
-  requireJurisdiction((req) => req.body.jurisdictionId),
-  async (req, res) => {
-    const { title, description, launchedAt, jurisdictionId } = req.body;
-    if (!title || !launchedAt || !jurisdictionId) return fail(res, 'title, launchedAt, and jurisdictionId are required', 400);
-
-    const { data, error } = await supabase
-      .from('policies')
-      .insert({
-        jurisdiction_id: jurisdictionId,
-        title,
-        description: description || null,
-        launched_at: new Date(launchedAt).toISOString(),
-        created_by: req.auth.officialId,
-      })
-      .select('policy_id, title, description, launched_at')
-      .single();
-    if (error) return fail(res, `Could not create policy: ${error.message}`, 500);
-
-    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'policy', entityId: data.policy_id });
-
-    return ok(
-      res,
-      { policyId: data.policy_id, title: data.title, description: data.description, launchedAt: data.launched_at },
-      'Policy created',
-      201
-    );
-  }
-);
-
-// List a jurisdiction's own launched policies - exact jurisdiction_id match,
-// same reasoning as the trend endpoint's policies overlay above (not the
-// descendant subtree /dashboard and /dashboard/trend use for score
-// aggregation).
-router.get(
-  '/policies/:jurisdictionId',
-  verifyToken,
-  requireRole(['Administration', 'Ministry']),
-  generalApiLimiter,
-  requireJurisdiction((req) => req.params.jurisdictionId),
-  async (req, res) => {
-    const { jurisdictionId } = req.params;
-    const { rows: data } = await pool.query(
-      `select policy_id, title, description, launched_at, created_by from policies
-       where jurisdiction_id = $1 order by launched_at desc`,
-      [jurisdictionId]
-    );
-
-    return ok(res, {
-      policies: data.map((p) => ({
-        policyId: p.policy_id,
-        title: p.title,
-        description: p.description,
-        launchedAt: p.launched_at,
-        createdBy: p.created_by,
-      })),
-    });
+    return ok(res, { points });
   }
 );
 
@@ -1040,82 +1011,6 @@ router.post(
       'Analytics generated',
       201
     );
-  }
-);
-
-// ===== Ministry Analytics & Workflow: Task 2C - Emergency Broadcast =====
-
-// Feature Catalog / Ministry Analytics & Workflow spec Task 2C - mass SMS +
-// push to every active user in a jurisdiction. Uses the same
-// descendant-subtree scoping as Task 2A above (not an exact jurisdiction_id
-// match) so a State/National admin's broadcast actually reaches users
-// (who are always enrolled at district level), not zero rows.
-router.post(
-  '/broadcast',
-  verifyToken,
-  requireRole(['Administration', 'Ministry']),
-  generalApiLimiter,
-  requireJurisdiction((req) => req.body.jurisdictionId),
-  async (req, res) => {
-    const { jurisdictionId, message, priority } = req.body;
-    if (!jurisdictionId || !message) return fail(res, 'jurisdictionId and message are required', 400);
-    const normalizedPriority = priority === 'urgent' ? 'urgent' : 'normal';
-
-    const allDescendantIds = await getDescendantJurisdictionIds(jurisdictionId);
-    let activeUsers;
-    try {
-      // Raw pg with = any($1::uuid[]) - see the analogous users lookup in
-      // /analytics/generate above for why.
-      const { rows } = await pool.query(
-        `select user_id from users where jurisdiction_id = any($1::uuid[]) and status = 'active'`,
-        [allDescendantIds]
-      );
-      activeUsers = rows;
-    } catch (err) {
-      return fail(res, `Could not load users: ${err.message}`, 500);
-    }
-
-    if (activeUsers.length === 0) {
-      return ok(res, { queuedCount: 0 }, 'No active users in this jurisdiction to broadcast to');
-    }
-
-    // Judgment call: every active user gets BOTH an SMS and a push row
-    // (not gated by users.sms_checkin_enabled, unlike the automated
-    // sms_checkin_prompt kind) - an emergency broadcast's whole point is
-    // maximum reach, not respecting a routine-reminder opt-in. Two separate
-    // dispatch_queue rows per user (not one row carrying two kinds)
-    // matches this table's existing one-row-per-delivery-attempt shape, so
-    // a user whose push fails but SMS succeeds (or vice versa) gets
-    // independent, accurate retry/attempt tracking per channel.
-    const rows = [];
-    for (const u of activeUsers) {
-      rows.push({ kind: 'admin_broadcast_sms', user_id: u.user_id, message, priority: normalizedPriority });
-      rows.push({ kind: 'admin_broadcast_push', user_id: u.user_id, message, priority: normalizedPriority });
-    }
-
-    // Raw pg, single multi-row INSERT - no generated/returned columns needed
-    // here (unlike the analytics-insight insert below, which stays on
-    // supabase-js for its .select().single() semantics), so this is the
-    // simple, low-risk write case safe to migrate.
-    try {
-      const values = [];
-      const placeholders = rows
-        .map((r, i) => {
-          const base = i * 4;
-          values.push(r.kind, r.user_id, r.message, r.priority);
-          return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4})`;
-        })
-        .join(', ');
-      await pool.query(`insert into dispatch_queue (kind, user_id, message, priority) values ${placeholders}`, values);
-    } catch (err) {
-      return fail(res, `Could not queue broadcast: ${err.message}`, 500);
-    }
-
-    await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'admin_broadcast', entityId: jurisdictionId });
-
-    // Count of USERS queued (not dispatch_queue rows, which is 2x this),
-    // per the spec.
-    return ok(res, { queuedCount: activeUsers.length }, `Broadcast queued for ${activeUsers.length} user(s)`, 201);
   }
 );
 

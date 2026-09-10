@@ -48,6 +48,18 @@ export default function Analysis() {
   const severityDistribution = analyticsData?.severityDistribution || [];
   const interventionPhases = analyticsData?.interventionPhases || { completed: 0, inProgress: 0, planned: 0 };
 
+  // Section B (new-role coordination data) - deliberately kept separate from
+  // the victim wellness analytics above: a different axis (is a case being
+  // actively handled by the role it was sent to, not how distressed the
+  // victim is), same jurisdiction subtree and time window though, via the
+  // same useReportsAnalytics call.
+  const investigationProgress = analyticsData?.investigationProgress || { casesWithRecord: 0, accusedStatusDistribution: [], chargesheetFiled: 0, message: null };
+  const threatProtection = analyticsData?.threatProtection || { totalReferrals: 0, resolvedCount: 0, threatTierDistribution: [] };
+  const compensationRelief = analyticsData?.compensationRelief || { totalCases: 0, bankDetailsOnFileCount: 0, reliefOverdueCount: 0 };
+  const agencyReferralVolume = analyticsData?.agencyReferralVolume || [];
+  const totalAgencyReferrals = agencyReferralVolume.reduce((sum, r) => sum + r.totalCount, 0);
+  const openAgencyReferrals = agencyReferralVolume.reduce((sum, r) => sum + r.openCount, 0);
+
   const total = adminData?.totalCases || adminData?.total || 0;
   const high = adminData?.highRiskCases || adminData?.high || 0;
   const critical = adminData?.criticalCases || adminData?.critical || 0;
@@ -181,6 +193,57 @@ export default function Analysis() {
           <StatCard title="VULNERABLE (MODERATE)" value={moderate} subtitle="Requires monitoring" accent="emerald" />
           <StatCard title="HIGH-RISK CASES" value={high} subtitle="High risk level" accent="rose" />
           <StatCard title="CRITICAL CASES" value={critical} subtitle="Immediate attention" accent="purple" />
+        </div>
+
+        {/* ===== Coordination & Case Handling (Section B) - deliberately its
+            own section, separate from the victim wellness analytics above.
+            Same jurisdiction/time-window scope, different axis: is a case
+            being actively handled by the role it was referred to. ===== */}
+        <div className="pt-2 border-t border-gray-100">
+          <h2 className="text-lg font-bold text-gray-800 mt-4">Coordination & Case Handling</h2>
+          <p className="text-xs text-gray-400 mb-4">
+            How Protection Officer, District Welfare Officer, DLSA, Investigating Officer, District Collector and
+            Rehabilitation Officer are handling referred cases in this same period - separate from victim wellness data above.
+          </p>
+
+          <ChartStatus pending={chartsPending} invalid={customRangeInvalid} loading={analyticsLoading} error={analyticsError}>
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <StatCard title="INVESTIGATION RECORDS" value={investigationProgress.casesWithRecord} subtitle={`${investigationProgress.chargesheetFiled} chargesheet filed`} accent="blue" />
+                <StatCard title="PROTECTION REFERRALS" value={threatProtection.totalReferrals} subtitle={`${threatProtection.resolvedCount} resolved`} accent="rose" />
+                <StatCard title="WELFARE CASES (DWO)" value={compensationRelief.totalCases} subtitle={`${compensationRelief.bankDetailsOnFileCount} w/ bank details on file`} accent="emerald" />
+                <StatCard title="CROSS-AGENCY REFERRALS" value={totalAgencyReferrals} subtitle={`${openAgencyReferrals} still open`} accent="purple" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+                  <h3 className="font-bold text-sm text-gray-800">Accused Status</h3>
+                  {investigationProgress.casesWithRecord === 0 ? (
+                    <p className="text-xs text-gray-400">{investigationProgress.message || 'No investigation records yet.'}</p>
+                  ) : (
+                    <DistributionBars items={investigationProgress.accusedStatusDistribution.map((a) => ({ label: a.status, count: a.count }))} colorClass="bg-[#519BCE]" />
+                  )}
+                </div>
+                <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+                  <h3 className="font-bold text-sm text-gray-800">Threat Tier (Protection Referrals)</h3>
+                  {threatProtection.totalReferrals === 0 ? (
+                    <p className="text-xs text-gray-400">No cases referred to a Protection Officer this period.</p>
+                  ) : (
+                    <DistributionBars items={threatProtection.threatTierDistribution.map((t) => ({ label: t.tier, count: t.count }))} colorClass="bg-rose-500" />
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+                <h3 className="font-bold text-sm text-gray-800">Cross-Agency Referral Volume by Role</h3>
+                {agencyReferralVolume.length === 0 ? (
+                  <p className="text-xs text-gray-400">No cross-agency referrals this period.</p>
+                ) : (
+                  <DistributionBars items={agencyReferralVolume.map((r) => ({ label: r.roleName, count: r.totalCount }))} colorClass="bg-purple-500" />
+                )}
+              </div>
+            </div>
+          </ChartStatus>
         </div>
 
       </div>
@@ -376,6 +439,29 @@ function InterventionDonut({ interventionPhases }) {
           <span>Planned / Referred <span className="text-gray-400 ml-2">{Math.round(plannedPct)}%</span></span>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Same "plain flex-bar, no charting library" idiom as TrendChart/
+// SeverityStackedChart above, generalized to any labeled count list - used
+// by the Coordination & Case Handling section for accused status/threat
+// tier/referral-role breakdowns, which don't fit the fixed 4-severity-tier
+// shape SeverityStackedChart is built around.
+function DistributionBars({ items, colorClass = 'bg-[#519BCE]' }) {
+  if (!items || items.length === 0) return <p className="text-xs text-gray-400">No data yet.</p>;
+  const max = Math.max(1, ...items.map((i) => i.count));
+  return (
+    <div className="space-y-2">
+      {items.map((item) => (
+        <div key={item.label} className="flex items-center gap-3 text-xs">
+          <span className="w-36 shrink-0 text-gray-600 font-medium truncate">{item.label}</span>
+          <div className="flex-1 bg-gray-100 rounded-full h-2.5 overflow-hidden">
+            <div className={`h-full rounded-full ${colorClass}`} style={{ width: `${(item.count / max) * 100}%` }} />
+          </div>
+          <span className="w-6 text-right font-bold text-gray-700">{item.count}</span>
+        </div>
+      ))}
     </div>
   );
 }

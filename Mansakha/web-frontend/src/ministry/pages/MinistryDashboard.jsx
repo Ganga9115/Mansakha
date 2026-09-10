@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import MinistryLayout from '../layouts/MinistryLayout';
-import { useJurisdictionOptions, useAdminDashboard, useCreatePolicy } from '../services/hooks';
+import { useJurisdictionOptions, useAdminDashboard } from '../services/hooks';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 
@@ -37,14 +37,15 @@ function useJurisdictionTrend(jurisdictionId, months = 6) {
   return state;
 }
 
-// Task 4A "Trend Line policy markers" - .../trend also returns
-// `policies: [{policyId, title, launchedAt}]` (launched within the same
-// [windowStart, now] window as `points`), so each policy is overlaid as a
-// vertical marker on the SAME month x-axis the score line already uses.
+// Ministry Analytics & Workflow Task 4A - a longitudinal distress-score
+// trend line, plotted from .../trend. Used to also overlay "policy launch"
+// markers on this same chart (Deploy New Policy) - that feature (and
+// Emergency Broadcast) was retired as not appropriate for this system's
+// real scope, so this is now just the score trend it always genuinely
+// computed.
 function TrendChart({ jurisdictionId }) {
   const { data, loading, error } = useJurisdictionTrend(jurisdictionId);
   const points = data?.points || [];
-  const policies = data?.policies || [];
   const hasScores = points.some((p) => p.averageScore != null);
 
   const width = 500;
@@ -59,18 +60,10 @@ function TrendChart({ jurisdictionId }) {
     return acc ? `${acc} L ${seg}` : `M ${seg}`;
   }, '');
 
-  const policyMarkers = policies
-    .map((p) => {
-      const monthKey = (p.launchedAt || '').slice(0, 7);
-      const idx = points.findIndex((pt) => pt.month === monthKey);
-      return idx >= 0 ? { ...p, x: xForIndex(idx) } : null;
-    })
-    .filter(Boolean);
-
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
       <h3 className="font-bold text-sm text-gray-800 mb-1">Distress Trend (National)</h3>
-      <p className="text-[11px] text-gray-400 mb-4">Average distress score by month. Dashed amber markers are launched policies - hover for details.</p>
+      <p className="text-[11px] text-gray-400 mb-4">Average distress score by month.</p>
       {loading ? (
         <p className="text-xs text-gray-400">Loading...</p>
       ) : error ? (
@@ -82,21 +75,6 @@ function TrendChart({ jurisdictionId }) {
           <div className="h-32 relative">
             <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
               <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="#E5E7EB" strokeDasharray="4 4" />
-              {policyMarkers.map((p) => (
-                <line
-                  key={p.policyId}
-                  x1={p.x}
-                  y1="0"
-                  x2={p.x}
-                  y2={height}
-                  stroke="#D97706"
-                  strokeWidth="1.5"
-                  strokeDasharray="3 2"
-                  vectorEffect="non-scaling-stroke"
-                >
-                  <title>{`${p.title} — launched ${new Date(p.launchedAt).toLocaleDateString()}`}</title>
-                </line>
-              ))}
               <path d={pathD} fill="none" stroke="#519BCE" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
               {points.map((p, i) =>
                 p.averageScore == null ? null : (
@@ -110,118 +88,8 @@ function TrendChart({ jurisdictionId }) {
               <span key={p.month}>{p.month.slice(5)}</span>
             ))}
           </div>
-          {policyMarkers.length > 0 && (
-            <div className="relative h-4">
-              {policyMarkers.map((p) => (
-                <span
-                  key={p.policyId}
-                  title={`${p.title} — launched ${new Date(p.launchedAt).toLocaleDateString()}`}
-                  className="absolute -translate-x-1/2 text-amber-600 text-[10px] font-bold cursor-help select-none"
-                  style={{ left: `${(p.x / width) * 100}%` }}
-                >
-                  ▲
-                </span>
-              ))}
-            </div>
-          )}
         </div>
       )}
-    </div>
-  );
-}
-
-function DeployPolicyWidget({ jurisdictionId, onDeployed }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [launchedAt, setLaunchedAt] = useState('');
-  const [errorMsg, setErrorMsg] = useState(null);
-  const [successMsg, setSuccessMsg] = useState(null);
-
-  const createPolicy = useCreatePolicy();
-
-  const handleDeploy = async (e) => {
-    e.preventDefault();
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    if (!title || !launchedAt) {
-      setErrorMsg('Title and Launch Date are required.');
-      return;
-    }
-
-    try {
-      await createPolicy.mutate({
-        jurisdictionId,
-        title,
-        description,
-        launchedAt,
-      });
-      setSuccessMsg('Policy deployed successfully!');
-      setTitle('');
-      setDescription('');
-      setLaunchedAt('');
-      if (onDeployed) onDeployed();
-    } catch (err) {
-      setErrorMsg(err.message || 'Could not deploy policy.');
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-6 space-y-4">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <h3 className="font-bold text-sm text-gray-800">Deploy New Policy</h3>
-          <p className="text-[11px] text-gray-400 mt-0.5">
-            Log strategic interventions to measure their impact against the distress trend line.
-          </p>
-        </div>
-      </div>
-
-      <form onSubmit={handleDeploy} className="space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">Policy Title</label>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-              placeholder="e.g. Operation Safe Streets"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">Launch Date</label>
-            <input
-              type="date"
-              value={launchedAt}
-              onChange={(e) => setLaunchedAt(e.target.value)}
-              className="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="block text-[11px] font-bold text-gray-600 uppercase mb-1">Description (Optional)</label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full text-xs p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-            placeholder="Brief details about the policy..."
-          />
-        </div>
-
-        {errorMsg && <p className="text-xs text-rose-600">{errorMsg}</p>}
-        {successMsg && <p className="text-xs text-emerald-600">{successMsg}</p>}
-
-        <div className="flex justify-end mt-2">
-          <button
-            type="submit"
-            disabled={createPolicy.loading || !jurisdictionId}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
-          >
-            {createPolicy.loading ? 'Deploying...' : 'Deploy Policy'}
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
@@ -244,6 +112,15 @@ export default function MinistryDashboard() {
           <StatCard title="Total Cases (Nationwide)" value={data?.total ?? '-'} />
           <StatCard title="High-Risk Cases" value={data?.highRisk ?? '-'} tone="text-rose-600" />
           <StatCard title="Critical Cases" value={data?.critical ?? '-'} tone="text-purple-700" />
+        </div>
+
+        {/* Coordination-role at-a-glance counts - see district_admin's own
+            AdminDashboard.jsx for the full rationale comment. Ministry rides
+            National's own dashboard route (useAdminDashboard above), so
+            these two fields are already present on the same `data` object. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:w-2/3">
+          <StatCard title="Open Protection Referrals (Nationwide)" value={data?.openProtectionReferrals ?? '-'} tone="text-rose-600" />
+          <StatCard title="Compensation Pending (Nationwide)" value={data?.compensationPendingCount ?? '-'} tone="text-amber-600" />
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
@@ -279,8 +156,6 @@ export default function MinistryDashboard() {
             </table>
           </div>
         </div>
-
-        <DeployPolicyWidget jurisdictionId={nationalJurisdictionId} />
 
         <TrendChart jurisdictionId={nationalJurisdictionId} />
       </div>

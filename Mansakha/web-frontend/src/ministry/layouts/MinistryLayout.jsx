@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Settings, FileText, Map, Inbox, Radio, LogOut, User, Trophy, Menu, X, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, Settings, FileText, Map, Inbox, LogOut, User, Trophy, Menu, X, Mail } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
@@ -14,7 +14,6 @@ const NAV_ITEMS = [
   { name: 'Audit Log', icon: FileText, path: '/ministry/audit-log' },
   { name: 'Analysis', icon: Map, path: '/ministry/heatmap' },
   { name: 'Reports Inbox', icon: Inbox, path: '/ministry/reports' },
-  { name: 'Broadcast', icon: Radio, path: '/ministry/broadcast' },
   { name: 'Mail', icon: Mail, path: '/ministry/mail' },
   { name: 'Profile', icon: User, path: '/ministry/profile' },
 ];
@@ -55,7 +54,6 @@ export default function MinistryLayout({ children, title = 'Ministry Console', h
         <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 shrink-0">
           <div className="flex flex-col items-start gap-0.5">
             <img src="/logo-3.png" alt="Mansakha" className="h-auto w-[185px]" />
-            <p className="text-[11px] text-blue-200 italic leading-tight">Ministry Console</p>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
