@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Switch, Image, ActivityIndicator, Alert, Platform } from 'react-native';
+import React, { useRef, useState, useEffect } from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Switch, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../shared/context/AuthContext';
 import { useToast } from '../../shared/context/ToastContext';
 import {
@@ -62,14 +63,55 @@ export default function SettingsScreen({ navigation }) {
   const updateCounsellorPreference = useUpdateCounsellorPreference();
   const [displayLanguageId, setDisplayLanguageId] = useState(null);
   const [speakingLanguageId, setSpeakingLanguageId] = useState(null);
-  const { tier, isDesktop } = useResponsive();
+  const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
 
   const [localOptedForCounsellor, setLocalOptedForCounsellor] = useState(false);
   const [profileImageUri, setProfileImageUri] = useState(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [selectedDocketIndex, setSelectedDocketIndex] = useState(0);
 
-  React.useEffect(() => {
+  const casesList = dashboardQuery.data?.linkedCases?.length
+    ? dashboardQuery.data.linkedCases
+    : dashboardQuery.data?.caseStatus
+    ? [{ ...dashboardQuery.data.caseStatus, docketNumber: dashboardQuery.data.docketNumber }]
+    : [];
+
+  // Load active docket index from local storage on mount
+  useEffect(() => {
+    const loadSelectedDocket = async () => {
+      try {
+        const savedIndex = await AsyncStorage.getItem('selectedDocketIndex');
+        if (savedIndex !== null) {
+          const index = parseInt(savedIndex, 10);
+          if (!isNaN(index) && index < casesList.length) {
+            setSelectedDocketIndex(index);
+          }
+        }
+      } catch (e) {
+        console.error('Error loading selected docket', e);
+      }
+    };
+    if (casesList.length > 0) {
+      loadSelectedDocket();
+    }
+  }, [casesList.length]);
+
+  // Handler to change docket and persist active selection
+  const handleSelectDocket = async (index) => {
+    setSelectedDocketIndex(index);
+    const selectedCaseItem = casesList[index];
+    try {
+      await AsyncStorage.setItem('selectedDocketIndex', index.toString());
+      if (selectedCaseItem) {
+        await AsyncStorage.setItem('activeDocketData', JSON.stringify(selectedCaseItem));
+      }
+    } catch (e) {
+      console.error('Error saving active docket selection', e);
+    }
+  };
+
+  useEffect(() => {
     if (dashboardQuery.data) {
       setLocalOptedForCounsellor(dashboardQuery.data.optedForManualCounsellor ?? false);
       if (dashboardQuery.data.avatarUrl || dashboardQuery.data.profileImage) {
@@ -134,15 +176,11 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  const casesList = dashboardQuery.data?.linkedCases?.length
-    ? dashboardQuery.data.linkedCases
-    : dashboardQuery.data?.caseStatus
-    ? [{ ...dashboardQuery.data.caseStatus, docketNumber: dashboardQuery.data.docketNumber }]
-    : [];
+  const selectedCase = casesList[selectedDocketIndex] || casesList[0];
 
   return (
     <View style={styles.container}>
-      {/* Dynamic Header matched with HomeScreen */}
+      {/* Dynamic Header */}
       <View
         style={[
           styles.topHeader,
@@ -184,14 +222,8 @@ export default function SettingsScreen({ navigation }) {
       <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={styles.scrollContent}>
         <View style={[styles.contentBody, !isDesktop && styles.contentBodyMobile]}>
           
-          {/* ACCOUNT OVERVIEW */}
-          <View style={styles.sectionHeaderWrap}>
-            <Text style={styles.sectionHeaderTitle}>ACCOUNT OVERVIEW</Text>
-            <View style={styles.blueBar}/>
-          </View>
-
+          {/* USER PROFILE CARD */}
           <Card style={styles.customCard}>
-            {/* User Profile Hero Box */}
             <View style={styles.heroBox}>
               <View style={styles.userProfileLeft}>
                 <View style={styles.heroAvatarContainer}>
@@ -222,61 +254,85 @@ export default function SettingsScreen({ navigation }) {
               </View>
             </View>
 
-            {/* Linked Cases */}
-            {casesList.length > 0 ? (
-              casesList.map((c, index) => {
-                const docketId = c.docketNumber || c.docketId || c.docketNo || c.caseNumber || 'N/A';
-                const caseType = c.caseType || c.type || 'N/A';
-                const caseStage = c.caseStage || c.stage || 'Trial';
-                const key = c.userId || c.caseNumber || index;
-
-                if (!isDesktop) {
-                  return (
-                    <View key={key} style={styles.caseSimpleBlock}>
-                      <View style={styles.caseSimpleRow}>
-                        <Text style={styles.caseSimpleLabel}>Docket ID :</Text>
-                        <Text style={styles.caseSimpleValue}>{docketId}</Text>
-                      </View>
-                      <View style={styles.caseSimpleRow}>
-                        <Text style={styles.caseSimpleLabel}>Case Type :</Text>
-                        <Text style={styles.caseSimpleValue}>{caseType}</Text>
-                      </View>
-                      <View style={styles.caseSimpleRow}>
-                        <Text style={styles.caseSimpleLabel}>Case Stage :</Text>
-                        <Text style={styles.caseSimpleValue}>{caseStage}</Text>
-                      </View>
+            {/* DOCKET SELECTION UI */}
+            {casesList.length > 0 && (
+              <View style={{ marginTop: spacing.md }}>
+                <View style={styles.docketSelectorHeader}>
+                  <View style={styles.docketSelectorLeft}>
+                    <View style={styles.blueIconBox}>
+                      <Feather color={colors.primary} name="archive" size={18} />
                     </View>
-                  );
-                }
-
-                return (
-                  <View key={key} style={styles.caseRowContainer}>
-                    <View style={styles.caseIconBox}>
-                      <Feather color={colors.primary} name="briefcase" size={18}/>
+                    <View>
+                      <Text style={styles.docketSelectorTitle}>Your Dockets</Text>
+                      <Text style={styles.docketSelectorSubtitle}>Select a docket to view case details and preferences.</Text>
                     </View>
+                  </View>
 
-                    <View style={styles.caseDataGrid}>
-                      <View style={styles.caseGridItem}>
+                  {/* Docket Buttons */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.docketsList}>
+                    {casesList.map((item, idx) => {
+                      const isSelected = selectedDocketIndex === idx;
+                      const docketId = item.docketNumber || item.docketId || item.docketNo || item.caseNumber || `${idx + 1}`;
+
+                      return (
+                        <Pressable
+                          key={item.userId || idx}
+                          onPress={() => handleSelectDocket(idx)}
+                          style={[styles.docketPill, isSelected ? styles.docketPillActive : styles.docketPillInactive]}
+                        >
+                          <Text style={[styles.docketPillTitle, isSelected && styles.textWhite]}>
+                            Docket {docketId}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                {/* Active Docket Details Grid */}
+                {selectedCase && (
+                  <View style={styles.docketDetailGrid}>
+                    <View style={styles.docketGridCol}>
+                      <View style={styles.gridIconBox}>
+                        <Feather name="archive" size={18} color={colors.primary} />
+                      </View>
+                      <View>
                         <Text style={styles.fieldLabel}>Docket ID</Text>
-                        <Text style={styles.fieldValueBold}>{docketId}</Text>
+                        <Text style={styles.fieldValueBold}>
+                          {selectedCase.docketNumber || selectedCase.docketId || selectedCase.docketNo || selectedCase.caseNumber || 'N/A'}
+                        </Text>
                       </View>
+                    </View>
 
-                      <View style={[styles.caseGridItem, styles.caseTypeWideItem]}>
+                    <View style={styles.gridDivider} />
+
+                    <View style={styles.docketGridCol}>
+                      <View style={styles.gridIconBox}>
+                        <Feather name="scale" size={18} color={colors.primary} />
+                      </View>
+                      <View>
                         <Text style={styles.fieldLabel}>Case Type</Text>
-                        <Text style={styles.fieldValueBold}>{caseType}</Text>
+                        <Text style={styles.fieldValueBold}>
+                          {selectedCase.caseType || selectedCase.type || 'N/A'}
+                        </Text>
                       </View>
+                    </View>
 
-                      <View style={styles.caseGridItem}>
+                    <View style={styles.gridDivider} />
+
+                    <View style={styles.docketGridCol}>
+                      <View style={styles.gridIconBox}>
+                        <Feather name="calendar" size={18} color={colors.primary} />
+                      </View>
+                      <View>
                         <Text style={styles.fieldLabel}>Case Stage</Text>
-                        <Text style={styles.fieldValueBold}>{caseStage}</Text>
+                        <Text style={styles.fieldValueBold}>
+                          {selectedCase.caseStage || selectedCase.stage || 'N/A'}
+                        </Text>
                       </View>
                     </View>
                   </View>
-                );
-              })
-            ) : (
-              <View style={styles.caseRowContainer}>
-                <Text style={styles.fieldLabel}>No cases linked</Text>
+                )}
               </View>
             )}
           </Card>
@@ -472,7 +528,7 @@ export default function SettingsScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: colors.background 
+    backgroundColor: '#F3F6FA' 
   },
   scrollContent: { 
     flex: 1 
@@ -527,14 +583,11 @@ const styles = StyleSheet.create({
     marginLeft: spacing.md 
   },
   contentBody: {
-    backgroundColor: colors.background,
+    backgroundColor: '#F3F6FA',
     paddingHorizontal: 36,
     paddingTop: spacing.md,
     paddingBottom: spacing.xxxl,
     width: '100%',
-  },
-  contentBodyDesktop: {
-    marginTop: 0,
   },
   contentBodyMobile: {
     paddingHorizontal: spacing.xl,
@@ -559,26 +612,25 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 
-  /* Custom Clean Card */
+  /* Custom Card */
   customCard: {
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
     padding: spacing.md,
     marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: '#E2E8F0',
     ...shadow.sm,
   },
 
   /* Profile Hero Banner */
   heroBox: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#EBF3FA',
     borderRadius: radius.md,
     padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.md,
   },
   userProfileLeft: {
     flexDirection: 'row',
@@ -631,34 +683,106 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  /* Horizontal Case Layout */
-  caseRowContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  caseIconBox: {
-    width: 38,
-    height: 38,
-    borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  caseDataGrid: {
-    flex: 1,
+  /* Docket Selector Section */
+  docketSelectorHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingBottom: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    flexWrap: 'wrap',
+    gap: spacing.md,
   },
-  caseGridItem: {
+  docketSelectorLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    minWidth: 220,
+  },
+  blueIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: '#EBF3FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  docketSelectorTitle: {
+    ...typography.bodyStrong,
+    color: colors.textPrimary,
+  },
+  docketSelectorSubtitle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  docketsList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  docketPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+  },
+  docketPillActive: {
+    backgroundColor: '#356399',
+    borderColor: '#356399',
+  },
+  docketPillInactive: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#E2E8F0',
+  },
+  docketPillTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textPrimary,
+  },
+  docketPillSub: {
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  textWhite: {
+    color: colors.white,
+  },
+  textWhiteMuted: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+
+  /* Active Docket Detail Grid */
+  docketDetailGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+  },
+  docketGridCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
-  caseTypeWideItem: {
-    flex: 2,
+  gridIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.md,
+    backgroundColor: '#EBF3FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.xs,
+  },
+  gridDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: spacing.sm,
   },
   fieldLabel: {
     ...typography.caption,
@@ -668,29 +792,6 @@ const styles = StyleSheet.create({
   fieldValueBold: {
     ...typography.bodyStrong,
     color: colors.textPrimary,
-  },
-
-  /* Mobile: plain "Label : Value" case details, no icons/colored pills */
-  caseSimpleBlock: {
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  caseSimpleRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 2,
-  },
-  caseSimpleLabel: {
-    ...typography.bodySmall,
-    color: colors.textSecondary,
-    width: 90,
-  },
-  caseSimpleValue: {
-    ...typography.bodyStrong,
-    color: colors.textPrimary,
-    flex: 1,
-    flexShrink: 1,
   },
 
   /* Preference Rows Layout */
@@ -719,7 +820,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.md,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#EBF3FA',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
@@ -741,7 +842,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: '#E2E8F0',
     marginVertical: spacing.sm,
   },
 

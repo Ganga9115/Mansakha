@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
@@ -42,6 +43,43 @@ export default function HomeScreen({ navigation }) {
       setSelectedUserId(rehabCase.userId);
     }
   }, [linkedCases, activeUserId, selectedUserId]);
+  // Load selected docket from Settings screen persistence
+  useEffect(() => {
+    const loadActiveDocket = async () => {
+      try {
+        const raw = await AsyncStorage.getItem('activeDocketData');
+        if (raw) {
+          const data = JSON.parse(raw);
+          if (data?.userId) {
+            setSelectedUserId(data.userId);
+          }
+        }
+      } catch (e) {
+        console.error('Error loading active docket', e);
+      }
+    };
+    loadActiveDocket();
+  }, []);
+  // Reload selected docket when screen gains focus (e.g., after returning from Settings)
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener('focus', () => {
+      const loadActiveDocket = async () => {
+        try {
+          const raw = await AsyncStorage.getItem('activeDocketData');
+          if (raw) {
+            const data = JSON.parse(raw);
+            if (data?.userId) {
+              setSelectedUserId(data.userId);
+            }
+          }
+        } catch (e) {
+          console.error('Error reloading active docket on focus', e);
+        }
+      };
+      loadActiveDocket();
+    });
+    return unsubscribe;
+  }, [navigation]);
 
   const sessionsQuery = useUpcomingSessions();
   const upcomingSessions = sessionsQuery.data?.sessions || [];
@@ -122,31 +160,6 @@ export default function HomeScreen({ navigation }) {
                     <Text style={[styles.tickerText, styles.tickerTextActive]}>{monthStr}</Text>
                     <Text style={styles.tickerText}>{yearStr}</Text>
                   </View>
-
-                  {/* Case Switcher - migration_034: only shown when this
-                      account actually has more than one docket. Each pill
-                      shows that case's own current eCourt stage so it's
-                      clear which one (if any) is the isolated Rehabilitation
-                      context - switching here is the "exit" path back to a
-                      victim's other cases from inside that isolation. */}
-                  {linkedCases.length > 1 && (
-                    <View style={styles.caseSwitcherRow}>
-                      {linkedCases.map((c) => (
-                        <Pressable
-                          key={c.userId}
-                          onPress={() => setSelectedUserId(c.userId)}
-                          style={[styles.caseSwitcherPill, c.userId === activeUserId && styles.caseSwitcherPillActive]}
-                        >
-                          <Text style={[styles.caseSwitcherDocket, c.userId === activeUserId && styles.caseSwitcherTextActive]}>
-                            Docket {c.docketNumber}
-                          </Text>
-                          <Text style={[styles.caseSwitcherStage, c.userId === activeUserId && styles.caseSwitcherTextActive]}>
-                            {c.caseStage}{c.caseStage === 'Rehabilitation' && c.rehabilitationOptedIn ? ' · Opted In' : ''}
-                          </Text>
-                        </Pressable>
-                      ))}
-                    </View>
-                  )}
 
                   {/* Distress Score Hero Card */}
                   <View style={styles.distressCard}>
@@ -328,14 +341,18 @@ export default function HomeScreen({ navigation }) {
                                     <Text style={styles.sessionTitle}>Counselling Session</Text>
                                     {s.counsellorName && (
                                       <View style={styles.iconMetaRow}>
-                                        <Feather name="user" size={13} color={colors.textSecondary} />
+                                        <Feather name="user" size={13} color={colors.sidebarAccent} />
                                         <Text style={styles.sessionMetaText}>With {s.counsellorName}</Text>
                                       </View>
                                     )}
                                     <View style={styles.iconMetaRow}>
-                                      <Feather name="clock" size={13} color={colors.textSecondary} />
+                                      <Feather name="clock" size={13} color={colors.sidebarAccent} />
                                       <Text style={styles.sessionMetaText}>{timeStr}</Text>
                                     </View>
+                                    {/* Join Session button */}
+                                    <Pressable style={styles.joinSessionBtn} onPress={() => {/* TODO: handle join */}}>
+                                      <Text style={styles.joinSessionBtnText}>Join Session</Text>
+                                    </Pressable>
                                   </View>
                                 </View>
                               </View>
