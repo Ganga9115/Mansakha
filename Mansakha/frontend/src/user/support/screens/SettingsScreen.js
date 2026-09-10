@@ -74,8 +74,8 @@ export default function SettingsScreen({ navigation }) {
   const casesList = dashboardQuery.data?.linkedCases?.length
     ? dashboardQuery.data.linkedCases
     : dashboardQuery.data?.caseStatus
-    ? [{ ...dashboardQuery.data.caseStatus, docketNumber: dashboardQuery.data.docketNumber }]
-    : [];
+      ? [{ ...dashboardQuery.data.caseStatus, docketNumber: dashboardQuery.data.docketNumber }]
+      : [];
 
   // Load active docket index from local storage on mount
   useEffect(() => {
@@ -211,7 +211,7 @@ export default function SettingsScreen({ navigation }) {
             <DesktopHeaderActions
               fullName={dashboardQuery.data?.fullName || userName}
               alertCount={dashboardQuery.data?.alerts?.length || 0}
-              onBellPress={() => {}}
+              onBellPress={() => { }}
             />
           ) : (
             <TopRightActions />
@@ -221,7 +221,7 @@ export default function SettingsScreen({ navigation }) {
 
       <ScrollView bounces={false} showsVerticalScrollIndicator={false} style={styles.scrollContent}>
         <View style={[styles.contentBody, !isDesktop && styles.contentBodyMobile]}>
-          
+
           {/* USER PROFILE CARD */}
           <Card style={styles.customCard}>
             <View style={styles.heroBox}>
@@ -231,7 +231,7 @@ export default function SettingsScreen({ navigation }) {
                     {profileImageUri ? (
                       <Image source={{ uri: profileImageUri }} style={styles.heroAvatarImage} />
                     ) : (
-                      <Feather color={colors.primary} name="user" size={24}/>
+                      <Feather color={colors.primary} name="user" size={22} />
                     )}
                     {isUploadingImage && (
                       <View style={styles.avatarLoadingOverlay}>
@@ -246,23 +246,20 @@ export default function SettingsScreen({ navigation }) {
                 </View>
               </View>
 
-              <View style={styles.shieldBadgeContainer}>
-                <Feather color={colors.primaryLight} name="shield" size={40}/>
-                <View style={styles.shieldCheckMark}>
-                  <Feather color={colors.onPrimary} name="check" size={10}/>
-                </View>
+              <View style={styles.badgeCheckCircle}>
+                <Feather color={colors.white} name="chevron-down" size={16} />
               </View>
             </View>
 
             {/* DOCKET SELECTION UI */}
             {casesList.length > 0 && (
               <View style={{ marginTop: spacing.md }}>
-                <View style={styles.docketSelectorHeader}>
+                <View style={[styles.docketSelectorHeader, !isDesktop && styles.docketSelectorHeaderMobile]}>
                   <View style={styles.docketSelectorLeft}>
                     <View style={styles.blueIconBox}>
                       <Feather color={colors.primary} name="archive" size={18} />
                     </View>
-                    <View>
+                    <View style={{ flex: 1 }}>
                       <Text style={styles.docketSelectorTitle}>Your Dockets</Text>
                       <Text style={styles.docketSelectorSubtitle}>Select a docket to view case details and preferences.</Text>
                     </View>
@@ -291,12 +288,9 @@ export default function SettingsScreen({ navigation }) {
 
                 {/* Active Docket Details Grid */}
                 {selectedCase && (
-                  <View style={styles.docketDetailGrid}>
+                  <View style={[styles.docketDetailGrid, !isDesktop && styles.docketDetailGridMobile]}>
                     <View style={styles.docketGridCol}>
-                      <View style={styles.gridIconBox}>
-                        <Feather name="archive" size={18} color={colors.primary} />
-                      </View>
-                      <View>
+                      <View style={styles.docketTextWrap}>
                         <Text style={styles.fieldLabel}>Docket ID</Text>
                         <Text style={styles.fieldValueBold}>
                           {selectedCase.docketNumber || selectedCase.docketId || selectedCase.docketNo || selectedCase.caseNumber || 'N/A'}
@@ -307,12 +301,9 @@ export default function SettingsScreen({ navigation }) {
                     <View style={styles.gridDivider} />
 
                     <View style={styles.docketGridCol}>
-                      <View style={styles.gridIconBox}>
-                        <Feather name="scale" size={18} color={colors.primary} />
-                      </View>
-                      <View>
+                      <View style={styles.docketTextWrap}>
                         <Text style={styles.fieldLabel}>Case Type</Text>
-                        <Text style={styles.fieldValueBold}>
+                        <Text style={styles.fieldValueBold} numberOfLines={1}>
                           {selectedCase.caseType || selectedCase.type || 'N/A'}
                         </Text>
                       </View>
@@ -321,12 +312,9 @@ export default function SettingsScreen({ navigation }) {
                     <View style={styles.gridDivider} />
 
                     <View style={styles.docketGridCol}>
-                      <View style={styles.gridIconBox}>
-                        <Feather name="calendar" size={18} color={colors.primary} />
-                      </View>
-                      <View>
+                      <View style={styles.docketTextWrap}>
                         <Text style={styles.fieldLabel}>Case Stage</Text>
-                        <Text style={styles.fieldValueBold}>
+                        <Text style={styles.fieldValueBold} numberOfLines={1}>
                           {selectedCase.caseStage || selectedCase.stage || 'N/A'}
                         </Text>
                       </View>
@@ -340,16 +328,16 @@ export default function SettingsScreen({ navigation }) {
           {/* PREFERENCES */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>PREFERENCES</Text>
-            <View style={styles.blueBar}/>
+            <View style={styles.blueBar} />
           </View>
 
           <Card style={styles.customCard}>
             <View style={[styles.preferenceRow, !isDesktop && styles.preferenceRowMobile]}>
               <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
-                  <Feather color={colors.primary} name="globe" size={18}/>
+                  <Feather color={colors.primary} name="globe" size={18} />
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.prefTitle}>Display Language</Text>
                   <Text style={styles.prefSubtitle}>Select your preferred interface language</Text>
                 </View>
@@ -374,14 +362,14 @@ export default function SettingsScreen({ navigation }) {
               </View>
             </View>
 
-            <View style={styles.rowDivider}/>
+            <View style={styles.rowDivider} />
 
             <View style={[styles.preferenceRow, !isDesktop && styles.preferenceRowMobile]}>
               <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
-                  <Feather color={colors.primary} name="mic" size={18}/>
+                  <Feather color={colors.primary} name="mic" size={18} />
                 </View>
-                <View>
+                <View style={{ flex: 1 }}>
                   <Text style={styles.prefTitle}>Speaking Language</Text>
                   <Text style={styles.prefSubtitle}>Language used for voice check-ins and AI calls</Text>
                 </View>
@@ -404,12 +392,12 @@ export default function SettingsScreen({ navigation }) {
           {/* COMMUNICATION PREFERENCES */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>COMMUNICATION PREFERENCES</Text>
-            <View style={styles.blueBar}/>
+            <View style={styles.blueBar} />
           </View>
 
           <Card style={styles.customCard}>
             <View style={styles.toggleRow}>
-              <View style={{ flex: 1 }}>
+              <View style={{ flex: 1, paddingRight: spacing.sm }}>
                 <Text style={styles.prefTitle}>Prefer a human counsellor</Text>
                 <Text style={styles.prefSubtitle}>Get matched with a counsellor for chat & calls</Text>
               </View>
@@ -426,26 +414,26 @@ export default function SettingsScreen({ navigation }) {
           {/* SYSTEM */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>SYSTEM</Text>
-            <View style={styles.blueBar}/>
+            <View style={styles.blueBar} />
           </View>
 
           <Card style={styles.customCard}>
             <View style={[styles.systemRow, !isDesktop && styles.systemRowMobile]}>
               <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
-                  <Feather color={colors.primary} name="bell" size={18}/>
+                  <Feather color={colors.primary} name="bell" size={18} />
                 </View>
                 <Text style={styles.prefTitle}>Push Notifications</Text>
               </View>
               <Text style={[styles.systemValueText, !isDesktop && styles.systemValueTextMobile]}>Enabled</Text>
             </View>
 
-            <View style={styles.rowDivider}/>
+            <View style={styles.rowDivider} />
 
             <View style={[styles.systemRow, !isDesktop && styles.systemRowMobile]}>
               <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
-                  <Feather color={colors.textSecondary} name="info" size={18}/>
+                  <Feather color={colors.textSecondary} name="info" size={18} />
                 </View>
                 <Text style={styles.prefTitle}>App Version</Text>
               </View>
@@ -456,14 +444,14 @@ export default function SettingsScreen({ navigation }) {
           {/* SECURITY */}
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>SECURITY</Text>
-            <View style={styles.blueBar}/>
+            <View style={styles.blueBar} />
           </View>
 
           <Card style={styles.customCard}>
             <View style={[styles.preferenceRow, !isDesktop && styles.preferenceRowMobile]}>
               <View style={[styles.prefLeft, !isDesktop && styles.prefLeftMobile]}>
                 <View style={styles.prefIconBox}>
-                  <Feather color={colors.primary} name="lock" size={18}/>
+                  <Feather color={colors.primary} name="lock" size={18} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.prefTitle}>Password</Text>
@@ -514,9 +502,9 @@ export default function SettingsScreen({ navigation }) {
 
           <View style={styles.sectionHeaderWrap}>
             <Text style={styles.sectionHeaderTitle}>ACCOUNT</Text>
-            <View style={styles.blueBar}/>
+            <View style={styles.blueBar} />
           </View>
-          <LogoutButton style={{ marginBottom: spacing.lg }} variant="row"/>
+          <LogoutButton style={{ marginBottom: spacing.lg }} variant="row" />
         </View>
       </ScrollView>
 
@@ -526,12 +514,12 @@ export default function SettingsScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F3F6FA' 
+  container: {
+    flex: 1,
+    backgroundColor: '#F3F6FA'
   },
-  scrollContent: { 
-    flex: 1 
+  scrollContent: {
+    flex: 1
   },
   topHeader: {
     backgroundColor: colors.primaryLight,
@@ -548,13 +536,13 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     alignItems: 'center',
   },
-  headerIconDesktop: { 
-    marginRight: spacing.sm 
+  headerIconDesktop: {
+    marginRight: spacing.sm
   },
-  headerLeft: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    flex: 1 
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1
   },
   avatarContainer: {
     width: 44,
@@ -570,17 +558,17 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  headerInfo: { 
-    flex: 1 
+  headerInfo: {
+    flex: 1
   },
-  pageTitle: { 
-    ...typography.h1, 
+  pageTitle: {
+    ...typography.h1,
     color: colors.primaryDark,
     fontSize: 24,
     fontWeight: '700',
   },
-  headerRight: { 
-    marginLeft: spacing.md 
+  headerRight: {
+    marginLeft: spacing.md
   },
   contentBody: {
     backgroundColor: '#F3F6FA',
@@ -590,7 +578,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   contentBodyMobile: {
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     paddingBottom: 100,
   },
 
@@ -625,9 +613,10 @@ const styles = StyleSheet.create({
 
   /* Profile Hero Banner */
   heroBox: {
-    backgroundColor: '#EBF3FA',
-    borderRadius: radius.md,
-    padding: spacing.md,
+    backgroundColor: '#EDF5FC',
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -635,15 +624,16 @@ const styles = StyleSheet.create({
   userProfileLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
   },
   heroAvatarContainer: {
     position: 'relative',
     marginRight: spacing.sm,
   },
   heroAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -661,24 +651,20 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     ...typography.bodyStrong,
-    color: colors.textPrimary,
+    color: '#2B4A6F',
+    fontSize: 18,
+    fontWeight: '700',
   },
   heroSubtitle: {
     ...typography.caption,
-    color: colors.textSecondary,
-    marginTop: 2,
+    color: '#718096',
+    marginTop: 1,
   },
-  shieldBadgeContainer: {
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  shieldCheckMark: {
-    position: 'absolute',
-    backgroundColor: colors.primary,
+  badgeCheckCircle: {
+    backgroundColor: '#5298D4',
     borderRadius: radius.pill,
-    width: 16,
-    height: 16,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -694,11 +680,16 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: spacing.md,
   },
+  docketSelectorHeaderMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: spacing.xs,
+  },
   docketSelectorLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
-    minWidth: 220,
+    minWidth: 200,
   },
   blueIconBox: {
     width: 36,
@@ -721,18 +712,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+    paddingVertical: 4,
   },
   docketPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: radius.pill,
     borderWidth: 1,
   },
   docketPillActive: {
-    backgroundColor: '#356399',
-    borderColor: '#356399',
+    backgroundColor: '#2D6296',
+    borderColor: '#2D6296',
   },
   docketPillInactive: {
     backgroundColor: '#F8FAFC',
@@ -743,15 +735,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary,
   },
-  docketPillSub: {
-    fontSize: 11,
-    color: colors.textSecondary,
-  },
   textWhite: {
     color: colors.white,
-  },
-  textWhiteMuted: {
-    color: 'rgba(255, 255, 255, 0.8)',
   },
 
   /* Active Docket Detail Grid */
@@ -761,37 +746,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     backgroundColor: '#F8FAFC',
     borderRadius: radius.md,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: '#EBF3FA',
+  },
+  docketDetailGridMobile: {
+    paddingHorizontal: spacing.xs,
   },
   docketGridCol: {
-    flexDirection: 'row',
-    alignItems: 'center',
     flex: 1,
+    alignItems: 'flex-start',
+    paddingHorizontal: 4,
   },
-  gridIconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.md,
-    backgroundColor: '#EBF3FA',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs,
+  docketTextWrap: {
+    flexDirection: 'column',
   },
   gridDivider: {
     width: 1,
-    height: 32,
+    height: 28,
     backgroundColor: '#E2E8F0',
-    marginHorizontal: spacing.sm,
+    marginHorizontal: 2,
   },
   fieldLabel: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: '#8A99AD',
+    fontSize: 11,
     marginBottom: 2,
   },
   fieldValueBold: {
     ...typography.bodyStrong,
-    color: colors.textPrimary,
+    color: '#2B4A6F',
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   /* Preference Rows Layout */
@@ -896,20 +884,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.sm,
   },
-  primaryBtnFilledText: { 
-    ...typography.bodyStrong, 
-    color: colors.onPrimary 
+  primaryBtnFilledText: {
+    ...typography.bodyStrong,
+    color: colors.onPrimary
   },
-  errorText: { 
-    ...typography.caption, 
-    color: colors.danger, 
-    marginTop: spacing.sm, 
-    textAlign: 'center' 
+  errorText: {
+    ...typography.caption,
+    color: colors.danger,
+    marginTop: spacing.sm,
+    textAlign: 'center'
   },
-  successText: { 
-    ...typography.caption, 
-    color: colors.success, 
-    marginTop: spacing.sm, 
-    textAlign: 'center' 
+  successText: {
+    ...typography.caption,
+    color: colors.success,
+    marginTop: spacing.sm,
+    textAlign: 'center'
   },
 });
