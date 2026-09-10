@@ -17,7 +17,13 @@ const { resolveDateWindow, bucketize } = require('../../core/services/reportBuck
 // shared code across the 3 admin route files, unlike the route files
 // themselves - see reportSnapshot.js's own header comment for why).
 const { resolveReportPeriod } = require('../../core/services/reportPeriods');
-const { computeDistrictWiseSnapshot } = require('../../core/services/reportSnapshot');
+const {
+  computeDistrictWiseSnapshot,
+  computeInvestigationProgress,
+  computeThreatProtectionSummary,
+  computeCompensationReliefSummary,
+  computeAgencyReferralVolume,
+} = require('../../core/services/reportSnapshot');
 const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
 
 // How far back to look when predicting escalation risk across a whole
@@ -355,7 +361,20 @@ router.get(
       else interventionPhases.planned += 1;
     }
 
-    return ok(res, { trend, severityDistribution, interventionPhases });
+    // Coordination-role activity across the SAME jurisdiction subtree and
+    // time window as the wellness charts above - a flat aggregate over
+    // whatever this admin can see (not a per-child breakdown; that
+    // comparison already exists on the Dashboard's own trends table). Reuses
+    // reportSnapshot.js's own Report-building functions unmodified - see
+    // their own header comments for the real-world grounding on each.
+    const [investigationProgress, threatProtection, compensationRelief, agencyReferralVolume] = await Promise.all([
+      computeInvestigationProgress(jurisdictionIds),
+      computeThreatProtectionSummary(jurisdictionIds, since, until),
+      computeCompensationReliefSummary(jurisdictionIds),
+      computeAgencyReferralVolume(jurisdictionIds, since, until),
+    ]);
+
+    return ok(res, { trend, severityDistribution, interventionPhases, investigationProgress, threatProtection, compensationRelief, agencyReferralVolume });
   }
 );
 
