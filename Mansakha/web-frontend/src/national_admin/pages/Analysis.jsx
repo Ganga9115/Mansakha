@@ -58,6 +58,14 @@ export default function Analysis() {
   const agencyReferralVolume = analyticsData?.agencyReferralVolume || [];
   const totalAgencyReferrals = agencyReferralVolume.reduce((sum, r) => sum + r.totalCount, 0);
   const openAgencyReferrals = agencyReferralVolume.reduce((sum, r) => sum + r.openCount, 0);
+  // Legal Aid Funnel - the dedicated pipeline's own lifecycle (migration_040),
+  // not period-scoped like caseStageDistribution: "where things stand right
+  // now" across every request this jurisdiction's cases have ever filed
+  // (migration_041 caps each case at one request, ever, so this can only
+  // grow one case at a time).
+  const legalAidFunnel = analyticsData?.legalAidFunnel || { totalCount: 0, stages: [] };
+  const legalAidRejected = legalAidFunnel.stages.find((s) => s.status === 'Rejected')?.count || 0;
+  const legalAidActiveStages = legalAidFunnel.stages.filter((s) => s.status !== 'Rejected');
 
   const total = data?.totalCases || data?.total || 0;
   const high = data?.highRiskCases || data?.high || 0;
@@ -289,6 +297,25 @@ export default function Analysis() {
                   <p className="text-xs text-gray-400">No cross-agency referrals this period.</p>
                 ) : (
                   <DistributionBars items={agencyReferralVolume.map((r) => ({ label: r.roleName, count: r.totalCount }))} colorClass="bg-purple-500" />
+                )}
+              </div>
+
+              <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-sm text-gray-800">Legal Aid Funnel</h3>
+                  <span className="text-xs text-gray-400">{legalAidFunnel.totalCount} request{legalAidFunnel.totalCount === 1 ? '' : 's'} ever filed</span>
+                </div>
+                {legalAidFunnel.totalCount === 0 ? (
+                  <p className="text-xs text-gray-400">No Legal Aid requests filed from this jurisdiction yet.</p>
+                ) : (
+                  <>
+                    <DistributionBars items={legalAidActiveStages.map((s) => ({ label: s.status, count: s.count }))} colorClass="bg-amber-500" />
+                    {legalAidRejected > 0 && (
+                      <p className="text-[11px] text-rose-500 pt-1">
+                        {legalAidRejected} rejected - a rejected case cannot file again (one Legal Aid request per case, ever).
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </div>

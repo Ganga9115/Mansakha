@@ -669,6 +669,55 @@ async function computeAgencyReferralVolume(jurisdictionIds, periodStart, periodE
   });
 }
 
+// Legal Aid Funnel - the dedicated pipeline's own lifecycle
+// (migration_040: Submitted -> Under Review -> Verified -> Approved ->
+// Active -> Completed, or -> Rejected at either of the first two stages),
+// counted at each real stage a request currently sits in. Not
+// period-scoped - like caseStageDistribution, "where things stand right
+// now" is the useful reading, not "how many crossed a stage this window."
+// jurisdictionIds scopes by the CASE's own district (legal_aid_requests
+// has no jurisdiction column of its own - joined via users, same as every
+// other Section A function).
+const LEGAL_AID_STATUSES = ['Submitted', 'Under Review', 'Verified', 'Approved', 'Active', 'Completed', 'Rejected'];
+
+async function computeLegalAidFunnel(jurisdictionIds) {
+  const { rows } = await pool.query(
+    `select lar.status, count(*) as count
+     from legal_aid_requests lar
+     join users u on u.user_id = lar.user_id
+     where u.jurisdiction_id = any($1::uuid[])
+     group by lar.status`,
+    [jurisdictionIds]
+  );
+  const countByStatus = new Map(rows.map((r) => [r.status, Number(r.count)]));
+  const totalCount = rows.reduce((sum, r) => sum + Number(r.count), 0);
+  return {
+    totalCount,
+    stages: LEGAL_AID_STATUSES.map((status) => ({ status, count: countByStatus.get(status) || 0 })),
+  };
+}
+
+// Per-child rollup - one row per district/state, same shape the Report's
+// own computePerChildRollups already uses for every other Section A metric.
+async function countLegalAidFunnelByGroup(jurisdictionIds, groupByParent) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id, lar.status, count(*) as count
+     from legal_aid_requests lar
+     join users u on u.user_id = lar.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[])
+     group by ${groupExpr}, lar.status`,
+    [jurisdictionIds]
+  );
+  const byGroup = new Map();
+  for (const r of rows) {
+    if (!byGroup.has(r.group_id)) byGroup.set(r.group_id, new Map());
+    byGroup.get(r.group_id).set(r.status, Number(r.count));
+  }
+  return byGroup;
+}
+
 // ===== Trend direction (State/National rollup rows) =====
 // Copied from districtAdmin.routes.js's own computeAverageScore/
 // computeTrendDirection - self-contained here per this file's own "no
@@ -1693,6 +1742,7 @@ module.exports = {
   computeThreatProtectionSummary,
   computeCompensationReliefSummary,
   computeAgencyReferralVolume,
+  computeLegalAidFunnel,
   computeTrendDirection,
   computeReportingCompliance,
   computeLanguagePreferences,
@@ -1710,6 +1760,7 @@ module.exports = {
   countThreatProtectionByGroup,
   countCompensationReliefByGroup,
   countAgencyReferralVolumeByGroup,
+  countLegalAidFunnelByGroup,
   computeAvgScoreForPeriod,
   computePerChildRollups,
 };
