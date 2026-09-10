@@ -369,6 +369,21 @@ export function useCounsellorPerformance(jurisdictionId) {
   );
 }
 
+// Section B (workforce data) - Ministry's own fuller version, covering all 6
+// coordination roles including Rehabilitation Officer (provider-scoped, not
+// jurisdiction-scoped - only Ministry's copy of this feature has it). No
+// jurisdictionId param - Ministry is unrestricted by jurisdiction (Section 3),
+// so these are real nationwide numbers, not a picker.
+export function useCoordinationRolePerformanceMinistry() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/coordination-roles/performance', token), [token]);
+}
+
+export function useCoordinationStaffingGapsMinistry() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/ministry/coordination-roles/staffing-gaps', token), [token]);
+}
+
 // ===== Mansakha Mail =====
 // Internal staff mail (backend/src/mail/routes/mail.routes.js) - role-agnostic
 // endpoints under /api/mail, so these hooks are plain, unprefixed by

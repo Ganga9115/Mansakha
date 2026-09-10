@@ -81,6 +81,26 @@ export function useReportsAnalytics(jurisdictionId, range, start, end) {
   }, [token, jurisdictionId, range, start, end]);
 }
 
+// Section B (workforce data) - which officials hold the 5 jurisdiction/
+// station-scoped coordination roles in this admin's own subtree, and how
+// their own queue is moving. See the backend route's own header comment for
+// why Rehabilitation Officer is excluded here (Ministry's own copy covers it).
+export function useCoordinationRolePerformance(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/national/coordination-roles/performance/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+export function useCoordinationStaffingGaps(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/national/coordination-roles/staffing-gaps/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
 export function useExportReportCsv() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

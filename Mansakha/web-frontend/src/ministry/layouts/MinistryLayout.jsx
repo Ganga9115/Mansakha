@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/ministry/dashboard' },
   { name: 'Staff Management', icon: Users, path: '/ministry/staff-management' },
   { name: 'Performance & Efficacy', icon: Trophy, path: '/ministry/performance' },
+  { name: 'Coordination Roster', icon: Users, path: '/ministry/coordination-roster' },
   { name: 'System Configuration', icon: Settings, path: '/ministry/system-config' },
   { name: 'Audit Log', icon: FileText, path: '/ministry/audit-log' },
   { name: 'Analysis', icon: Map, path: '/ministry/heatmap' },

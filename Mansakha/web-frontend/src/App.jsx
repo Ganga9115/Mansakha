@@ -38,6 +38,7 @@ import StateDashboard from './state_admin/pages/StateDashboard';
 import StateAdminDistrictDashboard from './state_admin/pages/AdminDashboard';
 import StateCaseDetail from './state_admin/pages/CaseDetail';
 import StateAnalysis from './state_admin/pages/Analysis';
+import StateCoordinationRolePerformance from './state_admin/pages/CoordinationRolePerformance';
 import StateAdminAlerts from './state_admin/pages/AdminAlerts';
 import StateReports from './state_admin/pages/Reports';
 import StateSettings from './state_admin/pages/Settings';
@@ -51,6 +52,7 @@ import NationalStateDashboard from './national_admin/pages/StateDashboard';
 import NationalDistrictDashboard from './national_admin/pages/AdminDashboard';
 import NationalCaseDetail from './national_admin/pages/CaseDetail';
 import NationalAnalysis from './national_admin/pages/Analysis';
+import NationalCoordinationRolePerformance from './national_admin/pages/CoordinationRolePerformance';
 import NationalAdminAlerts from './national_admin/pages/AdminAlerts';
 import NationalReports from './national_admin/pages/Reports';
 import NationalSettings from './national_admin/pages/Settings';
@@ -63,6 +65,7 @@ import MinistryLoginPage from './ministry/pages/Login';
 import MinistryDashboard from './ministry/pages/MinistryDashboard';
 import StaffManagement from './ministry/pages/StaffManagement';
 import CounsellorPerformance from './ministry/pages/CounsellorPerformance';
+import MinistryCoordinationRolePerformance from './ministry/pages/CoordinationRolePerformance';
 import SystemConfig from './ministry/pages/SystemConfig';
 import AuditLog from './ministry/pages/AuditLog';
 import Heatmap from './ministry/pages/Heatmap';
@@ -176,6 +179,7 @@ export default function App() {
         <Route path="/stateadmin/district/:jurisdictionId" element={<RequireAuth><StateAdminDistrictDashboard /></RequireAuth>} />
         <Route path="/stateadmin/case-detail/:id" element={<RequireAuth><StateCaseDetail /></RequireAuth>} />
         <Route path="/stateadmin/analysis" element={<RequireAuth><StateAnalysis /></RequireAuth>} />
+        <Route path="/stateadmin/coordination-roster" element={<RequireAuth><StateCoordinationRolePerformance /></RequireAuth>} />
         <Route path="/stateadmin/alerts" element={<RequireAuth><StateAdminAlerts /></RequireAuth>} />
         <Route path="/stateadmin/reports" element={<RequireAuth><StateReports /></RequireAuth>} />
         <Route path="/stateadmin/mail" element={<RequireAuth><StateMailInbox /></RequireAuth>} />
@@ -189,6 +193,7 @@ export default function App() {
             sidebar. */}
         <Route path="/nationaladmin" element={<RequireAuth><NationalDashboard /></RequireAuth>} />
         <Route path="/nationaladmin/analysis" element={<RequireAuth><NationalAnalysis /></RequireAuth>} />
+        <Route path="/nationaladmin/coordination-roster" element={<RequireAuth><NationalCoordinationRolePerformance /></RequireAuth>} />
         <Route path="/nationaladmin/alerts" element={<RequireAuth><NationalAdminAlerts /></RequireAuth>} />
         <Route path="/nationaladmin/reports" element={<RequireAuth><NationalReports /></RequireAuth>} />
         <Route path="/nationaladmin/state/:jurisdictionId" element={<RequireAuth><NationalStateDashboard /></RequireAuth>} />
@@ -205,6 +210,7 @@ export default function App() {
         <Route path="/ministry/dashboard" element={<RequireAuth loginPath="/ministry/login"><MinistryDashboard /></RequireAuth>} />
         <Route path="/ministry/staff-management" element={<RequireAuth loginPath="/ministry/login"><StaffManagement /></RequireAuth>} />
         <Route path="/ministry/performance" element={<RequireAuth loginPath="/ministry/login"><CounsellorPerformance /></RequireAuth>} />
+        <Route path="/ministry/coordination-roster" element={<RequireAuth loginPath="/ministry/login"><MinistryCoordinationRolePerformance /></RequireAuth>} />
         <Route path="/ministry/system-config" element={<RequireAuth loginPath="/ministry/login"><SystemConfig /></RequireAuth>} />
         <Route path="/ministry/audit-log" element={<RequireAuth loginPath="/ministry/login"><AuditLog /></RequireAuth>} />
         <Route path="/ministry/heatmap" element={<RequireAuth loginPath="/ministry/login"><Heatmap /></RequireAuth>} />
