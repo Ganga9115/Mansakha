@@ -67,7 +67,6 @@ import SystemConfig from './ministry/pages/SystemConfig';
 import AuditLog from './ministry/pages/AuditLog';
 import Heatmap from './ministry/pages/Heatmap';
 import ReportsInbox from './ministry/pages/ReportsInbox';
-import EmergencyBroadcast from './ministry/pages/EmergencyBroadcast';
 import MinistrySettings from './ministry/pages/Settings';
 import MinistryMailInbox from './ministry/pages/MailInbox';
 import MinistryMailSent from './ministry/pages/MailSent';
@@ -210,7 +209,6 @@ export default function App() {
         <Route path="/ministry/audit-log" element={<RequireAuth loginPath="/ministry/login"><AuditLog /></RequireAuth>} />
         <Route path="/ministry/heatmap" element={<RequireAuth loginPath="/ministry/login"><Heatmap /></RequireAuth>} />
         <Route path="/ministry/reports" element={<RequireAuth loginPath="/ministry/login"><ReportsInbox /></RequireAuth>} />
-        <Route path="/ministry/broadcast" element={<RequireAuth loginPath="/ministry/login"><EmergencyBroadcast /></RequireAuth>} />
         <Route path="/ministry/mail" element={<RequireAuth loginPath="/ministry/login"><MinistryMailInbox /></RequireAuth>} />
         <Route path="/ministry/mail/sent" element={<RequireAuth loginPath="/ministry/login"><MinistryMailSent /></RequireAuth>} />
         <Route path="/ministry/mail/archived" element={<RequireAuth loginPath="/ministry/login"><MinistryMailArchived /></RequireAuth>} />

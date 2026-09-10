@@ -92,20 +92,6 @@ export function useGenerateAnalytics() {
   return { mutate, loading };
 }
 
-export function useSendBroadcast() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (payload) => {
-    setLoading(true);
-    try {
-      return await apiClient.post('/api/admin/national/broadcast', payload, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
 // --- Ministry: Staff/Account Management ---
 
 export function useStaffList(role, level, page = 1) {
