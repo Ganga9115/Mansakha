@@ -65,7 +65,13 @@ function RequestCard({ requestId, status, reason, rejectionReason, navigation })
             <Text style={styles.rejectionText}>{rejectionReason}</Text>
           </View>
         )}
-        <Button title="Submit a New Request" variant="outline" onPress={() => navigation.navigate('LegalAidRequest')} style={{ marginTop: spacing.md }} />
+        {/* migration_041: one Legal Aid request per case, ever - a rejected
+            request doesn't reopen submission, so there is no "Submit a New
+            Request" action here any more. */}
+        <Text style={styles.oneShotNote}>
+          Legal Aid can be requested once per case. If you believe this rejection was a mistake, contact your
+          District Legal Services Authority directly.
+        </Text>
       </Card>
     );
   }
@@ -88,9 +94,8 @@ function RequestCard({ requestId, status, reason, rejectionReason, navigation })
         </Pressable>
       )}
 
-      {status === 'Completed' && (
-        <Button title="Submit a New Request" variant="outline" onPress={() => navigation.navigate('LegalAidRequest')} style={{ marginTop: spacing.md }} />
-      )}
+      {/* migration_041: one Legal Aid request per case, ever - no "Submit a
+          New Request" action once Completed either. */}
     </Card>
   );
 }
@@ -188,6 +193,7 @@ const styles = StyleSheet.create({
   rejectionBox: { backgroundColor: colors.dangerLight, borderRadius: radius.md, padding: spacing.md, marginTop: spacing.md },
   rejectionLabel: { ...typography.label, color: colors.danger, fontSize: 10 },
   rejectionText: { ...typography.bodySmall, color: colors.textPrimary, marginTop: 2 },
+  oneShotNote: { ...typography.bodySmall, color: colors.textSecondary, marginTop: spacing.md },
 
   linkRow: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,

@@ -2101,6 +2101,9 @@ async function notifyJurisdictionalDlsa(caseUserId, jurisdictionId, priority) {
 
 // Filed against the literal ACTIVE case, never the anchor - same convention
 // intervention_requests already follows (see its own POST route's comment).
+// migration_041: one Legal Aid request per case, ever - not just one in
+// flight at a time. A rejected or completed request no longer opens the
+// door to a fresh submission on the same docket.
 router.post('/legal-aid-requests', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
   const { reason, description } = req.body;
@@ -2119,7 +2122,7 @@ router.post('/legal-aid-requests', async (req, res) => {
     request = rows[0];
   } catch (err) {
     if (err.code === '23505' && err.constraint === 'idx_legal_aid_requests_one_open_per_case') {
-      return fail(res, 'You already have an active Legal Aid request for this case', 409);
+      return fail(res, 'This case has already used its one Legal Aid request', 409);
     }
     return fail(res, `Could not submit Legal Aid request: ${err.message}`, 500);
   }
