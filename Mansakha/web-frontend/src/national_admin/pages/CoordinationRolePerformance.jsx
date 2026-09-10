@@ -15,21 +15,18 @@ import { useMyJurisdiction, useCoordinationRolePerformance, useCoordinationStaff
 // this jurisdiction-scoped view (see the backend route's own comment).
 // Ministry's own separate Coordination Roster page covers all 6 roles.
 
-// Capped, not a full scrollable list, for the same reason topActsSections
-// elsewhere in this codebase caps at 5 - a State/National subtree's gap
-// list can run into the hundreds of districts, and a wall of names doesn't
-// help an admin who already knows their own district count is worse than
-// showing "then some" once the count is meaningful.
-const GAP_DISPLAY_CAP = 8;
-
+// Every name is real, actionable data - a State/National subtree's gap list
+// can run into the hundreds of districts, so this caps the BOX HEIGHT (a
+// scrollable list), never the data itself. An earlier version truncated the
+// text with "+N more" and no way to see the rest - fixed per direct
+// feedback that hiding the tail of an actionable list isn't acceptable.
 function GapList({ names }) {
   if (names.length === 0) return <span className="text-emerald-600 font-semibold">Fully staffed</span>;
-  const shown = names.slice(0, GAP_DISPLAY_CAP);
   return (
-    <span className="text-gray-600">
-      {shown.join(', ')}
-      {names.length > GAP_DISPLAY_CAP ? ` +${names.length - GAP_DISPLAY_CAP} more` : ''}
-    </span>
+    <div className="flex-1 min-w-0">
+      <span className="text-[10px] font-bold text-gray-400 block mb-1">{names.length} unstaffed</span>
+      <div className="max-h-24 overflow-y-auto text-gray-600 leading-relaxed pr-1">{names.join(', ')}</div>
+    </div>
   );
 }
 

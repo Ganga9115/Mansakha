@@ -13,18 +13,18 @@ import { useCoordinationRolePerformanceMinistry, useCoordinationStaffingGapsMini
 // picker needed - Ministry is unrestricted (Section 3), so this is always
 // the real, whole-country roster.
 
-// Same display cap as the admin-tier pages, for the same reason - a
-// nationwide gap list can run into the hundreds of districts.
-const GAP_DISPLAY_CAP = 8;
-
+// Every name is real, actionable data - a nationwide gap list can run into
+// the hundreds of districts, so this caps the BOX HEIGHT (a scrollable
+// list), never the data itself. An earlier version truncated the text with
+// "+N more" and no way to see the rest - fixed per direct feedback that
+// hiding the tail of an actionable list isn't acceptable.
 function GapList({ names }) {
   if (names.length === 0) return <span className="text-emerald-600 font-semibold">Fully staffed</span>;
-  const shown = names.slice(0, GAP_DISPLAY_CAP);
   return (
-    <span className="text-gray-600">
-      {shown.join(', ')}
-      {names.length > GAP_DISPLAY_CAP ? ` +${names.length - GAP_DISPLAY_CAP} more` : ''}
-    </span>
+    <div className="flex-1 min-w-0">
+      <span className="text-[10px] font-bold text-gray-400 block mb-1">{names.length} unstaffed</span>
+      <div className="max-h-24 overflow-y-auto text-gray-600 leading-relaxed pr-1">{names.join(', ')}</div>
+    </div>
   );
 }
 
