@@ -66,6 +66,11 @@ export default function Analysis() {
   const legalAidFunnel = analyticsData?.legalAidFunnel || { totalCount: 0, stages: [] };
   const legalAidRejected = legalAidFunnel.stages.find((s) => s.status === 'Rejected')?.count || 0;
   const legalAidActiveStages = legalAidFunnel.stages.filter((s) => s.status !== 'Rejected');
+  // Cross-State Comparison's own companion to the flat agencyReferralVolume
+  // above - one row per state, same time window, feeding the BarChart in
+  // the Cross-State Comparison section below (not the Coordination & Case
+  // Handling one, which stays a flat jurisdiction-wide aggregate).
+  const agencyReferralVolumeByState = analyticsData?.agencyReferralVolumeByState || [];
 
   const total = data?.totalCases || data?.total || 0;
   const high = data?.highRiskCases || data?.high || 0;
@@ -300,6 +305,18 @@ export default function Analysis() {
                 )}
               </div>
 
+              {/* National's own Cross-State comparison for the same metric -
+                  which state is generating the most coordination-role
+                  workload, not just which role. Reuses the same BarChart
+                  component the Cross-State Comparison section above uses. */}
+              <BarChart
+                title="Cross-Agency Referral Volume by State"
+                subtitle="Highest first - which state is generating the most coordination-role workload this period."
+                items={agencyReferralVolumeByState.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.totalCount }))}
+                valueLabel="referrals"
+                barColor="bg-purple-500"
+              />
+
               <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-sm text-gray-800">Legal Aid Funnel</h3>
@@ -368,15 +385,24 @@ function TrendChart({ trend }) {
 
   return (
     <div className="h-44 relative flex flex-col justify-between pt-4">
-      <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
-        <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
-        {path && <path d={path} fill="none" stroke="#DC2626" strokeWidth="2.5" />}
-        {points.map((p, i) => p.y !== null && (
-          <circle key={i} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
-        ))}
-      </svg>
+      <div className="flex gap-2">
+        {/* Y-axis - score is always 0-100, so 3 fixed ticks (not computed
+            off the data) are enough to read the line against. */}
+        <div className="relative w-6 h-32 shrink-0 text-[8px] font-semibold text-gray-400">
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '10%' }}>100</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '50%' }}>50</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '90%' }}>0</span>
+        </div>
+        <svg className="flex-1 min-w-0 h-32 overflow-visible" viewBox="0 0 500 100">
+          <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
+          {path && <path d={path} fill="none" stroke="#DC2626" strokeWidth="2.5" />}
+          {points.map((p, i) => p.y !== null && (
+            <circle key={i} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
+          ))}
+        </svg>
+      </div>
       <div
-        className="grid text-[8px] font-semibold text-gray-400 px-2 pt-2 border-t border-gray-100"
+        className="grid text-[8px] font-semibold text-gray-400 px-2 pt-2 border-t border-gray-100 ml-8"
         style={{ gridTemplateColumns: `repeat(${Math.max(trend.length, 1)}, minmax(0, 1fr))` }}
       >
         {trend.map((t, i) => <span key={i} className="text-center whitespace-nowrap">{t.label}</span>)}

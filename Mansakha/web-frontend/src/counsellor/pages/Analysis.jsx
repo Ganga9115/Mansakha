@@ -234,15 +234,24 @@ function TrendChart({ trend }) {
 
   return (
     <div className="h-44 relative flex flex-col justify-between pt-4">
-      <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
-        <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
-        {path && <path d={path} fill="none" stroke="#DC2626" strokeWidth="2.5" />}
-        {points.map((p, i) => p.y !== null && (
-          <circle key={i} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
-        ))}
-      </svg>
+      <div className="flex gap-2">
+        {/* Y-axis - score is always 0-100, so 3 fixed ticks (not computed
+            off the data) are enough to read the line against. */}
+        <div className="relative w-6 h-32 shrink-0 text-[8px] font-semibold text-gray-400">
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '10%' }}>100</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '50%' }}>50</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '90%' }}>0</span>
+        </div>
+        <svg className="flex-1 min-w-0 h-32 overflow-visible" viewBox="0 0 500 100">
+          <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
+          {path && <path d={path} fill="none" stroke="#DC2626" strokeWidth="2.5" />}
+          {points.map((p, i) => p.y !== null && (
+            <circle key={i} cx={p.x} cy={p.y} r="3" fill="#DC2626" />
+          ))}
+        </svg>
+      </div>
       <div
-        className="grid text-[8px] font-semibold text-gray-400 px-2 pt-2 border-t border-gray-100"
+        className="grid text-[8px] font-semibold text-gray-400 px-2 pt-2 border-t border-gray-100 ml-8"
         style={{ gridTemplateColumns: `repeat(${Math.max(trend.length, 1)}, minmax(0, 1fr))` }}
       >
         {trend.map((t, i) => <span key={i} className="text-center whitespace-nowrap">{t.label}</span>)}

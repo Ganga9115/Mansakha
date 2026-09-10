@@ -23,6 +23,7 @@ const {
   computeThreatProtectionSummary,
   computeCompensationReliefSummary,
   computeAgencyReferralVolume,
+  computeAgencyReferralVolumeByChild,
   computeLegalAidFunnel,
 } = require('../../core/services/reportSnapshot');
 const { renderReportHtml, generatePdfBuffer } = require('../../core/services/reportPdf');
@@ -367,7 +368,7 @@ router.get(
     // comparison already exists on the Dashboard's own trends table). Reuses
     // reportSnapshot.js's own Report-building functions unmodified - see
     // their own header comments for the real-world grounding on each.
-    const [investigationProgress, threatProtection, compensationRelief, agencyReferralVolume, legalAidFunnel] = await Promise.all([
+    const [investigationProgress, threatProtection, compensationRelief, agencyReferralVolume, legalAidFunnel, agencyReferralVolumeByState] = await Promise.all([
       computeInvestigationProgress(jurisdictionIds),
       computeThreatProtectionSummary(jurisdictionIds, since, until),
       computeCompensationReliefSummary(jurisdictionIds),
@@ -376,9 +377,14 @@ router.get(
       // right now" across the dedicated Legal Aid pipeline (migration_040),
       // not "how many crossed a stage this window".
       computeLegalAidFunnel(jurisdictionIds),
+      // Cross-State Comparison's own companion to agencyReferralVolume above
+      // - one row per state (National's children are states, so
+      // groupByParent: true rolls each district up into its own state, same
+      // reasoning computeStateWiseSnapshot's own Report uses).
+      computeAgencyReferralVolumeByChild(jurisdictionId, true, since, until),
     ]);
 
-    return ok(res, { trend, severityDistribution, interventionPhases, investigationProgress, threatProtection, compensationRelief, agencyReferralVolume, legalAidFunnel });
+    return ok(res, { trend, severityDistribution, interventionPhases, investigationProgress, threatProtection, compensationRelief, agencyReferralVolume, legalAidFunnel, agencyReferralVolumeByState });
   }
 );
 

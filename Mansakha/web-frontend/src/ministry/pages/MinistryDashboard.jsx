@@ -72,18 +72,27 @@ function TrendChart({ jurisdictionId }) {
         <p className="text-xs text-gray-400">Not enough data yet.</p>
       ) : (
         <div className="space-y-1">
-          <div className="h-32 relative">
-            <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-              <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="#E5E7EB" strokeDasharray="4 4" />
-              <path d={pathD} fill="none" stroke="#519BCE" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
-              {points.map((p, i) =>
-                p.averageScore == null ? null : (
-                  <circle key={p.month} cx={xForIndex(i)} cy={yForScore(p.averageScore)} r="2.5" fill="#3D5A80" />
-                )
-              )}
-            </svg>
+          <div className="flex gap-2">
+            {/* Y-axis - score is always 0-100, so 3 fixed ticks (not
+                computed off the data) are enough to read the line against. */}
+            <div className="relative w-6 h-32 shrink-0 text-[8px] font-semibold text-gray-400">
+              <span className="absolute right-0 -translate-y-1/2 top-0">100</span>
+              <span className="absolute right-0 -translate-y-1/2 top-1/2">50</span>
+              <span className="absolute right-0 -translate-y-1/2 bottom-0 top-auto">0</span>
+            </div>
+            <div className="flex-1 min-w-0 h-32 relative">
+              <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
+                <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="#E5E7EB" strokeDasharray="4 4" />
+                <path d={pathD} fill="none" stroke="#519BCE" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+                {points.map((p, i) =>
+                  p.averageScore == null ? null : (
+                    <circle key={p.month} cx={xForIndex(i)} cy={yForScore(p.averageScore)} r="2.5" fill="#3D5A80" />
+                  )
+                )}
+              </svg>
+            </div>
           </div>
-          <div className="flex justify-between text-[10px] font-semibold text-gray-400 pt-2 border-t border-gray-100">
+          <div className="flex justify-between text-[10px] font-semibold text-gray-400 pt-2 border-t border-gray-100 ml-8">
             {points.map((p) => (
               <span key={p.month}>{p.month.slice(5)}</span>
             ))}

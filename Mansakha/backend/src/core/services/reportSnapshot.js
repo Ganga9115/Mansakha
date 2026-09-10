@@ -1274,6 +1274,27 @@ async function countAgencyReferralVolumeByGroup(jurisdictionIds, groupByParent, 
   return byGroup;
 }
 
+// Cross-child Agency Referral Volume comparison - the per-child companion to
+// computeAgencyReferralVolume above, exposed LIVE for State/National's own
+// Analysis page (Cross-District/Cross-State Comparison section), not just
+// buried inside a submitted Report. Deliberately standalone rather than
+// reusing computePerChildRollups - that function computes 12 other sections
+// (case stage, new enrollments, counsellors, ...) Analysis has no use for;
+// this runs just the one grouped query it actually needs.
+async function computeAgencyReferralVolumeByChild(jurisdictionId, groupByParent, periodStart, periodEnd) {
+  const [allDescendantIds, children] = await Promise.all([
+    getDescendantJurisdictionIds(jurisdictionId),
+    getChildJurisdictions(jurisdictionId),
+  ]);
+  const byGroup = await countAgencyReferralVolumeByGroup(allDescendantIds, groupByParent, periodStart, periodEnd);
+  return children.map((c) => {
+    const roles = byGroup.get(c.jurisdiction_id) || [];
+    const totalCount = roles.reduce((sum, r) => sum + r.totalCount, 0);
+    const resolvedCount = roles.reduce((sum, r) => sum + r.resolvedCount, 0);
+    return { jurisdictionId: c.jurisdiction_id, name: c.name, roles, totalCount, resolvedCount, openCount: totalCount - resolvedCount };
+  });
+}
+
 // Extends Case Type Distribution (already a whole-subtree aggregate table)
 // with the single most common case type PER CHILD, attached to the
 // districts/states comparison row - a full child x case-type matrix (9+
@@ -1742,6 +1763,7 @@ module.exports = {
   computeThreatProtectionSummary,
   computeCompensationReliefSummary,
   computeAgencyReferralVolume,
+  computeAgencyReferralVolumeByChild,
   computeLegalAidFunnel,
   computeTrendDirection,
   computeReportingCompliance,

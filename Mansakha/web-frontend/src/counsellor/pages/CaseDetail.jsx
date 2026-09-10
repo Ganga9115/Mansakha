@@ -51,17 +51,26 @@ function CaseTrendChart({ history }) {
 
   return (
     <div className="pt-1">
-      <svg className="w-full h-32 overflow-visible" viewBox="0 0 500 100">
-        <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
-        <path d={path} fill="none" stroke="#519BCE" strokeWidth="2.5" />
-        {points.map((p, i) => (
-          <circle key={i} cx={p.x} cy={p.y} r="4" fill={RISK_DOT_COLOR[p.riskLevel] || '#9CA3AF'}>
-            <title>{`${p.label} · ${p.source || 'Unknown source'}`}</title>
-          </circle>
-        ))}
-      </svg>
+      <div className="flex gap-2">
+        {/* Y-axis - score is always 0-100, so 3 fixed ticks (not computed
+            off the data) are enough to read the line against. */}
+        <div className="relative w-6 h-32 shrink-0 text-[8px] font-semibold text-gray-400">
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '10%' }}>100</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '50%' }}>50</span>
+          <span className="absolute right-0 -translate-y-1/2" style={{ top: '90%' }}>0</span>
+        </div>
+        <svg className="flex-1 min-w-0 h-32 overflow-visible" viewBox="0 0 500 100">
+          <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
+          <path d={path} fill="none" stroke="#519BCE" strokeWidth="2.5" />
+          {points.map((p, i) => (
+            <circle key={i} cx={p.x} cy={p.y} r="4" fill={RISK_DOT_COLOR[p.riskLevel] || '#9CA3AF'}>
+              <title>{`${p.label} · ${p.source || 'Unknown source'}`}</title>
+            </circle>
+          ))}
+        </svg>
+      </div>
       <div
-        className="grid text-[9px] font-semibold text-gray-400 px-1 pt-2 mt-2 border-t border-gray-100"
+        className="grid text-[9px] font-semibold text-gray-400 px-1 pt-2 mt-2 border-t border-gray-100 ml-8"
         style={{ gridTemplateColumns: `repeat(${points.length}, minmax(0, 1fr))` }}
       >
         {points.map((p, i) => <span key={i} className="text-center whitespace-nowrap">{p.label}</span>)}
