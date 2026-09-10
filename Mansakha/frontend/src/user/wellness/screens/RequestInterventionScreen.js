@@ -72,7 +72,7 @@ function DocumentSlot({ doc, attached, uploading, onPick }) {
   );
 }
 
-function NewRequestForm({ types, caseUserId }) {
+function NewRequestForm({ types, caseUserId, navigation }) {
   const [selectedTypeId, setSelectedTypeId] = useState(null);
   const [description, setDescription] = useState('');
   const [pendingDocs, setPendingDocs] = useState({});
@@ -150,6 +150,23 @@ function NewRequestForm({ types, caseUserId }) {
       {!submitted ? (
         <>
           <View style={styles.typeGrid}>
+            {/* Legal Aid (migration_040) has its own dedicated pipeline - not
+                a submittable type here (intervention_types' own row for it is
+                soft-deleted, see this file's STATUS_SCREEN_BY_TYPE comment) -
+                but it belongs in this list so a victim looking for help finds
+                every kind of assistance in one place. Tapping it hands off to
+                the real Legal Aid hub instead of the generic proof-upload
+                flow below. */}
+            <Pressable
+              style={styles.typeCard}
+              onPress={() => navigation?.navigate('LegalAidHub')}
+            >
+              <View style={styles.typeIconBox}>
+                <Feather name={getTypeIcon('Legal Aid')} size={20} color={colors.textSecondary} />
+              </View>
+              <Text style={styles.typeCardText}>Legal Aid</Text>
+            </Pressable>
+
             {types.map((t) => {
               const isSelected = selectedTypeId === t.interventionTypeId;
               return (
@@ -339,7 +356,7 @@ export default function RequestInterventionScreen({ navigation, route }) {
 
           {/* New Request Form Card */}
           <QueryBoundary query={typesQuery}>
-            {(typesData) => <NewRequestForm types={typesData?.interventionTypes || []} caseUserId={activeUserId} />}
+            {(typesData) => <NewRequestForm types={typesData?.interventionTypes || []} caseUserId={activeUserId} navigation={navigation} />}
           </QueryBoundary>
 
           {/* My Requests Section Card */}
