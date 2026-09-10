@@ -969,6 +969,180 @@ router.delete('/police-stations/:stationId', async (req, res) => {
   return ok(res, null, 'Police station removed');
 });
 
+// ===== Section B: Coordination-Role Workforce Data (Ministry's own, full
+// 6-role copy) =====
+// District/State/National Admin each have their own jurisdiction-scoped
+// version of this (backend/src/{district,state,national}_admin/routes/
+// *.routes.js's own '/coordination-roles/performance' and '-staffing-gaps'),
+// covering 5 roles - Rehabilitation Officer is deliberately excluded there
+// since it's scoped by rehabilitation_providers (a nationwide provider, not
+// a jurisdiction or a police station) and has no honest place in a
+// jurisdiction-scoped view. Ministry is exactly where RO's real scope
+// belongs: Ministry already manages providers via Staff Management, and is
+// unrestricted by jurisdiction (Section 3) - no requireJurisdiction, no
+// jurisdictionId param, real nationwide numbers.
+const ALL_COORDINATION_ROLES = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer'];
+const COORDINATION_ROLES_JURISDICTION_SCOPED_MINISTRY = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector'];
+
+router.get('/coordination-roles/performance', async (req, res) => {
+  // Jurisdiction/station-scoped roles (5) - same coalesce-onto-station's-own-
+  // jurisdiction trick the admin-tier version uses, just with no
+  // jurisdictionIds filter at all (Ministry sees everyone).
+  const [{ rows: officialRows }, { rows: queueRows }, { rows: providerOfficialRows }, { rows: providerQueueRows }] = await Promise.all([
+    pool.query(
+      `select o.official_id, o.full_name, r.role_name, orr.designation, orr.station_id, ps.name as station_name,
+              coalesce(orr.jurisdiction_id, ps.jurisdiction_id) as effective_jurisdiction_id,
+              j.name as jurisdiction_name
+       from official_roles orr
+       join officials o on o.official_id = orr.official_id
+       join roles r on r.role_id = orr.role_id
+       left join police_stations ps on ps.station_id = orr.station_id
+       left join jurisdictions j on j.jurisdiction_id = coalesce(orr.jurisdiction_id, ps.jurisdiction_id)
+       where orr.revoked_at is null and r.role_name = any($1::text[])
+         and coalesce(orr.jurisdiction_id, ps.jurisdiction_id) is not null`,
+      [ALL_COORDINATION_ROLES]
+    ),
+    pool.query(
+      `select ar.referred_to_role as role_name, u.jurisdiction_id,
+              count(*) filter (where ar.status = 'Open') as open_count,
+              count(*) filter (where ar.status = 'Resolved') as resolved_count,
+              avg(extract(epoch from (ar.resolved_at - ar.created_at)) / 86400) filter (where ar.resolved_at is not null) as avg_resolve_days
+       from agency_referrals ar
+       join users u on u.user_id = ar.user_id
+       where ar.referred_to_role = any($1::text[])
+       group by ar.referred_to_role, u.jurisdiction_id`,
+      [ALL_COORDINATION_ROLES]
+    ),
+    // Rehabilitation Officer - provider-scoped (migration_031's provider_id
+    // column), not jurisdiction-scoped at all.
+    pool.query(
+      `select o.official_id, o.full_name, orr.designation, orr.provider_id, rp.name as provider_name, rp.provider_type
+       from official_roles orr
+       join officials o on o.official_id = orr.official_id
+       join roles r on r.role_id = orr.role_id
+       join rehabilitation_providers rp on rp.provider_id = orr.provider_id
+       where orr.revoked_at is null and r.role_name = 'Rehabilitation Officer'`
+    ),
+    // agency_referrals carries providerId in metadata (see the victim opt-in
+    // and DWO hand-off flows, both of which write it) rather than a real FK -
+    // grouped in JS below rather than a jsonb group-by, since a provider_id
+    // key extracted from metadata isn't indexed/typed the way u.jurisdiction_id is.
+    pool.query(
+      `select ar.status, ar.created_at, ar.resolved_at, ar.metadata->>'providerId' as provider_id
+       from agency_referrals ar
+       where ar.referred_to_role = 'Rehabilitation Officer'`
+    ),
+  ]);
+
+  const queueByKey = new Map(queueRows.map((r) => [`${r.role_name}::${r.jurisdiction_id}`, r]));
+  const officials = officialRows.map((o) => {
+    const q = queueByKey.get(`${o.role_name}::${o.effective_jurisdiction_id}`);
+    return {
+      officialId: o.official_id,
+      fullName: o.full_name,
+      roleName: o.role_name,
+      designation: o.designation,
+      jurisdictionId: o.effective_jurisdiction_id,
+      jurisdictionName: o.jurisdiction_name,
+      stationName: o.station_name,
+      providerName: null,
+      openReferralCount: q ? Number(q.open_count) : 0,
+      resolvedReferralCount: q ? Number(q.resolved_count) : 0,
+      avgResolveDays: q && q.avg_resolve_days !== null ? Math.round(Number(q.avg_resolve_days) * 10) / 10 : null,
+    };
+  });
+
+  // Reduce per-provider referral rows to the same open/resolved/avg shape
+  // the jurisdiction-scoped roles already use.
+  const providerQueueByProviderId = new Map();
+  for (const r of providerQueueRows) {
+    if (!r.provider_id) continue;
+    const bucket = providerQueueByProviderId.get(r.provider_id) || { open: 0, resolved: 0, resolveDaysSum: 0, resolveDaysCount: 0 };
+    if (r.status === 'Open') bucket.open += 1;
+    if (r.status === 'Resolved') bucket.resolved += 1;
+    if (r.resolved_at) {
+      bucket.resolveDaysSum += (new Date(r.resolved_at).getTime() - new Date(r.created_at).getTime()) / 86400000;
+      bucket.resolveDaysCount += 1;
+    }
+    providerQueueByProviderId.set(r.provider_id, bucket);
+  }
+
+  const rehabilitationOfficials = providerOfficialRows.map((o) => {
+    const q = providerQueueByProviderId.get(o.provider_id);
+    return {
+      officialId: o.official_id,
+      fullName: o.full_name,
+      roleName: 'Rehabilitation Officer',
+      designation: o.designation,
+      jurisdictionId: null,
+      jurisdictionName: null,
+      stationName: null,
+      providerName: `${o.provider_name} (${o.provider_type})`,
+      openReferralCount: q ? q.open : 0,
+      resolvedReferralCount: q ? q.resolved : 0,
+      avgResolveDays: q && q.resolveDaysCount > 0 ? Math.round((q.resolveDaysSum / q.resolveDaysCount) * 10) / 10 : null,
+    };
+  });
+
+  return ok(res, { officials: [...officials, ...rehabilitationOfficials] });
+});
+
+// Nationwide staffing gaps - the "roleGaps"/"stationGaps" shape mirrors the
+// admin-tier version exactly (no jurisdictionIds filter - every district/
+// station in the country), plus "providerGaps": which real rehabilitation
+// providers (migration_029, Ministry-manageable) have no Rehabilitation
+// Officer assigned yet.
+router.get('/coordination-roles/staffing-gaps', async (req, res) => {
+  const [roleGapResults, { rows: stationGaps }, { rows: providerGaps }] = await Promise.all([
+    Promise.all(
+      COORDINATION_ROLES_JURISDICTION_SCOPED_MINISTRY.map(async (roleName) => {
+        const { rows } = await pool.query(
+          `select j.jurisdiction_id, j.name
+           from jurisdictions j
+           where j.level = 'district'
+             and not exists (
+               select 1 from official_roles orr
+               join roles r on r.role_id = orr.role_id
+               where r.role_name = $1 and orr.jurisdiction_id = j.jurisdiction_id and orr.revoked_at is null
+             )
+           order by j.name`,
+          [roleName]
+        );
+        return { roleName, unassignedJurisdictions: rows.map((r) => ({ jurisdictionId: r.jurisdiction_id, name: r.name })) };
+      })
+    ),
+    pool.query(
+      `select ps.station_id, ps.name, j.name as jurisdiction_name
+       from police_stations ps
+       join jurisdictions j on j.jurisdiction_id = ps.jurisdiction_id
+       where ps.deleted_at is null
+         and not exists (
+           select 1 from official_roles orr
+           join roles r on r.role_id = orr.role_id
+           where r.role_name = 'Investigating Officer' and orr.station_id = ps.station_id and orr.revoked_at is null
+         )
+       order by j.name, ps.name`
+    ),
+    pool.query(
+      `select rp.provider_id, rp.name, rp.provider_type
+       from rehabilitation_providers rp
+       where rp.deleted_at is null
+         and not exists (
+           select 1 from official_roles orr
+           join roles r on r.role_id = orr.role_id
+           where r.role_name = 'Rehabilitation Officer' and orr.provider_id = rp.provider_id and orr.revoked_at is null
+         )
+       order by rp.name`
+    ),
+  ]);
+
+  return ok(res, {
+    roleGaps: roleGapResults,
+    stationGaps: stationGaps.map((s) => ({ stationId: s.station_id, name: s.name, jurisdictionName: s.jurisdiction_name })),
+    providerGaps: providerGaps.map((p) => ({ providerId: p.provider_id, name: p.name, providerType: p.provider_type })),
+  });
+});
+
 // ===== Feature Catalog Section 6.3 =====
 
 // "Heatmaps by state / region" - pure aggregation, no new table. One row per

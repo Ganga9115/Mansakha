@@ -1169,6 +1169,154 @@ router.get(
   }
 );
 
+// ===== Section B: Coordination-Role Workforce Data =====
+// Distinct from Section A (reportSnapshot.js's case/user data, already in
+// the Report/Dashboard/Analysis) - this is about the ROSTER, not the cases:
+// which officials hold which of the 5 jurisdiction/station-attributable
+// coordination roles, and how their own queue (referrals to that role, in
+// their own scope) is actually moving. Rehabilitation Officer is
+// deliberately excluded here - it's scoped by rehabilitation_providers
+// (nationwide provider, not a jurisdiction or a police station), so it has
+// no honest place in a jurisdiction-scoped view; Ministry's own separate
+// copy of this feature covers all 6 roles including RO, since Ministry
+// already manages providers via Staff Management.
+//
+// Unlike Counsellor (a user is assigned to exactly one counsellor via
+// users.assigned_counsellor_id), there is no per-official assignment column
+// on agency_referrals - a referral targets a ROLE within a case's
+// jurisdiction, not a specific person. Confirmed live: two officials never
+// share a real (non-null) jurisdiction/station for the same role in this
+// data today, so attributing a jurisdiction's own queue numbers to
+// whichever official holds that scope is accurate - and correct even in
+// the rare case they DO share a scope, since they genuinely share the same
+// queue.
+const COORDINATION_ROLES_JURISDICTION_SCOPED = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector'];
+
+router.get(
+  '/coordination-roles/performance/:jurisdictionId',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.params.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId } = req.params;
+    const jurisdictionIds = await getDescendantJurisdictionIds(jurisdictionId);
+
+    // Investigating Officer is station-scoped (station_id, not
+    // jurisdiction_id) - coalesce onto the station's own jurisdiction_id so
+    // every role in this view resolves to one "effective jurisdiction" a
+    // single queue-health query can group by.
+    const { rows: officialRows } = await pool.query(
+      `select o.official_id, o.full_name, r.role_name, orr.designation, orr.station_id, ps.name as station_name,
+              coalesce(orr.jurisdiction_id, ps.jurisdiction_id) as effective_jurisdiction_id,
+              j.name as jurisdiction_name
+       from official_roles orr
+       join officials o on o.official_id = orr.official_id
+       join roles r on r.role_id = orr.role_id
+       left join police_stations ps on ps.station_id = orr.station_id
+       left join jurisdictions j on j.jurisdiction_id = coalesce(orr.jurisdiction_id, ps.jurisdiction_id)
+       where orr.revoked_at is null
+         and r.role_name in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
+         and coalesce(orr.jurisdiction_id, ps.jurisdiction_id) = any($1::uuid[])`,
+      [jurisdictionIds]
+    );
+
+    if (officialRows.length === 0) return ok(res, { officials: [] });
+
+    // One grouped query for every role+jurisdiction's queue health, not one
+    // query per official - same "single round trip regardless of roster
+    // size" fix the counsellor-performance route above already applies.
+    const { rows: queueRows } = await pool.query(
+      `select ar.referred_to_role as role_name, u.jurisdiction_id,
+              count(*) filter (where ar.status = 'Open') as open_count,
+              count(*) filter (where ar.status = 'Resolved') as resolved_count,
+              avg(extract(epoch from (ar.resolved_at - ar.created_at)) / 86400) filter (where ar.resolved_at is not null) as avg_resolve_days
+       from agency_referrals ar
+       join users u on u.user_id = ar.user_id
+       where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
+         and u.jurisdiction_id = any($1::uuid[])
+       group by ar.referred_to_role, u.jurisdiction_id`,
+      [jurisdictionIds]
+    );
+    const queueByKey = new Map(queueRows.map((r) => [`${r.role_name}::${r.jurisdiction_id}`, r]));
+
+    const officials = officialRows.map((o) => {
+      const q = queueByKey.get(`${o.role_name}::${o.effective_jurisdiction_id}`);
+      return {
+        officialId: o.official_id,
+        fullName: o.full_name,
+        roleName: o.role_name,
+        designation: o.designation,
+        jurisdictionId: o.effective_jurisdiction_id,
+        jurisdictionName: o.jurisdiction_name,
+        stationName: o.station_name,
+        openReferralCount: q ? Number(q.open_count) : 0,
+        resolvedReferralCount: q ? Number(q.resolved_count) : 0,
+        avgResolveDays: q && q.avg_resolve_days !== null ? Math.round(Number(q.avg_resolve_days) * 10) / 10 : null,
+      };
+    });
+
+    return ok(res, { officials });
+  }
+);
+
+// A real, actionable coverage gap - which district-level jurisdictions in
+// this admin's own subtree have NO official at all holding a given
+// jurisdiction-scoped role, and which police stations have no
+// Investigating Officer. Distinct from "officials" above (which only ever
+// lists roles that ARE staffed) - this is the honest complement, the same
+// "jurisdictionAssigned: false" gap already surfaced inline elsewhere
+// (e.g. Protection Officer's own queue) but rolled up for oversight here.
+router.get(
+  '/coordination-roles/staffing-gaps/:jurisdictionId',
+  verifyToken,
+  requireRole(['Administration', 'Ministry']),
+  generalApiLimiter,
+  requireJurisdiction((req) => req.params.jurisdictionId),
+  async (req, res) => {
+    const { jurisdictionId } = req.params;
+    const jurisdictionIds = await getDescendantJurisdictionIds(jurisdictionId);
+
+    const [roleGapResults, { rows: stationGaps }] = await Promise.all([
+      Promise.all(
+        COORDINATION_ROLES_JURISDICTION_SCOPED.map(async (roleName) => {
+          const { rows } = await pool.query(
+            `select j.jurisdiction_id, j.name
+             from jurisdictions j
+             where j.jurisdiction_id = any($1::uuid[]) and j.level = 'district'
+               and not exists (
+                 select 1 from official_roles orr
+                 join roles r on r.role_id = orr.role_id
+                 where r.role_name = $2 and orr.jurisdiction_id = j.jurisdiction_id and orr.revoked_at is null
+               )
+             order by j.name`,
+            [jurisdictionIds, roleName]
+          );
+          return { roleName, unassignedJurisdictions: rows.map((r) => ({ jurisdictionId: r.jurisdiction_id, name: r.name })) };
+        })
+      ),
+      pool.query(
+        `select ps.station_id, ps.name, j.name as jurisdiction_name
+         from police_stations ps
+         join jurisdictions j on j.jurisdiction_id = ps.jurisdiction_id
+         where ps.jurisdiction_id = any($1::uuid[]) and ps.deleted_at is null
+           and not exists (
+             select 1 from official_roles orr
+             join roles r on r.role_id = orr.role_id
+             where r.role_name = 'Investigating Officer' and orr.station_id = ps.station_id and orr.revoked_at is null
+           )
+         order by j.name, ps.name`,
+        [jurisdictionIds]
+      ),
+    ]);
+
+    return ok(res, {
+      roleGaps: roleGapResults,
+      stationGaps: stationGaps.map((s) => ({ stationId: s.station_id, name: s.name, jurisdictionName: s.jurisdiction_name })),
+    });
+  }
+);
+
 // ===== Detailed PDF Reports (District tier) =====
 // Replaces the old single-snapshot/single-target design: a District's report
 // carries a full case-wise snapshot (reportSnapshot.js's
