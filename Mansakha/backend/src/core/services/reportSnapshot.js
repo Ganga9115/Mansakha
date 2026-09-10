@@ -12,6 +12,12 @@ const { supabase } = require('../db/supabaseClient');
 const { getDescendantJurisdictionIds, getChildJurisdictions } = require('./jurisdictionTree');
 const { resolveTrendBuckets } = require('./reportPeriods');
 const { bucketize } = require('./reportBuckets');
+// computeThreatTier/getSosEventCounts ARE genuinely shared code (unlike a
+// role route file's own logic) - core/services, no jurisdiction/role
+// framing of their own, already the one pure function this whole system
+// uses to turn accused-status + SOS history into a Threat Tier. Reused here
+// exactly as protectionOfficer.routes.js reuses it, not reimplemented.
+const { computeThreatTier, getSosEventCounts } = require('./threatAssessment');
 
 // Order the risk badges will always sort in across every table this feature
 // renders (cases list, comparison rows) - Critical first, matching the
@@ -434,6 +440,235 @@ async function computeLegalProceedings(districtJurisdictionId, periodStart, peri
   return { casesWithRecord: rows.length, pendingCount, disposedCount, topActsSections, upcomingHearings, pendencyAging, message: null };
 }
 
+// ===== New-role case/user data (Section A - added for coordination-role
+// oversight visibility). Every query below identifies a case by
+// docket_number/case_type/jurisdiction only - the SAME privacy convention
+// computeNewEnrollments/computeCaseWiseSnapshot already established for
+// this file (never user_identity.full_name/contact_number/address). The one
+// new column read here, user_identity.bank_account_number, is read ONLY as
+// an `is not null` boolean - never its value - see computeCompensationReliefSummary.
+// Protection Officer's own single-referral Dispatch Details (victim name/
+// phone/address) stays untouched by this - nothing here widens that.
+
+const NO_INVESTIGATION_RECORDS_MESSAGE = "No investigation records generated yet for this district's cases";
+
+// District-tier. Current-state snapshot (not period-scoped) - same
+// reasoning caseTypeDistribution/caseStageDistribution already give:
+// accused status/chargesheet status are where-things-stand facts, not
+// period events. investigation_records is created lazily by IO on first
+// PATCH (confirmed: no insert anywhere else) - LEFT JOIN, honest zero-state
+// message when a district has none yet, same pattern computeLegalProceedings
+// already uses for court_case_details.
+// jurisdictionIds is an array everywhere in this function (a single-district
+// caller passes a 1-element array) - this lets the exact same function serve
+// both the Report's own per-district call and Analysis's flat whole-subtree
+// aggregate (GET /reports-analytics, which already resolves a full
+// descendant-id array for every tier).
+async function computeInvestigationProgress(jurisdictionIds) {
+  const { rows } = await pool.query(
+    `select ir.accused_status, ir.chargesheet_status, ir.chargesheet_filed_at,
+            ir.fir_document_path, ir.chargesheet_document_path, u.enrolled_at
+     from users u
+     left join investigation_records ir on ir.user_id = u.user_id
+     where u.jurisdiction_id = any($1::uuid[])`,
+    [jurisdictionIds]
+  );
+
+  const withRecord = rows.filter((r) => r.chargesheet_status !== null);
+  if (withRecord.length === 0) {
+    return {
+      casesWithRecord: 0, accusedStatusDistribution: [], chargesheetFiled: 0, chargesheetNotFiled: 0,
+      firDocumentOnFileCount: 0, chargesheetDocumentOnFileCount: 0, avgDaysToChargesheet: null,
+      message: NO_INVESTIGATION_RECORDS_MESSAGE,
+    };
+  }
+
+  const accusedCounts = new Map();
+  let chargesheetFiled = 0;
+  let firDocCount = 0;
+  let chargesheetDocCount = 0;
+  let daysSum = 0;
+  let daysCount = 0;
+  for (const r of withRecord) {
+    if (r.accused_status) accusedCounts.set(r.accused_status, (accusedCounts.get(r.accused_status) || 0) + 1);
+    if (r.chargesheet_status === 'Filed') chargesheetFiled += 1;
+    if (r.fir_document_path) firDocCount += 1;
+    if (r.chargesheet_document_path) chargesheetDocCount += 1;
+    if (r.chargesheet_filed_at && r.enrolled_at) {
+      daysSum += (new Date(r.chargesheet_filed_at).getTime() - new Date(r.enrolled_at).getTime()) / 86400000;
+      daysCount += 1;
+    }
+  }
+
+  return {
+    casesWithRecord: withRecord.length,
+    accusedStatusDistribution: [...accusedCounts.entries()].map(([status, count]) => ({ status, count })),
+    chargesheetFiled,
+    chargesheetNotFiled: withRecord.length - chargesheetFiled,
+    firDocumentOnFileCount: firDocCount,
+    chargesheetDocumentOnFileCount: chargesheetDocCount,
+    avgDaysToChargesheet: daysCount > 0 ? Math.round((daysSum / daysCount) * 10) / 10 : null,
+    message: null,
+  };
+}
+
+// District-tier. Period-scoped (referred_to_role = 'Protection Officer'
+// referrals CREATED this period) - a volume-of-activity section, same
+// convention computeInterventionSummary/computeAlertVolume already use.
+// Threat Tier isn't a stored column (protectionOfficer.routes.js computes
+// it fresh on every read) - reused here the same way rather than
+// duplicated: fetch each referral's own accused_status/case_type, batch the
+// real 7-day SOS count via getSosEventCounts, then bucket through the same
+// computeThreatTier function PO's own queue uses.
+async function computeThreatProtectionSummary(jurisdictionIds, periodStart, periodEnd) {
+  const { rows } = await pool.query(
+    `select ar.status, ar.metadata, ar.user_id, ir.accused_status, ct.name as case_type_name
+     from agency_referrals ar
+     join users u on u.user_id = ar.user_id
+     join case_types ct on ct.case_type_id = u.case_type_id
+     left join investigation_records ir on ir.user_id = ar.user_id
+     where ar.referred_to_role = 'Protection Officer' and u.jurisdiction_id = any($1::uuid[])
+       and ar.created_at >= $2 and ar.created_at <= $3`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+
+  if (rows.length === 0) {
+    return { totalReferrals: 0, originTypeDistribution: [], threatTierDistribution: [], resolutionOutcomeDistribution: [], resolvedCount: 0 };
+  }
+
+  const sosCounts = await getSosEventCounts(rows.map((r) => r.user_id), 7);
+
+  const originCounts = new Map();
+  const tierCounts = new Map();
+  const outcomeCounts = new Map();
+  let resolvedCount = 0;
+  for (const r of rows) {
+    const originType = r.metadata?.originType || 'Unspecified';
+    originCounts.set(originType, (originCounts.get(originType) || 0) + 1);
+
+    const tier = computeThreatTier({ accusedStatus: r.accused_status, caseTypeName: r.case_type_name, sosEventCount7d: sosCounts[r.user_id] || 0 });
+    const tierLabel = r.metadata?.manualThreatTier || tier || 'Not yet assessed';
+    tierCounts.set(tierLabel, (tierCounts.get(tierLabel) || 0) + 1);
+
+    if (r.status === 'Resolved') {
+      resolvedCount += 1;
+      const category = r.metadata?.outcome?.category;
+      if (category) outcomeCounts.set(category, (outcomeCounts.get(category) || 0) + 1);
+    }
+  }
+
+  return {
+    totalReferrals: rows.length,
+    originTypeDistribution: [...originCounts.entries()].map(([originType, count]) => ({ originType, count })),
+    threatTierDistribution: [...tierCounts.entries()].map(([tier, count]) => ({ tier, count })),
+    resolutionOutcomeDistribution: [...outcomeCounts.entries()].map(([category, count]) => ({ category, count })),
+    resolvedCount,
+  };
+}
+
+const NO_DWO_REFERRALS_MESSAGE = "No cases have been referred to a District Welfare Officer yet";
+// Duplicated from dwo.routes.js's own IMMEDIATE_RELIEF_COMPLIANCE_DAYS by
+// this file's own established convention (header comment) of adapting a
+// role route file's constants rather than importing across the role-folder
+// boundary - keep this in sync if that threshold ever changes there.
+const IMMEDIATE_RELIEF_COMPLIANCE_DAYS = 7;
+
+// District-tier. Current-state snapshot (not period-scoped), same reasoning
+// as computeInvestigationProgress above - relief/compensation status is a
+// pipeline-position fact, not a period event. bank_account_number is read
+// ONLY as `is not null` (a boolean), never selected as a value - the one
+// hard privacy line this section must never cross.
+async function computeCompensationReliefSummary(jurisdictionIds) {
+  const { rows } = await pool.query(
+    `select ar.metadata, ar.status, ar.created_at, (ui.bank_account_number is not null) as has_bank_details
+     from agency_referrals ar
+     join users u on u.user_id = ar.user_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     where ar.referred_to_role = 'District Welfare Officer' and u.jurisdiction_id = any($1::uuid[])`,
+    [jurisdictionIds]
+  );
+
+  if (rows.length === 0) {
+    return {
+      totalCases: 0, reliefStatusDistribution: [], reliefOverdueCount: 0,
+      compensationVerifiedCount: 0, compensationStagesTotal: 0, compensationStagesPaid: 0,
+      bankDetailsOnFileCount: 0, message: NO_DWO_REFERRALS_MESSAGE,
+    };
+  }
+
+  const reliefCounts = new Map();
+  let reliefOverdueCount = 0;
+  let compensationVerifiedCount = 0;
+  let stagesTotal = 0;
+  let stagesPaid = 0;
+  let bankDetailsOnFileCount = 0;
+
+  for (const r of rows) {
+    const relief = r.metadata?.immediateRelief;
+    const reliefStatus = relief?.status || 'Not Requested';
+    reliefCounts.set(reliefStatus, (reliefCounts.get(reliefStatus) || 0) + 1);
+    // Same rule as dwo.routes.js's own computeImmediateReliefCompliance:
+    // "Overdue" only while relief is still missing/Requested past the
+    // compliance window - anything already moving (Approved/Provided)
+    // is On Track regardless of age.
+    if (reliefStatus === 'Not Requested' || reliefStatus === 'Requested') {
+      const daysOpen = (Date.now() - new Date(r.created_at).getTime()) / 86400000;
+      if (daysOpen > IMMEDIATE_RELIEF_COMPLIANCE_DAYS) reliefOverdueCount += 1;
+    }
+
+    const compensation = r.metadata?.compensation;
+    if (compensation?.verifiedAt) {
+      compensationVerifiedCount += 1;
+      const stages = compensation.stages || [];
+      stagesTotal += stages.length;
+      stagesPaid += stages.filter((s) => s.status === 'Paid').length;
+    }
+
+    if (r.has_bank_details) bankDetailsOnFileCount += 1;
+  }
+
+  return {
+    totalCases: rows.length,
+    reliefStatusDistribution: [...reliefCounts.entries()].map(([status, count]) => ({ status, count })),
+    reliefOverdueCount,
+    compensationVerifiedCount,
+    compensationStagesTotal: stagesTotal,
+    compensationStagesPaid: stagesPaid,
+    bankDetailsOnFileCount,
+    message: null,
+  };
+}
+
+// District-tier. Period-scoped (referrals CREATED this period), grouped by
+// role - "is this case actually getting handled by the role it was sent
+// to". Same shape as the existing computeInterventionSummary, just keyed by
+// referred_to_role instead of intervention type.
+async function computeAgencyReferralVolume(jurisdictionIds, periodStart, periodEnd) {
+  const { rows } = await pool.query(
+    `select ar.referred_to_role as role_name,
+            count(*) as total_count,
+            count(*) filter (where ar.status = 'Resolved') as resolved_count,
+            avg(extract(epoch from (ar.resolved_at - ar.created_at)) / 86400) filter (where ar.resolved_at is not null) as avg_resolve_days
+     from agency_referrals ar
+     join users u on u.user_id = ar.user_id
+     where u.jurisdiction_id = any($1::uuid[]) and ar.created_at >= $2 and ar.created_at <= $3
+     group by ar.referred_to_role
+     order by count(*) desc`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  return rows.map((r) => {
+    const totalCount = Number(r.total_count);
+    const resolvedCount = Number(r.resolved_count);
+    return {
+      roleName: r.role_name,
+      totalCount,
+      resolvedCount,
+      openCount: totalCount - resolvedCount,
+      avgResolveDays: r.avg_resolve_days !== null ? Math.round(Number(r.avg_resolve_days) * 10) / 10 : null,
+    };
+  });
+}
+
 // ===== Trend direction (State/National rollup rows) =====
 // Copied from districtAdmin.routes.js's own computeAverageScore/
 // computeTrendDirection - self-contained here per this file's own "no
@@ -847,6 +1082,149 @@ async function countResponseTimesByGroup(jurisdictionIds, groupByParent, periodS
   return new Map(rows.map((r) => [r.group_id, r]));
 }
 
+// ===== Per-child rollups for the 4 new-role sections above =====
+
+// Investigation Progress rollup - accused_status is a small fixed enum (4
+// values, threatAssessment.js's own ACCUSED_STATUSES), so a per-child
+// column-per-status table is bounded/readable, same reasoning
+// countCaseStageByGroup already gives for its own 5 fixed columns.
+async function countInvestigationProgressByGroup(jurisdictionIds, groupByParent) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id,
+            count(ir.investigation_id) as cases_with_record,
+            count(*) filter (where ir.accused_status = 'In Custody') as in_custody,
+            count(*) filter (where ir.accused_status = 'Out on Bail') as out_on_bail,
+            count(*) filter (where ir.accused_status = 'Absconding') as absconding,
+            count(*) filter (where ir.accused_status = 'Convicted') as convicted,
+            count(*) filter (where ir.chargesheet_status = 'Filed') as chargesheet_filed,
+            count(*) filter (where ir.fir_document_path is not null) as fir_doc_count,
+            count(*) filter (where ir.chargesheet_document_path is not null) as chargesheet_doc_count
+     from users u
+     left join investigation_records ir on ir.user_id = u.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[])
+     group by ${groupExpr}`,
+    [jurisdictionIds]
+  );
+  return new Map(rows.map((r) => [r.group_id, r]));
+}
+
+// Threat & Protection rollup - Threat Tier can't be bucketed in SQL (it's
+// computeThreatTier, a JS function, not a stored column - see
+// computeThreatProtectionSummary above for why) so this fetches every
+// matching referral ONCE across the whole subtree (with its own child group
+// id attached) and buckets per child in JS, same "some things need JS
+// aggregation, not pure SQL" precedent computeCounsellorSection/
+// computeSpikeAlerts already set in this file.
+async function countThreatProtectionByGroup(jurisdictionIds, groupByParent, periodStart, periodEnd) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id, ar.status, ar.metadata, ar.user_id, ir.accused_status, ct.name as case_type_name
+     from agency_referrals ar
+     join users u on u.user_id = ar.user_id
+     join case_types ct on ct.case_type_id = u.case_type_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join investigation_records ir on ir.user_id = ar.user_id
+     where ar.referred_to_role = 'Protection Officer' and u.jurisdiction_id = any($1::uuid[])
+       and ar.created_at >= $2 and ar.created_at <= $3`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  if (rows.length === 0) return new Map();
+
+  const sosCounts = await getSosEventCounts(rows.map((r) => r.user_id), 7);
+  const byGroup = new Map();
+  for (const r of rows) {
+    if (!byGroup.has(r.group_id)) byGroup.set(r.group_id, { totalReferrals: 0, resolvedCount: 0, tierCounts: new Map() });
+    const bucket = byGroup.get(r.group_id);
+    bucket.totalReferrals += 1;
+    if (r.status === 'Resolved') bucket.resolvedCount += 1;
+    const tier = computeThreatTier({ accusedStatus: r.accused_status, caseTypeName: r.case_type_name, sosEventCount7d: sosCounts[r.user_id] || 0 });
+    const tierLabel = r.metadata?.manualThreatTier || tier || 'Not yet assessed';
+    bucket.tierCounts.set(tierLabel, (bucket.tierCounts.get(tierLabel) || 0) + 1);
+  }
+  return byGroup;
+}
+
+// Compensation & Relief rollup - metadata is jsonb, parsed the same way
+// computeCompensationReliefSummary does for District, just fetched once
+// across the whole subtree (with its group id attached) and reduced per
+// child in JS. bank_account_number is read ONLY as `is not null` here too.
+async function countCompensationReliefByGroup(jurisdictionIds, groupByParent) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id, ar.metadata, ar.status, ar.created_at, (ui.bank_account_number is not null) as has_bank_details
+     from agency_referrals ar
+     join users u on u.user_id = ar.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     where ar.referred_to_role = 'District Welfare Officer' and u.jurisdiction_id = any($1::uuid[])`,
+    [jurisdictionIds]
+  );
+  if (rows.length === 0) return new Map();
+
+  const byGroup = new Map();
+  for (const r of rows) {
+    if (!byGroup.has(r.group_id)) {
+      byGroup.set(r.group_id, { totalCases: 0, reliefOverdueCount: 0, compensationVerifiedCount: 0, compensationStagesTotal: 0, compensationStagesPaid: 0, bankDetailsOnFileCount: 0 });
+    }
+    const bucket = byGroup.get(r.group_id);
+    bucket.totalCases += 1;
+
+    const relief = r.metadata?.immediateRelief;
+    const reliefStatus = relief?.status || 'Not Requested';
+    if (reliefStatus === 'Not Requested' || reliefStatus === 'Requested') {
+      const daysOpen = (Date.now() - new Date(r.created_at).getTime()) / 86400000;
+      if (daysOpen > IMMEDIATE_RELIEF_COMPLIANCE_DAYS) bucket.reliefOverdueCount += 1;
+    }
+
+    const compensation = r.metadata?.compensation;
+    if (compensation?.verifiedAt) {
+      bucket.compensationVerifiedCount += 1;
+      const stages = compensation.stages || [];
+      bucket.compensationStagesTotal += stages.length;
+      bucket.compensationStagesPaid += stages.filter((s) => s.status === 'Paid').length;
+    }
+
+    if (r.has_bank_details) bucket.bankDetailsOnFileCount += 1;
+  }
+  return byGroup;
+}
+
+// Agency Referral Volume rollup - pure grouped SQL, same shape as
+// countInterventionSummaryByGroup, just keyed by referred_to_role instead
+// of intervention type.
+async function countAgencyReferralVolumeByGroup(jurisdictionIds, groupByParent, periodStart, periodEnd) {
+  const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
+  const { rows } = await pool.query(
+    `select ${groupExpr} as group_id, ar.referred_to_role as role_name,
+            count(*) as total_count,
+            count(*) filter (where ar.status = 'Resolved') as resolved_count,
+            avg(extract(epoch from (ar.resolved_at - ar.created_at)) / 86400) filter (where ar.resolved_at is not null) as avg_resolve_days
+     from agency_referrals ar
+     join users u on u.user_id = ar.user_id
+     join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     where u.jurisdiction_id = any($1::uuid[]) and ar.created_at >= $2 and ar.created_at <= $3
+     group by ${groupExpr}, ar.referred_to_role
+     order by ${groupExpr}, count(*) desc`,
+    [jurisdictionIds, periodStart.toISOString(), periodEnd.toISOString()]
+  );
+  const byGroup = new Map();
+  for (const r of rows) {
+    if (!byGroup.has(r.group_id)) byGroup.set(r.group_id, []);
+    const totalCount = Number(r.total_count);
+    const resolvedCount = Number(r.resolved_count);
+    byGroup.get(r.group_id).push({
+      roleName: r.role_name,
+      totalCount,
+      resolvedCount,
+      openCount: totalCount - resolvedCount,
+      avgResolveDays: r.avg_resolve_days !== null ? Math.round(Number(r.avg_resolve_days) * 10) / 10 : null,
+    });
+  }
+  return byGroup;
+}
+
 // Extends Case Type Distribution (already a whole-subtree aggregate table)
 // with the single most common case type PER CHILD, attached to the
 // districts/states comparison row - a full child x case-type matrix (9+
@@ -909,6 +1287,10 @@ async function computePerChildRollups(children, allDescendantIds, groupByParent,
     legalProceedingsByGroup,
     responseTimesByGroup,
     topCaseTypeByGroup,
+    investigationProgressByGroup,
+    threatProtectionByGroup,
+    compensationReliefByGroup,
+    agencyReferralVolumeByGroup,
     perChildExtras,
   ] = await Promise.all([
     countCaseStageByGroup(allDescendantIds, groupByParent),
@@ -918,6 +1300,10 @@ async function computePerChildRollups(children, allDescendantIds, groupByParent,
     countLegalProceedingsByGroup(allDescendantIds, groupByParent),
     countResponseTimesByGroup(allDescendantIds, groupByParent, periodStart, periodEnd),
     countTopCaseTypeByGroup(allDescendantIds, groupByParent),
+    countInvestigationProgressByGroup(allDescendantIds, groupByParent),
+    countThreatProtectionByGroup(allDescendantIds, groupByParent, periodStart, periodEnd),
+    countCompensationReliefByGroup(allDescendantIds, groupByParent),
+    countAgencyReferralVolumeByGroup(allDescendantIds, groupByParent, periodStart, periodEnd),
     // Per-child sub-calls that need each child's OWN descendant subtree walk
     // (trend direction, current avg score, counsellor rollup) - can't be
     // expressed as a single SQL group-by the way the others above are.
@@ -1010,7 +1396,58 @@ async function computePerChildRollups(children, allDescendantIds, groupByParent,
     ...extrasById.get(c.jurisdiction_id).counsellorRollup,
   }));
 
-  return { rows, caseStageDistribution, newEnrollments, alertVolume, interventionSummary, legalProceedings, responseTimes, counsellors };
+  const investigationProgress = children.map((c) => {
+    const r = investigationProgressByGroup.get(c.jurisdiction_id);
+    return {
+      jurisdictionId: c.jurisdiction_id,
+      name: c.name,
+      casesWithRecord: r ? Number(r.cases_with_record) : 0,
+      inCustody: r ? Number(r.in_custody) : 0,
+      outOnBail: r ? Number(r.out_on_bail) : 0,
+      absconding: r ? Number(r.absconding) : 0,
+      convicted: r ? Number(r.convicted) : 0,
+      chargesheetFiled: r ? Number(r.chargesheet_filed) : 0,
+      firDocumentOnFileCount: r ? Number(r.fir_doc_count) : 0,
+      chargesheetDocumentOnFileCount: r ? Number(r.chargesheet_doc_count) : 0,
+    };
+  });
+
+  const threatProtection = children.map((c) => {
+    const bucket = threatProtectionByGroup.get(c.jurisdiction_id);
+    return {
+      jurisdictionId: c.jurisdiction_id,
+      name: c.name,
+      totalReferrals: bucket ? bucket.totalReferrals : 0,
+      resolvedCount: bucket ? bucket.resolvedCount : 0,
+      threatTierDistribution: bucket ? [...bucket.tierCounts.entries()].map(([tier, count]) => ({ tier, count })) : [],
+    };
+  });
+
+  const compensationRelief = children.map((c) => {
+    const b = compensationReliefByGroup.get(c.jurisdiction_id);
+    return {
+      jurisdictionId: c.jurisdiction_id,
+      name: c.name,
+      totalCases: b ? b.totalCases : 0,
+      reliefOverdueCount: b ? b.reliefOverdueCount : 0,
+      compensationVerifiedCount: b ? b.compensationVerifiedCount : 0,
+      compensationStagesTotal: b ? b.compensationStagesTotal : 0,
+      compensationStagesPaid: b ? b.compensationStagesPaid : 0,
+      bankDetailsOnFileCount: b ? b.bankDetailsOnFileCount : 0,
+    };
+  });
+
+  const agencyReferralVolume = children.map((c) => {
+    const roles = agencyReferralVolumeByGroup.get(c.jurisdiction_id) || [];
+    const totalCount = roles.reduce((sum, r) => sum + r.totalCount, 0);
+    const resolvedCount = roles.reduce((sum, r) => sum + r.resolvedCount, 0);
+    return { jurisdictionId: c.jurisdiction_id, name: c.name, roles, totalCount, resolvedCount, openCount: totalCount - resolvedCount };
+  });
+
+  return {
+    rows, caseStageDistribution, newEnrollments, alertVolume, interventionSummary, legalProceedings, responseTimes, counsellors,
+    investigationProgress, threatProtection, compensationRelief, agencyReferralVolume,
+  };
 }
 
 // ===== Top-level tier snapshots =====
@@ -1087,6 +1524,13 @@ async function computeCaseWiseSnapshot(districtJurisdictionId, periodStart, peri
     computeSpikeAlerts([districtJurisdictionId], periodStart, periodEnd),
   ]);
 
+  const [investigationProgress, threatProtection, compensationRelief, agencyReferralVolume] = await Promise.all([
+    computeInvestigationProgress([districtJurisdictionId]),
+    computeThreatProtectionSummary([districtJurisdictionId], periodStart, periodEnd),
+    computeCompensationReliefSummary([districtJurisdictionId]),
+    computeAgencyReferralVolume([districtJurisdictionId], periodStart, periodEnd),
+  ]);
+
   return {
     tier: 'district',
     summary,
@@ -1103,6 +1547,10 @@ async function computeCaseWiseSnapshot(districtJurisdictionId, periodStart, peri
     consentCompliance,
     counsellors,
     responseTimes,
+    investigationProgress,
+    threatProtection,
+    compensationRelief,
+    agencyReferralVolume,
   };
 }
 
@@ -1161,6 +1609,10 @@ async function computeDistrictWiseSnapshot(stateJurisdictionId, periodStart, per
     counsellors: perChildRollups.counsellors,
     responseTimes: perChildRollups.responseTimes,
     reportingCompliance,
+    investigationProgress: perChildRollups.investigationProgress,
+    threatProtection: perChildRollups.threatProtection,
+    compensationRelief: perChildRollups.compensationRelief,
+    agencyReferralVolume: perChildRollups.agencyReferralVolume,
   };
 }
 
@@ -1215,6 +1667,10 @@ async function computeStateWiseSnapshot(nationalJurisdictionId, periodStart, per
     counsellors: perChildRollups.counsellors,
     responseTimes: perChildRollups.responseTimes,
     reportingCompliance,
+    investigationProgress: perChildRollups.investigationProgress,
+    threatProtection: perChildRollups.threatProtection,
+    compensationRelief: perChildRollups.compensationRelief,
+    agencyReferralVolume: perChildRollups.agencyReferralVolume,
   };
 }
 
@@ -1233,6 +1689,10 @@ module.exports = {
   computeAlertVolume,
   computeInterventionSummary,
   computeLegalProceedings,
+  computeInvestigationProgress,
+  computeThreatProtectionSummary,
+  computeCompensationReliefSummary,
+  computeAgencyReferralVolume,
   computeTrendDirection,
   computeReportingCompliance,
   computeLanguagePreferences,
@@ -1246,6 +1706,10 @@ module.exports = {
   countLegalProceedingsByGroup,
   countResponseTimesByGroup,
   countTopCaseTypeByGroup,
+  countInvestigationProgressByGroup,
+  countThreatProtectionByGroup,
+  countCompensationReliefByGroup,
+  countAgencyReferralVolumeByGroup,
   computeAvgScoreForPeriod,
   computePerChildRollups,
 };

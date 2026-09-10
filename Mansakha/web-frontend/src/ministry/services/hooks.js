@@ -5,10 +5,11 @@ import { getToken } from './auth';
 // Ministry's own copy of the shared data-hooks file - trimmed to only the
 // hooks Ministry's pages actually call. Ministry is a jurisdiction-
 // unrestricted superset of Administration (Section 3), so its dashboard/
-// broadcast/policy/analytics calls reuse the National tier's own mount
+// analytics calls reuse the National tier's own mount
 // (backend/src/national_admin/routes/nationalAdmin.routes.js allows
 // Ministry through requireRole(['Administration','Ministry'])), scoped to
-// the root national jurisdiction id.
+// the root national jurisdiction id. Emergency Broadcast and Deploy Policy
+// were retired as not appropriate for this system's real scope.
 
 function useQuery(queryFn, deps) {
   const [state, setState] = useState({ data: null, loading: true, error: null });
@@ -75,20 +76,6 @@ export function useAdminDashboard(jurisdictionId) {
   );
 }
 
-export function useCreatePolicy() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (payload) => {
-    setLoading(true);
-    try {
-      return await apiClient.post('/api/admin/national/policies', payload, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
 // Task 2A - admin-triggered only (never polled/auto-called - GEMINI_API_KEY
 // is a small shared free-tier quota, see backend/src/ai/gemini.js).
 export function useGenerateAnalytics() {
@@ -98,22 +85,6 @@ export function useGenerateAnalytics() {
     setLoading(true);
     try {
       return await apiClient.post('/api/admin/national/analytics/generate', payload, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
-// Task 2C - mass SMS+push to every active user in a jurisdiction, resolves
-// to { queuedCount }.
-export function useSendBroadcast() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (payload) => {
-    setLoading(true);
-    try {
-      return await apiClient.post('/api/admin/national/broadcast', payload, token);
     } finally {
       setLoading(false);
     }

@@ -74,6 +74,13 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* Coordination-role at-a-glance counts - see districtAdmin's own
+            AdminDashboard.jsx for the full rationale comment. */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full sm:w-1/2">
+          <StatCard title="Open Protection Referrals" value={data?.openProtectionReferrals ?? '-'} tone="text-rose-600" />
+          <StatCard title="Compensation Pending" value={data?.compensationPendingCount ?? '-'} tone="text-amber-600" />
+        </div>
+
         <div className="flex items-start justify-between">
           <h2 className="text-xl font-bold text-gray-800">Cases</h2>
           <div className="text-right">

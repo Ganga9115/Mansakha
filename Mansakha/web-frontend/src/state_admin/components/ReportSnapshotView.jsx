@@ -189,6 +189,160 @@ function ResponseTimesRow({ responseTimes }) {
   );
 }
 
+// ===== New-role case/user data (Section A) - same "plain stat tile / small
+// table" idiom as ResponseTimesRow/CounsellorRows above, no charting library
+// (this codebase's own convention). Array shape = State/National per-child
+// rollup (one row per district/state), plain object = District's own
+// single-jurisdiction view - same Array.isArray detection reportPdf.js's
+// matching PDF sections already use, so the in-app preview and the
+// downloaded PDF always agree on which shape they're looking at.
+
+function InvestigationProgressView({ data }) {
+  if (Array.isArray(data)) {
+    const nonZero = data.filter((r) => r.casesWithRecord > 0);
+    if (nonZero.length === 0) return <p className="text-xs text-gray-400">No investigation records yet.</p>;
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-[10px] uppercase text-gray-400 border-b border-gray-100">
+              <th className="py-2 pr-3">Name</th><th className="py-2 pr-3">Records</th><th className="py-2 pr-3">Out on Bail</th><th className="py-2 pr-3">Absconding</th><th className="py-2 pr-3">Chargesheet Filed</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {data.map((r) => (
+              <tr key={r.jurisdictionId}>
+                <td className="py-2 pr-3 font-semibold text-gray-700 whitespace-nowrap">{r.name}</td>
+                <td className="py-2 pr-3 text-gray-600">{r.casesWithRecord}</td>
+                <td className="py-2 pr-3 text-gray-600">{r.outOnBail}</td>
+                <td className="py-2 pr-3 text-[#dc4545] font-semibold">{r.absconding}</td>
+                <td className="py-2 pr-3 text-gray-600">{r.chargesheetFiled}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if (data.casesWithRecord === 0) return <p className="text-xs text-gray-400">{data.message}.</p>;
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Cases w/ Record</p><p className="font-bold text-gray-700">{data.casesWithRecord}</p></div>
+        <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Chargesheet Filed</p><p className="font-bold text-gray-700">{data.chargesheetFiled} / {data.casesWithRecord}</p></div>
+        <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Avg Days to Chargesheet</p><p className="font-bold text-gray-700">{data.avgDaysToChargesheet ?? '-'}</p></div>
+      </div>
+      {data.accusedStatusDistribution.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {data.accusedStatusDistribution.map((a) => (
+            <span key={a.status} className="text-[10px] font-semibold bg-gray-50 rounded-full px-2.5 py-1 text-gray-600">{a.status}: {a.count}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ThreatProtectionView({ data }) {
+  if (Array.isArray(data)) {
+    const nonZero = data.filter((r) => r.totalReferrals > 0);
+    if (nonZero.length === 0) return <p className="text-xs text-gray-400">No Protection Officer referrals this period.</p>;
+    return (
+      <div className="space-y-1.5">
+        {nonZero.map((r) => (
+          <div key={r.jurisdictionId} className="flex items-center justify-between text-xs bg-gray-50 rounded-md px-3 py-2 gap-3">
+            <span className="font-semibold text-gray-700 truncate">{r.name}</span>
+            <span className="text-gray-500 text-right shrink-0">
+              {r.totalReferrals} referred &middot; {r.resolvedCount} resolved &middot; {r.threatTierDistribution.map((t) => `${t.tier}: ${t.count}`).join(', ')}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (data.totalReferrals === 0) return <p className="text-xs text-gray-400">No Protection Officer referrals this period.</p>;
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Referrals This Period</p><p className="font-bold text-gray-700">{data.totalReferrals}</p></div>
+        <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Resolved</p><p className="font-bold text-gray-700">{data.resolvedCount}</p></div>
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {data.threatTierDistribution.map((t) => (
+          <span key={t.tier} className="text-[10px] font-semibold bg-gray-50 rounded-full px-2.5 py-1 text-gray-600">{t.tier}: {t.count}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CompensationReliefView({ data }) {
+  if (Array.isArray(data)) {
+    const nonZero = data.filter((r) => r.totalCases > 0);
+    if (nonZero.length === 0) return <p className="text-xs text-gray-400">No cases referred to a District Welfare Officer yet.</p>;
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left text-[10px] uppercase text-gray-400 border-b border-gray-100">
+              <th className="py-2 pr-3">Name</th><th className="py-2 pr-3">Cases</th><th className="py-2 pr-3">Relief Overdue</th><th className="py-2 pr-3">Comp. Stages Paid</th><th className="py-2 pr-3">Bank Details On File</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {data.map((r) => (
+              <tr key={r.jurisdictionId}>
+                <td className="py-2 pr-3 font-semibold text-gray-700 whitespace-nowrap">{r.name}</td>
+                <td className="py-2 pr-3 text-gray-600">{r.totalCases}</td>
+                <td className="py-2 pr-3 text-[#dc4545] font-semibold">{r.reliefOverdueCount}</td>
+                <td className="py-2 pr-3 text-gray-600">{r.compensationStagesPaid} / {r.compensationStagesTotal}</td>
+                <td className="py-2 pr-3 text-gray-600">{r.bankDetailsOnFileCount}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+  if (data.totalCases === 0) return <p className="text-xs text-gray-400">{data.message}.</p>;
+  return (
+    <div className="grid grid-cols-3 gap-2 text-xs">
+      <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Cases Referred</p><p className="font-bold text-gray-700">{data.totalCases}</p></div>
+      <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Relief Overdue</p><p className={`font-bold ${data.reliefOverdueCount > 0 ? 'text-[#dc4545]' : 'text-gray-700'}`}>{data.reliefOverdueCount}</p></div>
+      <div className="bg-gray-50 rounded-md px-3 py-2"><p className="text-[10px] text-gray-400 uppercase">Bank Details On File</p><p className="font-bold text-gray-700">{data.bankDetailsOnFileCount} / {data.totalCases}</p></div>
+    </div>
+  );
+}
+
+function AgencyReferralVolumeView({ data, isRollup }) {
+  if (isRollup) {
+    const nonZero = data.filter((r) => r.totalCount > 0);
+    if (nonZero.length === 0) return <p className="text-xs text-gray-400">No cross-agency referrals this period.</p>;
+    return (
+      <div className="space-y-1.5">
+        {nonZero.map((r) => (
+          <div key={r.jurisdictionId} className="flex items-center justify-between text-xs bg-gray-50 rounded-md px-3 py-2 gap-3">
+            <span className="font-semibold text-gray-700 truncate">{r.name}</span>
+            <span className="text-gray-500 text-right shrink-0">{r.totalCount} total &middot; {r.openCount} open &middot; {r.resolvedCount} resolved</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (!data || data.length === 0) return <p className="text-xs text-gray-400">No cross-agency referrals this period.</p>;
+  return (
+    <div className="space-y-1.5">
+      {data.map((r) => (
+        <div key={r.roleName} className="flex items-center justify-between text-xs bg-gray-50 rounded-md px-3 py-2 gap-3">
+          <span className="font-semibold text-gray-700 truncate">{r.roleName}</span>
+          <span className="text-gray-500 text-right shrink-0">
+            {r.totalCount} total &middot; {r.openCount} open &middot; {r.resolvedCount} resolved{r.avgResolveDays !== null ? ` · avg ${r.avgResolveDays}d` : ''}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // Small pill row so a sender can see who's reviewed a cc'd report and who
 // hasn't - exported separately so Reports.jsx can place it outside the
 // snapshot body (next to the recipients heading) if that reads better.
@@ -253,6 +407,34 @@ export default function ReportSnapshotView({ snapshot }) {
         <div>
           <p className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">SOS Response Times</p>
           <ResponseTimesRow responseTimes={snapshot.responseTimes} />
+        </div>
+      )}
+
+      {snapshot.investigationProgress && (
+        <div>
+          <p className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">Investigation Progress</p>
+          <InvestigationProgressView data={snapshot.investigationProgress} />
+        </div>
+      )}
+
+      {snapshot.threatProtection && (
+        <div>
+          <p className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">Threat &amp; Protection</p>
+          <ThreatProtectionView data={snapshot.threatProtection} />
+        </div>
+      )}
+
+      {snapshot.compensationRelief && (
+        <div>
+          <p className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">Compensation &amp; Relief</p>
+          <CompensationReliefView data={snapshot.compensationRelief} />
+        </div>
+      )}
+
+      {snapshot.agencyReferralVolume && (
+        <div>
+          <p className="text-[11px] font-bold text-gray-500 uppercase mb-1.5">Cross-Agency Referral Volume</p>
+          <AgencyReferralVolumeView data={snapshot.agencyReferralVolume} isRollup={snapshot.tier !== 'district'} />
         </div>
       )}
     </div>

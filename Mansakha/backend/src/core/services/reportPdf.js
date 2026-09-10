@@ -488,6 +488,160 @@ function buildLegalProceedingsSection(legalProceedings, tier) {
   return `${sectionBanner('Legal Proceedings', desc)}${stats}${agingSection}${actsSection}${hearingsSection}`;
 }
 
+// ===== New-role case/user data (Section A) - same recipe as every section
+// above: sectionBanner + chart-above-its-table where the data is a
+// distribution, plain table otherwise. Array shape = State/National
+// per-child rollup, plain object = District's own single-jurisdiction view -
+// same detection convention buildLegalProceedingsSection/
+// buildCaseStageDistributionSection already use.
+
+function buildInvestigationProgressSection(investigationProgress, tier) {
+  if (Array.isArray(investigationProgress)) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `Investigation status per ${childLabel.toLowerCase()} - accused custody status and chargesheet filing, as tracked by each case's Investigating Officer.`;
+    const nonZero = investigationProgress.filter((r) => r.casesWithRecord > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Investigation Progress', desc)}<p class="empty-note">No investigation records have been generated yet anywhere in this ${tier === 'state' ? 'state' : 'nation'}.</p>`;
+    }
+    const rows = investigationProgress.map((r) => [
+      escapeHtml(r.name), String(r.casesWithRecord), String(r.inCustody), String(r.outOnBail),
+      String(r.absconding), String(r.convicted), String(r.chargesheetFiled),
+    ]);
+    return `${sectionBanner('Investigation Progress', desc)}${table(
+      [childLabel, 'Cases w/ Record', 'In Custody', 'Out on Bail', 'Absconding', 'Convicted', 'Chargesheet Filed'],
+      rows
+    )}`;
+  }
+
+  const desc = 'Investigation status for this district’s cases - accused custody status and chargesheet filing, as tracked by each case’s Investigating Officer (a current snapshot, not scoped to this reporting period).';
+  if (investigationProgress.casesWithRecord === 0) {
+    return `${sectionBanner('Investigation Progress', desc)}<p class="empty-note">${escapeHtml(investigationProgress.message)}.</p>`;
+  }
+  const stats = `<div class="stat-strip">
+    <div class="stat"><span class="stat-value">${investigationProgress.casesWithRecord}</span><span class="stat-label">Cases w/ Record</span></div>
+    <div class="stat"><span class="stat-value">${investigationProgress.chargesheetFiled}</span><span class="stat-label">Chargesheet Filed</span></div>
+    <div class="stat"><span class="stat-value">${investigationProgress.avgDaysToChargesheet ?? '&mdash;'}</span><span class="stat-label">Avg. Days to Chargesheet</span></div>
+  </div>`;
+  const accusedChart = investigationProgress.accusedStatusDistribution.length
+    ? `<div class="chart-wrap">${buildBarChartSvg(investigationProgress.accusedStatusDistribution, { valueKey: 'count', labelKey: 'status' })}</div>`
+    : '';
+  const accusedTable = investigationProgress.accusedStatusDistribution.length
+    ? table(['Accused Status', 'Cases'], investigationProgress.accusedStatusDistribution.map((a) => [escapeHtml(a.status), String(a.count)]))
+    : '<p class="empty-note">No accused status recorded yet.</p>';
+  const docsTable = `<p class="subheading">Evidence On File</p>${table(
+    ['Document', 'Cases w/ Document'],
+    [['FIR Copy', String(investigationProgress.firDocumentOnFileCount)], ['Chargesheet', String(investigationProgress.chargesheetDocumentOnFileCount)]]
+  )}`;
+  return `${sectionBanner('Investigation Progress', desc)}${stats}${accusedChart}${accusedTable}${docsTable}`;
+}
+
+function buildThreatProtectionSection(threatProtection, tier) {
+  if (Array.isArray(threatProtection)) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `Cases referred to a Protection Officer per ${childLabel.toLowerCase()} during this period, and their assessed Threat Tier.`;
+    const nonZero = threatProtection.filter((r) => r.totalReferrals > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Threat & Protection', desc)}<p class="empty-note">No cases were referred to a Protection Officer anywhere in this ${tier === 'state' ? 'state' : 'nation'} during this period.</p>`;
+    }
+    const rows = threatProtection.map((r) => [
+      escapeHtml(r.name), String(r.totalReferrals), String(r.resolvedCount),
+      r.threatTierDistribution.map((t) => `${escapeHtml(t.tier)}: ${t.count}`).join(', ') || '&mdash;',
+    ]);
+    return `${sectionBanner('Threat & Protection', desc)}${table([childLabel, 'Referrals', 'Resolved', 'Threat Tier Breakdown'], rows)}`;
+  }
+
+  const desc = 'Cases referred to a Protection Officer during this period, why (origin), and their assessed Threat Tier.';
+  if (threatProtection.totalReferrals === 0) {
+    return `${sectionBanner('Threat & Protection', desc)}<p class="empty-note">No cases were referred to a Protection Officer during this period.</p>`;
+  }
+  const stats = `<div class="stat-strip">
+    <div class="stat"><span class="stat-value">${threatProtection.totalReferrals}</span><span class="stat-label">Referrals This Period</span></div>
+    <div class="stat"><span class="stat-value">${threatProtection.resolvedCount}</span><span class="stat-label">Resolved</span></div>
+  </div>`;
+  const originTable = `<p class="subheading">How Each Case Reached Protection</p>${table(
+    ['Origin', 'Cases'],
+    threatProtection.originTypeDistribution.map((o) => [escapeHtml(o.originType), String(o.count)])
+  )}`;
+  const tierChart = `<p class="subheading">Threat Tier</p><div class="chart-wrap">${buildBarChartSvg(threatProtection.threatTierDistribution, { valueKey: 'count', labelKey: 'tier' })}</div>${table(
+    ['Threat Tier', 'Cases'],
+    threatProtection.threatTierDistribution.map((t) => [escapeHtml(t.tier), String(t.count)])
+  )}`;
+  const outcomeTable = threatProtection.resolutionOutcomeDistribution.length
+    ? `<p class="subheading">Resolution Outcomes</p>${table(
+        ['Outcome', 'Cases'],
+        threatProtection.resolutionOutcomeDistribution.map((o) => [escapeHtml(o.category), String(o.count)])
+      )}`
+    : '';
+  return `${sectionBanner('Threat & Protection', desc)}${stats}${originTable}${tierChart}${outcomeTable}`;
+}
+
+function buildCompensationReliefSection(compensationRelief, tier) {
+  if (Array.isArray(compensationRelief)) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `Immediate Relief and Compensation status per ${childLabel.toLowerCase()}, as tracked by each District Welfare Officer.`;
+    const nonZero = compensationRelief.filter((r) => r.totalCases > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Compensation & Relief', desc)}<p class="empty-note">No cases have been referred to a District Welfare Officer anywhere in this ${tier === 'state' ? 'state' : 'nation'} yet.</p>`;
+    }
+    const rows = compensationRelief.map((r) => [
+      escapeHtml(r.name), String(r.totalCases),
+      r.reliefOverdueCount > 0 ? `<span style="color:${RISK_COLORS.High.fg};font-weight:600;">${r.reliefOverdueCount}</span>` : '0',
+      `${r.compensationStagesPaid} / ${r.compensationStagesTotal}`,
+      String(r.bankDetailsOnFileCount),
+    ]);
+    return `${sectionBanner('Compensation & Relief', desc)}${table(
+      [childLabel, 'Cases', 'Relief Overdue', 'Compensation Stages Paid', 'Bank Details On File'],
+      rows
+    )}`;
+  }
+
+  const desc = 'Immediate Relief and Compensation status for this district’s cases (a current snapshot, not scoped to this reporting period). Bank account numbers are never included in this report - only whether one is on file.';
+  if (compensationRelief.totalCases === 0) {
+    return `${sectionBanner('Compensation & Relief', desc)}<p class="empty-note">${escapeHtml(compensationRelief.message)}.</p>`;
+  }
+  const stats = `<div class="stat-strip">
+    <div class="stat"><span class="stat-value">${compensationRelief.totalCases}</span><span class="stat-label">Cases Referred</span></div>
+    <div class="stat"><span class="stat-value" style="color:${compensationRelief.reliefOverdueCount > 0 ? RISK_COLORS.High.fg : NAVY}">${compensationRelief.reliefOverdueCount}</span><span class="stat-label">Relief Overdue (&gt;7 days)</span></div>
+    <div class="stat"><span class="stat-value">${compensationRelief.bankDetailsOnFileCount} / ${compensationRelief.totalCases}</span><span class="stat-label">Bank Details On File</span></div>
+  </div>`;
+  const reliefTable = `<p class="subheading">Immediate Relief Status</p>${table(
+    ['Status', 'Cases'],
+    compensationRelief.reliefStatusDistribution.map((s) => [escapeHtml(s.status), String(s.count)])
+  )}`;
+  const compensationTable = `<p class="subheading">Compensation</p>${table(
+    ['Verified Cases', 'Stages Paid', 'Stages Total'],
+    [[String(compensationRelief.compensationVerifiedCount), String(compensationRelief.compensationStagesPaid), String(compensationRelief.compensationStagesTotal)]]
+  )}`;
+  return `${sectionBanner('Compensation & Relief', desc)}${stats}${reliefTable}${compensationTable}`;
+}
+
+function buildAgencyReferralVolumeSection(agencyReferralVolume, tier) {
+  if (agencyReferralVolume.length > 0 && agencyReferralVolume[0].jurisdictionId !== undefined) {
+    const childLabel = tier === 'state' ? 'District' : 'State';
+    const desc = `Cross-agency referral volume per ${childLabel.toLowerCase()} during this period - is each case actually being handled by the role it was sent to.`;
+    const nonZero = agencyReferralVolume.filter((r) => r.totalCount > 0);
+    if (nonZero.length === 0) {
+      return `${sectionBanner('Cross-Agency Referral Volume', desc)}<p class="empty-note">No cross-agency referrals were created anywhere in this ${tier === 'state' ? 'state' : 'nation'} during this period.</p>`;
+    }
+    const rows = agencyReferralVolume.map((r) => [escapeHtml(r.name), String(r.totalCount), String(r.openCount), String(r.resolvedCount)]);
+    return `${sectionBanner('Cross-Agency Referral Volume', desc)}${table([childLabel, 'Total Referrals', 'Open', 'Resolved'], rows)}`;
+  }
+
+  const desc = 'Referrals created for this district’s cases during this period, by role - is each case actually being handled by the role it was sent to.';
+  if (agencyReferralVolume.length === 0) {
+    return `${sectionBanner('Cross-Agency Referral Volume', desc)}<p class="empty-note">No cross-agency referrals were created during this period.</p>`;
+  }
+  const chart = buildBarChartSvg(agencyReferralVolume, { valueKey: 'totalCount', labelKey: 'roleName', maxLabelChars: 16 });
+  const rows = agencyReferralVolume.map((r) => [
+    escapeHtml(r.roleName), String(r.totalCount), String(r.openCount), String(r.resolvedCount),
+    r.avgResolveDays !== null ? `${r.avgResolveDays}d` : '&mdash;',
+  ]);
+  return `${sectionBanner('Cross-Agency Referral Volume', desc)}<div class="chart-wrap">${chart}</div>${table(
+    ['Role', 'Total Referrals', 'Open', 'Resolved', 'Avg. Resolve Time'],
+    rows
+  )}`;
+}
+
 function buildReportingComplianceSection(reportingCompliance, tier) {
   const childLabel = tier === 'state' ? 'District' : 'State';
   const reportedCount = reportingCompliance.filter((r) => r.hasReported).length;
@@ -587,6 +741,10 @@ function renderReportHtml(report) {
   if (snapshot.alertVolume) sections.push({ title: 'Alert Volume & Status', html: buildAlertVolumeSection(snapshot.alertVolume, tier) });
   if (snapshot.interventionSummary) sections.push({ title: 'Intervention Summary', html: buildInterventionSummarySection(snapshot.interventionSummary, tier) });
   if (snapshot.legalProceedings) sections.push({ title: 'Legal Proceedings', html: buildLegalProceedingsSection(snapshot.legalProceedings, tier) });
+  if (snapshot.investigationProgress) sections.push({ title: 'Investigation Progress', html: buildInvestigationProgressSection(snapshot.investigationProgress, tier) });
+  if (snapshot.threatProtection) sections.push({ title: 'Threat & Protection', html: buildThreatProtectionSection(snapshot.threatProtection, tier) });
+  if (snapshot.compensationRelief) sections.push({ title: 'Compensation & Relief', html: buildCompensationReliefSection(snapshot.compensationRelief, tier) });
+  if (snapshot.agencyReferralVolume) sections.push({ title: 'Cross-Agency Referral Volume', html: buildAgencyReferralVolumeSection(snapshot.agencyReferralVolume, tier) });
   if (snapshot.languagePreferences) sections.push({ title: 'Language & Preferences', html: buildLanguagePreferencesSection(snapshot.languagePreferences) });
   if (snapshot.consentCompliance) sections.push({ title: 'Consent Compliance', html: buildConsentComplianceSection(snapshot.consentCompliance) });
   if (snapshot.counsellors) sections.push({ title: 'Counsellor Workload', html: buildCounsellorsSection(snapshot.counsellors, tier) });

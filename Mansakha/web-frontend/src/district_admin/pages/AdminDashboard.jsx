@@ -74,6 +74,18 @@ export default function AdminDashboard() {
           </div>
         </div>
 
+        {/* Coordination-role at-a-glance counts - the live-dashboard
+            counterpart to the periodic Report's own Threat & Protection /
+            Compensation & Relief sections, cheap enough to compute on every
+            page load (see backend's countNewRoleDashboardStats). Kept as
+            its own small row rather than folded into the risk-tier grid
+            above - a different axis (is a case being actively handled by
+            the role it was sent to, not how distressed the victim is). */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full sm:w-1/2">
+          <StatCard title="Open Protection Referrals" value={data?.openProtectionReferrals ?? '-'} tone="text-rose-600" />
+          <StatCard title="Compensation Pending" value={data?.compensationPendingCount ?? '-'} tone="text-amber-600" />
+        </div>
+
         <div className="flex items-start justify-between">
           <h2 className="text-xl font-bold text-gray-800">Cases</h2>
           <div className="text-right">

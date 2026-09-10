@@ -40,11 +40,15 @@ export default function NationalDashboard() {
     <StaffLayout title="National Dashboard">
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 flex-1 mr-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 flex-1 mr-6">
             <StatCard title="Total Cases (National)" value={data?.totalCases ?? data?.total ?? '-'} />
             <StatCard title="High-Risk Cases" value={data?.highRiskCases ?? data?.highRisk ?? '-'} tone="text-rose-600" />
             <StatCard title="Critical Cases" value={data?.criticalCases ?? data?.critical ?? '-'} tone="text-purple-700" />
             <StatCard title="Predicted Escalations" value={data?.predictedEscalations ?? '-'} tone="text-orange-600" />
+            {/* Coordination-role at-a-glance counts - see districtAdmin's own
+                AdminDashboard.jsx for the full rationale comment. */}
+            <StatCard title="Open Protection Referrals" value={data?.openProtectionReferrals ?? '-'} tone="text-rose-600" />
+            <StatCard title="Compensation Pending" value={data?.compensationPendingCount ?? '-'} tone="text-amber-600" />
           </div>
           <div className="text-right">
             <button
@@ -61,8 +65,8 @@ export default function NationalDashboard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="col-span-2 bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
+        <div className="grid grid-cols-1 gap-6">
+          <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-100">
               <h3 className="font-bold text-sm text-gray-800">State-wise Breakdown</h3>
             </div>
@@ -103,11 +107,6 @@ export default function NationalDashboard() {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
-            <h3 className="font-bold text-sm text-gray-800 mb-4">Policy-Input Trend (National)</h3>
-            <p className="text-xs text-gray-400">Not enough data yet.</p>
           </div>
         </div>
       </div>
