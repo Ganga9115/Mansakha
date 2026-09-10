@@ -2,9 +2,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Switch, Image, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../../shared/context/AuthContext';
 import { useToast } from '../../shared/context/ToastContext';
+import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 import {
   useUserDashboard,
   useLanguageOptions,
@@ -69,7 +69,11 @@ export default function SettingsScreen({ navigation }) {
   const [localOptedForCounsellor, setLocalOptedForCounsellor] = useState(false);
   const [profileImageUri, setProfileImageUri] = useState(null);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [selectedDocketIndex, setSelectedDocketIndex] = useState(0);
+
+  // This is the ONE place in the app a docket gets picked (see
+  // ActiveCaseContext.js) - every other case-scoped screen just reads
+  // activeCaseUserId from context and reacts.
+  const { activeCaseUserId, setActiveCaseUserId } = useActiveCase();
 
   const casesList = dashboardQuery.data?.linkedCases?.length
     ? dashboardQuery.data.linkedCases
@@ -77,38 +81,8 @@ export default function SettingsScreen({ navigation }) {
       ? [{ ...dashboardQuery.data.caseStatus, docketNumber: dashboardQuery.data.docketNumber }]
       : [];
 
-  // Load active docket index from local storage on mount
-  useEffect(() => {
-    const loadSelectedDocket = async () => {
-      try {
-        const savedIndex = await AsyncStorage.getItem('selectedDocketIndex');
-        if (savedIndex !== null) {
-          const index = parseInt(savedIndex, 10);
-          if (!isNaN(index) && index < casesList.length) {
-            setSelectedDocketIndex(index);
-          }
-        }
-      } catch (e) {
-        console.error('Error loading selected docket', e);
-      }
-    };
-    if (casesList.length > 0) {
-      loadSelectedDocket();
-    }
-  }, [casesList.length]);
-
-  // Handler to change docket and persist active selection
-  const handleSelectDocket = async (index) => {
-    setSelectedDocketIndex(index);
-    const selectedCaseItem = casesList[index];
-    try {
-      await AsyncStorage.setItem('selectedDocketIndex', index.toString());
-      if (selectedCaseItem) {
-        await AsyncStorage.setItem('activeDocketData', JSON.stringify(selectedCaseItem));
-      }
-    } catch (e) {
-      console.error('Error saving active docket selection', e);
-    }
+  const handleSelectDocket = (item) => {
+    setActiveCaseUserId(item.userId || null);
   };
 
   useEffect(() => {
@@ -176,7 +150,7 @@ export default function SettingsScreen({ navigation }) {
     }
   };
 
-  const selectedCase = casesList[selectedDocketIndex] || casesList[0];
+  const selectedCase = casesList.find((c) => c.userId === activeCaseUserId) || casesList[0];
 
   return (
     <View style={styles.container}>
@@ -268,13 +242,13 @@ export default function SettingsScreen({ navigation }) {
                   {/* Docket Buttons */}
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.docketsList}>
                     {casesList.map((item, idx) => {
-                      const isSelected = selectedDocketIndex === idx;
+                      const isSelected = (item.userId && item.userId === selectedCase?.userId) || (!item.userId && idx === 0 && !selectedCase?.userId);
                       const docketId = item.docketNumber || item.docketId || item.docketNo || item.caseNumber || `${idx + 1}`;
 
                       return (
                         <Pressable
                           key={item.userId || idx}
-                          onPress={() => handleSelectDocket(idx)}
+                          onPress={() => handleSelectDocket(item)}
                           style={[styles.docketPill, isSelected ? styles.docketPillActive : styles.docketPillInactive]}
                         >
                           <Text style={[styles.docketPillTitle, isSelected && styles.textWhite]}>

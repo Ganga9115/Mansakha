@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
@@ -16,15 +15,17 @@ import TopRightActions from '../../shared/components/TopRightActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor, useRehabilitationProgress } from '../../shared/services/hooks';
+import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 
 export default function HomeScreen({ navigation }) {
   // Case-lifecycle isolation (migration_034): null means "let the backend
-  // resolve to the anchor" (today's exact default behaviour). Only ever set
-  // to something else by the effect below (auto-isolating into a
-  // Rehabilitation-opted-in case) or by the victim's own tap on the case
-  // switcher further down - never inferred from anything else.
-  const [selectedUserId, setSelectedUserId] = useState(null);
-  const query = useUserDashboard(selectedUserId);
+  // resolve to the anchor" (today's exact default behaviour). The selection
+  // itself now lives in ActiveCaseContext, the one shared source every
+  // case-scoped screen reads (Settings/Profile is the only place it's
+  // explicitly picked; this screen only ever WRITES to it automatically,
+  // via the Rehabilitation auto-isolation effect below).
+  const { activeCaseUserId, setActiveCaseUserId } = useActiveCase();
+  const query = useUserDashboard(activeCaseUserId);
   const linkedCases = query.data?.linkedCases || [];
   const activeUserId = query.data?.userId;
 
@@ -33,53 +34,16 @@ export default function HomeScreen({ navigation }) {
   // app should show that isolated view immediately, not require a manual
   // switch, while Investigation/Trial/Compensation/Case-Closed cases stay
   // on the normal shared (anchor) context exactly as before. Only runs
-  // while the victim hasn't already made an explicit choice via the
-  // switcher (selectedUserId still null), so a manual switch away is never
-  // silently overridden back.
+  // while the victim hasn't already made an explicit choice (activeCaseUserId
+  // still null), so a manual switch away (from Settings) is never silently
+  // overridden back.
   useEffect(() => {
-    if (selectedUserId || !activeUserId) return;
+    if (activeCaseUserId || !activeUserId) return;
     const rehabCase = linkedCases.find((c) => c.caseStage === 'Rehabilitation' && c.rehabilitationOptedIn);
     if (rehabCase && rehabCase.userId !== activeUserId) {
-      setSelectedUserId(rehabCase.userId);
+      setActiveCaseUserId(rehabCase.userId);
     }
-  }, [linkedCases, activeUserId, selectedUserId]);
-  // Load selected docket from Settings screen persistence
-  useEffect(() => {
-    const loadActiveDocket = async () => {
-      try {
-        const raw = await AsyncStorage.getItem('activeDocketData');
-        if (raw) {
-          const data = JSON.parse(raw);
-          if (data?.userId) {
-            setSelectedUserId(data.userId);
-          }
-        }
-      } catch (e) {
-        console.error('Error loading active docket', e);
-      }
-    };
-    loadActiveDocket();
-  }, []);
-  // Reload selected docket when screen gains focus (e.g., after returning from Settings)
-  useEffect(() => {
-    const unsubscribe = navigation?.addListener('focus', () => {
-      const loadActiveDocket = async () => {
-        try {
-          const raw = await AsyncStorage.getItem('activeDocketData');
-          if (raw) {
-            const data = JSON.parse(raw);
-            if (data?.userId) {
-              setSelectedUserId(data.userId);
-            }
-          }
-        } catch (e) {
-          console.error('Error reloading active docket on focus', e);
-        }
-      };
-      loadActiveDocket();
-    });
-    return unsubscribe;
-  }, [navigation]);
+  }, [linkedCases, activeUserId, activeCaseUserId]);
 
   const sessionsQuery = useUpcomingSessions();
   const upcomingSessions = sessionsQuery.data?.sessions || [];
@@ -257,7 +221,7 @@ export default function HomeScreen({ navigation }) {
                         See RequestInterventionScreen.js. */}
                     <Pressable
                       style={[styles.gridCardRow, isDesktop && styles.gridCardRowDesktop]}
-                      onPress={() => navigation?.navigate('RequestIntervention')}
+                      onPress={() => navigation?.navigate('RequestIntervention', { caseUserId: activeUserId })}
                     >
                       <View style={styles.gridIconSquare}>
                         <Feather name="life-buoy" size={18} color={colors.primary} />

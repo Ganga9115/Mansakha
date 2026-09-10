@@ -6,6 +6,7 @@ const { requireRole } = require('../../core/middleware/requireRole');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { loadRequestDocuments } = require('../../core/services/legalAidDocuments');
+const { ensureCourtCaseDetails } = require('../../core/services/courtCaseSync');
 
 // Public Prosecutor (migration_040) - the real DLSA-assigned advocate
 // role for the dedicated Legal Aid pipeline. Every route here filters by
@@ -196,34 +197,61 @@ router.post('/my-cases/:requestId/private-notes', async (req, res) => {
 });
 
 // This representative's own upcoming hearings across every Active case -
-// backs the "Hearings" nav page. A hearing row is itself the RECORD of a
-// past outcome; "upcoming" here means its own next_hearing_date field,
-// looking forward from today.
+// backs the "Hearings" nav page. Sourced from each case's own eCourt data
+// (court_case_details.next_hearing_date, the same simulated-eCourt-sync feed
+// the victim's own Case Details screen already shows - see
+// courtCaseSync.js's own comment on why this reuses that exact logic), NOT
+// this representative's own legal_aid_hearings records - those are the
+// OFFICIAL RECORD of a hearing already held, not a forward-looking court
+// schedule, so they were never the right source for "what's coming up".
 router.get('/hearings-upcoming', async (req, res) => {
-  const { rows } = await pool.query(
-    `select h.hearing_id, h.next_hearing_date, h.court, h.hearing_type, u.docket_number, lar.request_id
-     from legal_aid_hearings h
-     join legal_aid_requests lar on lar.request_id = h.request_id
-     join legal_aid_assignments laa on laa.request_id = lar.request_id and laa.representative_official_id = $1 and laa.status = 'Active'
+  const { rows: cases } = await pool.query(
+    `select lar.request_id, u.user_id, u.docket_number, u.case_stage, u.cnr_number, u.enrolled_at,
+            ct.name as case_type_name, j.name as jurisdiction_name, ui.full_name as victim_full_name
+     from legal_aid_assignments laa
+     join legal_aid_requests lar on lar.request_id = laa.request_id
      join users u on u.user_id = lar.user_id
-     where h.next_hearing_date is not null and h.next_hearing_date >= current_date
-       and h.hearing_id in (
-         select h2.hearing_id from legal_aid_hearings h2 where h2.request_id = h.request_id order by h2.hearing_date desc limit 1
-       )
-     order by h.next_hearing_date asc`,
+     left join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     where laa.representative_official_id = $1 and laa.status = 'Active'`,
     [req.auth.officialId]
   );
 
-  return ok(res, {
-    upcomingHearings: rows.map((h) => ({
-      hearingId: h.hearing_id,
-      requestId: h.request_id,
-      docketNumber: h.docket_number,
-      nextHearingDate: h.next_hearing_date,
-      court: h.court,
-      hearingType: h.hearing_type,
-    })),
-  });
+  const withCourtData = await Promise.all(cases.map(async (c) => {
+    let courtCase;
+    try {
+      courtCase = await ensureCourtCaseDetails({
+        userId: c.user_id,
+        caseStage: c.case_stage,
+        docketNumber: c.docket_number,
+        cnrNumber: c.cnr_number,
+        caseTypeName: c.case_type_name,
+        jurisdictionName: c.jurisdiction_name,
+        enrolledAt: c.enrolled_at,
+        victimFullName: c.victim_full_name,
+      });
+    } catch (err) {
+      console.error('hearings-upcoming: could not load court case details', err.message, { requestId: c.request_id });
+      return null;
+    }
+    if (!courtCase.available || !courtCase.row.next_hearing_date) return null;
+    return {
+      requestId: c.request_id,
+      docketNumber: c.docket_number,
+      nextHearingDate: courtCase.row.next_hearing_date,
+      nextHearingPurpose: courtCase.row.next_hearing_purpose,
+      court: courtCase.row.court_complex || courtCase.row.court_establishment || null,
+      courtNumber: courtCase.row.court_number,
+      hearingMode: courtCase.row.hearing_mode,
+    };
+  }));
+
+  const upcomingHearings = withCourtData
+    .filter((h) => h && h.nextHearingDate >= new Date().toISOString().slice(0, 10))
+    .sort((a, b) => a.nextHearingDate.localeCompare(b.nextHearingDate));
+
+  return ok(res, { upcomingHearings });
 });
 
 module.exports = router;

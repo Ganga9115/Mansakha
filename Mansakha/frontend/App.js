@@ -15,6 +15,7 @@ import {
 import { AuthProvider } from './src/user/shared/context/AuthContext';
 import { ToastProvider } from './src/user/shared/context/ToastContext';
 import { LanguageProvider } from './src/user/shared/context/LanguageContext';
+import { ActiveCaseProvider } from './src/user/shared/context/ActiveCaseContext';
 import RootNavigator from './src/user/navigation/RootNavigator';
 import ErrorBoundary from './src/user/shared/components/ErrorBoundary';
 import SplashScreen from './src/user/onboarding/screens/SplashScreen';
@@ -61,7 +62,9 @@ export default function App() {
             <ToastProvider>
               <LanguageProvider>
                 <AuthProvider>
-                  <RootNavigator />
+                  <ActiveCaseProvider>
+                    <RootNavigator />
+                  </ActiveCaseProvider>
                 </AuthProvider>
               </LanguageProvider>
             </ToastProvider>

@@ -13,6 +13,7 @@ import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary, EmptyState } from '../../shared/components/QueryStates';
 import { useUserDashboard, useRehabilitationEligibility, useOptInRehabilitation } from '../../shared/services/hooks';
+import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 
 // Pill styling per provider type - Government leans on the same
 // success-green used elsewhere for a "settled/official" status, NGO on the
@@ -135,11 +136,18 @@ export function EligibleContent({ providers, onOptedIn, caseUserId }) {
 export default function RehabilitationOptInScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  // Optional - which docket in the caller's own family this screen concerns
-  // (see the case switcher on HomeScreen.js); defaults to the caller's own
-  // anchor case when navigated to without one, same as every other hook
-  // here defaults when caseUserId is omitted.
-  const caseUserId = route?.params?.caseUserId;
+  // Optional - which docket in the caller's own family this screen concerns.
+  // An explicit route param (a direct deep-link) wins; otherwise this falls
+  // back to whichever docket is active in Settings/Profile (see
+  // ActiveCaseContext.js), and finally to the caller's own anchor case when
+  // neither is set, same as every other hook here defaults when caseUserId
+  // is omitted. Note: this is this SCREEN's own resolution only -
+  // EligibleContent below is also rendered directly by
+  // RehabilitationDecisionGate.js with its own explicit caseUserId prop,
+  // which must never be overridden by context (a pending decision gate is
+  // about one specific case, not "whatever's currently active").
+  const { activeCaseUserId } = useActiveCase();
+  const caseUserId = route?.params?.caseUserId || activeCaseUserId;
   const dashboardQuery = useUserDashboard(caseUserId);
   const eligibilityQuery = useRehabilitationEligibility(caseUserId);
 

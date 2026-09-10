@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary, EmptyState } from '../../shared/components/QueryStates';
 import { useUserDashboard, useCourtCaseDetails, useInvestigationProgress } from '../../shared/services/hooks';
+import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 
 // Real, live status from the Investigating Officer's own record
 const ACCUSED_STATUS_TONE = {
@@ -131,9 +132,13 @@ export default function CaseDetailsScreen({ navigation, route }) {
   const dashboardQuery = useUserDashboard();
   const linkedCases = dashboardQuery.data?.linkedCases || [];
 
-  const [selectedUserId, setSelectedUserId] = useState(route?.params?.caseUserId || null);
-
-  const activeUserId = selectedUserId || linkedCases[0]?.userId;
+  // Docket switching now lives in one place, Settings/Profile's own docket
+  // selector (see ActiveCaseContext.js) - this screen just reads whichever
+  // docket is currently active there. route?.params?.caseUserId (e.g. from
+  // Home's Case Details tile) still works as a fallback for the rare case a
+  // navigation fires before context has hydrated from storage.
+  const { activeCaseUserId } = useActiveCase();
+  const activeUserId = activeCaseUserId || route?.params?.caseUserId || linkedCases[0]?.userId;
   const activeCase = linkedCases.find((c) => c.userId === activeUserId);
   const courtQuery = useCourtCaseDetails(activeUserId);
   const investigationQuery = useInvestigationProgress(activeUserId);
@@ -169,25 +174,6 @@ export default function CaseDetailsScreen({ navigation, route }) {
 
       <ScrollView style={styles.scrollView} bounces={false} showsVerticalScrollIndicator={false}>
         <View style={[styles.body, isDesktop && styles.bodyDesktop]}>
-          {linkedCases.length > 1 && (
-            <View style={styles.switcherRow}>
-              {linkedCases.map((c, index) => (
-                <Pressable
-                  key={c.userId}
-                  onPress={() => setSelectedUserId(c.userId)}
-                  style={[
-                    styles.switcherPill,
-                    c.userId === activeUserId && styles.switcherPillActive,
-                  ]}
-                >
-                  <Text style={[styles.switcherPillText, c.userId === activeUserId && styles.switcherPillTextActive]}>
-                    Docket {c.docketNumber || index + 1}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          )}
-
           <InvestigationProgressCard data={investigationQuery.data} />
 
           {!activeUserId ? (
@@ -519,28 +505,6 @@ const styles = StyleSheet.create({
   headerTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 18, fontWeight: '700' },
   body: { width: '100%', paddingHorizontal: spacing.md, paddingVertical: spacing.md, maxWidth: 1080, alignSelf: 'center' },
   bodyDesktop: { paddingHorizontal: spacing.xl, paddingVertical: spacing.lg },
-
-  switcherRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.lg, flexWrap: 'wrap' },
-  switcherPill: {
-    paddingVertical: 8,
-    paddingHorizontal: 20,
-    borderRadius: radius.pill,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  switcherPillActive: {
-    backgroundColor: '#3B5998',
-    borderColor: '#3B5998',
-  },
-  switcherPillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  switcherPillTextActive: {
-    color: '#FFFFFF',
-  },
 
   /* Overview Box */
   overviewCard: {

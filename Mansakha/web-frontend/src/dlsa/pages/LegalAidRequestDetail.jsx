@@ -223,6 +223,71 @@ function PendingFeedbackCard({ feedback, requestId, onDecided }) {
   );
 }
 
+// Standalone reassignment - available on any Active case regardless of
+// whether there's poor feedback prompting it (a Public Prosecutor going
+// unavailable, moving districts, etc. is a real reason to swap them that has
+// nothing to do with feedback). Same backend action as the feedback-driven
+// one in PendingFeedbackCard - reassign only requires a reason, feedbackId
+// is optional there specifically so this standalone path can omit it.
+function StandaloneReassignPanel({ requestId, currentAssignment, onDone }) {
+  const reassign = useReassignRepresentative();
+  const eligible = useEligibleRepresentatives(requestId);
+  const [open, setOpen] = useState(false);
+  const [newRepId, setNewRepId] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState(null);
+
+  const handleConfirm = async () => {
+    if (!newRepId || !reason.trim()) return;
+    setError(null);
+    try {
+      await reassign.mutate(requestId, { newRepresentativeOfficialId: newRepId, endedReason: reason.trim() });
+      setOpen(false);
+      setNewRepId('');
+      setReason('');
+      onDone();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="px-4 py-2 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold transition">
+        Reassign Public Prosecutor
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3 w-full">
+      <h3 className="font-bold text-sm text-gray-800">
+        Reassign Public Prosecutor{currentAssignment ? ` (currently ${currentAssignment.representativeName})` : ''}
+      </h3>
+      {eligible.loading ? (
+        <p className="text-xs text-gray-400">Loading eligible Public Prosecutors...</p>
+      ) : (
+        <select value={newRepId} onChange={(e) => setNewRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
+          <option value="">Select a new Public Prosecutor...</option>
+          {(eligible.data?.representatives || [])
+            .filter((rep) => rep.officialId !== currentAssignment?.representativeOfficialId)
+            .map((rep) => (
+              <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
+            ))}
+        </select>
+      )}
+      <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for reassignment (required)" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" />
+      {error && <p className="text-xs text-rose-700">{error}</p>}
+      <div className="flex gap-2">
+        <button onClick={handleConfirm} disabled={!newRepId || !reason.trim() || reassign.loading} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
+          {reassign.loading ? 'Working...' : 'Confirm Reassignment'}
+        </button>
+        <button onClick={() => { setOpen(false); setError(null); }} className="px-3 py-2 text-gray-500 text-xs">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
 export default function LegalAidRequestDetail() {
   const { requestId } = useParams();
   const navigate = useNavigate();
@@ -326,6 +391,18 @@ export default function LegalAidRequestDetail() {
             )}
           </div>
         </div>
+
+        {/* Reassignment isn't only a feedback-driven action - a Public
+            Prosecutor going unavailable, changing district, etc. is reason
+            enough on its own, so this is offered on every Active case,
+            independent of PendingFeedbackCard below. */}
+        {r.status === 'Active' && (
+          <StandaloneReassignPanel
+            requestId={r.requestId}
+            currentAssignment={r.assignments?.find((a) => a.status === 'Active')}
+            onDone={detailQuery.refetch}
+          />
+        )}
 
         {showRejectReason && (
           <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex items-center gap-2">

@@ -337,7 +337,7 @@ router.get('/legal-aid-requests/:requestId', async (req, res) => {
   const documents = await loadRequestDocuments(request.request_id);
 
   const { rows: assignments } = await pool.query(
-    `select laa.assignment_id, laa.status, laa.assigned_at, laa.ended_at, laa.ended_reason,
+    `select laa.assignment_id, laa.representative_official_id, laa.status, laa.assigned_at, laa.ended_at, laa.ended_reason,
             o.full_name as representative_name, orr.designation
      from legal_aid_assignments laa
      join officials o on o.official_id = laa.representative_official_id
@@ -383,6 +383,7 @@ router.get('/legal-aid-requests/:requestId', async (req, res) => {
     documents,
     assignments: assignments.map((a) => ({
       assignmentId: a.assignment_id,
+      representativeOfficialId: a.representative_official_id,
       status: a.status,
       representativeName: a.representative_name,
       designation: a.designation,

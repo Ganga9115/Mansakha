@@ -12,6 +12,7 @@ import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import * as ImagePicker from 'expo-image-picker';
 import { useUserDashboard, useCompensationStatus, useBankDetails, useSaveBankDetails, useUploadBankProof } from '../../shared/services/hooks';
+import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 
 function inr(n) {
   return `₹${Number(n).toLocaleString('en-IN')}`;
@@ -312,7 +313,11 @@ function BankDetailsCard() {
 export default function CompensationScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const caseUserId = route?.params?.caseUserId;
+  // Falls back to whichever docket is active in Settings/Profile (see
+  // ActiveCaseContext.js) when this screen wasn't navigated to with an
+  // explicit docket already.
+  const { activeCaseUserId } = useActiveCase();
+  const caseUserId = route?.params?.caseUserId || activeCaseUserId;
   const dashboardQuery = useUserDashboard(caseUserId);
   const compensationQuery = useCompensationStatus(caseUserId);
 

@@ -11,6 +11,7 @@ import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary, EmptyState } from '../../shared/components/QueryStates';
 import { useUserDashboard, useRehabilitationProgress } from '../../shared/services/hooks';
+import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 
 function formatDate(iso) {
   if (!iso) return null;
@@ -198,7 +199,11 @@ function PhaseCard({ phase }) {
 export default function RehabilitationProgressScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const caseUserId = route?.params?.caseUserId;
+  // Falls back to whichever docket is active in Settings/Profile (see
+  // ActiveCaseContext.js) when this screen wasn't navigated to with an
+  // explicit docket already.
+  const { activeCaseUserId } = useActiveCase();
+  const caseUserId = route?.params?.caseUserId || activeCaseUserId;
   const dashboardQuery = useUserDashboard(caseUserId);
   const rehabilitationQuery = useRehabilitationProgress(caseUserId);
 

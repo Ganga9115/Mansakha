@@ -20,6 +20,7 @@ import {
   useSubmitInterventionRequest,
   useUploadInterventionDocument,
 } from '../../shared/services/hooks';
+import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 
 const STATUS_META = {
   Pending: { color: colors.warning, bg: colors.warningLight, icon: 'clock' },
@@ -309,7 +310,11 @@ function RequestHistoryItem({ r, navigation }) {
 export default function RequestInterventionScreen({ navigation, route }) {
   const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const dashboardQuery = useUserDashboard(route?.params?.caseUserId);
+  // route?.params?.caseUserId (an explicit deep-link, e.g. from Home's own
+  // tile) wins if present; otherwise this falls back to whichever docket is
+  // currently active in Settings/Profile (see ActiveCaseContext.js).
+  const { activeCaseUserId } = useActiveCase();
+  const dashboardQuery = useUserDashboard(route?.params?.caseUserId || activeCaseUserId);
   const activeUserId = dashboardQuery.data?.userId;
   const typesQuery = useInterventionTypes();
   const requestsQuery = useMyInterventionRequests();
