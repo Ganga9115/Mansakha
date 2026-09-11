@@ -4,16 +4,16 @@ import { Trash2, Link2, X } from 'lucide-react';
 import { useDataOperatorUsers, useUpdateDataOperatorUser, useDeleteDataOperatorUser, useLinkExistingCase } from '../services/hooks';
 import PersonSearchPicker from '../components/PersonSearchPicker';
 
-// migration_034: Case Stage is no longer editable by Data Operator (or any
-// staff role) here or anywhere else - it's read-only, shown exactly as the
-// backend reports it, and changes exclusively through the simulated eCourt
-// sync worker (core/services/ecourtStageSync.js).
+// NHAA stages - forward-only, same order as backend
+const NHAA_STAGES = ['Investigation', 'Trial', 'Compensation', 'Case Closed'];
+function nhaaStageIndex(s) { return NHAA_STAGES.indexOf(s); }
+
 const CASE_STAGE_TONE = {
-  Investigation: 'bg-amber-50 text-amber-700',
-  Trial: 'bg-blue-50 text-blue-700',
-  Rehabilitation: 'bg-violet-50 text-violet-700',
-  Compensation: 'bg-teal-50 text-teal-700',
-  'Case Closed': 'bg-gray-100 text-gray-600',
+  Investigation: 'bg-amber-50 text-amber-700 border-amber-200',
+  Trial: 'bg-blue-50 text-blue-700 border-blue-200',
+  Rehabilitation: 'bg-violet-50 text-violet-700 border-violet-200',
+  Compensation: 'bg-teal-50 text-teal-700 border-teal-200',
+  'Case Closed': 'bg-gray-100 text-gray-600 border-gray-200',
 };
 
 // A real switch (track + sliding knob) instead of a colored badge that
@@ -97,6 +97,17 @@ export default function Users() {
     }
   };
 
+  const handleStageChange = async (userId, currentStage, newStage) => {
+    if (!newStage || newStage === currentStage) return;
+    setRowError((prev) => ({ ...prev, [userId]: null }));
+    try {
+      await updateUser.mutate(userId, { caseStage: newStage });
+      refetch();
+    } catch (err) {
+      setRowError((prev) => ({ ...prev, [userId]: err.message }));
+    }
+  };
+
   const handleDelete = async (userId, docketNumber) => {
     if (!window.confirm(`Delete user record ${docketNumber}? This only works if the case has no history yet.`)) return;
     setRowError((prev) => ({ ...prev, [userId]: null }));
@@ -140,9 +151,22 @@ export default function Users() {
                   <td className="py-3 px-4 text-gray-700">{u.caseType || '-'}</td>
                   <td className="py-3 px-4 text-gray-700">{u.jurisdictionName || '-'}</td>
                   <td className="py-3 px-4">
-                    <span className={`inline-block px-2 py-1 rounded-full text-[11px] font-semibold ${CASE_STAGE_TONE[u.caseStage] || 'bg-gray-100 text-gray-600'}`}>
-                      {u.caseStage}
-                    </span>
+                    <select
+                      value={u.caseStage}
+                      onChange={(e) => handleStageChange(u.userId, u.caseStage, e.target.value)}
+                      disabled={updateUser.loading}
+                      className={`px-2 py-1 rounded-lg text-[11px] font-semibold border cursor-pointer appearance-none focus:outline-none focus:ring-1 focus:ring-[#3D5A80] disabled:opacity-50 ${CASE_STAGE_TONE[u.caseStage] || 'bg-gray-100 text-gray-600 border-gray-200'}`}
+                      title="Advance NHAA case stage (forward-only)"
+                    >
+                      {NHAA_STAGES.map((stage) => (
+                        <option
+                          key={stage}
+                          value={stage}
+                        >
+                          {stage}
+                        </option>
+                      ))}
+                    </select>
                   </td>
                   <td className="py-3 px-4">
                     <StatusToggle

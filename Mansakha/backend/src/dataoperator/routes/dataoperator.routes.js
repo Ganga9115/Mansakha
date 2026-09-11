@@ -6,6 +6,11 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { createUser, updateUser, deleteUser, linkExistingCase, createLinkedCase, ProvisioningError } = require('../../user/services/userProvisioning');
 const { writeAuditLog } = require('../../core/services/auditLog');
+const { checkAndCompleteCasesForPerson } = require('../../core/services/caseCompletion');
+
+// NHAA lifecycle stages - forward-only transitions gated here (same guard as dwo.routes.js).
+const NHAA_STAGES = ['Investigation', 'Trial', 'Compensation', 'Case Closed'];
+function nhaaStageIndex(s) { return NHAA_STAGES.indexOf(s); }
 
 const router = express.Router();
 
@@ -185,23 +190,41 @@ router.get('/users', async (req, res) => {
   });
 });
 
-// migration_034: caseStage removed - Data Operator (like every other staff
-// role) has no option whatsoever to create, modify, advance, downgrade, or
-// otherwise set a case's stage, including marking it 'Case Closed'. That
-// used to be Data Operator's own explicit privilege; it now belongs
-// exclusively to the (simulated) eCourt sync worker - see
-// core/services/ecourtStageSync.js.
+// NHAA case stage is now a Data Operator / DWO responsibility (migration_045).
+// eCourt label stays read-only. Operator can advance NHAA stage forward only.
 router.patch('/users/:userId', async (req, res) => {
   const { userId } = req.params;
-  const { status, address, contactNumber } = req.body;
-  try {
-    await updateUser(userId, { status, address, contactNumber });
-    await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'update', entityType: 'user', entityId: userId });
-    return ok(res, null, 'User record updated');
-  } catch (err) {
-    if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
-    throw err;
+  const { status, address, contactNumber, caseStage } = req.body;
+
+  if (caseStage !== undefined) {
+    if (!NHAA_STAGES.includes(caseStage)) {
+      return fail(res, `caseStage must be one of: ${NHAA_STAGES.join(', ')}`, 400);
+    }
+    const { rows } = await pool.query('select case_stage from users where user_id = $1', [userId]);
+    if (!rows[0]) return fail(res, 'User not found', 404);
+    const currentStage = rows[0].case_stage;
+    await pool.query('update users set case_stage = $1 where user_id = $2', [caseStage, userId]);
+    await writeAuditLog({
+      actorType: 'official', actorId: req.auth.officialId,
+      action: 'nhaa_stage_updated', targetType: 'user', targetId: userId,
+      metadata: { fromStage: currentStage, toStage: caseStage },
+    });
+    if (caseStage === 'Case Closed') {
+      await checkAndCompleteCasesForPerson(userId).catch(() => {});
+    }
   }
+
+  if (status !== undefined || address !== undefined || contactNumber !== undefined) {
+    try {
+      await updateUser(userId, { status, address, contactNumber });
+    } catch (err) {
+      if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
+      throw err;
+    }
+  }
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'update', entityType: 'user', entityId: userId });
+  return ok(res, null, 'User record updated');
 });
 
 router.delete('/users/:userId', async (req, res) => {
