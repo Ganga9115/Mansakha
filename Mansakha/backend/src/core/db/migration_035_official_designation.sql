@@ -1,0 +1,13 @@
+-- Official designation - a per-role-grant attribute, same reasoning as the
+-- existing jurisdiction_id/provider_id/station_id columns already on this
+-- table: a person's title under the PoA Act Rules is a fact about THIS
+-- specific role grant, assigned by the appointing authority (Ministry, on
+-- this app's staff-management side) at creation/edit time - never
+-- self-selected by the officer. Grounded in real practice: the Rules leave
+-- "Protection Officer" appointment to state government notification, and
+-- different states have designated a Deputy Superintendent of Police, a
+-- Sub-Divisional Magistrate, a Tehsildar, or a District Social Welfare
+-- Officer to the role - so this is a free-text-backed but
+-- dropdown-constrained field on the app side (see ministry.routes.js's
+-- DESIGNATION_OPTIONS), not a hardcoded single title.
+alter table official_roles add column if not exists designation text;

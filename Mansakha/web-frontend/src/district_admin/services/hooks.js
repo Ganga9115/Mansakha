@@ -1,0 +1,448 @@
+import { useCallback, useEffect, useState } from 'react';
+import { apiClient } from './apiClient';
+import { getToken } from './auth';
+
+// District Admin's own copy of the shared data-hooks file - trimmed to only
+// the hooks District Admin's pages actually call, per the no-shared-imports
+// rule. Every /api/admin/* call below hits the District tier's own mount
+// (see backend/src/district_admin/routes/districtAdmin.routes.js).
+
+function useQuery(queryFn, deps) {
+  const [state, setState] = useState({ data: null, loading: true, error: null });
+
+  const refetch = useCallback(() => {
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    queryFn()
+      .then((data) => { if (!cancelled) setState({ data, loading: false, error: null }); })
+      .catch((err) => { if (!cancelled) setState({ data: null, loading: false, error: err.message }); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  useEffect(() => refetch(), [refetch]);
+
+  return { ...state, refetch };
+}
+
+// --- Public lookups (used by User Registration form) ---
+
+export function useCaseTypeOptions() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/lookups/case-types', token), [token]);
+}
+
+export function useJurisdictionOptions(level, parentId) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ level });
+    if (parentId) params.set('parentId', parentId);
+    return apiClient.get(`/api/lookups/jurisdictions?${params.toString()}`, token);
+  }, [token, level, parentId]);
+}
+
+export function useMe() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/me', token), [token]);
+}
+
+export function useMyNotifications() {
+  const token = getToken();
+  return useQuery(() => apiClient.get('/api/me/notifications', token), [token]);
+}
+
+export function useMyJurisdiction() {
+  const { data, loading, error } = useMe();
+  const role = data?.roles?.[0];
+  return { jurisdictionId: role?.jurisdictionId, jurisdictionLevel: role?.jurisdictionLevel, loading, error };
+}
+
+// --- District Administration ---
+
+export function useAdminDashboard(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/district/dashboard/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+// Reports page's 3 charts (trend line, severity-distribution stacked bars,
+// intervention-phase donut), scoped to jurisdictionId's own subtree. `range`
+// is one of '7d'|'30d'|'90d'|'custom'; `start`/`end` (YYYY-MM-DD) are only
+// used/required when range is 'custom' - until both are filled with a valid
+// (end >= start) order, this resolves to null without hitting the network,
+// so Reports.jsx can render a "pick a date range" prompt instead of firing
+// a doomed/partial request.
+export function useReportsAnalytics(jurisdictionId, range, start, end) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve(null);
+    if (range === 'custom' && !(start && end && end >= start)) return Promise.resolve(null);
+    const q = new URLSearchParams({ range });
+    if (range === 'custom') {
+      q.set('start', start);
+      q.set('end', end);
+    }
+    return apiClient.get(`/api/admin/district/reports-analytics/${jurisdictionId}?${q.toString()}`, token);
+  }, [token, jurisdictionId, range, start, end]);
+}
+
+// Section B (workforce data) - which officials hold the 5 jurisdiction/
+// station-scoped coordination roles in this admin's own subtree, and how
+// their own queue is moving. See the backend route's own header comment for
+// why Rehabilitation Officer is excluded here (Ministry's own copy covers it).
+export function useCoordinationRolePerformance(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/district/coordination-roles/performance/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+export function useCoordinationStaffingGaps(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/district/coordination-roles/staffing-gaps/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+export function useExportReportCsv() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (jurisdictionId, name = 'report') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/admin/district/dashboard/${jurisdictionId}/export`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to export report');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// --- Case-wise Reports workflow (District generates a case-wise report and
+// submits it to its own State - required - plus optional direct cc's to
+// National/Ministry; see backend/src/district_admin/routes/
+// districtAdmin.routes.js's own reports/* mount for the exact contract). ---
+
+// Imperative - mutate(payload) posts { jurisdictionId, periodType, year,
+// month|quarter|week, customStart, customEnd, commentary, asDraft,
+// recipients } and resolves { reportId, generatedAt, status }. The required
+// primary recipient (District's own State) is always added server-side -
+// `recipients` here is ONLY the optional extra cc's the checklist UI adds.
+export function useGenerateReport() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/district/reports/generate', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// `box` is 'inbox'|'outbox' - resolves to null/skips the call when
+// jurisdictionId is falsy, matching useAdminDashboard's own guard pattern.
+export function useReportsList(jurisdictionId, box) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve(null);
+    const params = new URLSearchParams({ jurisdictionId, box });
+    return apiClient.get(`/api/admin/district/reports?${params.toString()}`, token);
+  }, [token, jurisdictionId, box]);
+}
+
+// Acts on the CALLER'S OWN recipient row only (a report cc'd to
+// State+National+Ministry is reviewed independently by each) - this is
+// District's own tier-scoped mount, unlike Ministry's copy of this same
+// hook shape which is hardcoded to the national mount.
+export function useUpdateReportStatus() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, status) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/district/reports/${reportId}/status`, { status }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Forward an already-received report onward (e.g. to National and/or
+// Ministry directly) without regenerating it - only a real RECIPIENT of a
+// report can forward it (enforced server-side), so this only ever makes
+// sense from the Inbox tab, never Outbox. `target` is {type:'jurisdiction',
+// jurisdictionId} or {type:'ministry'}.
+export function useForwardReport() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, target) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/admin/district/reports/${reportId}/forward`, target, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// Mirrors useExportReportCsv's exact raw-fetch-to-blob-download pattern,
+// just against the PDF route/content-type instead of the CSV export one.
+export function useDownloadReportPdf() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (reportId, filename = 'report') => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000'}/api/admin/district/reports/${reportId}/pdf`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('Failed to download PDF');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${filename}.pdf`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useCreateUser() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/district/users', payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useSearchUserByDocket() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (docketNumber) => {
+    setLoading(true);
+    try {
+      return await apiClient.get(`/api/admin/district/users?docketNumber=${encodeURIComponent(docketNumber)}`, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useUpdateUser() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId, payload) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/district/users/${userId}`, payload, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useAdminAlerts(jurisdictionId) {
+  const token = getToken();
+  return useQuery(
+    () => (jurisdictionId ? apiClient.get(`/api/admin/district/alerts/${jurisdictionId}`, token) : Promise.resolve(null)),
+    [token, jurisdictionId]
+  );
+}
+
+// --- Case Detail (read-only for Administration - the GET routes below allow
+// both Counsellor and Administration; the write actions Counsellor's own
+// copy has - notes/interventions/scheduling/chat - are intentionally not
+// duplicated here since Administration never gets those per the PS's
+// explicit Counsellor/Administration split). ---
+
+export function useCaseDetail(userId) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/counsellor/cases/${userId}`, token), [token, userId]);
+}
+
+export function useCaseNotes(userId) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/counsellor/cases/${userId}/notes`, token), [token, userId]);
+}
+
+// ===== Mansakha Mail =====
+// Internal staff mail (backend/src/mail/routes/mail.routes.js) - role-agnostic
+// endpoints under /api/mail, so these hooks are plain, unprefixed by
+// "admin" even though this file is District Admin's own copy.
+
+export function useMailDirectory(q) {
+  const token = getToken();
+  return useQuery(() => {
+    const query = (q || '').trim();
+    if (query.length < 2) return Promise.resolve({ officials: [] });
+    return apiClient.get(`/api/mail/directory?q=${encodeURIComponent(query)}`, token);
+  }, [token, q]);
+}
+
+export function useMailInbox(q, page = 1) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ page });
+    if (q) params.set('q', q);
+    return apiClient.get(`/api/mail/inbox?${params.toString()}`, token);
+  }, [token, q, page]);
+}
+
+export function useMailSent(q, page = 1) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ page });
+    if (q) params.set('q', q);
+    return apiClient.get(`/api/mail/sent?${params.toString()}`, token);
+  }, [token, q, page]);
+}
+
+export function useMailArchived(q, page = 1) {
+  const token = getToken();
+  return useQuery(() => {
+    const params = new URLSearchParams({ page });
+    if (q) params.set('q', q);
+    return apiClient.get(`/api/mail/archived?${params.toString()}`, token);
+  }, [token, q, page]);
+}
+
+export function useMailThread(threadId) {
+  const token = getToken();
+  return useQuery(() => apiClient.get(`/api/mail/threads/${threadId}`, token), [token, threadId]);
+}
+
+// Polled (mirrors useMyNotifications) so the sidebar badge updates without a
+// manual refresh - powers StaffLayout's Mail nav badge.
+export function useMailUnreadCount() {
+  const token = getToken();
+  const query = useQuery(() => apiClient.get('/api/mail/unread-count', token), [token]);
+  useEffect(() => {
+    const interval = setInterval(() => query.refetch(), 15000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query.refetch]);
+  return query;
+}
+
+// Imperative (non-hook-query) mail actions - compose/reply/send/attach/etc.
+// all just need a one-shot call, not the loading/error/refetch shape above.
+export function useMailActions() {
+  const token = getToken();
+
+  return {
+    // { threadId?, subject?, body, recipientOfficialIds?, asDraft? } - no
+    // threadId => new thread (subject + recipientOfficialIds required);
+    // threadId => reply (subject/recipients inherited server-side).
+    composeOrReply: (payload) => apiClient.post('/api/mail/messages', payload, token),
+    updateDraft: (messageId, body) => apiClient.patch(`/api/mail/messages/${messageId}`, { body }, token),
+    sendDraft: (messageId) => apiClient.post(`/api/mail/messages/${messageId}/send`, {}, token),
+    deleteDraft: (messageId) => apiClient.delete(`/api/mail/messages/${messageId}`, token),
+    uploadAttachment: (messageId, file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return apiClient.uploadFile(`/api/mail/messages/${messageId}/attachments`, formData, token);
+    },
+    removeAttachment: (messageId, attachmentId) => apiClient.delete(`/api/mail/messages/${messageId}/attachments/${attachmentId}`, token),
+    getAttachmentUrl: (attachmentId) => apiClient.get(`/api/mail/attachments/${attachmentId}`, token),
+    markThreadRead: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/read`, {}, token),
+    markThreadUnread: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/unread`, {}, token),
+    archiveThread: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/archive`, {}, token),
+    unarchiveThread: (threadId) => apiClient.patch(`/api/mail/threads/${threadId}/unarchive`, {}, token),
+    deleteThread: (threadId) => apiClient.delete(`/api/mail/threads/${threadId}`, token),
+  };
+}
+
+// ===== Victim-Initiated Intervention Requests =====
+// District Admin's own review side - a victim requests one of 6 eligible
+// intervention types (Counselling excluded) with proof documents, and this
+// role Accepts or Rejects it. See migration_027_intervention_requests.sql.
+
+export function useInterventionRequestsList(jurisdictionId, status) {
+  const token = getToken();
+  return useQuery(() => {
+    if (!jurisdictionId) return Promise.resolve(null);
+    const params = new URLSearchParams({ jurisdictionId });
+    if (status) params.set('status', status);
+    return apiClient.get(`/api/admin/district/intervention-requests?${params.toString()}`, token);
+  }, [token, jurisdictionId, status]);
+}
+
+export function useInterventionRequestDetail(requestId) {
+  const token = getToken();
+  return useQuery(
+    () => (requestId ? apiClient.get(`/api/admin/district/intervention-requests/${requestId}`, token) : Promise.resolve(null)),
+    [token, requestId]
+  );
+}
+
+export function useReviewInterventionRequest() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (requestId, decision, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.patch(`/api/admin/district/intervention-requests/${requestId}/decision`, { decision, reason }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+// --- Agency Coordination (new coordination roles) ---
+// District Admin optionally creates a referral into one of the 6 new
+// coordination-role queues AFTER already deciding a case through the
+// existing Intervention Requests flow above - never instead of it.
+
+export function useCaseAgencyReferrals(userId) {
+  const token = getToken();
+  return useQuery(
+    () => (userId ? apiClient.get(`/api/admin/district/agency-referrals?userId=${userId}`, token) : Promise.resolve(null)),
+    [token, userId]
+  );
+}
+
+export function useCreateAgencyReferral() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (userId, referredToRole, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.post('/api/admin/district/agency-referrals', { userId, referredToRole, reason }, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}

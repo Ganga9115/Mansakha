@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { View, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   useFonts,
@@ -11,15 +12,23 @@ import {
   PublicSans_600SemiBold,
   PublicSans_700Bold,
 } from '@expo-google-fonts/public-sans';
-import { AuthProvider } from './src/context/AuthContext';
-import { ToastProvider } from './src/context/ToastContext';
-import { LanguageProvider } from './src/context/LanguageContext';
-import RootNavigator from './src/navigation/RootNavigator';
-import ErrorBoundary from './src/components/ErrorBoundary';
-import SplashScreen from './src/screens/SplashScreen';
-import { colors } from './src/theme/colors';
+import { AuthProvider } from './src/user/shared/context/AuthContext';
+import { ToastProvider } from './src/user/shared/context/ToastContext';
+import { LanguageProvider } from './src/user/shared/context/LanguageContext';
+import { ActiveCaseProvider } from './src/user/shared/context/ActiveCaseContext';
+import RootNavigator from './src/user/navigation/RootNavigator';
+import ErrorBoundary from './src/user/shared/components/ErrorBoundary';
+import SplashScreen from './src/user/onboarding/screens/SplashScreen';
+import { colors } from './src/user/shared/theme/colors';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
+    }
+  }
+});
 
 export default function App() {
   const [splashFinished, setSplashFinished] = useState(false);
@@ -46,18 +55,22 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="dark" />
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <ToastProvider>
-            <LanguageProvider>
-              <AuthProvider>
-                <RootNavigator />
-              </AuthProvider>
-            </LanguageProvider>
-          </ToastProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <ErrorBoundary>
+          <QueryClientProvider client={queryClient}>
+            <ToastProvider>
+              <LanguageProvider>
+                <AuthProvider>
+                  <ActiveCaseProvider>
+                    <RootNavigator />
+                  </ActiveCaseProvider>
+                </AuthProvider>
+              </LanguageProvider>
+            </ToastProvider>
+          </QueryClientProvider>
+        </ErrorBoundary>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

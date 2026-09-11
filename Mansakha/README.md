@@ -10,8 +10,8 @@ separate `SIH26094_Additional_Standout_Features.md` backlog is not implemented h
 ## Status
 
 **This pass implements Suggested Build Order step 1 only: auth & role scaffolding.**
-Three login surfaces (Ministry, Staff, Victim), the full database schema, and RBAC
-middleware are real and functional. Everything else (Victim check-in flow, AI Risk
+Three login surfaces (Ministry, Staff, User), the full database schema, and RBAC
+middleware are real and functional. Everything else (User check-in flow, AI Risk
 Engine, Counsellor module, Administration/Ministry dashboards) is scaffolded as
 navigation entry points behind a "Coming soon" placeholder, not yet built — see
 Build Prompt Section 11 for the full sequence.
@@ -29,12 +29,12 @@ frontend/    React Native (Expo) - Android + web, single codebase
 
 All of these are free tier / no billing account, per Build Prompt Section 1:
 
-- **Supabase** (supabase.com) — new project, free tier. Run `backend/src/db/schema.sql`
+- **Supabase** (supabase.com) — new project, free tier. Run `backend/src/core/db/schema.sql`
   in the Supabase SQL editor to create all 19 tables.
 - **Firebase** (console.firebase.google.com) — new project, Spark (free) plan, enable
   Phone Authentication. Generate a service account key (Project Settings > Service
   Accounts) for the backend, and grab the Web API key for the frontend.
-- **Google Cloud** — an OAuth 2.0 Client ID (for Victim Gmail login) and, separately,
+- **Google Cloud** — an OAuth 2.0 Client ID (for User Gmail login) and, separately,
   a Gemini API key from Google AI Studio (stay on the free tier, don't attach billing).
 - **Exotel** (exotel.com) — trial account only, for IVRS. Not a free tier at scale;
   see the note in `backend/.env.example`.
@@ -83,6 +83,6 @@ URL directly, not linked from anywhere in the app - see the note in
 the Staff Management screen once logged in - there's no seed script for these since
 they're meant to be provisioned through the app itself, per Build Prompt Section 3.
 
-Broader demo/sample data (many victims, realistic check-in history) is Section 10 of
+Broader demo/sample data (many users, realistic check-in history) is Section 10 of
 the build prompt and still outstanding - see the leftover-task list from the last
 build pass.

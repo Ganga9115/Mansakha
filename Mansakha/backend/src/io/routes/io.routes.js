@@ -1,0 +1,460 @@
+const express = require('express');
+const multer = require('multer');
+const crypto = require('crypto');
+const { supabase } = require('../../core/db/supabaseClient');
+const { pool } = require('../../core/db/pgPool');
+const { writeAuditLog } = require('../../core/services/auditLog');
+const { verifyToken } = require('../../core/middleware/verifyToken');
+const { requireRole } = require('../../core/middleware/requireRole');
+const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
+const { ok, fail } = require('../../core/services/responseEnvelope');
+const { ACCUSED_STATUSES, computeThreatTier, getSosEventCounts, getSosEventCount } = require('../../core/services/threatAssessment');
+
+const router = express.Router();
+
+// Investigating Officer - REINSTATED (migration_033) with real substance,
+// after briefly being retired and absorbed into Protection Officer under
+// the earlier Legal Aid/Threat consolidation. This is now the one role
+// with genuine statutory custody over arrest/bail/chargesheet facts,
+// scoped to a real police station (the one that registered the FIR), not
+// just a district.
+//
+// Deliberately NOT agency_referrals-based like every other new-role file -
+// "every registered case gets investigated" (not a District-Admin-created
+// escalation), so this mirrors Counsellor's own assigned_counsellor_id
+// pattern instead: a case belongs to this queue because users.station_id
+// matches this officer's own assigned station, the same way a case belongs
+// to a Counsellor's queue via assigned_counsellor_id.
+const ROLE_NAME = 'Investigating Officer';
+
+function getOwnStationId(req) {
+  return req.auth.roles.find((r) => r.roleName === ROLE_NAME)?.stationId || null;
+}
+
+// Privacy Shield: NOTHING in this file ever selects user_identity's
+// full_name/contact_number/address - a case is identified to this officer by
+// docket number alone, the same boundary every other officials-side role
+// file holds. There is deliberately no "masked calling" feature built on top
+// of that: this project has no real telephony credentials (see
+// dispatchWorker.js's placeIvrsCall, a disclosed stub), so a masked-call
+// button would be a fabricated capability rather than a real one. The
+// stronger guarantee is the one actually implemented here - the contact
+// number is never sent to this role's client at all, so there is nothing on
+// screen to extract, mask or leak.
+
+// migration_037 - FIR / Chargesheet PDFs. Memory storage, straight through
+// to Supabase Storage without touching disk, exactly like the victim's own
+// intervention-proof uploads (user.routes.js) and me.js's profile photos.
+const caseDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB - a scanned chargesheet runs larger than a photo
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype !== 'application/pdf') return cb(new Error('File must be a PDF'));
+    cb(null, true);
+  },
+});
+
+// Multer signals a rejected file (wrong type, over the size limit) by
+// passing an Error to next() - with no handler that surfaces to the client
+// as an opaque 500 "Internal server error", which tells an officer who
+// picked a .docx nothing at all. This turns those into the real 400 they
+// are, with multer's own message.
+function handleUpload(middleware) {
+  return (req, res, next) => middleware(req, res, (err) => {
+    if (!err) return next();
+    const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+    return fail(res, tooLarge ? 'File is too large (10MB maximum)' : err.message || 'Could not read the uploaded file', 400);
+  });
+}
+
+router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
+
+// 'Active' = still under investigation (case_stage hasn't advanced past it
+// yet) - 'Handed Off' = chargesheet already filed and the case has moved to
+// Trial or beyond, kept visible read-only rather than disappearing from
+// view entirely.
+router.get('/cases', async (req, res) => {
+  const { status } = req.query;
+  if (status && !['Active', 'HandedOff'].includes(status)) return fail(res, "status must be 'Active' or 'HandedOff'", 400);
+
+  const stationId = getOwnStationId(req);
+  if (!stationId) return ok(res, { cases: [], stationAssigned: false });
+
+  const stageFilter = status === 'Active' ? `and u.case_stage = 'Investigation'` : status === 'HandedOff' ? `and u.case_stage != 'Investigation'` : '';
+
+  const { rows } = await pool.query(
+    `select u.user_id, u.docket_number, u.case_stage, ct.name as case_type_name,
+            ir.accused_status, ir.investigation_progress, ir.chargesheet_status, ir.threat_alerted_at, ir.investigation_complete_at
+     from users u
+     join case_types ct on ct.case_type_id = u.case_type_id
+     left join investigation_records ir on ir.user_id = u.user_id
+     where u.station_id = $1 ${stageFilter}
+     order by u.case_stage, u.docket_number`,
+    [stationId]
+  );
+
+  const sosCounts = await getSosEventCounts(rows.map((r) => r.user_id), 7);
+
+  return ok(res, {
+    stationAssigned: true,
+    cases: rows.map((r) => ({
+      userId: r.user_id,
+      docketNumber: r.docket_number,
+      caseTypeName: r.case_type_name,
+      caseStage: r.case_stage,
+      accusedStatus: r.accused_status || null,
+      investigationProgress: r.investigation_progress || null,
+      chargesheetStatus: r.chargesheet_status || 'Not Filed',
+      threatAlertedAt: r.threat_alerted_at || null,
+      investigationCompleteAt: r.investigation_complete_at || null,
+      threatTier: computeThreatTier({
+        accusedStatus: r.accused_status || null,
+        caseTypeName: r.case_type_name,
+        sosEventCount7d: sosCounts[r.user_id] || 0,
+      }),
+    })),
+  });
+});
+
+async function loadOwnCase(userId, req, res) {
+  const stationId = getOwnStationId(req);
+  if (!stationId) {
+    fail(res, 'You are not yet assigned to a police station.', 403);
+    return null;
+  }
+  const { rows } = await pool.query(
+    `select u.user_id, u.docket_number, u.case_stage, u.station_id, ct.name as case_type_name,
+            ir.investigation_id, ir.accused_status, ir.investigation_progress, ir.chargesheet_status,
+            ir.chargesheet_filed_at, ir.threat_alerted_at, ir.investigation_complete_at,
+            ir.fir_document_path, ir.chargesheet_document_path
+     from users u
+     join case_types ct on ct.case_type_id = u.case_type_id
+     left join investigation_records ir on ir.user_id = u.user_id
+     where u.user_id = $1`,
+    [userId]
+  );
+  const row = rows[0];
+  if (!row || row.station_id !== stationId) {
+    fail(res, 'Case not found', 404);
+    return null;
+  }
+  return row;
+}
+
+router.get('/cases/:userId', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+
+  const { rows: notes } = await pool.query(
+    `select note_id, note_text, authored_by, created_at from case_notes
+     where user_id = $1 and official_id = $2
+     order by created_at desc`,
+    [c.user_id, req.auth.officialId]
+  );
+
+  const sosEventCount7d = await getSosEventCount(c.user_id, 7);
+
+  // migration_037 - fresh short-lived signed URLs per read (the stored
+  // value is a storage path, never a URL). Same pattern as
+  // interventionRequestReview.js's own proof-document retrieval.
+  const signDocument = async (path) => {
+    if (!path) return null;
+    const { data, error } = await supabase.storage.from('case-documents').createSignedUrl(path, 3600);
+    return error ? null : data.signedUrl;
+  };
+  const [firDocumentUrl, chargesheetDocumentUrl] = await Promise.all([
+    signDocument(c.fir_document_path),
+    signDocument(c.chargesheet_document_path),
+  ]);
+
+  return ok(res, {
+    userId: c.user_id,
+    docketNumber: c.docket_number,
+    caseTypeName: c.case_type_name,
+    caseStage: c.case_stage,
+    accusedStatus: c.accused_status || null,
+    investigationProgress: c.investigation_progress || null,
+    chargesheetStatus: c.chargesheet_status || 'Not Filed',
+    chargesheetFiledAt: c.chargesheet_filed_at || null,
+    threatAlertedAt: c.threat_alerted_at || null,
+    investigationCompleteAt: c.investigation_complete_at || null,
+    firDocumentUrl,
+    chargesheetDocumentUrl,
+    sosEventCount7d,
+    threatTier: computeThreatTier({ accusedStatus: c.accused_status || null, caseTypeName: c.case_type_name, sosEventCount7d }),
+    notes: notes.map((n) => ({ noteId: n.note_id, noteText: n.note_text, authoredBy: n.authored_by, createdAt: n.created_at })),
+  });
+});
+
+// One investigation_records row per case (unique on user_id) - upserted
+// rather than assumed to already exist, since a case newly assigned to this
+// station has none yet.
+async function upsertInvestigationRecord(userId, officialId, patch) {
+  const { data, error } = await supabase
+    .from('investigation_records')
+    .upsert(
+      { user_id: userId, updated_by: officialId, updated_at: new Date().toISOString(), ...patch },
+      { onConflict: 'user_id' }
+    )
+    .select('investigation_id')
+    .single();
+  return { data, error };
+}
+
+// Sets Accused Status - the real signal Threat Tier is computed from on
+// every subsequent read (core/services/threatAssessment.js). Not stored as
+// a tier itself - the tier also depends on sos_events, which changes
+// independently, so it's always computed fresh.
+router.patch('/cases/:userId/accused-status', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+
+  const { accusedStatus } = req.body;
+  if (!ACCUSED_STATUSES.includes(accusedStatus)) {
+    return fail(res, `accusedStatus must be one of: ${ACCUSED_STATUSES.join(', ')}`, 400);
+  }
+
+  const { error } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { accused_status: accusedStatus });
+  if (error) return fail(res, `Could not update accused status: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
+
+  return ok(res, { userId: c.user_id, accusedStatus }, 'Accused status updated');
+});
+
+// Victim-safe progress summary - shown on the victim's own Case Details
+// (no confidential evidence; raw investigative detail stays in this
+// officer's own case_notes, never surfaced to the victim).
+router.patch('/cases/:userId/investigation-progress', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+
+  const { investigationProgress } = req.body;
+  if (!investigationProgress || !String(investigationProgress).trim()) return fail(res, 'investigationProgress is required', 400);
+
+  const { error } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { investigation_progress: String(investigationProgress).trim() });
+  if (error) return fail(res, `Could not update investigation progress: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
+
+  return ok(res, { userId: c.user_id }, 'Investigation progress updated');
+});
+
+// migration_034: no longer touches users.case_stage - case_stage is now
+// EXCLUSIVELY eCourt-authoritative (core/services/ecourtStageSync.js is the
+// only writer anywhere in the backend). This still records IO's own real
+// chargesheet_status/chargesheet_filed_at fact on investigation_records
+// (genuinely IO's to know and log), it just no longer advances the shared
+// case stage as a side effect - that transition now happens on its own
+// simulated eCourt schedule, independent of when IO happens to log this.
+// Idempotent - filing again once already Filed is a no-op error, not a
+// duplicate write.
+router.patch('/cases/:userId/chargesheet', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+  if (c.chargesheet_status === 'Filed') return fail(res, 'Chargesheet has already been marked as filed for this case.', 400);
+
+  const filedAt = new Date().toISOString();
+  const { error } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { chargesheet_status: 'Filed', chargesheet_filed_at: filedAt });
+  if (error) return fail(res, `Could not update chargesheet status: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
+
+  return ok(res, { userId: c.user_id, chargesheetStatus: 'Filed' }, 'Chargesheet marked as filed');
+});
+
+// Document Transparency (migration_037) - the FIR copy and the filed
+// chargesheet, uploaded as PDFs and bound to this case's own record, then
+// downloadable by the victim from their own Case Details (see
+// user.routes.js's GET /investigation-progress, which mints a fresh
+// short-lived signed URL per read - the stored value here is a storage
+// path, never a URL). Re-uploading replaces the previous file at the same
+// deterministic path rather than accumulating orphans, matching me.js's
+// own profile-photo upsert reasoning.
+const CASE_DOCUMENT_TYPES = {
+  fir: { column: 'fir_document_path', label: 'FIR copy' },
+  chargesheet: { column: 'chargesheet_document_path', label: 'Chargesheet' },
+};
+
+router.post('/cases/:userId/documents/:documentType', handleUpload(caseDocumentUpload.single('file')), async (req, res) => {
+  const meta = CASE_DOCUMENT_TYPES[req.params.documentType];
+  if (!meta) return fail(res, `documentType must be one of: ${Object.keys(CASE_DOCUMENT_TYPES).join(', ')}`, 400);
+
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+  if (!req.file) return fail(res, 'file is required (PDF)', 400);
+
+  const storagePath = `${c.user_id}/${req.params.documentType}-${crypto.randomUUID()}.pdf`;
+  const { error: uploadError } = await supabase.storage
+    .from('case-documents')
+    .upload(storagePath, req.file.buffer, { contentType: 'application/pdf', upsert: true });
+  if (uploadError) return fail(res, `Could not upload ${meta.label}: ${uploadError.message}`, 500);
+
+  const { error } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { [meta.column]: storagePath });
+  if (error) return fail(res, `Uploaded, but could not bind it to the case record: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
+
+  return ok(res, { userId: c.user_id, documentType: req.params.documentType }, `${meta.label} uploaded - the victim can now download it`, 201);
+});
+
+// A bookkeeping close-out distinct from the chargesheet/case_stage
+// transition above - lets this officer explicitly declare their own
+// involvement complete (used to filter the Active/Handed Off tabs),
+// without implying the case itself is closed (that stays Data Operator's
+// sole action, unrelated to this).
+router.patch('/cases/:userId/investigation-complete', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+  if (c.investigation_complete_at) return fail(res, 'Investigation has already been marked complete for this case.', 400);
+
+  const { error } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { investigation_complete_at: new Date().toISOString() });
+  if (error) return fail(res, `Could not mark investigation complete: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'update', entityType: 'investigation_record', entityId: c.user_id });
+
+  return ok(res, { userId: c.user_id }, 'Investigation marked complete');
+});
+
+// "Threat detected -> referred to the district's Protection Officer" -
+// creates a real, actionable referral (same self-referral-style creation
+// used by urgent-help's own PO alert), not just a passive notification.
+// Reuses an existing OPEN referral rather than creating a duplicate.
+//
+// Framed as a REFERRAL, not an order, deliberately. Real grounding: under
+// the Witness Protection Scheme, 2018 an Investigating Officer genuinely may
+// move a protection application, and the Threat Analysis Report is prepared
+// by an ACP/DySP-rank officer - which is this role. What the IO cannot do is
+// direct the protective response: measures are authorised by a Competent
+// Authority and implemented by police. The Protection Officer accordingly
+// runs its own Threat Tier assessment on the far side and can override it -
+// nothing here binds them.
+router.post('/cases/:userId/alert-protection-officer', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+
+  const { reason } = req.body;
+  if (!reason || !String(reason).trim()) return fail(res, 'reason is required - kindly describe the detected threat', 400);
+
+  const { rows: existingReferralRows } = await pool.query(
+    `select referral_id, metadata from agency_referrals where user_id = $1 and referred_to_role = 'Protection Officer' and status = 'Open' limit 1`,
+    [c.user_id]
+  );
+  const existingReferral = existingReferralRows[0];
+
+  if (existingReferral) {
+    await supabase.from('agency_referral_notes').insert({
+      referral_id: existingReferral.referral_id,
+      author_official_id: req.auth.officialId,
+      note_text: `Investigating Officer: ${String(reason).trim()}`,
+    });
+  } else {
+    const { error: insertError } = await supabase.from('agency_referrals').insert({
+      user_id: c.user_id,
+      referred_to_role: 'Protection Officer',
+      referred_by_official_id: req.auth.officialId,
+      reason: String(reason).trim(),
+      // originType drives the Protection Registry's priority sort - see
+      // protectionOfficer.routes.js's GET /referrals.
+      metadata: { originType: 'io_threat_alert' },
+    });
+    if (insertError) return fail(res, `Could not alert Protection Officer: ${insertError.message}`, 500);
+  }
+
+  const { error: updateError } = await upsertInvestigationRecord(c.user_id, req.auth.officialId, { threat_alerted_at: new Date().toISOString() });
+  if (updateError) return fail(res, `Alert sent but could not update the investigation record: ${updateError.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'create', entityType: 'agency_referral', entityId: c.user_id });
+
+  return ok(res, { userId: c.user_id }, 'Protection Officer alerted', 201);
+});
+
+// Every task raised on this case so far, across ANY role - not referral-
+// scoped like every other new-role file (IO has no referral concept), just
+// a direct t.user_id filter. Same case-level visibility principle District
+// Collector's cross-agency view already establishes as normal practice.
+router.get('/cases/:userId/tasks', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+
+  const { rows } = await pool.query(
+    `select t.task_id, t.assigned_to_role, t.action, t.due_at, t.status, t.completed_at,
+            t.auto_generated, t.created_at, o.full_name as created_by_name
+     from agency_tasks t
+     left join officials o on o.official_id = t.created_by_official_id
+     where t.user_id = $1
+     order by (t.due_at is null), t.due_at asc, t.created_at desc`,
+    [c.user_id]
+  );
+
+  return ok(res, {
+    tasks: rows.map((t) => ({
+      taskId: t.task_id,
+      assignedToRole: t.assigned_to_role,
+      action: t.action,
+      dueAt: t.due_at,
+      status: t.status,
+      completedAt: t.completed_at,
+      autoGenerated: t.auto_generated,
+      createdByName: t.created_by_name || 'System (auto-escalated)',
+      createdAt: t.created_at,
+      overdue: t.status === 'Pending' && !!t.due_at && new Date(t.due_at) < new Date(),
+    })),
+  });
+});
+
+router.post('/cases/:userId/notes', async (req, res) => {
+  const c = await loadOwnCase(req.params.userId, req, res);
+  if (!c) return;
+
+  const { noteText } = req.body;
+  if (!noteText || !String(noteText).trim()) return fail(res, 'noteText is required', 400);
+
+  const { data, error } = await supabase
+    .from('case_notes')
+    .insert({ user_id: c.user_id, official_id: req.auth.officialId, note_text: String(noteText).trim(), authored_by: 'manual' })
+    .select('note_id')
+    .single();
+  if (error) return fail(res, `Could not add note: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, userId: c.user_id, action: 'create', entityType: 'case_note', entityId: data.note_id });
+
+  return ok(res, { noteId: data.note_id }, 'Note added', 201);
+});
+
+// ===== Structured tasks (migration_030_agency_tasks.sql) - INBOUND ONLY =====
+// Investigating Officer has no statutory authority to raise cross-
+// departmental directives - real-world grounding: IO's own authority
+// (Rule 7, PoA Rules) is investigation-specific (arrest, custody,
+// chargesheet); directing another department is an executive/
+// administrative act, which is District Collector's function, not a police
+// investigator's. GET /tasks (a global list) and POST /tasks (outbound
+// creation) - which backed the old "My Tasks" page and "Assign Action
+// Item" card - have been removed entirely. A directive raised on THIS
+// case by another role (e.g. District Collector) is still visible via the
+// per-case GET /cases/:userId/tasks above, regardless of which role it
+// targets - and can be marked complete here if it targets Investigating
+// Officer. Other roles' own routes.js files keep their own POST /tasks,
+// which can still target 'Investigating Officer' as assignedToRole - this
+// cut is one-directional.
+router.patch('/tasks/:taskId/complete', async (req, res) => {
+  const { rows } = await pool.query(
+    'select task_id, status from agency_tasks where task_id = $1 and assigned_to_role = $2',
+    [req.params.taskId, ROLE_NAME]
+  );
+  const task = rows[0];
+  if (!task) return fail(res, 'Task not found', 404);
+  if (task.status === 'Completed') return fail(res, 'This task is already completed', 400);
+
+  const { error } = await supabase
+    .from('agency_tasks')
+    .update({ status: 'Completed', completed_at: new Date().toISOString() })
+    .eq('task_id', task.task_id);
+  if (error) return fail(res, `Could not complete task: ${error.message}`, 500);
+
+  await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_task', entityId: task.task_id });
+
+  return ok(res, { taskId: task.task_id, status: 'Completed' }, 'Task marked complete');
+});
+
+module.exports = router;

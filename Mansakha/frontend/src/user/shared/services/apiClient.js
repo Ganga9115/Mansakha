@@ -1,0 +1,77 @@
+// Thin fetch wrapper - attaches the JWT, unwraps the { success, data, message }
+// envelope from Build Prompt Section 7, and throws on failure so callers can just
+// await and try/catch instead of checking `.success` everywhere.
+import { Platform } from 'react-native';
+
+// Use the Mac's LAN IP when running on a physical Android device.
+// Use localhost when running on web/Mac.
+const API_BASE_URL =
+  Platform.OS === 'android'
+    ? process.env.EXPO_PUBLIC_API_LAN_URL
+    : process.env.EXPO_PUBLIC_API_BASE_URL;
+    console.log('Platform:', Platform.OS);
+console.log('API_BASE_URL:', API_BASE_URL);
+
+// const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:4000';
+
+async function request(path, { method = 'GET', body, token } = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const envelope = await res.json();
+  if (!envelope.success) {
+    const error = new Error(envelope.message || 'Request failed');
+    error.status = res.status;
+    throw error;
+  }
+  return envelope.data;
+}
+
+// Raw (non-envelope) GET for the CSV export route, which deliberately
+// bypasses {success,data,message} since it's a file download, not a JSON
+// API response - returns the Blob directly.
+async function downloadBlob(path, token) {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE_URL}${path}`, { headers });
+  if (!res.ok) throw new Error('Export failed');
+  return res.blob();
+}
+
+// multipart/form-data POST (e.g. voice message upload) - deliberately does
+// NOT set Content-Type itself so fetch can set the multipart boundary, but
+// otherwise follows the same envelope-unwrapping/error-throwing contract as
+// request() above so callers can treat it like any other apiClient method.
+async function uploadFile(path, formData, token) {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  const envelope = await res.json();
+  if (!envelope.success) {
+    const error = new Error(envelope.message || 'Request failed');
+    error.status = res.status;
+    throw error;
+  }
+  return envelope.data;
+}
+
+export const apiClient = {
+  get: (path, token) => request(path, { method: 'GET', token }),
+  post: (path, body, token) => request(path, { method: 'POST', body, token }),
+  patch: (path, body, token) => request(path, { method: 'PATCH', body, token }),
+  delete: (path, token) => request(path, { method: 'DELETE', token }),
+  downloadBlob,
+  uploadFile,
+};
