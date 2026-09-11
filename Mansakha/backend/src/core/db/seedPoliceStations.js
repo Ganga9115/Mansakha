@@ -1,4 +1,5 @@
 // Provisions IO and PO accounts for every police station in the jurisdictions table.
+// If a district has no police station, it will create one first.
 // ID Scheme (alphabetical by station name):
 //   IO-001, IO-002... for Investigating Officers
 //   PO-001, PO-002... for Protection Officers
@@ -26,11 +27,11 @@ function pad(n, width = 3) {
   return String(n).padStart(width, '0');
 }
 
-async function ensureOfficialWithRole(fullName, email, officialIdentifier, stationId, roleId) {
+async function ensureOfficialWithRole(fullName, email, officialIdentifier, stationId, jurisdictionId, roleId) {
   const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
   const { data: existing } = await supabase.from('officials')
-    .select('official_id').eq('email', email).maybeSingle();
+    .select('official_id').eq('official_identifier', officialIdentifier).maybeSingle();
 
   let officialId;
   if (existing) {
@@ -38,7 +39,7 @@ async function ensureOfficialWithRole(fullName, email, officialIdentifier, stati
     await supabase.from('officials').update({
       password_hash: passwordHash, full_name: fullName,
       must_change_password: false, staff_id: officialIdentifier,
-      official_identifier: officialIdentifier,
+      email: email,
     }).eq('official_id', officialId);
   } else {
     const { data, error } = await supabase.from('officials').insert({
@@ -49,13 +50,6 @@ async function ensureOfficialWithRole(fullName, email, officialIdentifier, stati
     if (error) throw new Error(`Insert failed for ${email}: ${error.message}`);
     officialId = data.official_id;
   }
-
-  // IO/PO are jurisdiction-scoped to the station's district
-  const { rows: stationRows } = await pool.query(
-    'select jurisdiction_id from police_stations where station_id = $1', [stationId]
-  );
-  const jurisdictionId = stationRows[0]?.jurisdiction_id;
-  if (!jurisdictionId) throw new Error(`No jurisdiction for station ${stationId}`);
 
   const { data: existingRole } = await supabase.from('official_roles')
     .select('official_role_id').eq('official_id', officialId)
@@ -81,47 +75,95 @@ async function main() {
   const poRole = roles.find((r) => r.role_name === 'Protection Officer');
   if (!ioRole || !poRole) throw new Error('IO or PO role not found in roles table');
 
-  // Load all police stations sorted alphabetically
-  const { rows: stations } = await pool.query(
-    'select station_id, name from police_stations where deleted_at is null order by name'
-  );
+  // Load all districts
+  const { rows: districts } = await pool.query('select jurisdiction_id, name, parent_id from jurisdictions where level = $1', ['district']);
+  
+  const { rows: states } = await pool.query('select jurisdiction_id, name from jurisdictions where level = $1', ['state']);
+  const stateCodeById = new Map();
+  states.forEach(s => {
+    let name = s.name.replace(/\s*\((UT|NCT)\)/gi, '').trim();
+    stateCodeById.set(s.jurisdiction_id, name.substring(0, 2).toLowerCase());
+  });
 
-  if (stations.length === 0) {
-    console.warn('No police stations found. Run seed:jurisdictions first or add stations via the admin UI.');
-    return;
+  // Ensure every district has at least one police station
+  console.log(`Ensuring police stations exist for ${districts.length} districts...`);
+  
+  const { rows: existingStations } = await pool.query('select station_id, name, jurisdiction_id from police_stations where deleted_at is null');
+  const stationsByDistrict = new Map();
+  for (const st of existingStations) {
+    if (!stationsByDistrict.has(st.jurisdiction_id)) stationsByDistrict.set(st.jurisdiction_id, []);
+    stationsByDistrict.get(st.jurisdiction_id).push(st);
   }
 
-  console.log(`Provisioning IO+PO accounts for ${stations.length} police stations...`);
+  const finalStations = [...existingStations];
+  for (const d of districts) {
+    if (!stationsByDistrict.has(d.jurisdiction_id)) {
+      const stateCode = stateCodeById.get(d.parent_id) || 'xx';
+      const psName = `${d.name} Sadar Police Station, ${stateCode.toUpperCase()}`;
+      const { rows: inserted } = await pool.query(
+        'INSERT INTO police_stations (name, jurisdiction_id) VALUES ($1, $2) RETURNING station_id, name, jurisdiction_id',
+        [psName, d.jurisdiction_id]
+      );
+      finalStations.push({ ...inserted[0], parent_id: d.parent_id });
+    } else {
+      for (const st of stationsByDistrict.get(d.jurisdiction_id)) {
+        st.parent_id = d.parent_id;
+      }
+    }
+  }
+
+  // Load all police stations sorted alphabetically
+  finalStations.sort((a, b) => a.name.localeCompare(b.name));
+
+  console.log(`Provisioning IO+PO accounts for ${finalStations.length} police stations...`);
 
   let ioCreated = 0, poCreated = 0;
-  for (let i = 0; i < stations.length; i++) {
-    const station = stations[i];
+  
+  // Concurrency
+  const CONCURRENCY = 10;
+  async function runWithConcurrency(items, limit, worker) {
+    const results = [];
+    let index = 0;
+    async function next() {
+      while (index < items.length) {
+        const i = index++;
+        results[i] = await worker(items[i], i);
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, next));
+    return results;
+  }
+
+  await runWithConcurrency(finalStations, CONCURRENCY, async (station, i) => {
     const slug = slugify(station.name);
+    const stateCode = stateCodeById.get(station.parent_id) || 'xx';
     const idx = pad(i + 1);
 
     const io = await ensureOfficialWithRole(
       `${station.name} Investigating Officer`,
-      `${slug}.io${DOMAIN}`,
+      `${slug}.io.${stateCode}${DOMAIN}`,
       `IO-${idx}`,
       station.station_id,
+      station.jurisdiction_id,
       ioRole.role_id,
     );
     const po = await ensureOfficialWithRole(
       `${station.name} Protection Officer`,
-      `${slug}.po${DOMAIN}`,
+      `${slug}.po.${stateCode}${DOMAIN}`,
       `PO-${idx}`,
       station.station_id,
+      station.jurisdiction_id,
       poRole.role_id,
     );
 
     if (io.created) ioCreated++;
     if (po.created) poCreated++;
-  }
+  });
 
   console.log(`\nDone. IO: ${ioCreated} created. PO: ${poCreated} created.`);
   console.log(`Password: ${PASSWORD}`);
-  if (stations[0]) {
-    const s = slugify(stations[0].name);
+  if (finalStations[0]) {
+    const s = slugify(finalStations[0].name);
     console.log(`\nFirst station IO: IO-001 / ${s}.io${DOMAIN}`);
     console.log(`First station PO: PO-001 / ${s}.po${DOMAIN}`);
   }

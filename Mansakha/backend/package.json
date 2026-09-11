@@ -12,7 +12,11 @@
     "seed:super-admin": "node src/core/db/seedSuperAdmin.js",
     "seed:dummy": "node src/core/db/seedDummyAccounts.js",
     "seed:demo": "node src/core/db/seedDemoData.js",
-    "seed:all-admins": "node src/core/db/seedAllAdmins.js"
+    "seed:all-admins": "node src/core/db/seedAllAdmins.js",
+    "seed:police-stations": "node src/core/db/seedPoliceStations.js",
+    "seed:coordinators": "node src/core/db/seedCoordinators.js",
+    "seed:rehab-officers": "node src/core/db/seedRehabOfficers.js",
+    "seed:cases": "node src/core/db/seedCases.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",

@@ -8,7 +8,7 @@ import { useToast } from '../../shared/context/ToastContext';
 export default function MinistryLogin() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -20,7 +20,7 @@ export default function MinistryLogin() {
   const passwordRef = useRef(null);
   const submitButtonRef = useRef(null);
 
-  const handleEmailKeyDown = (e) => {
+  const handleIdentifierKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       passwordRef.current?.focus();
@@ -38,7 +38,7 @@ export default function MinistryLogin() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await apiClient.post('/api/auth/ministry/login', { email, password });
+      const data = await apiClient.post('/api/auth/ministry/login', { identifier, password });
       setToken(data.token);
       navigate('/ministry/dashboard');
     } catch (err) {
@@ -102,19 +102,18 @@ export default function MinistryLogin() {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Staff ID or Email Address</label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <User className="h-5 w-5 text-gray-400" />
                   </div>
                   <input
-                    type="email"
-                    placeholder="Email Address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={handleEmailKeyDown}
+                    type="text"
+                    value={identifier}
+                    onChange={(e) => setIdentifier(e.target.value)}
+                    onKeyDown={handleIdentifierKeyDown}
                     required
-                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 transition-colors focus:outline-none"
                   />
                 </div>
               </div>
@@ -128,12 +127,11 @@ export default function MinistryLogin() {
                   <input
                     ref={passwordRef}
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handlePasswordKeyDown}
                     required
-                    className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                    className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 transition-colors focus:outline-none"
                   />
                   <button
                     type="button"

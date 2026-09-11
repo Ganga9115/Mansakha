@@ -11,10 +11,13 @@ const router = express.Router();
 // Section 3 ("do not merge these into one login screen"). Ministry accounts are
 // seeded/manually provisioned, not created through any signup flow.
 router.post('/login', staffLoginLimiter, async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return fail(res, 'email and password are required', 400);
+  // migration_046: accept 'identifier' (email or official_identifier like SUP-001)
+  // with 'email' kept as a back-compat alias so existing callers still work.
+  const { identifier, email, password } = req.body;
+  const loginId = (identifier || email || '').trim();
+  if (!loginId || !password) return fail(res, 'identifier and password are required', 400);
 
-  const match = await findOfficialForLogin(email, ['Ministry']);
+  const match = await findOfficialForLogin(loginId, ['Ministry']);
   if (!match) return fail(res, 'Invalid credentials', 401);
 
   const passwordOk = await verifyPassword(password, match.official.password_hash);

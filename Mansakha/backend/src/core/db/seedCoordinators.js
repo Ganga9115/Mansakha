@@ -1,8 +1,11 @@
-// Provisions Rehabilitation Providers and Rehabilitation Officer accounts.
-// ID scheme: RO-001, RO-002... (alphabetical by district name)
-// Email: <provider_slug>.ro@mansakha.gov.in
+// Provisions Coordinator accounts (DWO, DLSA, SPP).
+// ID schemes:
+//   District Welfare Officer: DWO-001...
+//   DLSA Coordinator:         DLSA-001...
+//   Special Public Prosecutor: SPP-001...
+// Email: <role_slug>.<district_slug>@mansakha.gov.in
 // Password: Mansakha@2026
-// Idempotent - safe to re-run. Usage: node src/core/db/seedRehabOfficers.js
+// Idempotent - safe to re-run. Usage: node src/core/db/seedCoordinators.js
 
 require('dotenv').config();
 const bcrypt = require('bcrypt');
@@ -19,7 +22,7 @@ function pad(n, width = 3) {
   return String(n).padStart(width, '0');
 }
 
-async function ensureOfficial(fullName, email, officialIdentifier, jurisdictionId, roleId, providerId) {
+async function ensureOfficial(fullName, email, officialIdentifier, jurisdictionId, roleId, roleName) {
   const passwordHash = await bcrypt.hash(PASSWORD, 12);
 
   const { data: existing } = await supabase.from('officials').select('official_id').eq('official_identifier', officialIdentifier).maybeSingle();
@@ -49,43 +52,37 @@ async function ensureOfficial(fullName, email, officialIdentifier, jurisdictionI
     const { error } = await supabase.from('official_roles').insert({
       official_id: officialId, role_id: roleId, jurisdiction_id: jurisdictionId,
     });
-    if (error) throw new Error(`Could not assign Rehabilitation Officer role to ${email}: ${error.message}`);
+    if (error) throw new Error(`Could not assign ${roleName} role to ${email}: ${error.message}`);
   }
-
-  // Assign to the specific rehab provider (via rehabilitation_officers table if it exists, but typically officers are just staff linked to jurisdictions in Mansakha unless specified otherwise. Let's check schema. Rehabilitation officers are actually not linked to providers via a table right now in the schema - they are just staff with 'Rehabilitation Officer' role for the jurisdiction).
-}
-
-async function ensureProvider(name, type, jurisdictionId) {
-  const { data: existing } = await supabase.from('rehabilitation_providers')
-    .select('provider_id').eq('name', name).eq('jurisdiction_id', jurisdictionId).maybeSingle();
-    
-  if (existing) return existing.provider_id;
-  
-  const { data, error } = await supabase.from('rehabilitation_providers').insert({
-    name, provider_type: type, jurisdiction_id: jurisdictionId,
-    contact_info: '18001234567, Main District Road'
-  }).select('provider_id').single();
-  
-  if (error) throw new Error(`Could not create provider ${name}: ${error.message}`);
-  return data.provider_id;
 }
 
 async function main() {
-  const { data: role } = await supabase.from('roles').select('role_id').eq('role_name', 'Rehabilitation Officer').single();
-  if (!role) throw new Error('Rehabilitation Officer role not found');
+  const { data: roles, error: rolesError } = await supabase.from('roles').select('role_id, role_name');
+  if (rolesError) throw new Error('Could not fetch roles');
+
+  const dwoRole = roles.find(r => r.role_name === 'District Welfare Officer');
+  const dlsaRole = roles.find(r => r.role_name === 'DLSA Coordinator');
+  const sppRole = roles.find(r => r.role_name === 'Special Public Prosecutor');
+
+  if (!dwoRole || !dlsaRole || !sppRole) {
+    throw new Error('Could not find one or more coordinator roles in the DB.');
+  }
 
   const { data: districts } = await supabase.from('jurisdictions').select('jurisdiction_id, name, parent_id').eq('level', 'district').order('name');
+  
   const sortedDistricts = [...districts].sort((a, b) => a.name.localeCompare(b.name));
 
   const { data: states } = await supabase.from('jurisdictions').select('jurisdiction_id, name').eq('level', 'state');
   const stateCodeById = new Map();
   states.forEach(s => {
     let name = s.name.replace(/\s*\((UT|NCT)\)/gi, '').trim();
+    // basic abbreviation if missing
     stateCodeById.set(s.jurisdiction_id, name.substring(0, 2).toLowerCase());
   });
 
-  console.log(`Provisioning Rehabilitation Providers and Officers for ${sortedDistricts.length} districts...`);
+  console.log(`Provisioning Coordinators for ${sortedDistricts.length} districts...`);
 
+  // Simple chunking for concurrency
   const CONCURRENCY = 10;
   
   async function runWithConcurrency(items, limit, worker) {
@@ -106,25 +103,43 @@ async function main() {
     const stateCode = stateCodeById.get(d.parent_id) || 'xx';
     const idSuffix = pad(i + 1);
     
-    // 1. Create a primary rehab center for the district
-    const providerName = `${d.name} District Rehabilitation Center, ${stateCode.toUpperCase()}`;
-    const providerId = await ensureProvider(providerName, 'NGO', d.jurisdiction_id);
-    
-    // 2. Create the RO for this center/district
+    // 1. DWO
     await ensureOfficial(
-      `${d.name} Center RO`,
-      `${slug}.ro.${stateCode}${DOMAIN}`,
-      `RO-${idSuffix}`,
+      `${d.name} District Welfare Officer`,
+      `dwo.${slug}.${stateCode}${DOMAIN}`,
+      `DWO-${idSuffix}`,
       d.jurisdiction_id,
-      role.role_id,
-      providerId
+      dwoRole.role_id,
+      'District Welfare Officer'
+    );
+    
+    // 2. DLSA
+    await ensureOfficial(
+      `${d.name} DLSA Coordinator`,
+      `dlsa.${slug}.${stateCode}${DOMAIN}`,
+      `DLSA-${idSuffix}`,
+      d.jurisdiction_id,
+      dlsaRole.role_id,
+      'DLSA Coordinator'
+    );
+    
+    // 3. SPP
+    await ensureOfficial(
+      `${d.name} Special Public Prosecutor`,
+      `spp.${slug}.${stateCode}${DOMAIN}`,
+      `SPP-${idSuffix}`,
+      d.jurisdiction_id,
+      sppRole.role_id,
+      'Special Public Prosecutor'
     );
   });
 
   console.log('\nDone.');
   console.log(`Password for all: ${PASSWORD}`);
   console.log('\nSample IDs:');
-  console.log(`  RO-001  / ${slugify(sortedDistricts[0].name)}.ro@mansakha.gov.in`);
+  console.log(`  DWO:  DWO-001  / dwo.${slugify(sortedDistricts[0].name)}@mansakha.gov.in`);
+  console.log(`  DLSA: DLSA-001 / dlsa.${slugify(sortedDistricts[0].name)}@mansakha.gov.in`);
+  console.log(`  SPP:  SPP-001  / spp.${slugify(sortedDistricts[0].name)}@mansakha.gov.in`);
 }
 
 main().catch((err) => { console.error('Seed failed:', err.message); process.exit(1); });

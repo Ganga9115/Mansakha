@@ -167,7 +167,7 @@ async function ensureDemoUser(config) {
       jurisdiction_id: config.jurisdictionId,
       case_stage: config.caseStage,
       preferred_language: config.languageId || null,
-      auth_method: 'email_otp',
+      auth_method: 'district_admin',
     })
     .select('user_id')
     .single();
@@ -382,7 +382,7 @@ function buildUserConfigs(maps, districts) {
     // ----- Critical (3) -----
     { docketNumber: 'DEMO-0013', fullName: 'Meena Salunkhe', email: 'meena.salunkhe@example.com', caseTypeId: CT['Witness Facing Intimidation or Threats'], jurisdictionId: districts.mysuru, caseStage: 'Investigation', channelId: CH['Helpline Follow-Up'], languageId: LANG.te, checkins: withDaysAgo([CRITICAL[0], CRITICAL[1]], [14, 2]) },
     { docketNumber: 'DEMO-0014', fullName: 'Ravi Bhosale', email: 'ravi.bhosale@example.com', caseTypeId: CT['Family Affected by Caste-Based Violence'], jurisdictionId: districts.lucknow, caseStage: 'Trial', channelId: CH.SMS, languageId: LANG.ta, checkins: withDaysAgo([CRITICAL[1], CRITICAL[2]], [16, 1]) },
-    { docketNumber: 'DEMO-0015', fullName: 'Sangeeta Kale', email: 'sangeeta.kale@example.com', caseTypeId: CT['Gang Rape'], jurisdictionId: districts.varanasi, caseStage: 'Rehabilitation', channelId: CH.Chatbot, languageId: LANG.hi, checkins: withDaysAgo([CRITICAL[2], CRITICAL[3]], [19, 0]) },
+    { docketNumber: 'DEMO-0015', fullName: 'Sangeeta Kale', email: 'sangeeta.kale@example.com', caseTypeId: CT['Gang Rape'], jurisdictionId: districts.varanasi, caseStage: 'Compensation', channelId: CH.Chatbot, languageId: LANG.hi, checkins: withDaysAgo([CRITICAL[2], CRITICAL[3]], [19, 0]) },
 
     // ----- Escalating trend (1) -----
     { docketNumber: 'DEMO-0016', fullName: 'Ajay Gaikwad', email: 'ajay.gaikwad@example.com', caseTypeId: CT['Witness Facing Intimidation or Threats'], jurisdictionId: districts.pune, caseStage: 'Investigation', channelId: CH['Web Portal'], languageId: LANG.en, isEscalating: true, checkins: withDaysAgo(ESCALATING_BASE, [30, 14, 2]) },
