@@ -228,7 +228,7 @@ router.get('/dashboard', async (req, res) => {
   // migration_045 - one rehabilitation answer for the whole family
   // (rehabilitationStatus.js), not per-docket - so every case in
   // linkedCases reports the SAME opted-in/declined facts.
-  const rehabStatus = await rehabilitationStatus.getRehabilitationStatus(anchorUserId);
+  const rehabStatus = await getRehabilitationStatus(anchorUserId);
 
   const linkedCases = (caseFamily || []).map((c) => ({
     userId: c.user_id,
