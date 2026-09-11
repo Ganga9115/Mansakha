@@ -19,13 +19,15 @@ import UserShell from './UserShell';
 //      decision (rehabilitationClosurePendingAck) - the special flow takes
 //      priority over everything else, since it can only ever apply to a
 //      case that was already isolated into Rehabilitation.
-//   2. Any case currently in the Rehabilitation stage that hasn't been
-//      answered yet (not opted in, not declined) - the mandatory decision
-//      gate.
+//   2. migration_045: Any case currently in the 'Compensation' stage
+//      (Rehabilitation is no longer a stage - it's a person-level opt-in
+//      fact triggered when a case first reaches Compensation) that hasn't
+//      been answered yet (not opted in, not declined) - the mandatory
+//      decision gate.
 //   3. Otherwise, UserShell renders normally. Investigation/Trial/
-//      Compensation/Case Closed cases (and any Rehabilitation-stage case
-//      the victim already answered either way) never force a gate here -
-//      they continue on the existing, non-isolated shared login/context.
+//      Compensation cases (and any Compensation-stage case the victim
+//      already answered either way) never force a gate here - they
+//      continue on the existing, non-isolated shared login/context.
 // No separate "already asked" state is needed beyond the family's own
 // flags: each mutation below invalidates the dashboard query this gate
 // itself reads, so the very next render naturally reflects the answer.
@@ -41,8 +43,10 @@ export default function UserGate() {
   const dashboardQuery = useUserDashboard();
   const linkedCases = dashboardQuery.data?.linkedCases || [];
   const pendingClosureCase = linkedCases.find((c) => c.rehabilitationClosurePendingAck);
+  // migration_045: gate on Compensation (not the old Rehabilitation stage);
+  // rehabilitation is now a person-level opt-in fact triggered at Compensation.
   const pendingDecisionCase = linkedCases.find(
-    (c) => c.caseStage === 'Rehabilitation' && !c.rehabilitationOptedIn && !c.rehabilitationDeclined
+    (c) => c.caseStage === 'Compensation' && !c.rehabilitationOptedIn && !c.rehabilitationDeclined
   );
 
   // The decision gate needs the provider list for whichever case is

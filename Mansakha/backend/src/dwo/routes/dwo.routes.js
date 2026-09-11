@@ -13,6 +13,8 @@ const {
   withLiveCompensationView,
 } = require('../../core/services/compensationSchedule');
 const { mountInterventionReviewRoutes } = require('../../core/services/interventionRequestReview');
+const rehabilitationStatus = require('../../core/services/rehabilitationStatus');
+const { checkAndCompleteCasesForPerson } = require('../../core/services/caseCompletion');
 
 const router = express.Router();
 
@@ -164,13 +166,12 @@ router.get('/referrals/:referralId', async (req, res) => {
         updatedAt: referral.bank_details_updated_at,
       }
       : null,
-    // migration_034: Rehabilitation is now a genuine mid-case eCourt stage
-    // (Investigation -> Trial -> Rehabilitation -> Compensation -> Case
-    // Closed), not a post-closure phase - exposed so the Assign Task form
-    // can hide that option as a target until the case actually reaches it,
-    // rather than offering a directive the officer has no case access to
-    // yet.
-    rehabilitationEligible: referral.case_stage === 'Rehabilitation',
+    // migration_045: Rehabilitation is a person-level opt-in fact triggered
+    // once a case reaches Compensation, not a stage of its own any more -
+    // exposed so the Assign Task form can hide that option as a target
+    // until the case actually reaches that point, rather than offering a
+    // directive the officer has no case access to yet.
+    rehabilitationEligible: referral.case_stage === 'Compensation',
   });
 });
 
@@ -334,9 +335,26 @@ router.patch('/referrals/:referralId/compensation/stages/:stageIndex/mark-paid',
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'update', entityType: 'agency_referral', entityId: referral.referral_id });
 
+  // migration_045 - "user credentials should expire" once THIS case's
+  // compensation is fully paid AND the person's (shared) rehabilitation
+  // question is resolved. Re-checked here every time a stage is marked
+  // paid (not just the notionally-final one) since stages can in principle
+  // be marked out of order-ish and this is cheap to just always re-run.
+  let caseCompletion = null;
+  try {
+    caseCompletion = await checkAndCompleteCasesForPerson(referral.user_id);
+  } catch (err) {
+    console.error('mark-paid: case completion check failed', err.message, { referralId: referral.referral_id });
+  }
+
   return ok(
     res,
-    { referralId: referral.referral_id, compensation: withLiveCompensationView(nextMetadata.compensation, referral.case_stage) },
+    {
+      referralId: referral.referral_id,
+      compensation: withLiveCompensationView(nextMetadata.compensation, referral.case_stage),
+      caseCompleted: caseCompletion?.newlyCompleted?.includes(referral.user_id) || false,
+      credentialsExpired: caseCompletion?.anchorDeactivated || false,
+    },
     'Payment stage marked as paid'
   );
 });
@@ -416,15 +434,14 @@ router.patch('/referrals/:referralId/resolve', async (req, res) => {
 // Hand-off to Rehabilitation Officer once immediate relief is settled - same
 // mechanism as dlsa.routes.js's mark-trial-ready (a referral is scoped to
 // one role, so this creates a NEW referral for Rehabilitation Officer and
-// resolves this one). migration_034: Rehabilitation is now a genuine
-// mid-case eCourt stage, not a post-closure phase - gated on the case
-// actually being at that stage, same rule the victim's own opt-in route
-// enforces (user.routes.js's POST /rehabilitation-opt-in). Also sets
-// rehabilitation_opted_in_at on the case, exactly like the victim's own
-// opt-in does - without this, an officer-initiated hand-off would create a
-// referral but never mark the case as opted in, so it would never actually
-// get isolated into its own Rehabilitation context, and the special
-// post-closure continuation popup would never arm for it later.
+// resolves this one). migration_045: Rehabilitation is a person-level
+// opt-in fact triggered once a case reaches Compensation, not a stage of
+// its own - gated on the case actually being there, same rule the victim's
+// own opt-in route enforces (user.routes.js's POST /rehabilitation-opt-in).
+// Also opts the PERSON in via rehabilitationStatus.js, exactly like the
+// victim's own opt-in does - without this, an officer-initiated hand-off
+// would create a referral but never record the opt-in, so
+// rehabilitation-eligibility would keep offering the same decision again.
 router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) => {
   const referral = await loadOwnReferral(req.params.referralId, res);
   if (!referral) return;
@@ -438,9 +455,9 @@ router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) =
   const { providerId } = req.body;
   if (!providerId) return fail(res, 'providerId is required to hand off to Rehabilitation Officer', 400);
 
-  const { rows: caseRows } = await pool.query('select case_stage, rehabilitation_opted_in_at from users where user_id = $1', [referral.user_id]);
-  if (!caseRows[0] || caseRows[0].case_stage !== 'Rehabilitation') {
-    return fail(res, 'Rehabilitation hand-off is only available once the case reaches the Rehabilitation stage.', 400);
+  const { rows: caseRows } = await pool.query('select case_stage from users where user_id = $1', [referral.user_id]);
+  if (!caseRows[0] || caseRows[0].case_stage !== 'Compensation') {
+    return fail(res, 'Rehabilitation hand-off is only available once the case reaches the Compensation stage.', 400);
   }
 
   const { rows: providerRows } = await pool.query(
@@ -463,15 +480,13 @@ router.post('/referrals/:referralId/hand-off-rehabilitation', async (req, res) =
     .single();
   if (insertError) return fail(res, `Could not hand off to rehabilitation: ${insertError.message}`, 500);
 
-  // Only set once - a case already opted in (e.g. the victim opted in
-  // themselves earlier) must not have its original opt-in timestamp
-  // overwritten.
-  if (!caseRows[0].rehabilitation_opted_in_at) {
-    const { error: optInError } = await supabase
-      .from('users')
-      .update({ rehabilitation_opted_in_at: new Date().toISOString() })
-      .eq('user_id', referral.user_id);
-    if (optInError) console.error('hand-off-rehabilitation: could not set rehabilitation_opted_in_at', optInError.message);
+  // Only takes effect once - a person already opted in or declined (e.g.
+  // the victim answered themselves earlier, on this case or another of
+  // their own) keeps their original answer.
+  try {
+    await rehabilitationStatus.optIn(referral.user_id, provider.provider_id);
+  } catch (err) {
+    console.error('hand-off-rehabilitation: could not record opt-in', err.message);
   }
 
   const { error: resolveError } = await supabase

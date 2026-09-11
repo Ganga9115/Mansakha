@@ -6,6 +6,7 @@ const { signToken } = require('../../core/utils/jwt');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { verifyToken } = require('../../core/middleware/verifyToken');
 const { userLoginLimiter, gpsLookupLimiter } = require('../../core/middleware/rateLimiter');
+const { getRehabilitationStatus } = require('../../core/services/rehabilitationStatus');
 
 const router = express.Router();
 
@@ -45,8 +46,7 @@ router.post('/login', userLoginLimiter, async (req, res) => {
   // either way, not a tradeoff.
   const { rows } = await pool.query(
     `select u.user_id, u.password_hash, u.must_change_password, u.status, u.linked_to_user_id,
-            u.case_stage, u.rehabilitation_opted_in_at, u.rehabilitation_closure_pending_ack,
-            u.rehabilitation_continued_after_closure,
+            u.case_stage, u.case_completed_at,
             anchor.password_hash as anchor_password_hash, anchor.status as anchor_status
      from users u
      left join users anchor on anchor.user_id = u.linked_to_user_id
@@ -101,31 +101,45 @@ router.post('/login', userLoginLimiter, async (req, res) => {
     return fail(res, 'This account has been deactivated. Please contact your assigned counsellor or administrator.', 403);
   }
 
-  // migration_034: once eCourt closes THIS SPECIFIC docket, it stops being
-  // usable as a login credential - "the closed docket must be invalidated
-  // for application access" - UNLESS this is exactly the special case a
-  // victim who was already opted into Rehabilitation gets: they still need
-  // to be able to log in via this docket, either to see the "your case has
-  // been closed - continue Rehabilitation?" popup for the first time
-  // (closure_pending_ack still true), or to keep using the Rehabilitation
-  // context they already said "yes" to (continued_after_closure true).
-  // Once they've explicitly said "No" to that popup, neither flag is true
-  // any more and this docket goes back to being an ordinary closed case -
-  // blocked here exactly like one that never opted into Rehabilitation at
-  // all. A person with other still-open cases simply logs in with one of
-  // THOSE docket numbers instead (same shared password across the whole
-  // family - see POST /change-password below), which still works normally.
-  const stillHasRehabilitationAccess = !!user.rehabilitation_opted_in_at
-    && (user.rehabilitation_closure_pending_ack || user.rehabilitation_continued_after_closure);
-  if (user.case_stage === 'Case Closed' && !stillHasRehabilitationAccess) {
-    console.log('Login blocked - closed docket with no rehabilitation continuation:', user.user_id);
-    return fail(res, 'This case has been closed. If you have another active case, kindly log in using that docket number instead.', 403);
+  // migration_045: once THIS SPECIFIC docket's compensation is fully paid
+  // AND the person's (shared) rehabilitation question is resolved
+  // (case_completed_at - see caseCompletion.js), it stops being usable as a
+  // login credential. Unlike the old model there is no "continue
+  // Rehabilitation?" exception any more - completion is now unconditional,
+  // not something a victim is asked to override. A person with other
+  // still-open cases simply logs in with one of THOSE docket numbers
+  // instead (same shared password across the whole family - see
+  // POST /change-password below), which still works normally. If every
+  // case under this person is complete, checkAndCompleteCasesForPerson
+  // already deactivated the anchor itself, caught by the status check above.
+  if (user.case_completed_at) {
+    console.log('Login blocked - this docket has been completed:', user.user_id);
+    return fail(res, 'This case has been completed. If you have another active case, kindly log in using that docket number instead.', 403);
   }
 
   console.log('User login successful for:', anchorUserId, user.linked_to_user_id ? `(via linked docket ${user.user_id})` : '');
 
   const token = signToken({ type: 'user', userId: anchorUserId });
-  return ok(res, { token, mustChangePassword: user.must_change_password });
+
+  // migration_045: tell the client whether the rehab YES/NO popup needs to
+  // show on first load. A case that just advanced to Compensation AND has no
+  // rehabilitation_status row yet (never asked/answered) needs the popup.
+  // Computed here at login so the mobile app doesn't need a second round-trip
+  // before showing the home screen; re-evaluated on every login since the
+  // user's stage or decision may have changed between sessions.
+  let rehabDecisionRequired = false;
+  if (user.case_stage === 'Compensation') {
+    try {
+      const rehabStatus = await getRehabilitationStatus(user.user_id);
+      rehabDecisionRequired = !rehabStatus.optedInAt && !rehabStatus.declinedAt;
+    } catch (err) {
+      // Non-fatal - worst case the popup won't show; the eligibility endpoint
+      // will catch it on next open.
+      console.warn('Login: could not check rehab status for popup flag:', err.message);
+    }
+  }
+
+  return ok(res, { token, mustChangePassword: user.must_change_password, rehabDecisionRequired });
 });
 
 // Re-added per explicit request (was removed when the login model dropped

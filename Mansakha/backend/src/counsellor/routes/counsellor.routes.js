@@ -137,7 +137,7 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
          select risk_level_id from distress_scores where user_id = coalesce(u.linked_to_user_id, u.user_id) order by computed_at desc limit 1
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-       where u.assigned_counsellor_id = $1 and u.case_stage not in ('Case Closed', 'Rehabilitation') and u.status = 'active'`,
+       where u.assigned_counsellor_id = $1 and u.case_completed_at is null and u.status = 'active'`,
       [req.auth.officialId]
     ),
     // Feeds predictEscalationRiskBatch below - the forward-looking sibling of
@@ -152,7 +152,7 @@ router.get('/dashboard', requireRole(['Counsellor']), generalApiLimiter, async (
        from distress_scores ds
        join users u on coalesce(u.linked_to_user_id, u.user_id) = ds.user_id
        where u.assigned_counsellor_id = $1
-         and u.case_stage not in ('Case Closed', 'Rehabilitation') and u.status = 'active'
+         and u.case_completed_at is null and u.status = 'active'
          and ds.computed_at > now() - ($2 || ' days')::interval`,
       [req.auth.officialId, PREDICTION_LOOKBACK_DAYS]
     ),
@@ -295,7 +295,7 @@ router.get('/my-users', requireRole(['Counsellor']), generalApiLimiter, async (r
        ) ds on true
        left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
        left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
-       where u.assigned_counsellor_id = $1 and u.case_stage not in ('Case Closed', 'Rehabilitation') and u.status = 'active'`,
+       where u.assigned_counsellor_id = $1 and u.case_completed_at is null and u.status = 'active'`,
       [req.auth.officialId]
     ),
     pool.query(

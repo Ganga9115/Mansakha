@@ -9,6 +9,7 @@ const { requireJurisdiction } = require('../../core/middleware/requireJurisdicti
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { createUser, updateUser, ProvisioningError } = require('../../user/services/userProvisioning');
+const rehabilitationStatus = require('../../core/services/rehabilitationStatus');
 const { generateJurisdictionAnalytics } = require('../../ai/gemini');
 const { predictEscalationRiskBatch } = require('../../ai/scoring');
 const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
@@ -2184,16 +2185,17 @@ router.post(
       return fail(res, `referredToRole must be one of: ${AGENCY_REFERRAL_ROLES.join(', ')}`, 400);
     }
 
-    const { rows: userRows } = await pool.query('select jurisdiction_id, case_stage, rehabilitation_opted_in_at from users where user_id = $1', [userId]);
+    const { rows: userRows } = await pool.query('select jurisdiction_id, case_stage from users where user_id = $1', [userId]);
     if (!userRows[0]) return fail(res, 'Case not found', 404);
 
     const jurisdictionCheck = await requireJurisdictionInline(req, userRows[0].jurisdiction_id);
     if (jurisdictionCheck) return fail(res, jurisdictionCheck, 403);
 
-    // migration_034: Rehabilitation is now a genuine mid-case eCourt stage -
-    // same gate as DWO's own hand-off route and the victim's opt-in route.
-    if (referredToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Rehabilitation') {
-      return fail(res, 'Rehabilitation referrals are only available once the case reaches the Rehabilitation stage.', 400);
+    // migration_045: Rehabilitation is a person-level opt-in fact triggered
+    // once a case reaches Compensation, not a stage of its own - same gate
+    // as DWO's own hand-off route and the victim's opt-in route.
+    if (referredToRole === 'Rehabilitation Officer' && userRows[0].case_stage !== 'Compensation') {
+      return fail(res, 'Rehabilitation referrals are only available once the case reaches the Compensation stage.', 400);
     }
 
     const { data, error } = await supabase
@@ -2205,15 +2207,20 @@ router.post(
 
     // Same reasoning as DWO's hand-off-rehabilitation - a referral to
     // Rehabilitation Officer created through this general-purpose route
-    // must also mark the case as opted in, or it would never actually get
-    // isolated into its own Rehabilitation context. Only set once - never
-    // overwrites an existing opt-in timestamp.
-    if (referredToRole === 'Rehabilitation Officer' && !userRows[0].rehabilitation_opted_in_at) {
-      const { error: optInError } = await supabase
-        .from('users')
-        .update({ rehabilitation_opted_in_at: new Date().toISOString() })
-        .eq('user_id', userId);
-      if (optInError) console.error('agency-referrals: could not set rehabilitation_opted_in_at', optInError.message);
+    // must also record the PERSON's opt-in (rehabilitationStatus.js), or
+    // rehabilitation-eligibility would keep offering the same decision
+    // again. Only takes effect once - a person who already opted in or
+    // declined (via this case or another of their own) keeps that answer.
+    // Note: unlike DWO's own hand-off route, this general-purpose route
+    // accepts no providerId - a referral created this way is not yet
+    // visible in any Rehabilitation Officer's own provider-scoped queue
+    // (a pre-existing gap, not introduced by this change).
+    if (referredToRole === 'Rehabilitation Officer') {
+      try {
+        await rehabilitationStatus.optIn(userId, null);
+      } catch (err) {
+        console.error('agency-referrals: could not record rehabilitation opt-in', err.message);
+      }
     }
 
     await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'agency_referral', entityId: data.referral_id });

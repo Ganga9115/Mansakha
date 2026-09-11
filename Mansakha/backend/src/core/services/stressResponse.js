@@ -26,14 +26,13 @@ async function getJurisdictionIdsForCaseFamily(anchorUserId) {
 // compatibility) - every active Counsellor in the system is a candidate.
 //
 //   1. Primary: whichever eligible Counsellor currently has the fewest
-//      ACTIVE assigned cases (case_stage != 'Case Closed'). A closed case no
+//      ACTIVE assigned cases (case_completed_at is null - migration_045,
+//      replacing the old case_stage === 'Case Closed' check now that
+//      "closed" is an access fact, not a stage value). A completed case no
 //      longer counts toward caseload.
 //   2. Tie-break (two+ counsellors with the same active count): whichever
 //      has the HIGHER sum of case-stage scores (Investigation=1, Trial=2,
-//      Rehabilitation=3, Compensation=4, Case Closed=0) across every user
-//      currently assigned to them. Closed cases contribute 0 to this sum, so
-//      summing "all assigned" vs "active only" gives the identical total -
-//      no need to exclude them separately here.
+//      Compensation=3) across every user currently assigned to them.
 //   3. Still tied after that: first by official_id, for a deterministic pick
 //      rather than depending on query row order.
 //
@@ -51,7 +50,7 @@ async function selectLeastLoadedCounsellor(jurisdictionId) {
 
   const { data: assignedUsers } = await supabase
     .from('users')
-    .select('assigned_counsellor_id, case_stage')
+    .select('assigned_counsellor_id, case_stage, case_completed_at')
     .in('assigned_counsellor_id', counsellorIds)
     .eq('status', 'active');
 
@@ -62,10 +61,7 @@ async function selectLeastLoadedCounsellor(jurisdictionId) {
       u.assigned_counsellor_id,
       stageScoreSumByOfficial.get(u.assigned_counsellor_id) + (CASE_STAGE_SCORES[u.case_stage] ?? 0)
     );
-    // 'Rehabilitation' is now a post-Case-Closed phase (migration_029) run
-    // by a Rehabilitation Officer, not the assigned Counsellor - excluded
-    // from active caseload the same way Case Closed already is.
-    if (!['Case Closed', 'Rehabilitation'].includes(u.case_stage)) {
+    if (!u.case_completed_at) {
       activeCountByOfficial.set(u.assigned_counsellor_id, activeCountByOfficial.get(u.assigned_counsellor_id) + 1);
     }
   }

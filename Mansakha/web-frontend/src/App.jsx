@@ -123,7 +123,7 @@ import DistrictCollectorMyTasks from './district_collector/pages/MyTasks';
 import DistrictCollectorProfile from './district_collector/pages/Profile';
 import RehabilitationOfficerPlans from './rehabilitation_officer/pages/RehabilitationPlans';
 import RehabilitationOfficerReferralDetail from './rehabilitation_officer/pages/ReferralDetail';
-import RehabilitationOfficerMyTasks from './rehabilitation_officer/pages/MyTasks';
+
 import RehabilitationOfficerProfile from './rehabilitation_officer/pages/Profile';
 
 export default function App() {
@@ -277,7 +277,7 @@ export default function App() {
         <Route path="/districtcollector/profile" element={<RequireAuth loginPath="/signin"><DistrictCollectorProfile /></RequireAuth>} />
         <Route path="/rehabilitationofficer" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerPlans /></RequireAuth>} />
         <Route path="/rehabilitationofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerReferralDetail /></RequireAuth>} />
-        <Route path="/rehabilitationofficer/tasks" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerMyTasks /></RequireAuth>} />
+
         <Route path="/rehabilitationofficer/profile" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerProfile /></RequireAuth>} />
       </Routes>
       </ToastProvider>

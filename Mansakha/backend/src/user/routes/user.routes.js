@@ -16,6 +16,8 @@ const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = re
 const { ensureCourtCaseDetails } = require('../../core/services/courtCaseSync');
 const { getCompensationSchedule, withLiveCompensationView } = require('../../core/services/compensationSchedule');
 const { loadHearingTimeline } = require('../../core/services/legalAidHearingTimeline');
+const { getRehabilitationStatus, decline } = require('../../core/services/rehabilitationStatus');
+const { checkAndCompleteCasesForPerson } = require('../../core/services/caseCompletion');
 
 // Fixed national Police Control Room number - the mobile app dials this
 // directly via the device's own phone dialer (Linking.openURL('tel:...'))
@@ -169,13 +171,13 @@ router.get('/dashboard', async (req, res) => {
        from users where user_id = $1 limit 1`,
       [anchorUserId]
     ),
-    // The ACTIVE case's own docket/stage/rehabilitation facts - a separate
-    // row from the anchor's own wellness fields above whenever a specific
-    // family member's docket is being viewed.
+    // The ACTIVE case's own docket/stage facts - a separate row from the
+    // anchor's own wellness fields above whenever a specific family
+    // member's docket is being viewed. Rehabilitation is no longer read
+    // here (migration_045: it's a person-level fact - see
+    // rehabilitationStatus.js, fetched once below for the whole family).
     pool.query(
-      `select docket_number, case_stage, rehabilitation_opted_in_at, rehabilitation_declined_at,
-              rehabilitation_closure_pending_ack, rehabilitation_continued_after_closure
-       from users where user_id = $1 limit 1`,
+      `select docket_number, case_stage, case_completed_at from users where user_id = $1 limit 1`,
       [activeUserId]
     ),
     pool.query(`select full_name from user_identity where user_id = $1 limit 1`, [anchorUserId]),
@@ -199,14 +201,12 @@ router.get('/dashboard', async (req, res) => {
     pool.query(`select occurred_at from interactions where user_id = $1 order by occurred_at desc limit 1`, [anchorUserId]),
     // Multi-case support: anchorUserId here is always the anchor (see
     // auth.user.routes.js's login), so every row sharing it - including the
-    // anchor's own case - is this person's full set of cases. Rehabilitation
-    // fields included so the app-level gate can tell, for EVERY case in the
-    // family (not just whichever is currently active), whether one of them
-    // needs the isolated Rehabilitation context or the post-closure
-    // continuation popup - see UserGate.js.
+    // anchor's own case - is this person's full set of cases.
+    // case_completed_at included so UserGate.js can tell a case that's
+    // finished from one still open, without needing case_stage to carry a
+    // 'Case Closed' value it no longer has.
     pool.query(
-      `select u.user_id, u.docket_number, u.case_stage, u.rehabilitation_opted_in_at, u.rehabilitation_declined_at,
-              u.rehabilitation_closure_pending_ack, u.rehabilitation_continued_after_closure,
+      `select u.user_id, u.docket_number, u.case_stage, u.case_completed_at,
               ct.name as case_type_name, j.name as jurisdiction_name
        from users u
        left join case_types ct on ct.case_type_id = u.case_type_id
@@ -225,16 +225,20 @@ router.get('/dashboard', async (req, res) => {
   const lastInteraction = lastInteractionResult.rows[0];
   const caseFamily = caseFamilyResult.rows;
 
+  // migration_045 - one rehabilitation answer for the whole family
+  // (rehabilitationStatus.js), not per-docket - so every case in
+  // linkedCases reports the SAME opted-in/declined facts.
+  const rehabStatus = await rehabilitationStatus.getRehabilitationStatus(anchorUserId);
+
   const linkedCases = (caseFamily || []).map((c) => ({
     userId: c.user_id,
     docketNumber: c.docket_number,
     caseStage: c.case_stage,
+    caseCompletedAt: c.case_completed_at,
     caseType: c.case_type_name || null,
     jurisdictionName: c.jurisdiction_name || null,
-    rehabilitationOptedIn: !!c.rehabilitation_opted_in_at,
-    rehabilitationDeclined: !!c.rehabilitation_declined_at,
-    rehabilitationClosurePendingAck: c.rehabilitation_closure_pending_ack,
-    rehabilitationContinuedAfterClosure: c.rehabilitation_continued_after_closure,
+    rehabilitationOptedIn: !!rehabStatus.optedInAt,
+    rehabilitationDeclined: !!rehabStatus.declinedAt,
   }));
 
   // Red-dot indicator for the "Chat with counsellor" Home tile - a separate
@@ -265,12 +269,12 @@ router.get('/dashboard', async (req, res) => {
     // of one case's docket with another's stage.
     userId: activeUserId,
     docketNumber: activeCase.docket_number,
-    caseStatus: { status: user.status, caseStage: activeCase.case_stage },
+    caseStatus: { status: user.status, caseStage: activeCase.case_stage, caseCompletedAt: activeCase.case_completed_at },
     rehabilitation: {
-      optedIn: !!activeCase.rehabilitation_opted_in_at,
-      declined: !!activeCase.rehabilitation_declined_at,
-      closurePendingAck: activeCase.rehabilitation_closure_pending_ack,
-      continuedAfterClosure: activeCase.rehabilitation_continued_after_closure,
+      optedIn: !!rehabStatus.optedInAt,
+      declined: !!rehabStatus.declinedAt,
+      closed: !!rehabStatus.closedAt,
+      providerName: rehabStatus.providerName,
     },
     preferredLanguageId: user.preferred_language,
     optedForManualCounsellor: user.opted_for_manual_counsellor,
@@ -1670,18 +1674,19 @@ router.get('/intervention-requests/:requestId', async (req, res) => {
   });
 });
 
-// ===== Rehabilitation (migration_034) =====
-// Rehabilitation is now a genuine mid-case stage set exclusively by eCourt
-// (Investigation -> Trial -> Rehabilitation -> Compensation -> Case
-// Closed), no longer a post-closure phase the victim's own opt-in used to
-// trigger. Opting in is now a SEPARATE fact (rehabilitation_opted_in_at)
-// from case_stage itself - a case can be in the Rehabilitation stage
-// without the victim having opted in yet, and opting in never touches
-// case_stage (only core/services/ecourtStageSync.js ever does). Every
-// route below accepts ?caseUserId= (resolveCaseUserId, defined near the
-// top of this file) so a specific docket in the caller's own family can be
-// acted on - required for the isolated Rehabilitation context to work for
-// a docket that isn't the caller's anchor.
+// ===== Rehabilitation (migration_045) =====
+// Rehabilitation is a PERSON-level opt-in fact (rehabilitationStatus.js),
+// not a case_stage value - triggered once a case reaches Compensation
+// (the strict eCourt-authoritative order is now just Investigation -> Trial
+// -> Compensation - see ecourtStageSync.js). Opting in/declining/being
+// closed out are all recorded once per person and visible from every case
+// (docket) they have, per explicit product decision ("rehabilitation is
+// the same for multiple NHaa cases", unlike compensation, which stays
+// genuinely per-case). Every route below accepts ?caseUserId=
+// (resolveCaseUserId, defined near the top of this file) so a specific
+// docket in the caller's own family can be the one that reached
+// Compensation and triggered the question, even though the answer itself
+// is recorded for the whole family at once.
 router.get('/rehabilitation-progress', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
   const { rows } = await pool.query(
@@ -1721,29 +1726,32 @@ router.get('/rehabilitation-progress', async (req, res) => {
   });
 });
 
-// Eligible to be ASKED to opt in - the case's own eCourt stage is
-// 'Rehabilitation' and the victim hasn't already answered (opted in or
-// declined) for this stage instance yet. Never automatic, never official-
-// triggered alone (DWO's own hand-off route is a separate, official-
-// initiated path - this is specifically the victim's own mandatory-gate
-// decision).
+// Eligible to be ASKED to opt in - migration_045: the gate is now
+// case_stage === 'Compensation' (Rehabilitation is no longer a stage;
+// it's a person-level opt-in fact triggered once a case reaches
+// Compensation). Uses rehabilitation_status table (replaces the old
+// per-docket rehabilitation_opted_in_at / rehabilitation_declined_at
+// columns, which were dropped in migration_045).
 router.get('/rehabilitation-eligibility', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
   const { rows: userRows } = await pool.query(
-    'select case_stage, jurisdiction_id, rehabilitation_opted_in_at, rehabilitation_declined_at from users where user_id = $1',
+    'select case_stage, jurisdiction_id from users where user_id = $1',
     [activeUserId]
   );
   const user = userRows[0];
   if (!user) return fail(res, 'Case not found', 404);
 
-  if (user.rehabilitation_opted_in_at) {
+  // migration_045: gate on Compensation, not the old Rehabilitation stage
+  if (user.case_stage !== 'Compensation') {
+    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'Rehabilitation becomes available once your case reaches the Compensation stage.', providers: [] });
+  }
+
+  const rehabStatus = await getRehabilitationStatus(activeUserId);
+  if (rehabStatus.optedInAt) {
     return ok(res, { eligible: false, alreadyOptedIn: true, reason: 'You have already opted in to rehabilitation.', providers: [] });
   }
-  if (user.rehabilitation_declined_at) {
-    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'You already answered this for the current stage.', providers: [] });
-  }
-  if (user.case_stage !== 'Rehabilitation') {
-    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'Rehabilitation becomes available once your case reaches that stage.', providers: [] });
+  if (rehabStatus.declinedAt) {
+    return ok(res, { eligible: false, alreadyOptedIn: false, reason: 'You have already declined rehabilitation.', providers: [] });
   }
 
   const { rows: providers } = await pool.query(
@@ -1768,16 +1776,18 @@ router.post('/rehabilitation-opt-in', async (req, res) => {
   if (!providerId) return fail(res, 'providerId is required', 400);
 
   const { rows: userRows } = await pool.query(
-    'select case_stage, rehabilitation_opted_in_at, rehabilitation_declined_at from users where user_id = $1',
+    'select case_stage from users where user_id = $1',
     [activeUserId]
   );
   const user = userRows[0];
   if (!user) return fail(res, 'Case not found', 404);
-  if (user.rehabilitation_opted_in_at) return fail(res, 'You have already opted in to rehabilitation.', 400);
-  if (user.rehabilitation_declined_at) return fail(res, 'You already answered this for the current stage.', 400);
-  if (user.case_stage !== 'Rehabilitation') {
-    return fail(res, 'Rehabilitation is only available once your case reaches that stage.', 400);
+  // migration_045: gate on Compensation, not the old Rehabilitation stage
+  if (user.case_stage !== 'Compensation') {
+    return fail(res, 'Rehabilitation opt-in is only available once your case reaches the Compensation stage.', 400);
   }
+  const rehabStatus = await getRehabilitationStatus(activeUserId);
+  if (rehabStatus.optedInAt) return fail(res, 'You have already opted in to rehabilitation.', 400);
+  if (rehabStatus.declinedAt) return fail(res, 'You have already declined rehabilitation.', 400);
 
   const { rows: providerRows } = await pool.query(
     'select provider_id, name from rehabilitation_providers where provider_id = $1 and deleted_at is null',
@@ -1809,31 +1819,34 @@ router.post('/rehabilitation-opt-in', async (req, res) => {
   return ok(res, { referralId }, 'Opted in to rehabilitation', 201);
 });
 
-// Self-service decline - the mandatory app-open gate's "No" answer. Unlike
-// before migration_034, this case is NOT closed (Rehabilitation now sits
-// mid-lifecycle, before Compensation/Case Closed) - declining just records
-// the answer and lets the case continue under completely normal tracking;
-// it no longer deactivates the account. If the victim has not opted in,
-// this case simply never enters the isolated Rehabilitation workflow, and
-// when it later reaches Case Closed it's treated as an ordinary closure.
+// Self-service decline - migration_045: now gated on case_stage = 'Compensation'
+// (Rehabilitation is no longer a stage; it's a person-level opt-in fact at
+// Compensation). Uses rehabilitation_status.decline() instead of the old
+// per-docket rehabilitation_declined_at column (dropped in migration_045).
+// Declining just records the answer; the case continues normally and
+// credential expiry is handled by caseCompletion.js once compensation is paid.
 router.post('/rehabilitation-decline', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
   const { rows: userRows } = await pool.query(
-    'select case_stage, rehabilitation_opted_in_at, rehabilitation_declined_at from users where user_id = $1',
+    'select case_stage from users where user_id = $1',
     [activeUserId]
   );
   const user = userRows[0];
   if (!user) return fail(res, 'Case not found', 404);
-  if (user.rehabilitation_opted_in_at) return fail(res, 'You have already opted in to rehabilitation.', 400);
-  if (user.rehabilitation_declined_at) return fail(res, 'You already answered this for the current stage.', 400);
-  if (user.case_stage !== 'Rehabilitation') {
-    return fail(res, 'This decision is only available once your case reaches the Rehabilitation stage.', 400);
+  // migration_045: gate on Compensation, not the old Rehabilitation stage
+  if (user.case_stage !== 'Compensation') {
+    return fail(res, 'This decision is only available once your case reaches the Compensation stage.', 400);
   }
+  const rehabStatus = await getRehabilitationStatus(activeUserId);
+  if (rehabStatus.optedInAt) return fail(res, 'You have already opted in to rehabilitation.', 400);
+  if (rehabStatus.declinedAt) return fail(res, 'You have already declined rehabilitation.', 400);
 
-  const { error } = await supabase.from('users').update({ rehabilitation_declined_at: new Date().toISOString() }).eq('user_id', activeUserId);
-  if (error) return fail(res, `Could not process this request: ${error.message}`, 500);
+  await decline(activeUserId);
+  // After declining, check if this case can now be completed
+  // (compensation may already be fully paid, waiting only on rehab resolution)
+  await checkAndCompleteCasesForPerson(activeUserId);
 
-  await writeAuditLog({ userId: activeUserId, action: 'update', entityType: 'user', entityId: activeUserId });
+  await writeAuditLog({ userId: activeUserId, action: 'update', entityType: 'rehabilitation_status', entityId: activeUserId, details: { decision: 'declined' } });
 
   return ok(res, null, 'Understood - your case will continue under normal tracking.');
 });

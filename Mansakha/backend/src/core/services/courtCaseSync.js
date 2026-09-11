@@ -44,8 +44,13 @@ async function ensureCourtCaseDetails({ userId, caseStage, docketNumber, cnrNumb
   let row = existing;
   if (isStale) {
     const resolvedCnr = cnrNumber || generateCnrNumber(docketNumber, jurisdictionName);
+    // migration_045: caseStage is no longer passed - the generator computes
+    // everything (including whether the case is Disposed) purely from its
+    // own dates now, independent of NHaa's case_stage. caseStage is still
+    // used above only to gate whether this function runs at all
+    // (isCourtCaseEligible).
     const generated = generateSimulatedCourtCaseDetails({
-      docketNumber, cnrNumber: resolvedCnr, caseTypeName, jurisdictionName, caseStage, enrolledAt, victimFullName,
+      docketNumber, cnrNumber: resolvedCnr, caseTypeName, jurisdictionName, enrolledAt, victimFullName,
     });
 
     const upsertPayload = {

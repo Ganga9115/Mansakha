@@ -987,19 +987,22 @@ async function computeSpikeAlerts(jurisdictionIds, periodStart, periodEnd, child
 // countRiskByGroup already established). Each of these mirrors a District-
 // tier section 1:1, just grouped by child instead of scoped to one district.
 
-// Case Stage Distribution rollup - case_stage is a fixed 5-value enum, so a
-// per-child column-per-stage table is bounded/readable (unlike a per-child
-// column-per-CASE-TYPE table, which is 9 columns and growing - see
-// countTopCaseTypeByGroup below for why that one takes a different shape).
+// Case Stage Distribution rollup - case_stage is a fixed 3-value enum
+// (migration_045: Investigation/Trial/Compensation only - Rehabilitation
+// was never a distinct stage and "Case Closed" is now an access fact,
+// case_completed_at, not a stage value), so a per-child column-per-stage
+// table is bounded/readable (unlike a per-child column-per-CASE-TYPE table,
+// which is 9 columns and growing - see countTopCaseTypeByGroup below for
+// why that one takes a different shape). case_closed is reported alongside
+// the 3 real stages as its own derived count, same as it read before.
 async function countCaseStageByGroup(jurisdictionIds, groupByParent) {
   const groupExpr = groupByParent ? 'j.parent_id' : 'u.jurisdiction_id';
   const { rows } = await pool.query(
     `select ${groupExpr} as group_id,
             count(*) filter (where u.case_stage = 'Investigation') as investigation,
             count(*) filter (where u.case_stage = 'Trial') as trial,
-            count(*) filter (where u.case_stage = 'Rehabilitation') as rehabilitation,
             count(*) filter (where u.case_stage = 'Compensation') as compensation,
-            count(*) filter (where u.case_stage = 'Case Closed') as case_closed
+            count(*) filter (where u.case_completed_at is not null) as case_closed
      from users u
      join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
      where u.jurisdiction_id = any($1::uuid[])
@@ -1457,7 +1460,6 @@ async function computePerChildRollups(children, allDescendantIds, groupByParent,
       name: c.name,
       investigation: r ? Number(r.investigation) : 0,
       trial: r ? Number(r.trial) : 0,
-      rehabilitation: r ? Number(r.rehabilitation) : 0,
       compensation: r ? Number(r.compensation) : 0,
       caseClosed: r ? Number(r.case_closed) : 0,
     };

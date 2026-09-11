@@ -16,7 +16,7 @@ import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
 
-const TOTAL_QUESTIONS = 5;
+const TOTAL_QUESTIONS = 15;
 
 export default function CheckinScreen({ navigation }) {
   const toast = useToast();
@@ -47,12 +47,25 @@ export default function CheckinScreen({ navigation }) {
     }
   }, [historyQuery.data]);
 
+  // 15 to match TOTAL_QUESTIONS - only ever seen back-to-back if Ollama
+  // stays offline for a whole check-in, so having a full, non-repeating set
+  // matters more at this length than it did at 5.
   const FALLBACK_QUESTIONS = [
     "Take your time. Can you tell me a little more about how you're feeling?",
     "I'm here to listen. What else is on your mind?",
     "Is there anything else you'd like to share today?",
     "How has everything been affecting your daily life?",
-    "Are you receiving any support from family, friends, or your community right now?"
+    "Are you receiving any support from family, friends, or your community right now?",
+    "How would you describe your sleep over the last few days?",
+    "Have you been able to eat regularly lately?",
+    "Is there anything specific that's been worrying you recently?",
+    "How are you feeling about your safety right now?",
+    "Have you been able to talk to anyone about how you're feeling?",
+    "What has been the hardest part of your day today?",
+    "Is there anything that has helped you feel a little better recently?",
+    "How are you coping with everything going on with your case?",
+    "Is there something you need right now that you haven't been able to get?",
+    "Before we finish, is there anything else you'd like us to know?",
   ];
 
   const loadNextQuestion = async (history) => {
@@ -214,7 +227,7 @@ export default function CheckinScreen({ navigation }) {
             {/* Progress Header */}
             <View style={styles.progressContainer}>
               <View style={styles.progressTextRow}>
-                <Text style={styles.progressLabel}>Question {responses.length + 1} of {TOTAL_QUESTIONS}</Text>
+                <Text style={styles.progressLabel}>Question {Math.min(responses.length + 1, TOTAL_QUESTIONS)} of {TOTAL_QUESTIONS}</Text>
                 <Text style={styles.progressPercent}>{Math.round(progressPercentage)}%</Text>
               </View>
               <View style={styles.progressTrack}>

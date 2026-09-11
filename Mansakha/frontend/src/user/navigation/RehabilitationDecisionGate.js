@@ -8,10 +8,10 @@ import { typography } from '../shared/theme/typography';
 import { useDeclineRehabilitation } from '../shared/services/hooks';
 import { EligibleContent } from '../wellness/screens/RehabilitationOptInScreen';
 
-// migration_034: this gate now fires the moment a SPECIFIC docket's own
-// eCourt case_stage reaches 'Rehabilitation' and the victim hasn't yet
-// answered for it (not on case closure - Rehabilitation is a genuine
-// mid-lifecycle stage now, between Trial and Compensation). Rendered by
+// migration_045: this gate now fires the moment a SPECIFIC docket's own
+// eCourt case_stage reaches 'Compensation' and the victim hasn't yet
+// answered for rehabilitation (Rehabilitation is a person-level opt-in
+// fact triggered at Compensation, not a stage itself). Rendered by
 // UserGate INSTEAD of UserShell for that decision, same convention as
 // RehabilitationClosureGate.js.
 //
@@ -65,12 +65,12 @@ export default function RehabilitationDecisionGate({ providers, caseUserId, dock
           <Feather name="compass" size={28} color={colors.primaryDark} />
         </View>
         <Text style={styles.headerLabel}>
-          {docketNumber ? `Docket ${docketNumber} · Rehabilitation Stage` : 'Rehabilitation Stage'}
+          {docketNumber ? `Docket ${docketNumber} · Compensation Stage` : 'Compensation Stage'}
         </Text>
         <Text style={styles.title}>Would You Like to Proceed With Rehabilitation Support?</Text>
         <Text style={styles.subtitle}>
-          The eCourt has moved this case into the Rehabilitation stage. Kindly indicate whether you wish to
-          continue with government or NGO-provided rehabilitation services - livelihood, housing, and social
+          The eCourt has moved this case into the Compensation stage. Kindly indicate whether you wish to
+          opt in for government or NGO-provided rehabilitation services - livelihood, housing, and social
           support tracked by a dedicated Rehabilitation Officer.
         </Text>
 

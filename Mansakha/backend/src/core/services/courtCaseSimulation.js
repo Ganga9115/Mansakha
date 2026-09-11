@@ -9,11 +9,12 @@
 // a matter of replacing the call site in user.routes.js, not touching the
 // data shape or any of the calling code.
 
-const VALID_COURT_STAGES = ['Trial', 'Rehabilitation', 'Compensation', 'Case Closed'];
+// migration_045: only 'Trial'/'Compensation' remain real case_stage values
+// past Investigation - a case only realistically has a CNR once it's
+// actually been filed in court, not during pure police Investigation,
+// before any court has taken it up.
+const VALID_COURT_STAGES = ['Trial', 'Compensation'];
 
-// A case only realistically has a CNR once it's actually been filed in
-// court - not during pure police Investigation, before any court has taken
-// it up.
 function isCourtCaseEligible(caseStage) {
   return VALID_COURT_STAGES.includes(caseStage);
 }
@@ -87,9 +88,27 @@ function isoDate(date) {
   return date.toISOString().slice(0, 10);
 }
 
+// How long a case sits in trial (from its own first hearing) before eCourt
+// disposes it - genuinely independent of, and upstream of, NHaa's own
+// case_stage now (migration_045: this used to be driven BACKWARDS, off
+// caseStage itself, which is exactly the inversion that change fixes -
+// eCourt is the one real, external fact; NHaa's stage is derived FROM it,
+// in ecourtStageSync.js, never the other way around). Kept short enough to
+// be demoable within a normal session for a case enrolled recently, the
+// same reasoning ecourtStageSync.js's own STAGE_INTERVAL_MS already uses -
+// but expressed in days (not ms) since every date here is calendar-date
+// granularity, and configurable for a deployment wanting a realistic
+// months-long real-world trial duration instead.
+const TRIAL_DISPOSAL_AFTER_DAYS = Number(process.env.ECOURT_TRIAL_DISPOSAL_DAYS) || 90;
+
 // The main generator - pure function, deterministic per (docketNumber,
-// current month). Returns exactly the court_case_details row shape.
-function generateSimulatedCourtCaseDetails({ docketNumber, cnrNumber, caseTypeName, jurisdictionName, caseStage, enrolledAt, victimFullName }) {
+// current month). Returns exactly the court_case_details row shape. Does
+// NOT take case_stage as input any more (migration_045) - every field here,
+// including whether the case is Disposed, is computed purely from the
+// case's own dates (enrolledAt) and elapsed real time, since this is meant
+// to BE the independent "real" eCourt record NHaa's own case_stage gets
+// derived from, not a mirror of it.
+function generateSimulatedCourtCaseDetails({ docketNumber, cnrNumber, caseTypeName, jurisdictionName, enrolledAt, victimFullName }) {
   const now = new Date();
   const seed = seedFor(docketNumber, monthBucketFor(now));
   const enrolled = enrolledAt ? new Date(enrolledAt) : addDays(now, -180);
@@ -98,12 +117,13 @@ function generateSimulatedCourtCaseDetails({ docketNumber, cnrNumber, caseTypeNa
   const filingDate = addDays(registrationDate, -(3 + (seed % 7)));
   const firstHearingDate = addDays(registrationDate, 21 + (seed % 20));
 
-  const isDisposed = caseStage === 'Case Closed';
+  const daysSinceFirstHearing = Math.floor((now.getTime() - firstHearingDate.getTime()) / 86400000);
+  const isDisposed = daysSinceFirstHearing >= TRIAL_DISPOSAL_AFTER_DAYS;
   const caseStageLabel = isDisposed
     ? 'Disposed'
-    : caseStage === 'Trial'
-    ? (seed % 3 === 0 ? 'Evidence' : seed % 3 === 1 ? 'Arguments' : 'Framing of Charges')
-    : 'Post-Trial Proceedings'; // Rehabilitation/Compensation - case adjudicated, compensation/rehab process ongoing
+    : daysSinceFirstHearing < 0
+    ? 'Awaiting First Hearing'
+    : (seed % 3 === 0 ? 'Evidence' : seed % 3 === 1 ? 'Arguments' : 'Framing of Charges');
 
   // Hearing history: one entry roughly every 30-40 days from first hearing
   // up to (but not past) today. When firstHearingDate itself is still in

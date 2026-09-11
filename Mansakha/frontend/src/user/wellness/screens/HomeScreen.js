@@ -29,17 +29,19 @@ export default function HomeScreen({ navigation }) {
   const linkedCases = query.data?.linkedCases || [];
   const activeUserId = query.data?.userId;
 
-  // A case in the Rehabilitation stage that the victim has opted into gets
+  // A case in the Compensation stage that the victim has opted into gets
   // isolated into its own docket-based context automatically - opening the
   // app should show that isolated view immediately, not require a manual
-  // switch, while Investigation/Trial/Compensation/Case-Closed cases stay
+  // switch, while Investigation/Trial/Case-Closed cases stay
   // on the normal shared (anchor) context exactly as before. Only runs
   // while the victim hasn't already made an explicit choice (activeCaseUserId
   // still null), so a manual switch away (from Settings) is never silently
   // overridden back.
   useEffect(() => {
     if (activeCaseUserId || !activeUserId) return;
-    const rehabCase = linkedCases.find((c) => c.caseStage === 'Rehabilitation' && c.rehabilitationOptedIn);
+    // migration_045: Rehabilitation is a person-level fact triggered when
+    // case_stage reaches Compensation.
+    const rehabCase = linkedCases.find((c) => c.caseStage === 'Compensation' && c.rehabilitationOptedIn);
     if (rehabCase && rehabCase.userId !== activeUserId) {
       setActiveCaseUserId(rehabCase.userId);
     }

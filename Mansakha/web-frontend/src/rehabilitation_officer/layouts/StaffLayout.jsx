@@ -10,7 +10,6 @@ import { useMe } from '../services/hooks';
 // by a government rehabilitation center or NGO), not a DWO tab.
 const NAV_ITEMS = [
   { name: 'Rehabilitation Plans', icon: Users, path: '/rehabilitationofficer' },
-  { name: 'My Tasks', icon: ClipboardList, path: '/rehabilitationofficer/tasks' },
   { name: 'Profile', icon: User, path: '/rehabilitationofficer/profile' },
 ];
 

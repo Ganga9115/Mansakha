@@ -296,12 +296,11 @@ function buildCaseStageDistributionSection(caseStageDistribution, tier) {
     escapeHtml(c.name),
     String(c.investigation),
     String(c.trial),
-    String(c.rehabilitation),
     String(c.compensation),
     String(c.caseClosed),
   ]);
   return `${sectionBanner('Case Stage Distribution', desc)}${table(
-    [childLabel, 'Investigation', 'Trial', 'Rehabilitation', 'Compensation', 'Case Closed'],
+    [childLabel, 'Investigation', 'Trial', 'Compensation', 'Case Closed'],
     rows
   )}`;
 }
