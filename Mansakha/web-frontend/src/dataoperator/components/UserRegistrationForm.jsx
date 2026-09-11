@@ -86,7 +86,7 @@ export default function UserRegistrationForm({ onCreate, creating, initialValues
   };
 
   const handleCopy = (text) => {
-    navigator.clipboard?.writeText(text).catch(() => {});
+    navigator.clipboard?.writeText(text).catch(() => { });
   };
 
   return (

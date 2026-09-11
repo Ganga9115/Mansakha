@@ -24,15 +24,19 @@ const router = express.Router();
 const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Operator'];
 
 router.post('/login', staffLoginLimiter, async (req, res) => {
-  const { email, password, roleName } = req.body;
-  if (!email || !password) return fail(res, 'email and password are required', 400);
+  // migration_046: accept 'identifier' (email or official_identifier like SA-001)
+  // with 'email' kept as a back-compat alias so existing callers still work.
+  const { identifier, email, password, roleName } = req.body;
+  const loginId = (identifier || email || '').trim();
+  if (!loginId || !password) return fail(res, 'identifier and password are required', 400);
 
   const rolesToSearch = (roleName && STAFF_LOGIN_ROLES.includes(roleName))
     ? [roleName]
     : STAFF_LOGIN_ROLES;
 
-  const match = await findOfficialForLogin(email, rolesToSearch);
+  const match = await findOfficialForLogin(loginId, rolesToSearch);
   if (!match) return fail(res, 'Invalid credentials', 401);
+
 
   const passwordOk = await verifyPassword(password, match.official.password_hash);
   if (!passwordOk) return fail(res, 'Invalid credentials', 401);

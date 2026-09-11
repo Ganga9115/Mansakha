@@ -40,7 +40,7 @@ const ROLE_HOME_PATH = {
 export default function SignIn() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [roleName, setRoleName] = useState(SIGNIN_ROLES[0]);
   const [loading, setLoading] = useState(false);
@@ -74,7 +74,7 @@ export default function SignIn() {
     e.preventDefault();
     setLoading(true);
     try {
-      const data = await apiClient.post('/api/auth/signin/login', { email, password, roleName });
+      const data = await apiClient.post('/api/auth/signin/login', { identifier, password, roleName });
 
       if (data.mustChangePassword) {
         setRequirePasswordChange(true);
@@ -161,19 +161,19 @@ export default function SignIn() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email or Staff ID</label>
                     <div className="relative">
                       <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <User className="h-5 w-5 text-gray-400" />
                       </div>
                       <input
                         ref={emailRef}
-                        type="email"
-                        placeholder="Email Address"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        type="text"
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
                         onKeyDown={focusOnEnter(passwordRef)}
                         required
+                        autoComplete="username"
                         className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
                     </div>
@@ -188,7 +188,6 @@ export default function SignIn() {
                       <input
                         ref={passwordRef}
                         type={showPassword ? 'text' : 'password'}
-                        placeholder="Password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={submitOnEnter}
@@ -233,7 +232,6 @@ export default function SignIn() {
                       </div>
                       <input
                         type={showNewPassword ? 'text' : 'password'}
-                        placeholder="New Password (min 8 chars)"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
