@@ -19,6 +19,7 @@ import {
   useMyInterventionRequests,
   useSubmitInterventionRequest,
   useUploadInterventionDocument,
+  useMyLegalAidRequestCurrent,
 } from '../../shared/services/hooks';
 import { useActiveCase } from '../../shared/context/ActiveCaseContext';
 
@@ -262,9 +263,37 @@ const STATUS_SCREEN_BY_TYPE = {
   Relocation: 'ThreatReport',
 };
 
+// Legal Aid (migration_040, dedicated pipeline) has its own richer status
+// vocabulary and its own full status screen (LegalAidHubScreen's stepper
+// handles every stage) - mapped into this list's simpler Pending/Accepted/
+// Rejected pill so it displays here at all (requirement 2 - "My Request"
+// must show the legal aid the user requested, which the old
+// intervention_requests-backed list never could, since Legal Aid stopped
+// being created there after migration_040).
+const LEGAL_AID_STATUS_TO_PILL = { Submitted: 'Pending', 'Under Review': 'Pending', Active: 'Accepted', Completed: 'Accepted', Rejected: 'Rejected' };
+
+function legalAidToHistoryItem(data) {
+  if (!data?.hasRequest) return null;
+  return {
+    requestId: `legal-aid-${data.requestId}`,
+    interventionTypeName: 'Legal Aid',
+    docketNumber: null,
+    requestedAt: data.createdAt,
+    description: data.reason,
+    documents: data.documents,
+    status: LEGAL_AID_STATUS_TO_PILL[data.status] || 'Pending',
+    decisionReason: data.rejectionReason,
+    isLegalAid: true,
+  };
+}
+
 function RequestHistoryItem({ r, navigation }) {
   const meta = STATUS_META[r.status] || STATUS_META.Pending;
-  const statusScreen = r.status === 'Accepted' ? STATUS_SCREEN_BY_TYPE[r.interventionTypeName] : null;
+  // Legal Aid always has somewhere useful to go (its own stepper covers
+  // every stage, not just an "Accepted" outcome) - every other intervention
+  // type keeps the existing Accepted-only gate, since those have no status
+  // screen worth showing before a decision.
+  const statusScreen = (r.status === 'Accepted' || r.isLegalAid) ? STATUS_SCREEN_BY_TYPE[r.interventionTypeName] : null;
 
   return (
     <Pressable 
@@ -323,7 +352,10 @@ export default function RequestInterventionScreen({ navigation, route }) {
   // caseUserId is available immediately) so it only ever shows this
   // docket's own requests, matching Case Details/Compensation.
   const requestsQuery = useMyInterventionRequests(caseUserId);
-  const requests = requestsQuery.data?.requests || [];
+  const legalAidQuery = useMyLegalAidRequestCurrent(caseUserId);
+  const legalAidItem = legalAidToHistoryItem(legalAidQuery.data);
+  const requests = [...(requestsQuery.data?.requests || []), ...(legalAidItem ? [legalAidItem] : [])]
+    .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
 
   return (
     <View style={styles.container}>

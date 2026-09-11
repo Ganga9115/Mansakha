@@ -6,11 +6,15 @@ import { useMyCases } from '../services/hooks';
 
 // Only cases directly assigned to this representative - filtered by
 // assignment, never by jurisdiction (see legalRepresentative.routes.js's own
-// comment on why). Active tab is the working list; History shows cases that
-// moved on (Reassigned away, or Completed) - full history never deleted.
+// comment on why). Pending needs an Accept/Reject decision (requirement 6)
+// before it's genuinely yours; Active is the working list once accepted;
+// History shows cases that moved on (Rejected, Reassigned away, or
+// Completed) - full history never deleted.
 
 const ASSIGNMENT_STATUS_BADGE = {
+  'Pending Acceptance': 'bg-amber-100 text-amber-700',
   Active: 'bg-emerald-100 text-emerald-700',
+  Rejected: 'bg-rose-100 text-rose-700',
   Reassigned: 'bg-gray-200 text-gray-600',
   Completed: 'bg-gray-200 text-gray-700',
 };
@@ -18,7 +22,7 @@ const ASSIGNMENT_STATUS_BADGE = {
 export default function MyCases() {
   const navigate = useNavigate();
   const [tab, setTab] = useState('active');
-  const query = useMyCases(tab === 'history' ? 'history' : undefined);
+  const query = useMyCases(tab === 'active' ? undefined : tab);
   const cases = query.data?.cases || [];
 
   return (
@@ -30,7 +34,7 @@ export default function MyCases() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {[{ key: 'active', label: 'Active' }, { key: 'history', label: 'History' }].map((t) => (
+          {[{ key: 'pending', label: 'Pending' }, { key: 'active', label: 'Active' }, { key: 'history', label: 'History' }].map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
@@ -49,7 +53,9 @@ export default function MyCases() {
           ) : query.error ? (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 m-4 rounded-lg">{query.error}</div>
           ) : cases.length === 0 ? (
-            <p className="text-sm text-gray-400 p-6">No {tab === 'history' ? 'past' : 'active'} cases.</p>
+            <p className="text-sm text-gray-400 p-6">
+              {tab === 'history' ? 'No past cases.' : tab === 'pending' ? 'No cases awaiting your decision.' : 'No active cases.'}
+            </p>
           ) : (
             <table className="w-full text-left min-w-[720px]">
               <thead>

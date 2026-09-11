@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, AlertTriangle } from 'lucide-react';
 import { useLegalAidRequestsList } from '../services/hooks';
 
 // migration_040 - the real Legal Aid intake queue, replacing this page's old
@@ -10,40 +10,37 @@ import { useLegalAidRequestsList } from '../services/hooks';
 // other list -> detail page in this app) - just pointed at the new
 // jurisdiction-scoped legal_aid_requests pipeline.
 //
-// Collapsed to 2 tabs per explicit product request: Active is DLSA's own
-// actionable queue - a request that has NOT yet had a Public Prosecutor
-// assigned (Submitted/Under Review, still needing a Start Review/Assign/
-// Reject decision) - and History is everything past that point (Active
-// status - a Public Prosecutor IS assigned and the case no longer needs
-// DLSA's attention day to day - plus Rejected). The per-stage tabs this used
-// to have (Submitted/Under Review/Verified/Approved/Rejected) are gone; the
-// detail page's own status-gated action buttons still drive what happens
-// next regardless of which tab a request was found under, so nothing about
-// the actual review workflow changed - just how it's browsed here. One
-// un-statused fetch (every status for this jurisdiction) split client-side,
-// rather than a second network round-trip per tab switch.
+// migration_044: 3 tabs, matching the real Legal Aid case lifecycle exactly
+// (requirement 4) - New Legal Aid (Submitted/Under Review, not yet assigned
+// OR needing reassignment after a Public Prosecutor rejected), Active (a
+// Public Prosecutor is genuinely working it - request status 'Active' and
+// the underlying case isn't eCourt-closed yet), and History (Rejected at
+// intake, or the case has reached 'Case Closed' per eCourt). One un-statused
+// fetch (every status for this jurisdiction) split client-side, rather than
+// a second network round-trip per tab switch.
 const STATUS_BADGE = {
   Submitted: 'bg-amber-100 text-amber-700',
   'Under Review': 'bg-sky-100 text-sky-700',
-  Verified: 'bg-indigo-100 text-indigo-700',
-  Approved: 'bg-teal-100 text-teal-700',
   Rejected: 'bg-rose-100 text-rose-700',
   Active: 'bg-emerald-100 text-emerald-700',
   Completed: 'bg-gray-200 text-gray-700',
 };
 
-const TABS = ['Active', 'History'];
-// A request in one of these statuses has no Public Prosecutor assigned yet -
-// it's still on DLSA's own to-do list. Anything else (Active - assigned,
-// Rejected - decided) has moved past that and belongs in History instead.
-const PP_NOT_ASSIGNED_STATUSES = ['Submitted', 'Under Review'];
+const TABS = ['New Legal Aid', 'Active', 'History'];
+
+function bucketOf(r) {
+  if (r.status === 'Active' && r.caseStage !== 'Case Closed') return 'Active';
+  if (r.status === 'Active' && r.caseStage === 'Case Closed') return 'History';
+  if (r.status === 'Rejected') return 'History';
+  return 'New Legal Aid'; // Submitted, or Under Review (including PP-rejected, needs reassignment)
+}
 
 export default function LegalAidQueue() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('Active');
+  const [tab, setTab] = useState('New Legal Aid');
   const query = useLegalAidRequestsList();
   const allRequests = query.data?.requests || [];
-  const requests = allRequests.filter((r) => PP_NOT_ASSIGNED_STATUSES.includes(r.status) === (tab === 'Active'));
+  const requests = allRequests.filter((r) => bucketOf(r) === tab);
   const jurisdictionAssigned = query.data?.jurisdictionAssigned !== false;
 
   return (
@@ -58,7 +55,7 @@ export default function LegalAidQueue() {
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
             <h3 className="font-bold text-sm text-gray-800">Legal Aid Requests</h3>
-            <p className="text-[11px] text-gray-400">Requests filed by victims in your district - Active needs your review or a Public Prosecutor assigned; History is everything already assigned or decided.</p>
+            <p className="text-[11px] text-gray-400">New Legal Aid needs your review or a Public Prosecutor assigned; Active has a Public Prosecutor genuinely working it; History is closed or rejected cases.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -81,9 +78,9 @@ export default function LegalAidQueue() {
             ) : query.error ? (
               <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 m-4 rounded-lg">{query.error}</div>
             ) : requests.length === 0 ? (
-              <p className="text-sm text-gray-400 p-6">No {tab === 'Active' ? 'requests awaiting action' : 'past'} requests.</p>
+              <p className="text-sm text-gray-400 p-6">No {tab.toLowerCase()} requests.</p>
             ) : (
-              <table className="w-full text-left min-w-[720px]">
+              <table className="w-full text-left min-w-[760px]">
                 <thead>
                   <tr className="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase">
                     <th className="px-6 py-3">Docket Number</th>
@@ -105,6 +102,11 @@ export default function LegalAidQueue() {
                       </td>
                       <td className="px-6 py-3.5">
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
+                        {r.needsReassignment && (
+                          <span className="ml-1.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700">
+                            <AlertTriangle size={10} /> PP rejected
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-3.5 text-right">
                         <button

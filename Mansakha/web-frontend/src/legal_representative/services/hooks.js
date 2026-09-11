@@ -65,13 +65,16 @@ export function useMyCaseDetail(requestId) {
   );
 }
 
-export function useRecordHearing() {
+// migration_044 - past hearings themselves are eCourt-only now (never
+// PP-entered); this only adds a note against one already-reported hearing
+// date. Replaces the old useRecordHearing (manual hearing creation).
+export function useAddHearingNote() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (requestId, hearing) => {
+  const mutate = async (requestId, { hearingDate, noteText }) => {
     setLoading(true);
     try {
-      return await apiClient.post(`/api/legalrepresentative/my-cases/${requestId}/hearings`, hearing, token);
+      return await apiClient.post(`/api/legalrepresentative/my-cases/${requestId}/hearing-notes`, { hearingDate, noteText }, token);
     } finally {
       setLoading(false);
     }
@@ -79,21 +82,29 @@ export function useRecordHearing() {
   return { mutate, loading };
 }
 
-export function usePrivateNotes(requestId) {
-  const token = getToken();
-  return useQuery(
-    () => (requestId ? apiClient.get(`/api/legalrepresentative/my-cases/${requestId}/private-notes`, token) : Promise.resolve(null)),
-    [token, requestId]
-  );
-}
-
-export function useAddPrivateNote() {
+// Requirement 6 - a Public Prosecutor must explicitly accept (or reject) an
+// assignment DLSA has made before it's genuinely theirs.
+export function useAcceptCase() {
   const token = getToken();
   const [loading, setLoading] = useState(false);
-  const mutate = async (requestId, noteText) => {
+  const mutate = async (requestId) => {
     setLoading(true);
     try {
-      return await apiClient.post(`/api/legalrepresentative/my-cases/${requestId}/private-notes`, { noteText }, token);
+      return await apiClient.post(`/api/legalrepresentative/my-cases/${requestId}/accept`, {}, token);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return { mutate, loading };
+}
+
+export function useRejectCase() {
+  const token = getToken();
+  const [loading, setLoading] = useState(false);
+  const mutate = async (requestId, reason) => {
+    setLoading(true);
+    try {
+      return await apiClient.post(`/api/legalrepresentative/my-cases/${requestId}/reject`, { reason }, token);
     } finally {
       setLoading(false);
     }

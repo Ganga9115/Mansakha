@@ -270,10 +270,10 @@ export function useSubmitLegalAidFeedback() {
 // Legal Aid (migration_040, dedicated pipeline) - replaces the consolidated
 // flow above for NEW requests (the 3 hooks above stay, unmodified, purely to
 // power the legacyRequestFound fallback banner on a case whose Legal Aid was
-// already accepted under the old flow). Real 7-stage lifecycle, existing
-// case documents auto-linked server-side (not re-uploaded), a real assigned
-// representative (not a free-text name), and feedback tied to a specific
-// hearing.
+// already accepted under the old flow). Real lifecycle, existing case
+// documents auto-linked server-side (not re-uploaded), a real assigned
+// Public Prosecutor (not a free-text name). migration_044: feedback is
+// removed application-wide; hearings are eCourt-only.
 
 export function useMyLegalAidRequestCurrent(caseUserId) {
   const token = useToken();
@@ -336,22 +336,6 @@ export function useLegalAidHearings(requestId) {
     queryKey: ['user', 'legal-aid-requests', requestId, 'hearings'],
     queryFn: () => apiClient.get(`/api/user/legal-aid-requests/${requestId}/hearings`, token),
     enabled: !!token && !!requestId,
-  });
-}
-
-// migration_043: one feedback per Public Prosecutor ASSIGNMENT, not per
-// hearing - the feedback box lives directly on LegalAidHubScreen.js's status
-// page (below the stepper), reachable the moment a Public Prosecutor is
-// assigned, not gated behind a hearing having been recorded yet. Invalidates
-// 'current' (GET .../current's own myFeedback is what tells that box whether
-// to show the form or the "already submitted" state).
-export function useSubmitLegalAidRequestFeedback(requestId) {
-  const token = useToken();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ rating, comment }) =>
-      apiClient.post(`/api/user/legal-aid-requests/${requestId}/feedback`, { rating, comment }, token),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-requests', 'current'] }),
   });
 }
 

@@ -15,7 +15,7 @@ const { propagateCounsellorAssignment } = require('../services/userProvisioning'
 const { generateNextQuestion, predictDistressScore, analyzeChatTranscript } = require('../../ai/ollama');
 const { ensureCourtCaseDetails } = require('../../core/services/courtCaseSync');
 const { getCompensationSchedule, withLiveCompensationView } = require('../../core/services/compensationSchedule');
-const { POOR_FEEDBACK_RATING_THRESHOLD } = require('../../core/services/legalAidConstants');
+const { loadHearingTimeline } = require('../../core/services/legalAidHearingTimeline');
 
 // Fixed national Police Control Room number - the mobile app dials this
 // directly via the device's own phone dialer (Linking.openURL('tel:...'))
@@ -2158,9 +2158,14 @@ router.get('/legal-aid-requests/current', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
 
   const { rows } = await pool.query(
-    `select lar.request_id, lar.reason, lar.description, lar.status, lar.rejection_reason, lar.created_at, lar.updated_at, u.jurisdiction_id
+    `select lar.request_id, lar.reason, lar.description, lar.status, lar.rejection_reason, lar.created_at, lar.updated_at,
+            u.jurisdiction_id, u.docket_number, u.case_stage, u.cnr_number, u.enrolled_at,
+            ct.name as case_type_name, j.name as jurisdiction_name, ui.full_name as victim_full_name
      from legal_aid_requests lar
      join users u on u.user_id = lar.user_id
+     join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
      where lar.user_id = $1 order by lar.created_at desc limit 1`,
     [activeUserId]
   );
@@ -2196,23 +2201,14 @@ router.get('/legal-aid-requests/current', async (req, res) => {
   );
   const dlsaCoordinator = dlsaRows[0] ? { fullName: dlsaRows[0].full_name, phone: dlsaRows[0].phone } : null;
 
-  // migration_043: one feedback per Public Prosecutor ASSIGNMENT, not per
-  // hearing - "current" here means whichever assignment is/was most recent
-  // (the Active one, or the final one once Completed), so the feedback box
-  // below the status page's stepper knows whether to show the form or the
-  // "already submitted" state.
-  const { rows: latestAssignmentRows } = await pool.query(
-    `select assignment_id from legal_aid_assignments where request_id = $1 order by assigned_at desc limit 1`,
-    [request.request_id]
-  );
-  let myFeedback = null;
-  if (latestAssignmentRows[0]) {
-    const { rows: feedbackRows } = await pool.query(
-      `select rating, comment from legal_aid_feedback where assignment_id = $1`,
-      [latestAssignmentRows[0].assignment_id]
-    );
-    if (feedbackRows[0]) myFeedback = { rating: feedbackRows[0].rating, comment: feedbackRows[0].comment };
-  }
+  // Requirement 7 - next hearing date shown on the victim's own Legal Aid
+  // page too, not just the Public Prosecutor's. Same eCourt source as
+  // everywhere else this is shown (loadHearingTimeline).
+  const hearingTimeline = await loadHearingTimeline({
+    requestId: request.request_id, userId: activeUserId, caseStage: request.case_stage,
+    docketNumber: request.docket_number, cnrNumber: request.cnr_number, caseTypeName: request.case_type_name,
+    jurisdictionName: request.jurisdiction_name, enrolledAt: request.enrolled_at, victimFullName: request.victim_full_name,
+  }, { includeUpcoming: true });
 
   return ok(res, {
     hasRequest: true,
@@ -2226,7 +2222,7 @@ router.get('/legal-aid-requests/current', async (req, res) => {
     updatedAt: request.updated_at,
     legacyRequestFound,
     dlsaCoordinator,
-    myFeedback,
+    nextHearing: hearingTimeline.available ? hearingTimeline.nextHearing : null,
   });
 });
 
@@ -2263,80 +2259,34 @@ router.get('/legal-aid-requests/:requestId/representative', async (req, res) => 
 });
 
 // Official hearing records only - never legal_aid_private_notes, enforced by
-// table choice alone (that table is never queried from this router).
-// migration_043: no more per-hearing feedbackGiven flag - feedback is
-// assignment-scoped now (see GET .../current's own myFeedback), unrelated to
-// any individual hearing on this list.
+// table choice alone (legal_aid_private_notes, retired by migration_044 -
+// see legalAidHearingTimeline.js's own header comment). Requirement 8: past
+// hearings are eCourt-only now, merged with whatever notes the Public
+// Prosecutor has added against each one (those notes were never private,
+// same as this table's own pre-migration_044 design intent).
 router.get('/legal-aid-requests/:requestId/hearings', async (req, res) => {
   const { requestId } = req.params;
-  const { rows: reqRows } = await pool.query('select user_id from legal_aid_requests where request_id = $1', [requestId]);
-  if (!reqRows[0]) return fail(res, 'Request not found', 404);
-  if (!(await isOwnCase(req, reqRows[0].user_id))) return fail(res, 'Not your request', 403);
-
-  const { rows } = await pool.query(
-    `select hearing_id, hearing_date, court, hearing_type, outcome, next_hearing_date, notes, created_at
-     from legal_aid_hearings where request_id = $1 order by hearing_date desc`,
+  const { rows: reqRows } = await pool.query(
+    `select lar.user_id, u.docket_number, u.case_stage, u.cnr_number, u.enrolled_at,
+            ct.name as case_type_name, j.name as jurisdiction_name, ui.full_name as victim_full_name
+     from legal_aid_requests lar
+     join users u on u.user_id = lar.user_id
+     join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     where lar.request_id = $1`,
     [requestId]
   );
-  return ok(res, {
-    hearings: rows.map((h) => ({
-      hearingId: h.hearing_id,
-      hearingDate: h.hearing_date,
-      court: h.court,
-      hearingType: h.hearing_type,
-      outcome: h.outcome,
-      nextHearingDate: h.next_hearing_date,
-      notes: h.notes,
-      createdAt: h.created_at,
-    })),
+  const request = reqRows[0];
+  if (!request) return fail(res, 'Request not found', 404);
+  if (!(await isOwnCase(req, request.user_id))) return fail(res, 'Not your request', 403);
+
+  const hearingTimeline = await loadHearingTimeline({
+    requestId, userId: request.user_id, caseStage: request.case_stage, docketNumber: request.docket_number,
+    cnrNumber: request.cnr_number, caseTypeName: request.case_type_name, jurisdictionName: request.jurisdiction_name,
+    enrolledAt: request.enrolled_at, victimFullName: request.victim_full_name,
   });
-});
-
-// migration_043: one feedback per Public Prosecutor ASSIGNMENT (DB-enforced),
-// not per hearing - reachable the moment a Public Prosecutor is assigned,
-// not gated behind a hearing actually having been recorded yet. A victim can
-// never edit another victim's feedback (every write here is scoped to
-// submitted_by_user_id = the caller's own id) or overwrite their own either
-// (the assignment-uniqueness index blocks a second insert; the frontend
-// shows GET .../current's own myFeedback instead of the form once one
-// exists).
-router.post('/legal-aid-requests/:requestId/feedback', async (req, res) => {
-  const { requestId } = req.params;
-  const { rating, comment } = req.body;
-  if (!rating || rating < 1 || rating > 5) return fail(res, 'rating is required (1-5)', 400);
-
-  const { rows: reqRows } = await pool.query('select lar.user_id, u.jurisdiction_id from legal_aid_requests lar join users u on u.user_id = lar.user_id where lar.request_id = $1', [requestId]);
-  if (!reqRows[0]) return fail(res, 'Request not found', 404);
-  if (!(await isOwnCase(req, reqRows[0].user_id))) return fail(res, 'Not your request', 403);
-
-  const { rows: assignmentRows } = await pool.query(
-    `select assignment_id from legal_aid_assignments where request_id = $1 order by assigned_at desc limit 1`,
-    [requestId]
-  );
-  if (!assignmentRows[0]) return fail(res, 'No Public Prosecutor has been assigned to this case yet', 400);
-
-  let feedback;
-  try {
-    const { rows } = await pool.query(
-      `insert into legal_aid_feedback (request_id, assignment_id, submitted_by_user_id, rating, comment)
-       values ($1, $2, $3, $4, $5) returning feedback_id`,
-      [requestId, assignmentRows[0].assignment_id, req.auth.userId, rating, comment ? String(comment).trim() || null : null]
-    );
-    feedback = rows[0];
-  } catch (err) {
-    if (err.code === '23505' && err.constraint === 'idx_legal_aid_feedback_one_per_assignment') {
-      return fail(res, 'You have already submitted feedback for your current Public Prosecutor', 409);
-    }
-    return fail(res, `Could not submit feedback: ${err.message}`, 500);
-  }
-
-  await writeAuditLog({ userId: req.auth.userId, action: 'create', entityType: 'legal_aid_feedback', entityId: feedback.feedback_id });
-
-  if (rating <= POOR_FEEDBACK_RATING_THRESHOLD) {
-    await notifyJurisdictionalDlsa(reqRows[0].user_id, reqRows[0].jurisdiction_id, 'urgent');
-  }
-
-  return ok(res, { feedbackId: feedback.feedback_id }, 'Feedback submitted. Kindly note that if you rate your Public Prosecutor poorly, DLSA may reassign your case.', 201);
+  return ok(res, hearingTimeline);
 });
 
 // ===== Protection status (Protection Officer flow) =====

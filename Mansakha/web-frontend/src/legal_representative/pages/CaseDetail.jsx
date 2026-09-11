@@ -1,14 +1,75 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowLeft, FileText, Gavel, Lock, PlusCircle } from 'lucide-react';
-import { useMyCaseDetail, useRecordHearing, usePrivateNotes, useAddPrivateNote } from '../services/hooks';
+import { ArrowLeft, FileText, Gavel, CheckCircle, XCircle, PlusCircle } from 'lucide-react';
+import { useMyCaseDetail, useAddHearingNote, useAcceptCase, useRejectCase } from '../services/hooks';
 
-// The representative's own working view of one case: Case Overview (read-
-// only - no DLSA-level assign/reassign controls here), Hearing Timeline (the
-// official, shared record - visible to DLSA and the victim too), and Private
-// Notes in its own visually distinct panel so the shared/private boundary is
-// obvious at a glance rather than easy to miss.
+// The representative's own working view of one case: an Accept/Reject
+// banner while the assignment is still pending (requirement 6), Case
+// Overview (read-only - no DLSA-level assign/reassign controls here), and
+// the Hearing Timeline - eCourt-reported past hearings only (requirement 8),
+// each with its own "Add Notes" action. Private Notes is gone entirely
+// (migration_044) - a hearing note is the one remaining notes mechanism,
+// and unlike Private Notes it is visible to DLSA and the victim too.
+
+function AcceptRejectBanner({ requestId, onDecided }) {
+  const accept = useAcceptCase();
+  const reject = useRejectCase();
+  const [showReject, setShowReject] = useState(false);
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState(null);
+
+  const handleAccept = async () => {
+    setError(null);
+    try {
+      await accept.mutate(requestId);
+      onDecided();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleReject = async () => {
+    setError(null);
+    try {
+      await reject.mutate(requestId, reason.trim() || undefined);
+      onDecided();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 space-y-3">
+      <h3 className="font-bold text-sm text-amber-900">DLSA has assigned you this case</h3>
+      <p className="text-xs text-amber-800">Review the case details below, then accept to take it on or reject if you're unable to.</p>
+      {!showReject ? (
+        <div className="flex gap-2">
+          <button onClick={handleAccept} disabled={accept.loading} className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
+            <CheckCircle size={14} /> {accept.loading ? 'Accepting...' : 'Accept Case'}
+          </button>
+          <button onClick={() => setShowReject(true)} className="flex items-center gap-1.5 px-4 py-2 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold transition">
+            <XCircle size={14} /> Reject Case
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <input
+            type="text" value={reason} onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason for rejecting (optional)" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
+          />
+          <div className="flex gap-2">
+            <button onClick={handleReject} disabled={reject.loading} className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
+              {reject.loading ? 'Working...' : 'Confirm Reject'}
+            </button>
+            <button onClick={() => { setShowReject(false); setReason(''); }} className="px-3 py-2 text-gray-500 text-xs">Cancel</button>
+          </div>
+        </div>
+      )}
+      {error && <p className="text-xs text-rose-700">{error}</p>}
+    </div>
+  );
+}
 
 function CaseOverview({ r }) {
   return (
@@ -73,148 +134,91 @@ function DocumentsCard({ documents }) {
   );
 }
 
-function HearingTimeline({ requestId, hearings, onRecorded, canRecord }) {
-  const record = useRecordHearing();
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ hearingDate: '', court: '', hearingType: '', outcome: '', nextHearingDate: '', notes: '' });
+function HearingNoteForm({ requestId, hearingDate, onAdded }) {
+  const addNote = useAddHearingNote();
+  const [noteText, setNoteText] = useState('');
+  const [open, setOpen] = useState(false);
   const [error, setError] = useState(null);
 
   const handleSubmit = async () => {
-    if (!form.hearingDate || !form.outcome.trim()) return;
+    if (!noteText.trim()) return;
     setError(null);
     try {
-      await record.mutate(requestId, {
-        hearingDate: form.hearingDate,
-        court: form.court.trim() || null,
-        hearingType: form.hearingType.trim() || null,
-        outcome: form.outcome.trim(),
-        nextHearingDate: form.nextHearingDate || null,
-        notes: form.notes.trim() || null,
-      });
-      setForm({ hearingDate: '', court: '', hearingType: '', outcome: '', nextHearingDate: '', notes: '' });
-      setShowForm(false);
-      onRecorded();
+      await addNote.mutate(requestId, { hearingDate, noteText: noteText.trim() });
+      setNoteText('');
+      setOpen(false);
+      onAdded();
     } catch (err) {
       setError(err.message);
     }
   };
 
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="flex items-center gap-1 text-[11px] font-semibold text-[#519BCE] hover:underline">
+        <PlusCircle size={12} /> Add Notes
+      </button>
+    );
+  }
+
   return (
-    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <Gavel size={15} className="text-[#3D5A80]" />
-          <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
-        </div>
-        {canRecord && !showForm && (
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 text-xs font-semibold text-[#519BCE] hover:underline">
-            <PlusCircle size={14} /> Record Hearing Outcome
-          </button>
-        )}
+    <div className="space-y-2 mt-1">
+      <textarea
+        value={noteText} onChange={(e) => setNoteText(e.target.value)}
+        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white" rows={2}
+        placeholder="Your notes on this hearing..."
+      />
+      {error && <p className="text-xs text-rose-600">{error}</p>}
+      <div className="flex gap-2">
+        <button onClick={handleSubmit} disabled={!noteText.trim() || addNote.loading} className="px-3 py-1.5 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
+          {addNote.loading ? 'Saving...' : 'Save Note'}
+        </button>
+        <button onClick={() => { setOpen(false); setNoteText(''); }} className="px-3 py-1.5 text-gray-500 text-xs">Cancel</button>
       </div>
-
-      {showForm && (
-        <div className="bg-[#F8F9FA] rounded-lg p-4 space-y-2">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <input type="date" value={form.hearingDate} onChange={(e) => setForm((f) => ({ ...f, hearingDate: e.target.value }))} className="px-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder="Hearing date" />
-            <input type="text" value={form.court} onChange={(e) => setForm((f) => ({ ...f, court: e.target.value }))} className="px-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder="Court / proceeding" />
-          </div>
-          <input type="text" value={form.hearingType} onChange={(e) => setForm((f) => ({ ...f, hearingType: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder="Hearing stage / type (e.g. Evidence, Arguments)" />
-          <textarea value={form.outcome} onChange={(e) => setForm((f) => ({ ...f, outcome: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder="Outcome (required)" rows={2} />
-          <input type="date" value={form.nextHearingDate} onChange={(e) => setForm((f) => ({ ...f, nextHearingDate: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder="Next hearing date (if any)" />
-          <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder="General case/proceeding notes for the official record" rows={2} />
-          {error && <p className="text-xs text-rose-600">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={handleSubmit} disabled={!form.hearingDate || !form.outcome.trim() || record.loading} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
-              {record.loading ? 'Saving...' : 'Save Hearing Outcome'}
-            </button>
-            <button onClick={() => setShowForm(false)} className="px-3 py-2 text-gray-500 text-xs">Cancel</button>
-          </div>
-        </div>
-      )}
-
-      {hearings?.length > 0 ? (
-        <div className="space-y-2">
-          {hearings.map((h) => (
-            <div key={h.hearingId} className="border border-gray-100 rounded-lg px-3 py-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-gray-800">{new Date(h.hearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                {h.court && <span className="text-gray-400">{h.court}</span>}
-              </div>
-              {h.hearingType && <p className="text-[10px] text-gray-400 mt-0.5">{h.hearingType}</p>}
-              <p className="text-gray-600 mt-1">{h.outcome}</p>
-              {h.notes && <p className="text-gray-500 mt-1 italic">{h.notes}</p>}
-              {h.nextHearingDate && <p className="text-[10px] text-gray-400 mt-1">Next hearing: {new Date(h.nextHearingDate).toLocaleDateString('en-IN')}</p>}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-400">No hearings recorded yet.</p>
-      )}
     </div>
   );
 }
 
-// Visually distinct from the Hearing Timeline above (muted panel, lock icon)
-// so the shared/private boundary is obvious - these notes never reach DLSA
-// or the victim, enforced server-side (see legalRepresentative.routes.js).
-function PrivateNotesPanel({ requestId, canWrite }) {
-  const notesQuery = usePrivateNotes(requestId);
-  const addNote = useAddPrivateNote();
-  const [noteText, setNoteText] = useState('');
-  const [error, setError] = useState(null);
-
-  const handleAdd = async () => {
-    if (!noteText.trim()) return;
-    setError(null);
-    try {
-      await addNote.mutate(requestId, noteText.trim());
-      setNoteText('');
-      notesQuery.refetch();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  return (
-    <div className="bg-gray-50 p-5 rounded-xl border border-gray-300 border-dashed space-y-3">
-      <div className="flex items-center gap-1.5">
-        <Lock size={15} className="text-gray-500" />
-        <h3 className="font-bold text-sm text-gray-700">Private Notes</h3>
-      </div>
-      <p className="text-[11px] text-gray-500">
-        Strictly internal - visible only to you. Never shown to DLSA, the victim, or included in the official case record.
-      </p>
-
-      {canWrite && (
-        <div className="space-y-2">
-          <textarea
-            value={noteText}
-            onChange={(e) => setNoteText(e.target.value)}
-            placeholder="Preparation notes, strategy reminders, follow-ups..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white"
-            rows={2}
-          />
-          {error && <p className="text-xs text-rose-600">{error}</p>}
-          <button onClick={handleAdd} disabled={!noteText.trim() || addNote.loading} className="px-3 py-1.5 bg-gray-700 hover:bg-gray-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
-            {addNote.loading ? 'Saving...' : 'Add Note'}
-          </button>
+// Requirement 8 - every past hearing comes from the eCourt-simulated feed
+// (never PP-entered); notes are the only thing this Public Prosecutor can
+// actually add, one at a time, against whichever hearing they concern.
+function HearingTimeline({ requestId, hearingTimeline, onChanged, canAddNotes }) {
+  if (!hearingTimeline?.available) {
+    return (
+      <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm">
+        <div className="flex items-center gap-1.5 mb-2">
+          <Gavel size={15} className="text-[#3D5A80]" />
+          <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
         </div>
-      )}
+        <p className="text-xs text-gray-400">{hearingTimeline?.reason || 'Not available yet.'}</p>
+      </div>
+    );
+  }
 
-      {notesQuery.loading ? (
-        <p className="text-xs text-gray-400">Loading...</p>
-      ) : (notesQuery.data?.notes || []).length === 0 ? (
-        <p className="text-xs text-gray-400">No private notes yet.</p>
-      ) : (
+  const hearings = hearingTimeline.pastHearings || [];
+  return (
+    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+      <div className="flex items-center gap-1.5">
+        <Gavel size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
+      </div>
+      <p className="text-[11px] text-gray-400">Sourced from the eCourt record - not editable here.</p>
+
+      {hearings.length > 0 ? (
         <div className="space-y-2">
-          {notesQuery.data.notes.map((n) => (
-            <div key={n.noteId} className="bg-white border border-gray-200 rounded-lg px-3 py-2 text-xs">
-              <p className="text-gray-700 whitespace-pre-wrap">{n.noteText}</p>
-              <p className="text-[10px] text-gray-400 mt-1">{new Date(n.createdAt).toLocaleString('en-IN')}</p>
+          {hearings.map((h) => (
+            <div key={h.hearingDate} className="border border-gray-100 rounded-lg px-3 py-2 text-xs space-y-1">
+              <span className="font-bold text-gray-800">{new Date(h.hearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              <p className="text-gray-600">{h.business}</p>
+              {h.notes?.map((n) => (
+                <p key={n.noteId} className="text-gray-500 italic pl-2 border-l-2 border-gray-200">{n.noteText}</p>
+              ))}
+              {canAddNotes && <HearingNoteForm requestId={requestId} hearingDate={h.hearingDate} onAdded={onChanged} />}
             </div>
           ))}
         </div>
+      ) : (
+        <p className="text-xs text-gray-400">No hearings recorded by eCourt yet.</p>
       )}
     </div>
   );
@@ -239,6 +243,7 @@ export default function CaseDetail() {
     );
   }
 
+  const isPending = r.myAssignmentStatus === 'Pending Acceptance';
   const canRecord = r.myAssignmentStatus === 'Active';
 
   return (
@@ -248,7 +253,9 @@ export default function CaseDetail() {
           <ArrowLeft size={14} /> Back to My Cases
         </button>
 
-        {!canRecord && (
+        {isPending && <AcceptRejectBanner requestId={requestId} onDecided={detailQuery.refetch} />}
+
+        {!isPending && !canRecord && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-3 rounded-lg">
             You are no longer the active Public Prosecutor on this case ({r.myAssignmentStatus}). This view is read-only.
           </div>
@@ -256,8 +263,7 @@ export default function CaseDetail() {
 
         <CaseOverview r={r} />
         <DocumentsCard documents={r.documents} />
-        <HearingTimeline requestId={requestId} hearings={r.hearings} onRecorded={detailQuery.refetch} canRecord={canRecord} />
-        <PrivateNotesPanel requestId={requestId} canWrite={canRecord} />
+        <HearingTimeline requestId={requestId} hearingTimeline={r.hearingTimeline} onChanged={detailQuery.refetch} canAddNotes={canRecord} />
       </div>
     </StaffLayout>
   );

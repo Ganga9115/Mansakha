@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowLeft, FileText, User, Phone, Home, Star } from 'lucide-react';
+import { ArrowLeft, FileText, User, Phone, Home, Gavel } from 'lucide-react';
 import {
   useLegalAidRequestDetail, useEligibleRepresentatives,
   useStartLegalAidReview, useRejectLegalAidRequest,
-  useAssignRepresentative, useReassignRepresentative, useContinueLegalAidFeedback,
+  useAssignRepresentative, useReassignRepresentative,
 } from '../services/hooks';
 
 // The single action surface for one Legal Aid request - every status
-// transition (Start Review / Reject / Assign Public Prosecutor) and the
-// poor-feedback review loop all live here, gated by the request's own
-// current status. Same list -> detail convention as
-// ReferralDetail.jsx/InterventionRequestDetail.jsx.
+// transition (Start Review / Reject / Assign Public Prosecutor) lives here,
+// gated by the request's own current status. Same list -> detail convention
+// as ReferralDetail.jsx/InterventionRequestDetail.jsx.
 //
 // There is no "Mark Complete" action here (per explicit product request) -
 // assigning a Public Prosecutor doesn't mean the case is done, and DLSA has
@@ -21,21 +20,26 @@ import {
 // entirely separate fact - see ecourtStageSync.js) ever says a case is
 // actually closed.
 //
-// migration_043: trimmed to exactly what's needed day to day - docket
-// number, victim details, current (eCourt) case stage, Legal Aid status,
-// reason, documents, and victim feedback, plus the Reassign action. Case
-// Type, the Assignment History timeline, and the Legal Aid Hearing Records
-// list are no longer shown here (the reassign panel's own "currently X"
-// label already names the current Public Prosecutor, which was the only
-// thing Assignment History was still needed for on this page).
+// migration_044: Assign Public Prosecutor no longer activates the case by
+// itself - it creates a 'Pending Acceptance' assignment the Public
+// Prosecutor must accept (or reject) themselves; Feedback is removed
+// application-wide (FeedbackCard/PendingFeedbackCard are gone); the Hearing
+// Records list is eCourt-sourced (never DLSA/PP-authored) with each Public
+// Prosecutor note shown inline.
 
 const STATUS_BADGE = {
   Submitted: 'bg-amber-100 text-amber-700',
   'Under Review': 'bg-sky-100 text-sky-700',
-  Verified: 'bg-indigo-100 text-indigo-700',
-  Approved: 'bg-teal-100 text-teal-700',
   Rejected: 'bg-rose-100 text-rose-700',
   Active: 'bg-emerald-100 text-emerald-700',
+  Completed: 'bg-gray-200 text-gray-700',
+};
+
+const ASSIGNMENT_STATUS_BADGE = {
+  'Pending Acceptance': 'bg-amber-100 text-amber-700',
+  Active: 'bg-emerald-100 text-emerald-700',
+  Rejected: 'bg-rose-100 text-rose-700',
+  Reassigned: 'bg-gray-200 text-gray-600',
   Completed: 'bg-gray-200 text-gray-700',
 };
 
@@ -105,126 +109,41 @@ function DocumentsCard({ documents }) {
   );
 }
 
-// Every feedback the victim has left about their Public Prosecutor(s) on
-// this case (migration_043: one per assignment, not per hearing) - good or
-// poor, not just the poor/unreviewed ones PendingFeedbackCard above already
-// surfaces as an action item.
-function FeedbackCard({ feedback }) {
+// Requirement 8 - every past hearing comes from eCourt (never DLSA/PP-
+// authored); the assigned Public Prosecutor's own notes on each are shown
+// alongside, read-only from this side.
+function HearingTimelineCard({ hearingTimeline }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <Star size={15} className="text-[#3D5A80]" />
-        <h3 className="font-bold text-sm text-gray-800">Feedback from Victim</h3>
+        <Gavel size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
       </div>
-      {feedback?.length > 0 ? (
+      {!hearingTimeline?.available ? (
+        <p className="text-xs text-gray-400">{hearingTimeline?.reason || 'Not available yet.'}</p>
+      ) : hearingTimeline.pastHearings?.length > 0 ? (
         <div className="space-y-2">
-          {feedback.map((f) => (
-            <div key={f.feedbackId} className="border border-gray-100 rounded-lg px-3 py-2 text-xs space-y-1">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 text-amber-500">
-                  {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={13} fill={i < f.rating ? 'currentColor' : 'none'} />)}
-                </div>
-                <span className="text-[10px] text-gray-400">{new Date(f.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-              </div>
-              {f.comment && <p className="text-gray-600 italic">"{f.comment}"</p>}
+          {hearingTimeline.pastHearings.map((h) => (
+            <div key={h.hearingDate} className="border border-gray-100 rounded-lg px-3 py-2 text-xs space-y-1">
+              <span className="font-bold text-gray-800">{new Date(h.hearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+              <p className="text-gray-600">{h.business}</p>
+              {h.notes?.map((n) => (
+                <p key={n.noteId} className="text-gray-500 italic pl-2 border-l-2 border-gray-200">{n.noteText}</p>
+              ))}
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-gray-400">No feedback submitted yet.</p>
+        <p className="text-xs text-gray-400">No hearings recorded by eCourt yet.</p>
       )}
     </div>
   );
 }
 
-function PendingFeedbackCard({ feedback, requestId, onDecided }) {
-  const reassign = useReassignRepresentative();
-  const continueRep = useContinueLegalAidFeedback();
-  const eligible = useEligibleRepresentatives(requestId);
-  const [showReassign, setShowReassign] = useState(null);
-  const [newRepId, setNewRepId] = useState('');
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState(null);
-
-  if (!feedback?.length) return null;
-
-  const handleContinue = async (feedbackId) => {
-    setError(null);
-    try {
-      await continueRep.mutate(requestId, feedbackId);
-      onDecided();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  const handleReassignConfirm = async (feedbackId) => {
-    if (!newRepId || !reason.trim()) return;
-    setError(null);
-    try {
-      await reassign.mutate(requestId, { newRepresentativeOfficialId: newRepId, endedReason: reason.trim(), feedbackId });
-      setShowReassign(null);
-      setNewRepId('');
-      setReason('');
-      onDecided();
-    } catch (err) {
-      setError(err.message);
-    }
-  };
-
-  return (
-    <div className="bg-rose-50 border border-rose-200 rounded-xl p-5 space-y-3">
-      <div className="flex items-center gap-1.5">
-        <Star size={15} className="text-rose-600" />
-        <h3 className="font-bold text-sm text-rose-800">Poor Feedback Needs Your Review</h3>
-      </div>
-      {feedback.map((f) => (
-        <div key={f.feedbackId} className="bg-white rounded-lg p-4 space-y-2 border border-rose-100">
-          <div className="flex items-center gap-1 text-amber-500">
-            {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={14} fill={i < f.rating ? 'currentColor' : 'none'} />)}
-            <span className="text-xs text-gray-500 ml-1">for hearing on {new Date(f.hearingDate).toLocaleDateString('en-IN')}</span>
-          </div>
-          {f.comment && <p className="text-xs text-gray-700 italic">"{f.comment}"</p>}
-
-          {showReassign === f.feedbackId ? (
-            <div className="space-y-2 pt-1">
-              <select value={newRepId} onChange={(e) => setNewRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-                <option value="">Select a new Public Prosecutor...</option>
-                {(eligible.data?.representatives || []).map((rep) => (
-                  <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
-                ))}
-              </select>
-              <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for reassignment (required)" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" />
-              <div className="flex gap-2">
-                <button onClick={() => handleReassignConfirm(f.feedbackId)} disabled={!newRepId || !reason.trim() || reassign.loading} className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
-                  Confirm Reassignment
-                </button>
-                <button onClick={() => setShowReassign(null)} className="px-3 py-1.5 text-gray-500 text-xs">Cancel</button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex gap-2 pt-1">
-              <button onClick={() => handleContinue(f.feedbackId)} disabled={continueRep.loading} className="px-3 py-1.5 border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-lg text-xs font-semibold transition disabled:opacity-60">
-                Continue with current Public Prosecutor
-              </button>
-              <button onClick={() => setShowReassign(f.feedbackId)} className="px-3 py-1.5 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold transition">
-                Reassign Public Prosecutor
-              </button>
-            </div>
-          )}
-        </div>
-      ))}
-      {error && <p className="text-xs text-rose-700">{error}</p>}
-    </div>
-  );
-}
-
-// Standalone reassignment - available on any Active case regardless of
-// whether there's poor feedback prompting it (a Public Prosecutor going
-// unavailable, moving districts, etc. is a real reason to swap them that has
-// nothing to do with feedback). Same backend action as the feedback-driven
-// one in PendingFeedbackCard - reassign only requires a reason, feedbackId
-// is optional there specifically so this standalone path can omit it.
+// Reassignment - a Public Prosecutor going unavailable, changing district,
+// etc. is reason enough on its own to swap them. Available on any Active
+// case; the new Public Prosecutor gets the same Accept/Reject step as a
+// first-time assignment (their own assignment starts 'Pending Acceptance').
 function StandaloneReassignPanel({ requestId, currentAssignment, onDone }) {
   const reassign = useReassignRepresentative();
   const eligible = useEligibleRepresentatives(requestId);
@@ -324,6 +243,11 @@ export default function LegalAidRequestDetail() {
     }
   }
 
+  const currentAssignment = r.assignments?.find((a) => a.status === 'Active');
+  const pendingAssignment = r.assignments?.find((a) => a.status === 'Pending Acceptance');
+  const latestAssignment = r.assignments?.[r.assignments.length - 1];
+  const needsReassignment = latestAssignment?.status === 'Rejected';
+
   return (
     <StaffLayout title="Legal Aid Request">
       <div className="space-y-6">
@@ -345,6 +269,14 @@ export default function LegalAidRequestDetail() {
               <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Status of Legal Aid</span>
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
             </div>
+            {pendingAssignment && (
+              <div>
+                <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Assignment</span>
+                <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${ASSIGNMENT_STATUS_BADGE['Pending Acceptance']}`}>
+                  Awaiting {pendingAssignment.representativeName}'s acceptance
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -353,7 +285,7 @@ export default function LegalAidRequestDetail() {
                 {startReview.loading ? 'Working...' : 'Start Review'}
               </button>
             )}
-            {r.status === 'Under Review' && !showRejectReason && !showAssign && (
+            {r.status === 'Under Review' && !pendingAssignment && !showRejectReason && !showAssign && (
               <>
                 <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition">
                   Assign Public Prosecutor
@@ -366,14 +298,20 @@ export default function LegalAidRequestDetail() {
           </div>
         </div>
 
+        {needsReassignment && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs px-4 py-3 rounded-lg font-semibold">
+            Public Prosecutor rejected - need to assign another Public Prosecutor.
+            {latestAssignment.endedReason ? ` Reason given: "${latestAssignment.endedReason}"` : ''}
+          </div>
+        )}
+
         {/* Reassignment isn't only a feedback-driven action - a Public
             Prosecutor going unavailable, changing district, etc. is reason
-            enough on its own, so this is offered on every Active case,
-            independent of PendingFeedbackCard below. */}
-        {r.status === 'Active' && (
+            enough on its own. */}
+        {r.status === 'Active' && currentAssignment && (
           <StandaloneReassignPanel
             requestId={r.requestId}
-            currentAssignment={r.assignments?.find((a) => a.status === 'Active')}
+            currentAssignment={currentAssignment}
             onDone={detailQuery.refetch}
           />
         )}
@@ -432,8 +370,6 @@ export default function LegalAidRequestDetail() {
           </div>
         )}
 
-        <PendingFeedbackCard feedback={r.pendingFeedbackReview} requestId={r.requestId} onDecided={detailQuery.refetch} />
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">
@@ -447,7 +383,7 @@ export default function LegalAidRequestDetail() {
               )}
             </div>
             <DocumentsCard documents={r.documents} />
-            <FeedbackCard feedback={r.feedback} />
+            <HearingTimelineCard hearingTimeline={r.hearingTimeline} />
           </div>
 
           <div className="space-y-6">

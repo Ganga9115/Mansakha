@@ -135,13 +135,17 @@ async function getUserNotifications(userId) {
        limit 5`,
       [userId]
     ),
+    // migration_044 - hearings themselves are eCourt-only now (never a
+    // notification-worthy app event); this row is the Public Prosecutor's
+    // own note against one of those hearings, the one hearing-adjacent thing
+    // this app still creates.
     pool.query(
-      `select h.hearing_id, h.created_at
-       from legal_aid_hearings h
-       join legal_aid_requests lar on lar.request_id = h.request_id
+      `select n.note_id, n.created_at
+       from legal_aid_hearing_notes n
+       join legal_aid_requests lar on lar.request_id = n.request_id
        join users u on u.user_id = lar.user_id
        where u.user_id = $1 or u.linked_to_user_id = $1
-       order by h.created_at desc
+       order by n.created_at desc
        limit 5`,
       [userId]
     ),
@@ -167,10 +171,10 @@ async function getUserNotifications(userId) {
       message: `Your Legal Aid request is now ${r.status}`,
     })),
     ...legalAidHearings.map((h) => ({
-      notificationId: h.hearing_id,
+      notificationId: h.note_id,
       notifiedAt: h.created_at,
       type: 'legal_aid_hearing',
-      message: 'A hearing outcome was recorded for your Legal Aid case',
+      message: 'Your Public Prosecutor added a note to a hearing on your Legal Aid case',
     })),
   ].sort((a, b) => new Date(b.notifiedAt).getTime() - new Date(a.notifiedAt).getTime());
 

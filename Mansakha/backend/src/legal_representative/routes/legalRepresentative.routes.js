@@ -1,5 +1,6 @@
 const express = require('express');
 const { pool, withTransaction } = require('../../core/db/pgPool');
+const { supabase } = require('../../core/db/supabaseClient');
 const { writeAuditLog } = require('../../core/services/auditLog');
 const { verifyToken } = require('../../core/middleware/verifyToken');
 const { requireRole } = require('../../core/middleware/requireRole');
@@ -7,6 +8,7 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { loadRequestDocuments } = require('../../core/services/legalAidDocuments');
 const { ensureCourtCaseDetails } = require('../../core/services/courtCaseSync');
+const { loadHearingTimeline } = require('../../core/services/legalAidHearingTimeline');
 
 // Public Prosecutor (migration_040) - the real DLSA-assigned advocate
 // role for the dedicated Legal Aid pipeline. Every route here filters by
@@ -14,6 +16,12 @@ const { ensureCourtCaseDetails } = require('../../core/services/courtCaseSync');
 // caller's own id), not by jurisdiction - jurisdictionId only matters at
 // DLSA's own assignment-time (dlsa.routes.js's eligible-representatives
 // picker), it plays no part in any query this role runs on its own cases.
+//
+// migration_044: an assignment is no longer instantly binding - DLSA's own
+// assign action creates it as 'Pending Acceptance', and only this role's own
+// Accept/Reject decision (below) resolves it to 'Active' or 'Rejected'. A
+// case is genuinely this Public Prosecutor's own responsibility only once
+// they've accepted it.
 const ROLE_NAME = 'Public Prosecutor';
 
 const router = express.Router();
@@ -26,11 +34,14 @@ router.use(verifyToken, requireRole([ROLE_NAME]), generalApiLimiter);
 async function loadOwnCaseRequest(req, res) {
   const { rows } = await pool.query(
     `select lar.request_id, lar.user_id, lar.reason, lar.description, lar.status, lar.created_at, lar.updated_at,
-            u.docket_number, u.case_stage, ct.name as case_type_name,
-            laa.assignment_id, laa.status as assignment_status
+            u.docket_number, u.case_stage, u.cnr_number, u.enrolled_at, u.jurisdiction_id,
+            ct.name as case_type_name, j.name as jurisdiction_name, ui.full_name as victim_full_name,
+            laa.assignment_id, laa.status as assignment_status, laa.assigned_by_official_id
      from legal_aid_requests lar
      join users u on u.user_id = lar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
      join legal_aid_assignments laa on laa.request_id = lar.request_id and laa.representative_official_id = $2
      where lar.request_id = $1
      order by laa.assigned_at desc
@@ -47,25 +58,40 @@ async function loadOwnCaseRequest(req, res) {
 
 router.get('/my-cases', async (req, res) => {
   const { status } = req.query;
-  const statuses = status === 'history' ? ['Reassigned', 'Completed'] : ['Active'];
+  const statuses = status === 'history' ? ['Reassigned', 'Rejected', 'Completed']
+    : status === 'pending' ? ['Pending Acceptance']
+    : ['Active'];
 
   const { rows } = await pool.query(
     `select lar.request_id, lar.reason, lar.status as request_status, lar.created_at,
-            u.docket_number, u.case_stage, ct.name as case_type_name,
-            laa.assignment_id, laa.status as assignment_status, laa.assigned_at,
-            (select h.next_hearing_date from legal_aid_hearings h where h.request_id = lar.request_id order by h.hearing_date desc limit 1) as next_hearing_date,
-            (select h.outcome from legal_aid_hearings h where h.request_id = lar.request_id order by h.hearing_date desc limit 1) as last_hearing_outcome
+            u.user_id, u.docket_number, u.case_stage, u.cnr_number, u.enrolled_at,
+            ct.name as case_type_name, j.name as jurisdiction_name, ui.full_name as victim_full_name,
+            laa.assignment_id, laa.status as assignment_status, laa.assigned_at
      from legal_aid_assignments laa
      join legal_aid_requests lar on lar.request_id = laa.request_id
      join users u on u.user_id = lar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
      where laa.representative_official_id = $1 and laa.status = any($2::text[])
      order by laa.assigned_at desc`,
     [req.auth.officialId, statuses]
   );
 
+  // Next hearing date per case, same eCourt source as /hearings-upcoming -
+  // pending cases skip this (nothing to prepare for until accepted).
+  const withNextHearing = await Promise.all(rows.map(async (r) => {
+    if (r.assignment_status !== 'Active') return { ...r, next_hearing_date: null };
+    const timeline = await loadHearingTimeline({
+      requestId: r.request_id, userId: r.user_id, caseStage: r.case_stage, docketNumber: r.docket_number,
+      cnrNumber: r.cnr_number, caseTypeName: r.case_type_name, jurisdictionName: r.jurisdiction_name,
+      enrolledAt: r.enrolled_at, victimFullName: r.victim_full_name,
+    }, { includeUpcoming: true });
+    return { ...r, next_hearing_date: timeline.nextHearing?.nextHearingDate || null };
+  }));
+
   return ok(res, {
-    cases: rows.map((r) => ({
+    cases: withNextHearing.map((r) => ({
       requestId: r.request_id,
       assignmentId: r.assignment_id,
       docketNumber: r.docket_number,
@@ -75,7 +101,6 @@ router.get('/my-cases', async (req, res) => {
       assignmentStatus: r.assignment_status,
       assignedAt: r.assigned_at,
       nextHearingDate: r.next_hearing_date,
-      lastHearingOutcome: r.last_hearing_outcome,
     })),
   });
 });
@@ -95,11 +120,13 @@ router.get('/my-cases/:requestId', async (req, res) => {
     [request.request_id]
   );
 
-  const { rows: hearings } = await pool.query(
-    `select hearing_id, hearing_date, court, hearing_type, outcome, next_hearing_date, notes, created_at
-     from legal_aid_hearings where request_id = $1 order by hearing_date desc`,
-    [request.request_id]
-  );
+  // migration_044: past hearings are eCourt-only (requirement 8) - never a
+  // Public-Prosecutor-authored record.
+  const hearingTimeline = await loadHearingTimeline({
+    requestId: request.request_id, userId: request.user_id, caseStage: request.case_stage,
+    docketNumber: request.docket_number, cnrNumber: request.cnr_number, caseTypeName: request.case_type_name,
+    jurisdictionName: request.jurisdiction_name, enrolledAt: request.enrolled_at, victimFullName: request.victim_full_name,
+  }, { includeUpcoming: true });
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'legal_aid_request', entityId: request.request_id });
 
@@ -121,77 +148,96 @@ router.get('/my-cases/:requestId', async (req, res) => {
       endedAt: a.ended_at,
       endedReason: a.ended_reason,
     })),
-    hearings: hearings.map((h) => ({
-      hearingId: h.hearing_id,
-      hearingDate: h.hearing_date,
-      court: h.court,
-      hearingType: h.hearing_type,
-      outcome: h.outcome,
-      nextHearingDate: h.next_hearing_date,
-      notes: h.notes,
-      createdAt: h.created_at,
-    })),
+    hearingTimeline,
   });
 });
 
-// assignment_id is always resolved server-side from the caller's OWN current
-// Active assignment on this request - never accepted from the client, which
-// would let a representative spoof a hearing onto someone else's assignment_id.
-router.post('/my-cases/:requestId/hearings', async (req, res) => {
+// Requirement 6 - a Public Prosecutor is not bound to a case DLSA assigns
+// them until they explicitly say so. Accept is the only route that ever
+// moves a request itself to 'Active' (see dlsa.routes.js's own assign-
+// representative comment on why it no longer does this directly).
+router.post('/my-cases/:requestId/accept', async (req, res) => {
   const request = await loadOwnCaseRequest(req, res);
   if (!request) return;
-  if (request.assignment_status !== 'Active') return fail(res, 'You are not the currently active representative on this case', 403);
+  if (request.assignment_status !== 'Pending Acceptance') {
+    return fail(res, `This assignment is '${request.assignment_status}', not awaiting your acceptance`, 400);
+  }
 
-  const { hearingDate, court, hearingType, outcome, nextHearingDate, notes } = req.body;
+  await withTransaction(async (client) => {
+    await client.query(`update legal_aid_assignments set status = 'Active' where assignment_id = $1`, [request.assignment_id]);
+    await client.query(
+      `update legal_aid_requests set status = 'Active', reviewed_by_official_id = $1, reviewed_at = now(), updated_at = now() where request_id = $2`,
+      [req.auth.officialId, request.request_id]
+    );
+  });
+
+  await writeAuditLog({
+    officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_assignment', entityId: request.assignment_id,
+    details: { note: 'Public Prosecutor accepted the case' },
+  });
+
+  return ok(res, { requestId: request.request_id, status: 'Active' }, 'Case accepted');
+});
+
+// Requirement 6 - the decline path. Does not touch legal_aid_requests.status
+// (it was never changed at assign-time, so it's already sitting at whatever
+// it was before - 'Under Review' for a first assignment, 'Active' for a
+// reassignment where some other assignment is still the case's real one).
+// DLSA needs to know to act again - dlsa.routes.js's own GET
+// /legal-aid-requests computes this live off the latest assignment's status
+// rather than this route storing a separate flag, so it can never drift.
+router.post('/my-cases/:requestId/reject', async (req, res) => {
+  const request = await loadOwnCaseRequest(req, res);
+  if (!request) return;
+  if (request.assignment_status !== 'Pending Acceptance') {
+    return fail(res, `This assignment is '${request.assignment_status}', not awaiting your acceptance`, 400);
+  }
+
+  const { reason } = req.body;
+
+  await pool.query(
+    `update legal_aid_assignments set status = 'Rejected', ended_at = now(), ended_reason = $1 where assignment_id = $2`,
+    [reason && String(reason).trim() ? String(reason).trim() : 'Rejected by Public Prosecutor', request.assignment_id]
+  );
+
+  await writeAuditLog({
+    officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_assignment', entityId: request.assignment_id,
+    details: { note: 'Public Prosecutor rejected the case', reason: reason || null },
+  });
+
+  // Best-effort - surfaced to DLSA as the needsReassignment flag on their own
+  // queue regardless of whether this insert succeeds (see that route's own
+  // comment); this is a secondary signal, not the source of truth.
+  if (request.assigned_by_official_id) {
+    const { error: notifyError } = await supabase.from('alert_notifications').insert({
+      user_id: request.user_id, official_id: request.assigned_by_official_id, source: 'legal_aid', priority: 'urgent',
+    });
+    if (notifyError) console.error('reject: could not notify DLSA', notifyError.message, { requestId: request.request_id });
+  }
+
+  return ok(res, { requestId: request.request_id }, 'Case rejected - DLSA has been notified to assign another Public Prosecutor');
+});
+
+// Requirement 8 - past hearings come exclusively from the eCourt-simulated
+// feed now (loadHearingTimeline, above); this only ever adds this Public
+// Prosecutor's own note against one of those already-reported dates, never
+// a hearing record of their own making.
+router.post('/my-cases/:requestId/hearing-notes', async (req, res) => {
+  const request = await loadOwnCaseRequest(req, res);
+  if (!request) return;
+  if (request.assignment_status !== 'Active') return fail(res, 'You are not the currently active Public Prosecutor on this case', 403);
+
+  const { hearingDate, noteText } = req.body;
   if (!hearingDate) return fail(res, 'hearingDate is required', 400);
-  if (!outcome || !String(outcome).trim()) return fail(res, 'outcome is required', 400);
-
-  const { rows } = await pool.query(
-    `insert into legal_aid_hearings (request_id, assignment_id, recorded_by_official_id, hearing_date, court, hearing_type, outcome, next_hearing_date, notes)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning hearing_id`,
-    [request.request_id, request.assignment_id, req.auth.officialId, hearingDate, court || null, hearingType || null, String(outcome).trim(), nextHearingDate || null, notes ? String(notes).trim() || null : null]
-  );
-
-  await writeAuditLog({ officialId: req.auth.officialId, userId: request.user_id, action: 'create', entityType: 'legal_aid_hearing', entityId: rows[0].hearing_id });
-
-  return ok(res, { hearingId: rows[0].hearing_id }, 'Hearing outcome recorded', 201);
-});
-
-// Strictly internal - never part of the official case record, never visible
-// to DLSA or the victim (see migration_040's own comment on how this is
-// enforced: no route under /api/dlsa/* or /api/user/* ever queries this
-// table, and every query here is additionally scoped to the caller's own
-// author_official_id). Create + Read only, matching the append-only
-// precedent of every other notes table in this codebase (case_notes,
-// agency_referral_notes) - neither has an update/delete route anywhere.
-router.get('/my-cases/:requestId/private-notes', async (req, res) => {
-  const request = await loadOwnCaseRequest(req, res);
-  if (!request) return;
-
-  const { rows } = await pool.query(
-    `select note_id, note_text, created_at from legal_aid_private_notes
-     where request_id = $1 and author_official_id = $2
-     order by created_at desc`,
-    [request.request_id, req.auth.officialId]
-  );
-
-  return ok(res, { notes: rows.map((n) => ({ noteId: n.note_id, noteText: n.note_text, createdAt: n.created_at })) });
-});
-
-router.post('/my-cases/:requestId/private-notes', async (req, res) => {
-  const request = await loadOwnCaseRequest(req, res);
-  if (!request) return;
-
-  const { noteText } = req.body;
   if (!noteText || !String(noteText).trim()) return fail(res, 'noteText is required', 400);
 
   const { rows } = await pool.query(
-    `insert into legal_aid_private_notes (request_id, assignment_id, author_official_id, note_text)
-     values ($1, $2, $3, $4) returning note_id, created_at`,
-    [request.request_id, request.assignment_id, req.auth.officialId, String(noteText).trim()]
+    `insert into legal_aid_hearing_notes (request_id, assignment_id, recorded_by_official_id, hearing_date, note_text)
+     values ($1, $2, $3, $4, $5) returning note_id, created_at`,
+    [request.request_id, request.assignment_id, req.auth.officialId, hearingDate, String(noteText).trim()]
   );
 
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'legal_aid_private_note', entityId: rows[0].note_id });
+  await writeAuditLog({ officialId: req.auth.officialId, userId: request.user_id, action: 'create', entityType: 'legal_aid_hearing_note', entityId: rows[0].note_id });
 
   return ok(res, { noteId: rows[0].note_id, createdAt: rows[0].created_at }, 'Note added', 201);
 });
@@ -200,10 +246,7 @@ router.post('/my-cases/:requestId/private-notes', async (req, res) => {
 // backs the "Hearings" nav page. Sourced from each case's own eCourt data
 // (court_case_details.next_hearing_date, the same simulated-eCourt-sync feed
 // the victim's own Case Details screen already shows - see
-// courtCaseSync.js's own comment on why this reuses that exact logic), NOT
-// this representative's own legal_aid_hearings records - those are the
-// OFFICIAL RECORD of a hearing already held, not a forward-looking court
-// schedule, so they were never the right source for "what's coming up".
+// courtCaseSync.js's own comment on why this reuses that exact logic).
 router.get('/hearings-upcoming', async (req, res) => {
   const { rows: cases } = await pool.query(
     `select lar.request_id, u.user_id, u.docket_number, u.case_stage, u.cnr_number, u.enrolled_at,

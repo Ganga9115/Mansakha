@@ -8,7 +8,7 @@ const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { mountInterventionReviewRoutes } = require('../../core/services/interventionRequestReview');
 const { loadRequestDocuments } = require('../../core/services/legalAidDocuments');
-const { POOR_FEEDBACK_RATING_THRESHOLD } = require('../../core/services/legalAidConstants');
+const { loadHearingTimeline } = require('../../core/services/legalAidHearingTimeline');
 
 const router = express.Router();
 
@@ -268,10 +268,14 @@ async function loadOwnLegalAidRequest(req, res) {
   const { rows } = await pool.query(
     `select lar.request_id, lar.user_id, lar.reason, lar.description, lar.status, lar.rejection_reason,
             lar.reviewed_by_official_id, lar.reviewed_at, lar.created_at, lar.updated_at,
-            u.docket_number, u.jurisdiction_id, u.case_stage, ct.name as case_type_name
+            u.docket_number, u.jurisdiction_id, u.case_stage, u.cnr_number, u.enrolled_at,
+            ct.name as case_type_name, j.name as jurisdiction_name,
+            ui.full_name as victim_full_name
      from legal_aid_requests lar
      join users u on u.user_id = lar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
+     left join jurisdictions j on j.jurisdiction_id = u.jurisdiction_id
+     left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
      where lar.request_id = $1`,
     [req.params.requestId]
   );
@@ -294,13 +298,23 @@ router.get('/legal-aid-requests', async (req, res) => {
   let where = 'u.jurisdiction_id = $1';
   if (status) { params.push(status); where += ` and lar.status = $${params.length}`; }
 
+  // latestAssignmentStatus - the one signal that distinguishes a genuinely
+  // NEW request (never assigned) from one that WAS assigned and had its
+  // Public Prosecutor reject the case (request.status reverts to 'Under
+  // Review' either way - see the reject route's own comment on why nothing
+  // else marks this) - the Legal Aid Requests queue uses this to show a
+  // "Public Prosecutor rejected - needs reassignment" flag on the latter.
   const { rows } = await pool.query(
     `select lar.request_id, lar.reason, lar.status, lar.created_at, lar.updated_at,
-            u.docket_number, u.case_stage, ct.name as case_type_name, ui.full_name as victim_name
+            u.docket_number, u.case_stage, ct.name as case_type_name, ui.full_name as victim_name,
+            latest.status as latest_assignment_status
      from legal_aid_requests lar
      join users u on u.user_id = lar.user_id
      join case_types ct on ct.case_type_id = u.case_type_id
      left join user_identity ui on ui.user_id = coalesce(u.linked_to_user_id, u.user_id)
+     left join lateral (
+       select status from legal_aid_assignments where request_id = lar.request_id order by assigned_at desc limit 1
+     ) latest on true
      where ${where}
      order by lar.created_at desc`,
     params
@@ -318,6 +332,7 @@ router.get('/legal-aid-requests', async (req, res) => {
       status: r.status,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
+      needsReassignment: r.latest_assignment_status === 'Rejected',
     })),
   });
 });
@@ -348,23 +363,20 @@ router.get('/legal-aid-requests/:requestId', async (req, res) => {
     [request.request_id]
   );
 
-  // migration_043: feedback is per-assignment, not per-hearing (see that
-  // migration's own comment) - every feedback row for this request, not
-  // just the poor/unreviewed ones below, so DLSA has a full picture of what
-  // the victim has actually said about their Public Prosecutor(s).
-  const { rows: allFeedback } = await pool.query(
-    `select feedback_id, rating, comment, created_at, dlsa_reviewed_at
-     from legal_aid_feedback where request_id = $1 order by created_at desc`,
-    [request.request_id]
-  );
-
-  const { rows: pendingFeedback } = await pool.query(
-    `select feedback_id, rating, comment, created_at
-     from legal_aid_feedback
-     where request_id = $1 and rating <= $2 and dlsa_reviewed_at is null
-     order by created_at desc`,
-    [request.request_id, POOR_FEEDBACK_RATING_THRESHOLD]
-  );
+  // migration_044: past hearings are eCourt-only now (requirement 8) -
+  // never a DLSA/PP-authored record - see legalAidHearingTimeline.js's own
+  // header comment.
+  const hearingTimeline = await loadHearingTimeline({
+    requestId: request.request_id,
+    userId: request.user_id,
+    caseStage: request.case_stage,
+    docketNumber: request.docket_number,
+    cnrNumber: request.cnr_number,
+    caseTypeName: request.case_type_name,
+    jurisdictionName: request.jurisdiction_name,
+    enrolledAt: request.enrolled_at,
+    victimFullName: request.victim_full_name,
+  });
 
   await writeAuditLog({ officialId: req.auth.officialId, action: 'read', entityType: 'legal_aid_request', entityId: request.request_id });
   await writeAuditLog({ officialId: req.auth.officialId, userId: request.user_id, action: 'read', entityType: 'victim_contact_details', entityId: request.request_id });
@@ -394,19 +406,7 @@ router.get('/legal-aid-requests/:requestId', async (req, res) => {
       endedAt: a.ended_at,
       endedReason: a.ended_reason,
     })),
-    feedback: allFeedback.map((f) => ({
-      feedbackId: f.feedback_id,
-      rating: f.rating,
-      comment: f.comment,
-      createdAt: f.created_at,
-      dlsaReviewedAt: f.dlsa_reviewed_at,
-    })),
-    pendingFeedbackReview: pendingFeedback.map((f) => ({
-      feedbackId: f.feedback_id,
-      rating: f.rating,
-      comment: f.comment,
-      createdAt: f.created_at,
-    })),
+    hearingTimeline,
   });
 });
 
@@ -505,13 +505,13 @@ async function isEligibleRepresentative(officialId, jurisdictionId) {
   return rows.length > 0;
 }
 
-// Under Review -> Active, in one transaction with the first assignment row.
-// migration_043: reachable directly from 'Under Review' - the
-// 'Verified'/'Approved' waypoints that used to sit in between are retired.
-// "Representative Assigned" is still not a persisted DB state (see
-// migration_040's own comment - there is no distinct actor/trigger
-// separating it from Active) - the audit_log entry still names that
-// conceptual sub-step.
+// migration_044: assigning a Public Prosecutor no longer activates the
+// request by itself - the request stays 'Under Review' until that Public
+// Prosecutor actually ACCEPTS (legalRepresentative.routes.js's own
+// POST .../accept, which is the only place request.status ever becomes
+// 'Active' now). This creates the assignment as 'Pending Acceptance' and
+// leaves it to them; reviewed_by/reviewed_at are still stamped here since
+// DLSA did act, just not the status column.
 router.post('/legal-aid-requests/:requestId/assign-representative', async (req, res) => {
   const request = await loadOwnLegalAidRequest(req, res);
   if (!request) return;
@@ -527,7 +527,7 @@ router.post('/legal-aid-requests/:requestId/assign-representative', async (req, 
   try {
     assignmentId = await withTransaction(async (client) => {
       await client.query(
-        `update legal_aid_requests set status = 'Active', reviewed_by_official_id = $1, reviewed_at = now(), updated_at = now() where request_id = $2`,
+        `update legal_aid_requests set reviewed_by_official_id = $1, reviewed_at = now(), updated_at = now() where request_id = $2`,
         [req.auth.officialId, request.request_id]
       );
       const { rows } = await client.query(
@@ -542,27 +542,26 @@ router.post('/legal-aid-requests/:requestId/assign-representative', async (req, 
   }
 
   await writeAuditLog({
-    officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_request', entityId: request.request_id,
-    details: { fromStatus: 'Under Review', toStatus: 'Active', note: 'Public Prosecutor Assigned' },
+    officialId: req.auth.officialId, action: 'create', entityType: 'legal_aid_assignment', entityId: assignmentId,
+    details: { note: 'Public Prosecutor assigned - pending their acceptance' },
   });
-  await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'legal_aid_assignment', entityId: assignmentId });
 
   const { error: notifyError } = await supabase.from('alert_notifications').insert({ user_id: request.user_id, official_id: representativeOfficialId, source: 'legal_aid', priority: 'normal' });
   if (notifyError) console.error('assign-representative: could not notify representative', notifyError.message, { assignmentId });
 
-  return ok(res, { requestId: request.request_id, status: 'Active', assignmentId }, 'Public Prosecutor assigned');
+  return ok(res, { requestId: request.request_id, status: request.status, assignmentId }, 'Public Prosecutor assigned - awaiting their acceptance');
 });
 
 // Reassignment within an Active request - does not change the request's own
-// status. Usable standalone (not only from the poor-feedback loop below) -
-// also how a representative whose account has been revoked mid-case gets
-// replaced (see ministry.routes.js's own revoke-time notification).
+// status. Usable standalone - also how a representative whose account has
+// been revoked mid-case gets replaced (see ministry.routes.js's own
+// revoke-time notification).
 router.post('/legal-aid-requests/:requestId/reassign', async (req, res) => {
   const request = await loadOwnLegalAidRequest(req, res);
   if (!request) return;
   if (request.status !== 'Active') return fail(res, `This request must be 'Active' to reassign a representative (currently '${request.status}')`, 400);
 
-  const { newRepresentativeOfficialId, endedReason, feedbackId } = req.body;
+  const { newRepresentativeOfficialId, endedReason } = req.body;
   if (!newRepresentativeOfficialId) return fail(res, 'newRepresentativeOfficialId is required', 400);
   if (!endedReason || !String(endedReason).trim()) return fail(res, 'endedReason is required', 400);
   if (!(await isEligibleRepresentative(newRepresentativeOfficialId, request.jurisdiction_id))) {
@@ -584,14 +583,14 @@ router.post('/legal-aid-requests/:requestId/reassign', async (req, res) => {
         `update legal_aid_assignments set status = 'Reassigned', ended_reason = $1, ended_at = now() where assignment_id = $2`,
         [String(endedReason).trim(), current.assignment_id]
       );
+      // New assignment starts 'Pending Acceptance' same as a first-time
+      // assignment (the table's own default) - a reassigned Public
+      // Prosecutor gets the same Accept/Reject step as any other.
       const { rows: newRows } = await client.query(
         `insert into legal_aid_assignments (request_id, representative_official_id, assigned_by_official_id)
          values ($1, $2, $3) returning assignment_id`,
         [request.request_id, newRepresentativeOfficialId, req.auth.officialId]
       );
-      if (feedbackId) {
-        await client.query(`update legal_aid_feedback set dlsa_reviewed_at = now() where feedback_id = $1 and request_id = $2`, [feedbackId, request.request_id]);
-      }
       await client.query(`update legal_aid_requests set updated_at = now() where request_id = $1`, [request.request_id]);
       return { oldAssignmentId: current.assignment_id, newAssignmentId: newRows[0].assignment_id, oldRepresentativeOfficialId: current.representative_official_id };
     });
@@ -611,24 +610,6 @@ router.post('/legal-aid-requests/:requestId/reassign', async (req, res) => {
   if (notifyError) console.error('reassign: could not notify representatives', notifyError.message, { requestId: request.request_id });
 
   return ok(res, { requestId: request.request_id, newAssignmentId: result.newAssignmentId }, 'Public Prosecutor reassigned');
-});
-
-// "Continue" arm of the poor-feedback review loop - DLSA has looked at it
-// and decided the current representative should carry on. No assignment
-// change; "Reassign" (above) is the other arm.
-router.patch('/legal-aid-requests/:requestId/feedback/:feedbackId/continue', async (req, res) => {
-  const request = await loadOwnLegalAidRequest(req, res);
-  if (!request) return;
-
-  const { rows } = await pool.query(
-    `update legal_aid_feedback set dlsa_reviewed_at = now() where feedback_id = $1 and request_id = $2 and dlsa_reviewed_at is null returning feedback_id`,
-    [req.params.feedbackId, request.request_id]
-  );
-  if (!rows[0]) return fail(res, 'Feedback not found or already reviewed', 404);
-
-  await writeAuditLog({ officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_feedback', entityId: rows[0].feedback_id, details: { note: 'DLSA continued current representative' } });
-
-  return ok(res, { feedbackId: rows[0].feedback_id }, 'Marked as reviewed - Public Prosecutor continues');
 });
 
 // "Mark Complete" (Active -> Completed) is deliberately gone, per explicit

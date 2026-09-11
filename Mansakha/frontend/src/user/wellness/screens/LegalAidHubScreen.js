@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Platform, TextInput, Linking } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform, Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
@@ -14,15 +14,17 @@ import StatusBadge from '../../shared/components/StatusBadge';
 import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import { QueryBoundary } from '../../shared/components/QueryStates';
-import { useUserDashboard, useMyLegalAidRequestCurrent, useLegalAidStatus, useSubmitLegalAidRequestFeedback } from '../../shared/services/hooks';
+import { useUserDashboard, useMyLegalAidRequestCurrent, useLegalAidStatus } from '../../shared/services/hooks';
 
 // Legal Aid hub - the dedicated pipeline (migration_040), distinct from the
 // old consolidated DLSA flow (see the legacy banner below). Landing screen
 // for the victim's "Legal Aid" section: Request Legal Aid / My Legal Aid
 // Request all reachable from here - this screen itself doubles as "My Legal
-// Aid Request" (the status view), and as of migration_043 also carries the
-// district DLSA's own contact details and the feedback box directly below
-// the stepper, rather than requiring a separate screen for either.
+// Aid Request" (the status view), and carries the district DLSA's own
+// contact details directly below the stepper. migration_044: Feedback is
+// removed application-wide; the next hearing date (requirement 7) is shown
+// here once a Public Prosecutor is actively on the case, sourced from the
+// same eCourt feed the Public Prosecutor's own Upcoming Hearings page uses.
 
 // migration_043: 4 stages, not 7 - "Verified"/"Approved" added review
 // overhead between DLSA starting a review and actually assigning a Public
@@ -58,73 +60,26 @@ function DlsaCoordinatorCard({ dlsa }) {
   );
 }
 
-function StarRating({ value, onChange }) {
+// Requirement 7 - the next hearing date, visible on the victim's own Legal
+// Aid page too, not just the Public Prosecutor's own Upcoming Hearings page.
+// nextHearing comes from GET .../current, sourced from the same eCourt feed.
+function NextHearingCard({ nextHearing }) {
+  if (!nextHearing) return null;
   return (
-    <View style={styles.starRow}>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <Pressable key={n} onPress={() => onChange(n)} hitSlop={6}>
-          <Feather name="star" size={26} color={n <= value ? (colors.warning || '#F5A623') : colors.border} />
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-// Feedback about the currently (or most recently) assigned Public
-// Prosecutor - one per assignment (migration_043), reachable the moment
-// they're assigned rather than only after a hearing has been recorded.
-// myFeedback (from GET .../current) is what tells this whether to show the
-// form or the "already submitted" state.
-function FeedbackBox({ requestId, myFeedback, onSubmitted }) {
-  const [rating, setRating] = useState(0);
-  const [comment, setComment] = useState('');
-  const [error, setError] = useState(null);
-  const submitFeedback = useSubmitLegalAidRequestFeedback(requestId);
-
-  if (myFeedback) {
-    return (
-      <View style={styles.feedbackCard}>
-        <View style={styles.feedbackGivenRow}>
-          <Feather name="check-circle" size={15} color={colors.success} />
-          <Text style={styles.feedbackGivenText}>You rated your Public Prosecutor</Text>
-        </View>
-        <View style={styles.starRow}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Feather key={n} name="star" size={18} color={n <= myFeedback.rating ? (colors.warning || '#F5A623') : colors.border} />
-          ))}
-        </View>
-        {!!myFeedback.comment && <Text style={styles.feedbackGivenComment}>"{myFeedback.comment}"</Text>}
+    <View style={styles.hearingCard}>
+      <View style={styles.hearingIconTile}>
+        <Feather name="calendar" size={16} color={colors.primary} />
       </View>
-    );
-  }
-
-  const handleSubmit = async () => {
-    if (!rating) return;
-    setError(null);
-    try {
-      await submitFeedback.mutateAsync({ rating, comment: comment.trim() || undefined });
-      onSubmitted?.();
-    } catch (err) {
-      setError(err.message || 'Could not submit feedback.');
-    }
-  };
-
-  return (
-    <View style={styles.feedbackCard}>
-      <Text style={styles.feedbackTitle}>Rate Your Public Prosecutor</Text>
-      <Text style={styles.feedbackIntro}>Your feedback helps DLSA ensure you are being properly represented.</Text>
-      <StarRating value={rating} onChange={setRating} />
-      <TextInput
-        style={styles.feedbackInput}
-        multiline
-        numberOfLines={3}
-        placeholder="Optional comments..."
-        placeholderTextColor={colors.textSecondary}
-        value={comment}
-        onChangeText={setComment}
-      />
-      {error && <Text style={styles.feedbackError}>{error}</Text>}
-      <Button title="Submit Feedback" onPress={handleSubmit} loading={submitFeedback.isPending} disabled={!rating || submitFeedback.isPending} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.hearingLabel}>Next Hearing</Text>
+        <Text style={styles.hearingDate}>
+          {new Date(nextHearing.nextHearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+        </Text>
+        {!!nextHearing.nextHearingPurpose && <Text style={styles.hearingPurpose}>{nextHearing.nextHearingPurpose}</Text>}
+        {!!nextHearing.court && (
+          <Text style={styles.hearingCourt}>{nextHearing.court}{nextHearing.courtNumber ? ` (Court No. ${nextHearing.courtNumber})` : ''}</Text>
+        )}
+      </View>
     </View>
   );
 }
@@ -147,7 +102,7 @@ function LegacyBanner() {
   );
 }
 
-function RequestCard({ requestId, status, reason, rejectionReason, dlsaCoordinator, myFeedback, navigation, onFeedbackSubmitted }) {
+function RequestCard({ status, reason, rejectionReason, dlsaCoordinator, nextHearing, navigation }) {
   if (status === 'Rejected') {
     return (
       <Card>
@@ -195,12 +150,10 @@ function RequestCard({ requestId, status, reason, rejectionReason, dlsaCoordinat
         </Pressable>
       )}
 
+      {hasRepresentative && <NextHearingCard nextHearing={nextHearing} />}
+
       {/* migration_041: one Legal Aid request per case, ever - no "Submit a
           New Request" action once Completed either. */}
-
-      {hasRepresentative && (
-        <FeedbackBox requestId={requestId} myFeedback={myFeedback} onSubmitted={onFeedbackSubmitted} />
-      )}
     </Card>
   );
 }
@@ -249,14 +202,12 @@ export default function LegalAidHubScreen({ navigation }) {
             {(data) =>
               data?.hasRequest ? (
                 <RequestCard
-                  requestId={data.requestId}
                   status={data.status}
                   reason={data.reason}
                   rejectionReason={data.rejectionReason}
                   dlsaCoordinator={data.dlsaCoordinator}
-                  myFeedback={data.myFeedback}
+                  nextHearing={data.nextHearing}
                   navigation={navigation}
-                  onFeedbackSubmitted={requestQuery.refetch}
                 />
               ) : (
                 <Card>
@@ -334,18 +285,16 @@ const styles = StyleSheet.create({
   dlsaCallBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   dlsaCallBtnText: { ...typography.bodySmall, color: colors.primary, fontWeight: '700' },
 
-  feedbackCard: {
+  hearingCard: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm,
     marginTop: spacing.lg, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border + '60',
   },
-  feedbackTitle: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14, marginBottom: 2 },
-  feedbackIntro: { ...typography.caption, color: colors.textSecondary, marginBottom: spacing.sm, lineHeight: 16 },
-  feedbackInput: {
-    borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: spacing.sm,
-    minHeight: 64, textAlignVertical: 'top', color: colors.textPrimary, marginTop: spacing.sm, marginBottom: spacing.sm, ...typography.bodySmall,
+  hearingIconTile: {
+    width: 32, height: 32, borderRadius: radius.md, backgroundColor: colors.primaryLight,
+    alignItems: 'center', justifyContent: 'center',
   },
-  feedbackError: { ...typography.bodySmall, color: colors.danger, marginBottom: spacing.sm },
-  starRow: { flexDirection: 'row', gap: spacing.xs, marginTop: spacing.xs },
-  feedbackGivenRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, marginBottom: spacing.xs },
-  feedbackGivenText: { ...typography.bodySmall, color: colors.textPrimary, fontWeight: '600' },
-  feedbackGivenComment: { ...typography.bodySmall, color: colors.textSecondary, fontStyle: 'italic', marginTop: spacing.xs },
+  hearingLabel: { ...typography.caption, color: colors.textSecondary },
+  hearingDate: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14, marginTop: 1 },
+  hearingPurpose: { ...typography.bodySmall, color: colors.textPrimary, marginTop: 2 },
+  hearingCourt: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
 });

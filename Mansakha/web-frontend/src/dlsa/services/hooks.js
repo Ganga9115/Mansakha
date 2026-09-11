@@ -195,16 +195,3 @@ export function useAssignRepresentative() {
 export function useReassignRepresentative() {
   return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/reassign`, 'POST');
 }
-export function useContinueLegalAidFeedback() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (requestId, feedbackId) => {
-    setLoading(true);
-    try {
-      return await apiClient.patch(`/api/dlsa/legal-aid-requests/${requestId}/feedback/${feedbackId}/continue`, {}, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
