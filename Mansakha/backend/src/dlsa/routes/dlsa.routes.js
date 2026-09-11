@@ -348,18 +348,21 @@ router.get('/legal-aid-requests/:requestId', async (req, res) => {
     [request.request_id]
   );
 
-  const { rows: hearings } = await pool.query(
-    `select hearing_id, hearing_date, court, hearing_type, outcome, next_hearing_date, notes, created_at
-     from legal_aid_hearings where request_id = $1 order by hearing_date desc`,
+  // migration_043: feedback is per-assignment, not per-hearing (see that
+  // migration's own comment) - every feedback row for this request, not
+  // just the poor/unreviewed ones below, so DLSA has a full picture of what
+  // the victim has actually said about their Public Prosecutor(s).
+  const { rows: allFeedback } = await pool.query(
+    `select feedback_id, rating, comment, created_at, dlsa_reviewed_at
+     from legal_aid_feedback where request_id = $1 order by created_at desc`,
     [request.request_id]
   );
 
   const { rows: pendingFeedback } = await pool.query(
-    `select f.feedback_id, f.rating, f.comment, f.created_at, h.hearing_date, h.outcome
-     from legal_aid_feedback f
-     join legal_aid_hearings h on h.hearing_id = f.hearing_id
-     where f.request_id = $1 and f.rating <= $2 and f.dlsa_reviewed_at is null
-     order by f.created_at desc`,
+    `select feedback_id, rating, comment, created_at
+     from legal_aid_feedback
+     where request_id = $1 and rating <= $2 and dlsa_reviewed_at is null
+     order by created_at desc`,
     [request.request_id, POOR_FEEDBACK_RATING_THRESHOLD]
   );
 
@@ -391,22 +394,17 @@ router.get('/legal-aid-requests/:requestId', async (req, res) => {
       endedAt: a.ended_at,
       endedReason: a.ended_reason,
     })),
-    hearings: hearings.map((h) => ({
-      hearingId: h.hearing_id,
-      hearingDate: h.hearing_date,
-      court: h.court,
-      hearingType: h.hearing_type,
-      outcome: h.outcome,
-      nextHearingDate: h.next_hearing_date,
-      notes: h.notes,
-      createdAt: h.created_at,
+    feedback: allFeedback.map((f) => ({
+      feedbackId: f.feedback_id,
+      rating: f.rating,
+      comment: f.comment,
+      createdAt: f.created_at,
+      dlsaReviewedAt: f.dlsa_reviewed_at,
     })),
     pendingFeedbackReview: pendingFeedback.map((f) => ({
       feedbackId: f.feedback_id,
       rating: f.rating,
       comment: f.comment,
-      hearingDate: f.hearing_date,
-      hearingOutcome: f.outcome,
       createdAt: f.created_at,
     })),
   });
@@ -452,16 +450,11 @@ router.patch('/legal-aid-requests/:requestId/start-review', async (req, res) => 
   return ok(res, { requestId: request.request_id, status: 'Under Review' }, 'Review started');
 });
 
-router.patch('/legal-aid-requests/:requestId/verify', async (req, res) => {
-  const request = await loadOwnLegalAidRequest(req, res);
-  if (!request) return;
-  const applied = await applyLegalAidTransition(req, res, request, { fromStatus: 'Under Review', toStatus: 'Verified' });
-  if (!applied) return;
-  return ok(res, { requestId: request.request_id, status: 'Verified' }, 'Request verified');
-});
-
-// Only reachable from 'Under Review', matching the spec's rejection path
-// exactly (Submitted -> Under Review -> Rejected) - never from 'Verified'.
+// Only reachable from 'Under Review', matching the simplified 4-stage flow
+// exactly (Submitted -> Under Review -> Active -> Completed, or -> Rejected
+// from Under Review) - migration_043 retired the 'Verify'/'Approve' steps
+// that used to sit between this and assign-representative below; nothing
+// else in the review path changed.
 router.patch('/legal-aid-requests/:requestId/reject', async (req, res) => {
   const request = await loadOwnLegalAidRequest(req, res);
   if (!request) return;
@@ -473,14 +466,6 @@ router.patch('/legal-aid-requests/:requestId/reject', async (req, res) => {
   });
   if (!applied) return;
   return ok(res, { requestId: request.request_id, status: 'Rejected' }, 'Request rejected');
-});
-
-router.patch('/legal-aid-requests/:requestId/approve', async (req, res) => {
-  const request = await loadOwnLegalAidRequest(req, res);
-  if (!request) return;
-  const applied = await applyLegalAidTransition(req, res, request, { fromStatus: 'Verified', toStatus: 'Approved' });
-  if (!applied) return;
-  return ok(res, { requestId: request.request_id, status: 'Approved' }, 'Request approved');
 });
 
 // Active Public Prosecutor officials in this request's own jurisdiction,
@@ -520,14 +505,17 @@ async function isEligibleRepresentative(officialId, jurisdictionId) {
   return rows.length > 0;
 }
 
-// Approved -> Active, in one transaction with the first assignment row.
-// "Representative Assigned" is not a persisted DB state (see migration_040's
-// own comment - there is no distinct actor/trigger separating it from
-// Active) - the audit_log entry still names that conceptual sub-step.
+// Under Review -> Active, in one transaction with the first assignment row.
+// migration_043: reachable directly from 'Under Review' - the
+// 'Verified'/'Approved' waypoints that used to sit in between are retired.
+// "Representative Assigned" is still not a persisted DB state (see
+// migration_040's own comment - there is no distinct actor/trigger
+// separating it from Active) - the audit_log entry still names that
+// conceptual sub-step.
 router.post('/legal-aid-requests/:requestId/assign-representative', async (req, res) => {
   const request = await loadOwnLegalAidRequest(req, res);
   if (!request) return;
-  if (request.status !== 'Approved') return fail(res, `This request must be 'Approved' for this action (currently '${request.status}')`, 400);
+  if (request.status !== 'Under Review') return fail(res, `This request must be 'Under Review' for this action (currently '${request.status}')`, 400);
 
   const { representativeOfficialId } = req.body;
   if (!representativeOfficialId) return fail(res, 'representativeOfficialId is required', 400);
@@ -555,7 +543,7 @@ router.post('/legal-aid-requests/:requestId/assign-representative', async (req, 
 
   await writeAuditLog({
     officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_request', entityId: request.request_id,
-    details: { fromStatus: 'Approved', toStatus: 'Active', note: 'Public Prosecutor Assigned' },
+    details: { fromStatus: 'Under Review', toStatus: 'Active', note: 'Public Prosecutor Assigned' },
   });
   await writeAuditLog({ officialId: req.auth.officialId, action: 'create', entityType: 'legal_aid_assignment', entityId: assignmentId });
 
@@ -643,25 +631,16 @@ router.patch('/legal-aid-requests/:requestId/feedback/:feedbackId/continue', asy
   return ok(res, { feedbackId: rows[0].feedback_id }, 'Marked as reviewed - Public Prosecutor continues');
 });
 
-// Active -> Completed. Also flips the current assignment to 'Completed' in
-// the same transaction, so a closed request never leaves an assignment
-// permanently sitting 'Active'.
-router.patch('/legal-aid-requests/:requestId/complete', async (req, res) => {
-  const request = await loadOwnLegalAidRequest(req, res);
-  if (!request) return;
-  if (request.status !== 'Active') return fail(res, `This request must be 'Active' for this action (currently '${request.status}')`, 400);
-
-  await withTransaction(async (client) => {
-    await client.query(`update legal_aid_requests set status = 'Completed', updated_at = now() where request_id = $1`, [request.request_id]);
-    await client.query(`update legal_aid_assignments set status = 'Completed' where request_id = $1 and status = 'Active'`, [request.request_id]);
-  });
-
-  await writeAuditLog({
-    officialId: req.auth.officialId, userId: request.user_id, action: 'update', entityType: 'legal_aid_request', entityId: request.request_id,
-    details: { fromStatus: 'Active', toStatus: 'Completed' },
-  });
-
-  return ok(res, { requestId: request.request_id, status: 'Completed' }, 'Legal Aid request marked complete');
-});
+// "Mark Complete" (Active -> Completed) is deliberately gone, per explicit
+// product request: assigning a Public Prosecutor is not DLSA declaring the
+// case done, and there is no other real-world moment during this flow that
+// is either - only the underlying court case's own eCourt-reported stage
+// (case_stage - see ecourtStageSync.js, the sole writer of it) says when a
+// case is actually closed, and that's an entirely separate fact from this
+// Legal Aid request's own status. A request assigned a Public Prosecutor now
+// simply stays 'Active' - tracking "does this case currently have a Public
+// Prosecutor working it" - for as long as the underlying case runs; there is
+// no DLSA-driven terminal step here any more (Rejected, at intake, remains
+// the only status DLSA can put a request into on their own).
 
 module.exports = router;

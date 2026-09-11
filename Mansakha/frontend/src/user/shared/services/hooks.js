@@ -339,13 +339,19 @@ export function useLegalAidHearings(requestId) {
   });
 }
 
-export function useSubmitLegalAidHearingFeedback(requestId) {
+// migration_043: one feedback per Public Prosecutor ASSIGNMENT, not per
+// hearing - the feedback box lives directly on LegalAidHubScreen.js's status
+// page (below the stepper), reachable the moment a Public Prosecutor is
+// assigned, not gated behind a hearing having been recorded yet. Invalidates
+// 'current' (GET .../current's own myFeedback is what tells that box whether
+// to show the form or the "already submitted" state).
+export function useSubmitLegalAidRequestFeedback(requestId) {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ hearingId, rating, comment }) =>
-      apiClient.post(`/api/user/legal-aid-requests/${requestId}/hearings/${hearingId}/feedback`, { rating, comment }, token),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-requests', requestId, 'hearings'] }),
+    mutationFn: ({ rating, comment }) =>
+      apiClient.post(`/api/user/legal-aid-requests/${requestId}/feedback`, { rating, comment }, token),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', 'legal-aid-requests', 'current'] }),
   });
 }
 
@@ -432,11 +438,19 @@ export function useInterventionTypes() {
   });
 }
 
-export function useMyInterventionRequests() {
+// Scoped to whichever docket is currently active (?caseUserId=,
+// resolveCaseUserId server-side) - same docket Case Details/Compensation/
+// Rehabilitation are already driven by via ActiveCaseContext, so switching
+// docket in Settings/Profile changes this list too, not just the ones filed
+// while that docket was active.
+export function useMyInterventionRequests(caseUserId) {
   const token = useToken();
   return useQuery({
-    queryKey: ['user', 'intervention-requests'],
-    queryFn: () => apiClient.get('/api/user/intervention-requests', token),
+    queryKey: ['user', 'intervention-requests', caseUserId || null],
+    queryFn: () => {
+      const qs = caseUserId ? `?caseUserId=${caseUserId}` : '';
+      return apiClient.get(`/api/user/intervention-requests${qs}`, token);
+    },
     enabled: !!token,
   });
 }

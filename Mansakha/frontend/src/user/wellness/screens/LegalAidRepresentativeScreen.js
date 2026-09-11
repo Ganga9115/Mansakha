@@ -17,8 +17,10 @@ import { useUserDashboard, useMyLegalAidRequestCurrent, useLegalAidRepresentativ
 
 // "Assigned Representative" - the rep's contact card plus the official
 // Hearing Timeline (representative-authored records, never private notes -
-// those stay backend-enforced representative-only). Feedback is prompted
-// per hearing, not per case, once a hearing's outcome is on record.
+// those stay backend-enforced representative-only). Feedback about the
+// Public Prosecutor themselves lives on LegalAidHubScreen.js's own status
+// page now (migration_043 - one feedback per assignment, not per hearing),
+// not prompted from an individual hearing row here any more.
 
 function RepresentativeCard({ rep }) {
   const toast = useToast();
@@ -56,7 +58,7 @@ function RepresentativeCard({ rep }) {
   );
 }
 
-function HearingRow({ hearing, requestId, navigation }) {
+function HearingRow({ hearing }) {
   return (
     <View style={styles.hearingRow}>
       <View style={styles.hearingHeaderRow}>
@@ -71,20 +73,6 @@ function HearingRow({ hearing, requestId, navigation }) {
         <Text style={styles.hearingNext}>
           Next hearing: {new Date(hearing.nextHearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
         </Text>
-      )}
-      {!hearing.feedbackGiven ? (
-        <Pressable
-          style={styles.feedbackBtn}
-          onPress={() => navigation.navigate('LegalAidFeedback', { requestId, hearingId: hearing.hearingId })}
-        >
-          <Feather name="star" size={13} color={colors.primary} />
-          <Text style={styles.feedbackBtnText}>Rate this hearing</Text>
-        </Pressable>
-      ) : (
-        <View style={styles.feedbackGivenRow}>
-          <Feather name="check" size={12} color={colors.success} />
-          <Text style={styles.feedbackGivenText}>Feedback submitted</Text>
-        </View>
       )}
     </View>
   );
@@ -151,7 +139,7 @@ export default function LegalAidRepresentativeScreen({ navigation }) {
                         {data.hearings.map((h, i) => (
                           <View key={h.hearingId}>
                             {i > 0 && <View style={styles.hearingDivider} />}
-                            <HearingRow hearing={h} requestId={requestId} navigation={navigation} />
+                            <HearingRow hearing={h} />
                           </View>
                         ))}
                       </View>
@@ -210,8 +198,4 @@ const styles = StyleSheet.create({
   hearingType: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
   hearingOutcome: { ...typography.bodySmall, color: colors.textPrimary, marginTop: spacing.xs, lineHeight: 18 },
   hearingNext: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
-  feedbackBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
-  feedbackBtnText: { ...typography.caption, color: colors.primary, fontWeight: '700' },
-  feedbackGivenRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: spacing.sm },
-  feedbackGivenText: { ...typography.caption, color: colors.success },
 });

@@ -1595,21 +1595,24 @@ router.post('/intervention-requests/:requestId/documents', interventionDocumentU
 // stay separate, same "per literal case, not resolved through the anchor"
 // convention as case_notes/interventions themselves (migration_027's own
 // comment explains why).
-// "My Requests" is the victim's own personal list, so it spans EVERY docket
-// in their family - deliberately NOT scoped to the active case the way
-// filing one is. Scoping the list too would mean switching cases silently
-// hid requests the person had actually made, losing sight of their own
-// status. Each row carries its docket so it is clear which case it concerns.
+// "My Requests" is scoped to whichever docket is currently active
+// (?caseUserId=, resolveCaseUserId - same convention as every other
+// case-scoped route here, and the same docket the rest of the app is now
+// consistently driven by via the RN app's own ActiveCaseContext), not
+// spanning the whole family - switching docket in Settings/Profile is
+// supposed to change what this list shows, same as Case Details/
+// Compensation/Rehabilitation already do.
 router.get('/intervention-requests', async (req, res) => {
+  const activeUserId = await resolveCaseUserId(req);
   const { rows } = await pool.query(
     `select ir.request_id, ir.description, ir.status, ir.decision_reason, ir.requested_at, ir.reviewed_at,
             it.name as intervention_type_name, u.docket_number
      from intervention_requests ir
      join intervention_types it on it.intervention_type_id = ir.intervention_type_id
      join users u on u.user_id = ir.user_id
-     where u.user_id = $1 or u.linked_to_user_id = $1
+     where u.user_id = $1
      order by ir.requested_at desc`,
-    [req.auth.userId]
+    [activeUserId]
   );
   const requestIds = rows.map((r) => r.request_id);
   const { rows: docRows } = requestIds.length > 0
@@ -2155,8 +2158,10 @@ router.get('/legal-aid-requests/current', async (req, res) => {
   const activeUserId = await resolveCaseUserId(req);
 
   const { rows } = await pool.query(
-    `select request_id, reason, description, status, rejection_reason, created_at, updated_at
-     from legal_aid_requests where user_id = $1 order by created_at desc limit 1`,
+    `select lar.request_id, lar.reason, lar.description, lar.status, lar.rejection_reason, lar.created_at, lar.updated_at, u.jurisdiction_id
+     from legal_aid_requests lar
+     join users u on u.user_id = lar.user_id
+     where lar.user_id = $1 order by lar.created_at desc limit 1`,
     [activeUserId]
   );
   const { rows: legacyRows } = await pool.query(
@@ -2173,6 +2178,42 @@ router.get('/legal-aid-requests/current', async (req, res) => {
     [request.request_id]
   );
 
+  // The DLSA Coordinator responsible for this case's own district - shown
+  // on the status page throughout the lifecycle (same disclosure level as
+  // an assigned Public Prosecutor's own contact card below), not just once
+  // a Public Prosecutor has been assigned. Jurisdiction-resolved, same as
+  // dlsa.routes.js's own eligible-representatives picker resolves Public
+  // Prosecutors - not tied to whichever DLSA official happened to click
+  // Start Review, since that's an internal detail, not "who do I contact".
+  const { rows: dlsaRows } = await pool.query(
+    `select o.full_name, o.phone
+     from officials o
+     join official_roles orr on orr.official_id = o.official_id and orr.revoked_at is null
+     join roles r on r.role_id = orr.role_id
+     where r.role_name = 'DLSA Coordinator' and orr.jurisdiction_id = $1
+     order by o.full_name limit 1`,
+    [request.jurisdiction_id]
+  );
+  const dlsaCoordinator = dlsaRows[0] ? { fullName: dlsaRows[0].full_name, phone: dlsaRows[0].phone } : null;
+
+  // migration_043: one feedback per Public Prosecutor ASSIGNMENT, not per
+  // hearing - "current" here means whichever assignment is/was most recent
+  // (the Active one, or the final one once Completed), so the feedback box
+  // below the status page's stepper knows whether to show the form or the
+  // "already submitted" state.
+  const { rows: latestAssignmentRows } = await pool.query(
+    `select assignment_id from legal_aid_assignments where request_id = $1 order by assigned_at desc limit 1`,
+    [request.request_id]
+  );
+  let myFeedback = null;
+  if (latestAssignmentRows[0]) {
+    const { rows: feedbackRows } = await pool.query(
+      `select rating, comment from legal_aid_feedback where assignment_id = $1`,
+      [latestAssignmentRows[0].assignment_id]
+    );
+    if (feedbackRows[0]) myFeedback = { rating: feedbackRows[0].rating, comment: feedbackRows[0].comment };
+  }
+
   return ok(res, {
     hasRequest: true,
     requestId: request.request_id,
@@ -2184,6 +2225,8 @@ router.get('/legal-aid-requests/current', async (req, res) => {
     createdAt: request.created_at,
     updatedAt: request.updated_at,
     legacyRequestFound,
+    dlsaCoordinator,
+    myFeedback,
   });
 });
 
@@ -2221,6 +2264,9 @@ router.get('/legal-aid-requests/:requestId/representative', async (req, res) => 
 
 // Official hearing records only - never legal_aid_private_notes, enforced by
 // table choice alone (that table is never queried from this router).
+// migration_043: no more per-hearing feedbackGiven flag - feedback is
+// assignment-scoped now (see GET .../current's own myFeedback), unrelated to
+// any individual hearing on this list.
 router.get('/legal-aid-requests/:requestId/hearings', async (req, res) => {
   const { requestId } = req.params;
   const { rows: reqRows } = await pool.query('select user_id from legal_aid_requests where request_id = $1', [requestId]);
@@ -2228,12 +2274,8 @@ router.get('/legal-aid-requests/:requestId/hearings', async (req, res) => {
   if (!(await isOwnCase(req, reqRows[0].user_id))) return fail(res, 'Not your request', 403);
 
   const { rows } = await pool.query(
-    `select h.hearing_id, h.hearing_date, h.court, h.hearing_type, h.outcome, h.next_hearing_date, h.notes, h.created_at,
-            (f.feedback_id is not null) as feedback_given
-     from legal_aid_hearings h
-     left join legal_aid_feedback f on f.hearing_id = h.hearing_id
-     where h.request_id = $1
-     order by h.hearing_date desc`,
+    `select hearing_id, hearing_date, court, hearing_type, outcome, next_hearing_date, notes, created_at
+     from legal_aid_hearings where request_id = $1 order by hearing_date desc`,
     [requestId]
   );
   return ok(res, {
@@ -2246,17 +2288,20 @@ router.get('/legal-aid-requests/:requestId/hearings', async (req, res) => {
       nextHearingDate: h.next_hearing_date,
       notes: h.notes,
       createdAt: h.created_at,
-      feedbackGiven: h.feedback_given,
     })),
   });
 });
 
-// One feedback per hearing (DB-enforced) - a victim can never edit another
-// victim's feedback because every write here is scoped to
-// submitted_by_user_id = the caller's own id, and can't overwrite their own
-// either, by the same unique index.
-router.post('/legal-aid-requests/:requestId/hearings/:hearingId/feedback', async (req, res) => {
-  const { requestId, hearingId } = req.params;
+// migration_043: one feedback per Public Prosecutor ASSIGNMENT (DB-enforced),
+// not per hearing - reachable the moment a Public Prosecutor is assigned,
+// not gated behind a hearing actually having been recorded yet. A victim can
+// never edit another victim's feedback (every write here is scoped to
+// submitted_by_user_id = the caller's own id) or overwrite their own either
+// (the assignment-uniqueness index blocks a second insert; the frontend
+// shows GET .../current's own myFeedback instead of the form once one
+// exists).
+router.post('/legal-aid-requests/:requestId/feedback', async (req, res) => {
+  const { requestId } = req.params;
   const { rating, comment } = req.body;
   if (!rating || rating < 1 || rating > 5) return fail(res, 'rating is required (1-5)', 400);
 
@@ -2264,20 +2309,23 @@ router.post('/legal-aid-requests/:requestId/hearings/:hearingId/feedback', async
   if (!reqRows[0]) return fail(res, 'Request not found', 404);
   if (!(await isOwnCase(req, reqRows[0].user_id))) return fail(res, 'Not your request', 403);
 
-  const { rows: hearingRows } = await pool.query('select assignment_id from legal_aid_hearings where hearing_id = $1 and request_id = $2', [hearingId, requestId]);
-  if (!hearingRows[0]) return fail(res, 'Hearing not found', 404);
+  const { rows: assignmentRows } = await pool.query(
+    `select assignment_id from legal_aid_assignments where request_id = $1 order by assigned_at desc limit 1`,
+    [requestId]
+  );
+  if (!assignmentRows[0]) return fail(res, 'No Public Prosecutor has been assigned to this case yet', 400);
 
   let feedback;
   try {
     const { rows } = await pool.query(
-      `insert into legal_aid_feedback (request_id, assignment_id, hearing_id, submitted_by_user_id, rating, comment)
-       values ($1, $2, $3, $4, $5, $6) returning feedback_id`,
-      [requestId, hearingRows[0].assignment_id, hearingId, req.auth.userId, rating, comment ? String(comment).trim() || null : null]
+      `insert into legal_aid_feedback (request_id, assignment_id, submitted_by_user_id, rating, comment)
+       values ($1, $2, $3, $4, $5) returning feedback_id`,
+      [requestId, assignmentRows[0].assignment_id, req.auth.userId, rating, comment ? String(comment).trim() || null : null]
     );
     feedback = rows[0];
   } catch (err) {
-    if (err.code === '23505' && err.constraint === 'idx_legal_aid_feedback_one_per_hearing') {
-      return fail(res, 'Feedback already submitted for this hearing', 409);
+    if (err.code === '23505' && err.constraint === 'idx_legal_aid_feedback_one_per_assignment') {
+      return fail(res, 'You have already submitted feedback for your current Public Prosecutor', 409);
     }
     return fail(res, `Could not submit feedback: ${err.message}`, 500);
   }

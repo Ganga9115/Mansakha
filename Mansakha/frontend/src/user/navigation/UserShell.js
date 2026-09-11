@@ -30,7 +30,6 @@ import RehabilitationOptInScreen from '../wellness/screens/RehabilitationOptInSc
 import LegalAidHubScreen from '../wellness/screens/LegalAidHubScreen';
 import LegalAidRequestScreen from '../wellness/screens/LegalAidRequestScreen';
 import LegalAidRepresentativeScreen from '../wellness/screens/LegalAidRepresentativeScreen';
-import LegalAidFeedbackScreen from '../wellness/screens/LegalAidFeedbackScreen';
 import ThreatReportScreen from '../wellness/screens/ThreatReportScreen';
 import FinancialAidScreen from '../wellness/screens/FinancialAidScreen';
 import CompensationScreen from '../wellness/screens/CompensationScreen';
@@ -204,7 +203,6 @@ function DesktopNavigator() {
       <Drawer.Screen name="LegalAidHub" component={LegalAidHubScreen} />
       <Drawer.Screen name="LegalAidRequest" component={LegalAidRequestScreen} />
       <Drawer.Screen name="LegalAidRepresentative" component={LegalAidRepresentativeScreen} />
-      <Drawer.Screen name="LegalAidFeedback" component={LegalAidFeedbackScreen} />
       <Drawer.Screen name="ThreatReport" component={ThreatReportScreen} />
       <Drawer.Screen name="FinancialAid" component={FinancialAidScreen} />
       <Drawer.Screen name="Compensation" component={CompensationScreen} />
@@ -246,7 +244,6 @@ function ShellStack({ tabs, includeExtras = true }) {
       <RootStack.Screen name="LegalAidHub" component={LegalAidHubScreen} />
       <RootStack.Screen name="LegalAidRequest" component={LegalAidRequestScreen} />
       <RootStack.Screen name="LegalAidRepresentative" component={LegalAidRepresentativeScreen} />
-      <RootStack.Screen name="LegalAidFeedback" component={LegalAidFeedbackScreen} />
       <RootStack.Screen name="ThreatReport" component={ThreatReportScreen} />
       <RootStack.Screen name="FinancialAid" component={FinancialAidScreen} />
       <RootStack.Screen name="Compensation" component={CompensationScreen} />

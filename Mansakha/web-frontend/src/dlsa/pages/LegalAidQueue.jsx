@@ -8,10 +8,20 @@ import { useLegalAidRequestsList } from '../services/hooks';
 // agency_referrals-backed content in place (same route/nav slot). Same
 // scannable-list, action-lives-on-detail convention as before (and every
 // other list -> detail page in this app) - just pointed at the new
-// jurisdiction-scoped legal_aid_requests pipeline. "Assigned Cases" (the
-// Active/Completed tail of this same lifecycle) is its own page - this one
-// covers the intake/review stages a DLSA actually triages day to day.
-
+// jurisdiction-scoped legal_aid_requests pipeline.
+//
+// Collapsed to 2 tabs per explicit product request: Active is DLSA's own
+// actionable queue - a request that has NOT yet had a Public Prosecutor
+// assigned (Submitted/Under Review, still needing a Start Review/Assign/
+// Reject decision) - and History is everything past that point (Active
+// status - a Public Prosecutor IS assigned and the case no longer needs
+// DLSA's attention day to day - plus Rejected). The per-stage tabs this used
+// to have (Submitted/Under Review/Verified/Approved/Rejected) are gone; the
+// detail page's own status-gated action buttons still drive what happens
+// next regardless of which tab a request was found under, so nothing about
+// the actual review workflow changed - just how it's browsed here. One
+// un-statused fetch (every status for this jurisdiction) split client-side,
+// rather than a second network round-trip per tab switch.
 const STATUS_BADGE = {
   Submitted: 'bg-amber-100 text-amber-700',
   'Under Review': 'bg-sky-100 text-sky-700',
@@ -22,13 +32,18 @@ const STATUS_BADGE = {
   Completed: 'bg-gray-200 text-gray-700',
 };
 
-const INTAKE_TABS = ['Submitted', 'Under Review', 'Verified', 'Approved', 'Rejected'];
+const TABS = ['Active', 'History'];
+// A request in one of these statuses has no Public Prosecutor assigned yet -
+// it's still on DLSA's own to-do list. Anything else (Active - assigned,
+// Rejected - decided) has moved past that and belongs in History instead.
+const PP_NOT_ASSIGNED_STATUSES = ['Submitted', 'Under Review'];
 
 export default function LegalAidQueue() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState('Submitted');
-  const query = useLegalAidRequestsList(tab);
-  const requests = query.data?.requests || [];
+  const [tab, setTab] = useState('Active');
+  const query = useLegalAidRequestsList();
+  const allRequests = query.data?.requests || [];
+  const requests = allRequests.filter((r) => PP_NOT_ASSIGNED_STATUSES.includes(r.status) === (tab === 'Active'));
   const jurisdictionAssigned = query.data?.jurisdictionAssigned !== false;
 
   return (
@@ -43,11 +58,11 @@ export default function LegalAidQueue() {
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
             <h3 className="font-bold text-sm text-gray-800">Legal Aid Requests</h3>
-            <p className="text-[11px] text-gray-400">Requests filed by victims in your district, awaiting review, verification, or approval.</p>
+            <p className="text-[11px] text-gray-400">Requests filed by victims in your district - Active needs your review or a Public Prosecutor assigned; History is everything already assigned or decided.</p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {INTAKE_TABS.map((s) => (
+            {TABS.map((s) => (
               <button
                 key={s}
                 onClick={() => setTab(s)}
@@ -66,7 +81,7 @@ export default function LegalAidQueue() {
             ) : query.error ? (
               <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 m-4 rounded-lg">{query.error}</div>
             ) : requests.length === 0 ? (
-              <p className="text-sm text-gray-400 p-6">No requests with status "{tab}".</p>
+              <p className="text-sm text-gray-400 p-6">No {tab === 'Active' ? 'requests awaiting action' : 'past'} requests.</p>
             ) : (
               <table className="w-full text-left min-w-[720px]">
                 <thead>

@@ -183,15 +183,12 @@ function useLegalAidAction(buildPath, method = 'PATCH') {
 export function useStartLegalAidReview() {
   return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/start-review`);
 }
-export function useVerifyLegalAidRequest() {
-  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/verify`);
-}
 export function useRejectLegalAidRequest() {
   return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/reject`);
 }
-export function useApproveLegalAidRequest() {
-  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/approve`);
-}
+// migration_043: assign-representative is reachable directly from 'Under
+// Review' now - the 'Verify'/'Approve' steps that used to sit in between are
+// retired, so there's no hook for them any more.
 export function useAssignRepresentative() {
   return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/assign-representative`, 'POST');
 }
@@ -210,7 +207,4 @@ export function useContinueLegalAidFeedback() {
     }
   };
   return { mutate, loading };
-}
-export function useCompleteLegalAidRequest() {
-  return useLegalAidAction((id) => `/api/dlsa/legal-aid-requests/${id}/complete`);
 }

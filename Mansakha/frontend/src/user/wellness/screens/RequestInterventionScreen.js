@@ -314,10 +314,15 @@ export default function RequestInterventionScreen({ navigation, route }) {
   // tile) wins if present; otherwise this falls back to whichever docket is
   // currently active in Settings/Profile (see ActiveCaseContext.js).
   const { activeCaseUserId } = useActiveCase();
-  const dashboardQuery = useUserDashboard(route?.params?.caseUserId || activeCaseUserId);
+  const caseUserId = route?.params?.caseUserId || activeCaseUserId;
+  const dashboardQuery = useUserDashboard(caseUserId);
   const activeUserId = dashboardQuery.data?.userId;
   const typesQuery = useInterventionTypes();
-  const requestsQuery = useMyInterventionRequests();
+  // "My Requests" below is scoped to this same resolved docket (not
+  // activeUserId - that's only set once the dashboard query resolves,
+  // caseUserId is available immediately) so it only ever shows this
+  // docket's own requests, matching Case Details/Compensation.
+  const requestsQuery = useMyInterventionRequests(caseUserId);
   const requests = requestsQuery.data?.requests || [];
 
   return (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Scale, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
+import { Scale, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 
@@ -8,14 +8,16 @@ import { useMe } from '../services/hooks';
 // dwo/layouts/StaffLayout.jsx (itself copied from district_admin's
 // template).
 //
-// migration_040: trimmed to exactly the 3 items the real Legal Aid workflow
-// needs (Legal Aid Requests, Assigned Cases, Profile) - the old Intervention
-// Requests/My Tasks/Referral Detail pages are UNLINKED here but not deleted
-// (still reachable by direct URL, see App.jsx), matching the backend's own
-// "leave the legacy routes mounted, just not surfaced" call.
+// migration_040: trimmed to the 2 items the real Legal Aid workflow needs
+// day to day (Legal Aid Requests, Profile) - the old Intervention Requests/
+// My Tasks/Referral Detail pages are UNLINKED here but not deleted (still
+// reachable by direct URL, see App.jsx), matching the backend's own "leave
+// the legacy routes mounted, just not surfaced" call. Assigned Cases
+// (Active/Completed) is no longer its own nav destination - that same split
+// is now the Active/History tabs on the Legal Aid Requests page itself, so
+// the page stays mounted/routable but isn't linked here either.
 const NAV_ITEMS = [
   { name: 'Legal Aid Requests', icon: Scale, path: '/dlsa' },
-  { name: 'Assigned Cases', icon: ClipboardList, path: '/dlsa/assigned-cases' },
   { name: 'Profile', icon: User, path: '/dlsa/profile' },
 ];
 
@@ -25,6 +27,7 @@ export default function StaffLayout({ children, title = 'Legal Aid Requests' }) 
   const { data: me } = useMe();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const profilePath = '/dlsa/profile';
   const activeNavItem = NAV_ITEMS
     .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
@@ -82,10 +85,26 @@ export default function StaffLayout({ children, title = 'Legal Aid Requests' }) 
           </div>
 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">
-            <div className="text-xs hidden sm:block text-right">
-              <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
-              <p className="text-[#3D5A80]/70">DLSA Coordinator</p>
-            </div>
+            <button
+              onClick={() => navigate(profilePath)}
+              className="flex items-center gap-3 sm:border-l border-[#D6E8F5] sm:pl-4 text-left focus:outline-none"
+            >
+              {me?.profileImageUrl ? (
+                <img
+                  src={me.profileImageUrl}
+                  alt={me?.fullName || 'Profile'}
+                  className="w-9 h-9 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
+                  <User size={18} className="text-[#3D5A80]" />
+                </div>
+              )}
+              <div className="text-xs hidden sm:block">
+                <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
+                <p className="text-[#3D5A80]/70">DLSA Coordinator</p>
+              </div>
+            </button>
 
             <button
               onClick={() => setShowLogoutConfirm(true)}

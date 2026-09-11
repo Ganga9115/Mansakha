@@ -20,6 +20,7 @@ export default function StaffLayout({ children, title = 'My Cases' }) {
   const { data: me } = useMe();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const profilePath = '/legalrepresentative/profile';
   const activeNavItem = NAV_ITEMS
     .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
@@ -77,10 +78,26 @@ export default function StaffLayout({ children, title = 'My Cases' }) {
           </div>
 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">
-            <div className="text-xs hidden sm:block text-right">
-              <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
-              <p className="text-[#3D5A80]/70">Public Prosecutor</p>
-            </div>
+            <button
+              onClick={() => navigate(profilePath)}
+              className="flex items-center gap-3 sm:border-l border-[#D6E8F5] sm:pl-4 text-left focus:outline-none"
+            >
+              {me?.profileImageUrl ? (
+                <img
+                  src={me.profileImageUrl}
+                  alt={me?.fullName || 'Profile'}
+                  className="w-9 h-9 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
+                  <User size={18} className="text-[#3D5A80]" />
+                </div>
+              )}
+              <div className="text-xs hidden sm:block">
+                <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
+                <p className="text-[#3D5A80]/70">Public Prosecutor</p>
+              </div>
+            </button>
 
             <button
               onClick={() => setShowLogoutConfirm(true)}

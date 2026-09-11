@@ -252,7 +252,17 @@ export default function CaseDetailsScreen({ navigation, route }) {
 
                         <View style={[styles.overviewGridRow, !isDesktop && styles.overviewGridRowMobile]}>
                           <View style={styles.overviewGridCell}>
-                            <Text style={styles.overviewLabel}>Case Stage</Text>
+                            {/* This is the court PROCEEDING's own stage
+                                (e.g. "Framing of Charge", "Evidence") from
+                                the simulated eCourt feed - deliberately
+                                labeled differently from the victim's overall
+                                case_stage (Investigation/Trial/Rehabilitation/
+                                Compensation/Case Closed, shown via Settings/
+                                Profile's own docket selector), which is a
+                                different, eCourt-exclusive concept covering
+                                the whole case lifecycle, not just where the
+                                court proceeding itself currently stands. */}
+                            <Text style={styles.overviewLabel}>Court Hearing Stages</Text>
                             <Text style={styles.overviewValue}>{data.caseStageLabel}</Text>
                           </View>
                           <View style={styles.overviewGridCell}>

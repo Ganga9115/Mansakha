@@ -32,10 +32,13 @@ export default function Hearings() {
           ) : hearings.length === 0 ? (
             <p className="text-sm text-gray-400 p-6">No upcoming hearings on the court schedule for your assigned cases.</p>
           ) : (
-            <table className="w-full text-left min-w-[680px]">
+            <table className="w-full text-left min-w-[820px]">
               <thead>
                 <tr className="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase">
                   <th className="px-6 py-3">Docket Number</th>
+                  <th className="px-6 py-3">Victim</th>
+                  <th className="px-6 py-3">Case Type</th>
+                  <th className="px-6 py-3">Case Stage</th>
                   <th className="px-6 py-3">Next Hearing</th>
                   <th className="px-6 py-3">Purpose</th>
                   <th className="px-6 py-3">Court</th>
@@ -47,9 +50,14 @@ export default function Hearings() {
                 {hearings.map((h) => (
                   <tr key={h.requestId} className="hover:bg-gray-50/70 transition">
                     <td className="px-6 py-3.5 text-sm font-bold text-gray-800">{h.docketNumber}</td>
-                    <td className="px-6 py-3.5 text-xs text-gray-700 font-semibold flex items-center gap-1.5">
-                      <CalendarClock size={13} className="text-[#3D5A80]" />
-                      {new Date(h.nextHearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    <td className="px-6 py-3.5 text-xs text-gray-600">{h.victimName || '—'}</td>
+                    <td className="px-6 py-3.5 text-xs text-gray-500">{h.caseTypeName || '—'}</td>
+                    <td className="px-6 py-3.5 text-xs text-gray-500">{h.caseStage || '—'}</td>
+                    <td className="px-6 py-3.5 text-xs text-gray-700 font-semibold">
+                      <span className="flex items-center gap-1.5">
+                        <CalendarClock size={13} className="text-[#3D5A80]" />
+                        {new Date(h.nextHearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
                     </td>
                     <td className="px-6 py-3.5 text-xs text-gray-500">{h.nextHearingPurpose || '—'}</td>
                     <td className="px-6 py-3.5 text-xs text-gray-500">{h.court || '—'}{h.courtNumber ? ` (Court No. ${h.courtNumber})` : ''}</td>

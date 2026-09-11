@@ -1,18 +1,33 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowLeft, FileText, User, Phone, Home, Gavel, Star, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, FileText, User, Phone, Home, Star } from 'lucide-react';
 import {
   useLegalAidRequestDetail, useEligibleRepresentatives,
-  useStartLegalAidReview, useVerifyLegalAidRequest, useRejectLegalAidRequest, useApproveLegalAidRequest,
-  useAssignRepresentative, useReassignRepresentative, useContinueLegalAidFeedback, useCompleteLegalAidRequest,
+  useStartLegalAidReview, useRejectLegalAidRequest,
+  useAssignRepresentative, useReassignRepresentative, useContinueLegalAidFeedback,
 } from '../services/hooks';
 
 // The single action surface for one Legal Aid request - every status
-// transition (Start Review / Verify / Reject / Approve / Assign
-// Representative / Mark Complete) and the poor-feedback review loop all live
-// here, gated by the request's own current status. Same list -> detail
-// convention as ReferralDetail.jsx/InterventionRequestDetail.jsx.
+// transition (Start Review / Reject / Assign Public Prosecutor) and the
+// poor-feedback review loop all live here, gated by the request's own
+// current status. Same list -> detail convention as
+// ReferralDetail.jsx/InterventionRequestDetail.jsx.
+//
+// There is no "Mark Complete" action here (per explicit product request) -
+// assigning a Public Prosecutor doesn't mean the case is done, and DLSA has
+// no other terminal step in this flow; a request stays 'Active' for as long
+// as the underlying case runs. Only the eCourt-reported case_stage (an
+// entirely separate fact - see ecourtStageSync.js) ever says a case is
+// actually closed.
+//
+// migration_043: trimmed to exactly what's needed day to day - docket
+// number, victim details, current (eCourt) case stage, Legal Aid status,
+// reason, documents, and victim feedback, plus the Reassign action. Case
+// Type, the Assignment History timeline, and the Legal Aid Hearing Records
+// list are no longer shown here (the reassign panel's own "currently X"
+// label already names the current Public Prosecutor, which was the only
+// thing Assignment History was still needed for on this page).
 
 const STATUS_BADGE = {
   Submitted: 'bg-amber-100 text-amber-700',
@@ -90,52 +105,33 @@ function DocumentsCard({ documents }) {
   );
 }
 
-function AssignmentHistoryCard({ assignments }) {
-  if (!assignments?.length) return null;
-  return (
-    <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
-      <h3 className="font-bold text-sm text-gray-800">Public Prosecutor Assignment History</h3>
-      <div className="space-y-2">
-        {assignments.map((a) => (
-          <div key={a.assignmentId} className="flex items-center justify-between text-xs border border-gray-100 rounded-lg px-3 py-2">
-            <div>
-              <span className="font-bold text-gray-800">{a.representativeName}</span>
-              {a.designation && <span className="text-gray-400"> · {a.designation}</span>}
-              <div className="text-[10px] text-gray-400">Assigned {new Date(a.assignedAt).toLocaleDateString('en-IN')}</div>
-              {a.endedReason && <div className="text-[10px] text-rose-500 mt-0.5">Reassigned: {a.endedReason}</div>}
-            </div>
-            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${a.status === 'Active' ? 'bg-emerald-100 text-emerald-700' : a.status === 'Completed' ? 'bg-gray-200 text-gray-700' : 'bg-gray-100 text-gray-500'}`}>
-              {a.status}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function HearingsCard({ hearings }) {
+// Every feedback the victim has left about their Public Prosecutor(s) on
+// this case (migration_043: one per assignment, not per hearing) - good or
+// poor, not just the poor/unreviewed ones PendingFeedbackCard above already
+// surfaces as an action item.
+function FeedbackCard({ feedback }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <Gavel size={15} className="text-[#3D5A80]" />
-        <h3 className="font-bold text-sm text-gray-800">Legal Aid Hearing Records</h3>
+        <Star size={15} className="text-[#3D5A80]" />
+        <h3 className="font-bold text-sm text-gray-800">Feedback from Victim</h3>
       </div>
-      {hearings?.length > 0 ? (
+      {feedback?.length > 0 ? (
         <div className="space-y-2">
-          {hearings.map((h) => (
-            <div key={h.hearingId} className="border border-gray-100 rounded-lg px-3 py-2 text-xs">
+          {feedback.map((f) => (
+            <div key={f.feedbackId} className="border border-gray-100 rounded-lg px-3 py-2 text-xs space-y-1">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-gray-800">{new Date(h.hearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
-                {h.court && <span className="text-gray-400">{h.court}</span>}
+                <div className="flex items-center gap-1 text-amber-500">
+                  {Array.from({ length: 5 }).map((_, i) => <Star key={i} size={13} fill={i < f.rating ? 'currentColor' : 'none'} />)}
+                </div>
+                <span className="text-[10px] text-gray-400">{new Date(f.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
               </div>
-              <p className="text-gray-600 mt-1">{h.outcome}</p>
-              {h.nextHearingDate && <p className="text-[10px] text-gray-400 mt-1">Next hearing: {new Date(h.nextHearingDate).toLocaleDateString('en-IN')}</p>}
+              {f.comment && <p className="text-gray-600 italic">"{f.comment}"</p>}
             </div>
           ))}
         </div>
       ) : (
-        <p className="text-xs text-gray-400">No hearings recorded yet.</p>
+        <p className="text-xs text-gray-400">No feedback submitted yet.</p>
       )}
     </div>
   );
@@ -294,11 +290,8 @@ export default function LegalAidRequestDetail() {
   const detailQuery = useLegalAidRequestDetail(requestId);
   const eligible = useEligibleRepresentatives(requestId);
   const startReview = useStartLegalAidReview();
-  const verify = useVerifyLegalAidRequest();
   const reject = useRejectLegalAidRequest();
-  const approve = useApproveLegalAidRequest();
   const assign = useAssignRepresentative();
-  const complete = useCompleteLegalAidRequest();
 
   const [showRejectReason, setShowRejectReason] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -345,15 +338,11 @@ export default function LegalAidRequestDetail() {
               <span className="text-base font-bold text-gray-800">{r.docketNumber}</span>
             </div>
             <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case Type</span>
-              <span className="text-xs font-bold text-gray-700">{r.caseTypeName}</span>
-            </div>
-            <div>
               <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case Stage</span>
               <span className="text-xs font-bold text-gray-700">{r.caseStage}</span>
             </div>
             <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Status</span>
+              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Status of Legal Aid</span>
               <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${STATUS_BADGE[r.status] || 'bg-gray-100 text-gray-600'}`}>{r.status}</span>
             </div>
           </div>
@@ -364,30 +353,15 @@ export default function LegalAidRequestDetail() {
                 {startReview.loading ? 'Working...' : 'Start Review'}
               </button>
             )}
-            {r.status === 'Under Review' && !showRejectReason && (
+            {r.status === 'Under Review' && !showRejectReason && !showAssign && (
               <>
-                <button onClick={() => runAction(verify.mutate, r.requestId)} disabled={verify.loading} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
-                  {verify.loading ? 'Working...' : 'Verify'}
+                <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition">
+                  Assign Public Prosecutor
                 </button>
                 <button onClick={() => setShowRejectReason(true)} className="px-4 py-2 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold transition">
                   Reject
                 </button>
               </>
-            )}
-            {r.status === 'Verified' && (
-              <button onClick={() => runAction(approve.mutate, r.requestId)} disabled={approve.loading} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
-                {approve.loading ? 'Working...' : 'Approve'}
-              </button>
-            )}
-            {r.status === 'Approved' && !showAssign && (
-              <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition">
-                Assign Public Prosecutor
-              </button>
-            )}
-            {r.status === 'Active' && (
-              <button onClick={() => runAction(complete.mutate, r.requestId)} disabled={complete.loading} className="px-4 py-2 border border-gray-300 text-gray-700 hover:bg-gray-50 rounded-lg text-xs font-semibold transition disabled:opacity-60 flex items-center gap-1.5">
-                <CheckCircle2 size={14} /> {complete.loading ? 'Working...' : 'Mark Complete'}
-              </button>
             )}
           </div>
         </div>
@@ -473,8 +447,7 @@ export default function LegalAidRequestDetail() {
               )}
             </div>
             <DocumentsCard documents={r.documents} />
-            <AssignmentHistoryCard assignments={r.assignments} />
-            <HearingsCard hearings={r.hearings} />
+            <FeedbackCard feedback={r.feedback} />
           </div>
 
           <div className="space-y-6">

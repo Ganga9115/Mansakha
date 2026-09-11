@@ -239,6 +239,11 @@ router.get('/hearings-upcoming', async (req, res) => {
     return {
       requestId: c.request_id,
       docketNumber: c.docket_number,
+      // Case details alongside the hearing itself - so this list stands on
+      // its own for hearing prep without a click-through to My Cases first.
+      caseTypeName: c.case_type_name,
+      caseStage: c.case_stage,
+      victimName: c.victim_full_name || null,
       nextHearingDate: courtCase.row.next_hearing_date,
       nextHearingPurpose: courtCase.row.next_hearing_purpose,
       court: courtCase.row.court_complex || courtCase.row.court_establishment || null,
