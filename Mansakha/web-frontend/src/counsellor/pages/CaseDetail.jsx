@@ -179,7 +179,7 @@ export default function CaseDetail() {
   // Solid blue (not outline) per explicit request - this is the page's
   // primary action, so it should read as such against the search bar it
   // now sits next to.
-  const chatWithUserButton = data.optedForManualCounsellor ? (
+  const chatWithUserButton = (
     <div className="relative inline-block shrink-0">
       <button
         onClick={() => navigate(`/counsellor/case-detail/${userId}/chat`)}
@@ -191,7 +191,7 @@ export default function CaseDetail() {
         <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white"></span>
       )}
     </div>
-  ) : null;
+  );
 
   return (
     <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
