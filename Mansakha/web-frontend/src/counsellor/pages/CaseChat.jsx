@@ -327,18 +327,18 @@ export default function CaseChat() {
           </a>
         </div>
 
-        {/* ── Scrollable message thread — light grey bg matching victim app ── */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5 no-scrollbar bg-[#F8F9FA]">
+        {/* ── Scrollable message thread ── */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-white">
           {loading && !data ? (
             <p className="text-xs text-center text-gray-400 mt-8">Loading messages...</p>
           ) : messageGroups.length === 0 ? (
             <p className="text-xs text-center text-gray-400 mt-8">No messages yet — say hello.</p>
           ) : (
             messageGroups.map((group) => (
-              <div key={group.label} className="space-y-3">
+              <div key={group.label} className="space-y-4">
                 {/* Date badge */}
-                <div className="flex justify-center">
-                  <span className="bg-white px-3 py-1 rounded-full border border-gray-200 shadow-sm text-[11px] font-semibold text-[#64748B]">
+                <div className="flex justify-center mb-2">
+                  <span className="bg-white px-4 py-1.5 rounded-full border border-gray-100 shadow-sm text-[11px] font-semibold text-gray-400">
                     {group.label}
                   </span>
                 </div>
@@ -351,28 +351,28 @@ export default function CaseChat() {
                   return (
                     <div
                       key={m.messageId}
-                      className={`flex items-end gap-2 ${isUser ? 'justify-start' : 'justify-end'}`}
+                      className={`flex items-end gap-3 ${isUser ? 'justify-start' : 'justify-end'}`}
                     >
                       {/* Victim avatar — left, light blue */}
                       {isUser && (
-                        <div className="w-8 h-8 rounded-full bg-[#EBF3FA] flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-[#F0F4F8] flex items-center justify-center shrink-0 mb-6">
                           <User size={16} className="text-[#3D5A80]" />
                         </div>
                       )}
 
-                      <div className={`flex flex-col max-w-[75%] ${isUser ? 'items-start' : 'items-end'}`}>
+                      <div className={`flex flex-col max-w-[70%] ${isUser ? 'items-start' : 'items-end'}`}>
                         {isVoice ? (
                           <button
                             type="button"
                             onClick={() => handleTogglePlay(m)}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-sm transition min-w-[170px] ${
+                            className={`flex items-center gap-3 px-5 py-3 rounded-3xl shadow-sm transition min-w-[170px] ${
                               isUser
-                                ? 'bg-white border border-gray-100 rounded-tl-sm text-[#0F172A]'
-                                : 'bg-[#EBF3FA] rounded-tr-sm text-[#1E293B]'
+                                ? 'bg-white border border-gray-100 text-[#0F172A]'
+                                : 'bg-[#F0F4F8] text-[#1E293B]'
                             }`}
                           >
-                            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'}`}>
-                              {isThisPlaying ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'}`}>
+                              {isThisPlaying ? <Pause size={14} /> : <Play size={14} className="ml-1" />}
                             </div>
                             <div className="flex-1 flex items-center gap-0.5 h-4">
                               {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
@@ -384,25 +384,24 @@ export default function CaseChat() {
                             </span>
                           </button>
                         ) : (
-                          /* user=white bg, counsellor=primaryLight — matches victim app */
-                          <div className={`px-4 py-3 rounded-2xl shadow-sm text-sm leading-relaxed ${
+                          <div className={`px-5 py-2.5 rounded-3xl shadow-sm text-[15px] leading-relaxed ${
                             isUser
-                              ? 'bg-white text-[#0F172A] border border-gray-100 rounded-tl-sm'
-                              : 'bg-[#EBF3FA] text-[#1E293B] rounded-tr-sm'
+                              ? 'bg-white text-[#0F172A] border border-gray-100'
+                              : 'bg-[#F0F4F8] text-[#1E293B]'
                           }`}>
                             {m.body}
                           </div>
                         )}
 
-                        <div className="flex items-center gap-1 mt-1 px-1">
-                          <span className="text-[11px] text-[#64748B]">{formatTime(m.sentAt)}</span>
-                          {!isUser && <CheckCircle2 size={11} className="text-[#3D5A80]" />}
+                        <div className="flex items-center gap-1 mt-1.5 px-2">
+                          <span className="text-[10px] text-gray-400 font-medium">{formatTime(m.sentAt)}</span>
+                          {!isUser && <CheckCircle2 size={11} className="text-[#93C5FD]" />}
                         </div>
                       </div>
 
                       {/* Counsellor avatar — right, dark blue filled */}
                       {!isUser && (
-                        <div className="w-8 h-8 rounded-full bg-[#3D5A80] flex items-center justify-center shrink-0 text-white">
+                        <div className="w-8 h-8 rounded-full bg-[#7CA8D8] flex items-center justify-center shrink-0 text-white mb-6">
                           <User size={16} />
                         </div>
                       )}
@@ -446,14 +445,14 @@ export default function CaseChat() {
         )}
 
         {/* ── Composer bar ── */}
-        <div className="px-4 py-3 bg-white border-t border-gray-100 shrink-0">
-          <div className="flex items-center gap-2 bg-[#F8F9FA] rounded-2xl border border-gray-200 shadow-sm px-3 py-1.5">
+        <div className="px-4 pb-6 pt-2 bg-white shrink-0">
+          <div className="flex items-center gap-2 bg-white rounded-[28px] border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] px-4 py-2.5 max-w-5xl mx-auto">
             {isRecording ? (
               <div className="flex-1 flex items-center gap-3 px-2 py-1.5">
                 <button
                   type="button"
                   onClick={cancelRecording}
-                  className="text-red-500 p-1 hover:bg-red-50 rounded-full transition"
+                  className="text-red-500 p-1.5 hover:bg-red-50 rounded-full transition"
                   title="Delete recording"
                   aria-label="Delete recording"
                 >
@@ -462,14 +461,14 @@ export default function CaseChat() {
                 <button
                   type="button"
                   onClick={togglePauseRecording}
-                  className="text-[#3D5A80] p-1 hover:bg-blue-50 rounded-full transition"
+                  className="text-[#93C5FD] p-1.5 hover:bg-blue-50 rounded-full transition"
                   title={isPaused ? 'Resume recording' : 'Pause recording'}
                   aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
                 >
                   {isPaused ? <Play size={20} /> : <Pause size={20} />}
                 </button>
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-sm font-medium text-[#0F172A] flex-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-sm font-medium text-gray-700 flex-1 ml-2">
                   {isPaused ? 'Paused' : 'Recording...'} {formatDuration(recordSeconds)}
                 </span>
               </div>
@@ -481,25 +480,25 @@ export default function CaseChat() {
                   onChange={handleDraftChange}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message..."
-                  className="flex-1 px-2 py-2 bg-transparent border-0 outline-none resize-none text-sm text-[#0F172A] placeholder-[#64748B] max-h-24"
+                  className="flex-1 px-4 py-2 bg-transparent border-0 outline-none resize-none text-[15px] text-[#0F172A] placeholder-gray-400 max-h-24"
                 />
                 <button
                   type="button"
                   onClick={() => setShowEmojiPicker((prev) => !prev)}
-                  className={`p-2 transition rounded-full hover:bg-gray-50 ${
-                    showEmojiPicker ? 'text-[#3D5A80]' : 'text-[#64748B]'
+                  className={`p-2.5 transition rounded-full hover:bg-gray-50 ${
+                    showEmojiPicker ? 'text-[#93C5FD]' : 'text-gray-400'
                   }`}
                   aria-label="Choose emoji"
                 >
-                  <Smile size={20} />
+                  <Smile size={22} />
                 </button>
                 <button
                   type="button"
                   onClick={startRecording}
-                  className="p-2 text-[#3D5A80] hover:bg-blue-50 rounded-full transition"
+                  className="p-2.5 text-gray-400 hover:text-[#93C5FD] hover:bg-blue-50 rounded-full transition"
                   aria-label="Record voice message"
                 >
-                  <Mic size={20} />
+                  <Mic size={22} />
                 </button>
               </>
             )}
@@ -508,13 +507,13 @@ export default function CaseChat() {
               type="button"
               onClick={isRecording ? stopAndSendRecording : handleSend}
               disabled={sendDisabled}
-              className="w-10 h-10 rounded-full bg-[#3D5A80] hover:bg-[#2D4360] text-white flex items-center justify-center shrink-0 disabled:opacity-50 transition shadow-xs"
+              className="w-11 h-11 rounded-full bg-[#9CA3AF] hover:bg-[#93C5FD] text-white flex items-center justify-center shrink-0 disabled:opacity-40 transition shadow-sm ml-1"
               aria-label="Send message"
             >
-              <Send size={18} />
+              <Send size={18} className="mr-0.5 mt-0.5" />
             </button>
           </div>
-          {recordError && <p className="text-xs text-red-500 px-3 pt-1.5">{recordError}</p>}
+          {recordError && <p className="text-xs text-red-500 px-6 pt-2">{recordError}</p>}
         </div>
 
       </div>
