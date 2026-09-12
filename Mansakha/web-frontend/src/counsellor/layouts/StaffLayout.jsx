@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Users, Bell, BarChart, User, LogOut, Menu, X, Mail } from 'lucide-react';
+import { LayoutDashboard, Users, Bell, BarChart, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
-import { useMe, useMailUnreadCount } from '../services/hooks';
+import { useMe } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 
 // Counsellor's own dedicated shell - own copy of what used to be the shared
@@ -14,7 +14,6 @@ const NAV_ITEMS = [
   { name: 'My Users', icon: Users, path: '/counsellor/my-users' },
   { name: 'Alerts', icon: Bell, path: '/counsellor/alerts' },
   { name: 'Analysis', icon: BarChart, path: '/counsellor/analysis' },
-  { name: 'Mail', icon: Mail, path: '/counsellor/mail' },
   { name: 'Profile', icon: User, path: '/counsellor/profile' },
 ];
 
@@ -27,7 +26,6 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
-  const { data: mailUnread } = useMailUnreadCount();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const profilePath = '/counsellor/profile';
@@ -108,11 +106,6 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
               >
                 <Icon size={18} />
                 <span className="text-sm flex-1">{item.name}</span>
-                {item.name === 'Mail' && mailUnread?.count > 0 && (
-                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {mailUnread.count > 99 ? '99+' : mailUnread.count}
-                  </span>
-                )}
               </Link>
             );
           })}
