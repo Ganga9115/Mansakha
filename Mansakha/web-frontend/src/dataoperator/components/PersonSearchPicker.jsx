@@ -37,18 +37,21 @@ export default function PersonSearchPicker({ onSelect, excludeUserId }) {
 
   return (
     <div className="space-y-3">
-      <form onSubmit={handleSearch} className="flex gap-2">
+      <form onSubmit={handleSearch} className="relative flex items-center w-full">
+        <div className="absolute left-4 text-gray-400">
+          <Search size={18} />
+        </div>
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name, docket, mobile, or Aadhaar..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+          className="w-full pl-11 pr-32 py-3.5 border border-gray-200 hover:border-gray-300 rounded-xl text-sm shadow-sm focus:outline-none focus:ring-4 focus:ring-[#519BCE]/10 focus:border-[#519BCE] transition-all"
         />
         <button
           type="submit"
           disabled={search.loading}
-          className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
+          className="absolute right-2 top-2 bottom-2 flex items-center gap-2 px-6 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60 shadow-sm"
         >
           <Search size={14} />
           {search.loading ? 'Searching...' : 'Search'}

@@ -90,14 +90,14 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function PartyList({ icon, title, pillBg, pillFg, parties, isLast }) {
+function PartyList({ icon, title, parties, isLast }) {
   if (!parties || parties.length === 0) return null;
   return (
     <View style={[styles.partyColumn, isLast && { borderRightWidth: 0 }]}>
       <View style={styles.partyHeaderRow}>
-        <View style={[styles.partyPill, { backgroundColor: pillBg }]}>
-          <Feather name={icon} size={14} color={pillFg} style={{ marginRight: 6 }} />
-          <Text style={[styles.partyPillText, { color: pillFg }]}>{title}</Text>
+        <View style={styles.partyPill}>
+          <Feather name={icon} size={14} color={colors.primaryDark} style={{ marginRight: 6 }} />
+          <Text style={styles.partyPillText}>{title}</Text>
         </View>
       </View>
       {parties.map((p, i) => (
@@ -306,11 +306,11 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         </View>
                       </View>
                       <View style={styles.cardContent}>
-                        <View style={styles.innerPanelContainer}>
+                        <View style={styles.partiesInnerContainer}>
                           <View style={isDesktop ? styles.partiesGrid : styles.partiesGridMobile}>
-                            <PartyList icon="home" title="Petitioner" pillBg="#DBEAFE" pillFg="#1E40AF" parties={data.petitionerNames} />
-                            <PartyList icon="user" title="Respondent" pillBg="#F3E8FF" pillFg="#6B21A8" parties={data.respondentNames} />
-                            <PartyList icon="users" title="Advocates" pillBg="#DCFCE7" pillFg="#15803D" parties={data.advocateNames} isLast />
+                            <PartyList icon="home" title="Petitioner" parties={data.petitionerNames} />
+                            <PartyList icon="user" title="Respondent" parties={data.respondentNames} />
+                            <PartyList icon="users" title="Advocates" parties={data.advocateNames} isLast />
                           </View>
                         </View>
                       </View>
@@ -531,10 +531,9 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   overviewHeaderTitle: {
-    fontSize: 14,
-    fontWeight: '800',
+    ...typography.label,
     color: '#8E9BAE',
-    letterSpacing: 0.5,
+    fontSize: 13,
     marginBottom: 16,
   },
   overviewContainer: {
@@ -562,14 +561,13 @@ const styles = StyleSheet.create({
     paddingRight: 8,
   },
   overviewLabel: {
-    fontSize: 12,
+    ...typography.caption,
     color: '#8E9BAE',
-    fontWeight: '500',
     marginBottom: 2,
   },
   overviewValue: {
-    fontSize: 13,
-    fontWeight: '700',
+    ...typography.bodySmall,
+    fontFamily: 'PublicSans_600SemiBold',
     color: '#3B5998',
     flexWrap: 'wrap',
   },
@@ -610,11 +608,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardTitle: {
+    ...typography.h3,
     fontSize: 15,
-    fontWeight: '700',
     color: '#1E293B',
   },
   cardSubTitle: {
+    ...typography.caption,
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
@@ -634,6 +633,13 @@ const styles = StyleSheet.create({
   },
 
   /* Parties Grid */
+  partiesInnerContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#EBF1F6',
+    overflow: 'hidden',
+  },
   partiesGrid: {
     flexDirection: 'row',
   },
@@ -651,25 +657,22 @@ const styles = StyleSheet.create({
   partyPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   partyPillText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...typography.bodyStrong,
+    fontSize: 13,
+    color: '#1E293B',
   },
   partyTextContainer: {
     marginVertical: 2,
   },
   partyName: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.bodySmall,
+    fontFamily: 'PublicSans_600SemiBold',
     color: '#334155',
   },
   partyRole: {
-    fontSize: 12,
-    fontWeight: '400',
+    ...typography.caption,
     color: '#64748B',
   },
 
@@ -701,14 +704,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   hearingLabel: {
-    fontSize: 12,
+    ...typography.caption,
     color: '#8E9BAE',
-    fontWeight: '500',
     marginBottom: 2,
   },
   hearingValue: {
-    fontSize: 13,
-    fontWeight: '700',
+    ...typography.bodySmall,
+    fontFamily: 'PublicSans_700Bold',
     color: '#1E293B',
   },
 
@@ -732,12 +734,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   rowLabel: {
-    fontSize: 13,
+    ...typography.bodySmall,
     color: '#64748B',
   },
   rowValue: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.bodySmall,
+    fontFamily: 'PublicSans_600SemiBold',
     color: '#1E293B',
   },
   statusPill: {
@@ -746,11 +748,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusPillText: {
-    fontSize: 12,
-    fontWeight: '600',
+    ...typography.caption,
+    fontFamily: 'PublicSans_600SemiBold',
   },
   progressText: {
-    fontSize: 13,
+    ...typography.bodySmall,
     color: '#334155',
     marginTop: spacing.xs,
     lineHeight: 18,
@@ -771,8 +773,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   documentBtnText: {
+    ...typography.bodySmall,
+    fontFamily: 'PublicSans_600SemiBold',
     fontSize: 12,
-    fontWeight: '600',
     color: '#3B5998',
   },
   fullWidth: {
@@ -782,9 +785,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   listItem: {
-    fontSize: 13,
+    ...typography.bodySmall,
     color: '#334155',
-    fontWeight: '500',
     paddingVertical: 2,
   },
   iaItem: {
@@ -793,17 +795,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   iaType: {
-    fontSize: 13,
-    fontWeight: '600',
+    ...typography.bodySmall,
+    fontFamily: 'PublicSans_600SemiBold',
     color: '#1E293B',
   },
   iaStatus: {
-    fontSize: 12,
+    ...typography.caption,
     color: '#64748B',
-    fontWeight: '400',
   },
   iaMeta: {
-    fontSize: 12,
+    ...typography.caption,
     color: '#64748B',
     marginTop: 2,
   },
@@ -813,12 +814,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   historyDate: {
-    fontSize: 12,
+    ...typography.caption,
     color: '#64748B',
     width: 90,
   },
   historyBusiness: {
-    fontSize: 13,
+    ...typography.bodySmall,
     color: '#1E293B',
     flex: 1,
   },
@@ -841,7 +842,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   disclaimer: {
-    fontSize: 12,
+    ...typography.caption,
     color: '#1E40AF',
     flex: 1,
   },
