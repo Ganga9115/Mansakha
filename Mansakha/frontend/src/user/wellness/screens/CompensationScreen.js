@@ -18,12 +18,17 @@ function inr(n) {
   return `₹${Number(n).toLocaleString('en-IN')}`;
 }
 
-function StageRow({ stage }) {
+function StageRow({ stage, index }) {
   const isPaid = stage.status === 'Paid';
+  const stageNum = index != null ? index + 1 : (
+    /^fir/i.test(stage.stage) ? 1 : /^chargesheet/i.test(stage.stage) ? 2 : /^final/i.test(stage.stage) ? 3 : 1
+  );
+  const displayTitle = `Stage ${stageNum}`;
+
   return (
     <View style={[styles.stageRow, isPaid && styles.stageRowPaid, !stage.unlocked && styles.stageRowLocked]}>
       <View style={{ flex: 1, paddingRight: spacing.xs }}>
-        <Text style={styles.stageName}>{stage.stage}</Text>
+        <Text style={styles.stageName}>{displayTitle}</Text>
         <Text style={styles.stageMeta}>
           {inr(stage.amount)} ({stage.percentage}%){isPaid && stage.paidAt ? ` • paid ${new Date(stage.paidAt).toLocaleDateString('en-IN')}` : ''}
         </Text>
@@ -98,8 +103,8 @@ function CompensationContent({ data }) {
           <Text style={styles.cardTitle}>Payment Stages</Text>
           <Text style={styles.introText}>Compensation is released in stages as your case progresses through the legal process.</Text>
           <View style={{ gap: spacing.sm, marginTop: spacing.md }}>
-            {data.stages.map((s) => (
-              <StageRow key={s.stage} stage={s} />
+            {data.stages.map((s, i) => (
+              <StageRow key={s.stage || i} stage={s} index={i} />
             ))}
           </View>
         </View>

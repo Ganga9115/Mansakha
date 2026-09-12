@@ -220,9 +220,6 @@ export default function SettingsScreen({ navigation }) {
                 </View>
               </View>
 
-              <View style={styles.badgeCheckCircle}>
-                <Feather color={colors.white} name="chevron-down" size={16} />
-              </View>
             </View>
 
             {/* DOCKET SELECTION UI */}
@@ -243,7 +240,8 @@ export default function SettingsScreen({ navigation }) {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.docketsList}>
                     {casesList.map((item, idx) => {
                       const isSelected = (item.userId && item.userId === selectedCase?.userId) || (!item.userId && idx === 0 && !selectedCase?.userId);
-                      const docketId = item.docketNumber || item.docketId || item.docketNo || item.caseNumber || `${idx + 1}`;
+                      const rawDocketId = item.docketNumber || item.docketId || item.docketNo || item.caseNumber || `${idx + 1}`;
+                      const docketNum = String(rawDocketId).replace(/^Docket\s*/i, '');
 
                       return (
                         <Pressable
@@ -252,7 +250,7 @@ export default function SettingsScreen({ navigation }) {
                           style={[styles.docketPill, isSelected ? styles.docketPillActive : styles.docketPillInactive]}
                         >
                           <Text style={[styles.docketPillTitle, isSelected && styles.textWhite]}>
-                            Docket {docketId}
+                            {docketNum}
                           </Text>
                         </Pressable>
                       );
@@ -587,7 +585,7 @@ const styles = StyleSheet.create({
 
   /* Profile Hero Banner */
   heroBox: {
-    backgroundColor: '#EDF5FC',
+    backgroundColor: '#EDE8F7',
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
@@ -625,7 +623,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     ...typography.bodyStrong,
-    color: '#2B4A6F',
+    color: '#3A2458',
     fontSize: 18,
     fontWeight: '700',
   },
@@ -635,7 +633,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   badgeCheckCircle: {
-    backgroundColor: '#5298D4',
+    backgroundColor: '#7C5CBF',
     borderRadius: radius.pill,
     width: 24,
     height: 24,
@@ -669,7 +667,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.md,
-    backgroundColor: '#EBF3FA',
+    backgroundColor: '#EDE8F7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
@@ -697,8 +695,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   docketPillActive: {
-    backgroundColor: '#2D6296',
-    borderColor: '#2D6296',
+    backgroundColor: '#4A3070',
+    borderColor: '#4A3070',
   },
   docketPillInactive: {
     backgroundColor: '#F8FAFC',
@@ -724,7 +722,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#EBF3FA',
+    borderColor: '#EDE8F7',
   },
   docketDetailGridMobile: {
     paddingHorizontal: spacing.xs,
@@ -751,7 +749,7 @@ const styles = StyleSheet.create({
   },
   fieldValueBold: {
     ...typography.bodyStrong,
-    color: '#2B4A6F',
+    color: '#3A2458',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -782,7 +780,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.md,
-    backgroundColor: '#EBF3FA',
+    backgroundColor: '#EDE8F7',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,

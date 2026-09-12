@@ -351,7 +351,7 @@ export default function HomeScreen({ navigation }) {
                               <Feather
                                 name={i === 0 ? "check-circle" : "plus-circle"}
                                 size={20}
-                                color={i === 0 ? colors.success || "#10B981" : colors.primary}
+                                color={i === 0 ? colors.primary : colors.primary}
                               />
                             </View>
                             <View style={styles.activityContent}>

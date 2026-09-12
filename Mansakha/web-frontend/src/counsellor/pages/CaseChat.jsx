@@ -326,7 +326,7 @@ export default function CaseChat() {
               }
             }}
             type="button"
-            className="w-10 h-10 rounded-full border-2 border-[#22C55E] bg-white flex items-center justify-center text-[#22C55E] hover:bg-emerald-50 active:bg-emerald-100 transition shrink-0 shadow-sm"
+            className="w-10 h-10 rounded-full border-2 border-[#7C5CBF] bg-[#F7F4FD] flex items-center justify-center text-[#7C5CBF] hover:bg-[#EDE8F7] active:bg-[#DDD0F5] transition shrink-0 shadow-sm"
             title={data?.phone ? `Call ${data.userName || 'User'}` : 'No phone number on file'}
             aria-label="Call User"
           >

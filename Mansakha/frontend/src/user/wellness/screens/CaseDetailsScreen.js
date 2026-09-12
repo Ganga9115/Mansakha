@@ -29,7 +29,7 @@ function InvestigationProgressCard({ data }) {
       <View style={styles.cardHeaderRow}>
         <View style={styles.cardHeaderLeft}>
           <View style={styles.cardHeaderIconTile}>
-            <Feather name="shield" size={18} color="#3B5998" />
+            <Feather name="shield" size={18} color="#7C5CBF" />
           </View>
           <View>
             <Text style={styles.cardTitle}>Investigation Progress</Text>
@@ -58,13 +58,13 @@ function InvestigationProgressCard({ data }) {
           <View style={styles.documentRow}>
             {data.firDocumentUrl && (
               <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.firDocumentUrl)}>
-                <Feather name="download" size={14} color="#3B5998" />
+                <Feather name="download" size={14} color="#7C5CBF" />
                 <Text style={styles.documentBtnText}>FIR Copy (PDF)</Text>
               </Pressable>
             )}
             {data.chargesheetDocumentUrl && (
               <Pressable style={styles.documentBtn} onPress={() => Linking.openURL(data.chargesheetDocumentUrl)}>
-                <Feather name="download" size={14} color="#3B5998" />
+                <Feather name="download" size={14} color="#7C5CBF" />
                 <Text style={styles.documentBtnText}>Chargesheet (PDF)</Text>
               </Pressable>
             )}
@@ -116,7 +116,7 @@ function HearingGridCell({ icon, label, value, isLast, iconColor }) {
   return (
     <View style={[styles.hearingCell, isLast && { borderRightWidth: 0 }]}>
       <View style={styles.hearingIconTile}>
-        <Feather name={icon} size={16} color={iconColor || '#3B82F6'} />
+        <Feather name={icon} size={16} color={iconColor || '#7C5CBF'} />
       </View>
       <View style={styles.hearingTextContainer}>
         <Text style={styles.hearingLabel}>{label}</Text>
@@ -297,7 +297,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                       <View style={styles.cardHeaderRow}>
                         <View style={styles.cardHeaderLeft}>
                           <View style={styles.cardHeaderIconTile}>
-                            <Feather name="users" size={18} color="#3B82F6" />
+                            <Feather name="users" size={18} color='#7C5CBF' />
                           </View>
                           <View>
                             <Text style={styles.cardTitle}>Parties & Advocates</Text>
@@ -350,7 +350,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                       <View style={styles.cardHeaderRow}>
                         <View style={styles.cardHeaderLeft}>
                           <View style={styles.cardHeaderIconTile}>
-                            <Feather name="book-open" size={18} color="#3B82F6" />
+                            <Feather name="book-open" size={18} color='#7C5CBF' />
                           </View>
                           <View>
                             <Text style={styles.cardTitle}>Acts, Sections & FIR</Text>
@@ -380,7 +380,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         <View style={styles.cardHeaderRow}>
                           <View style={styles.cardHeaderLeft}>
                             <View style={styles.cardHeaderIconTile}>
-                              <Feather name="layers" size={18} color="#3B5998" />
+                              <Feather name="layers" size={18} color="#7C5CBF" />
                             </View>
                             <View>
                               <Text style={styles.cardTitle}>Interlocutory Applications (Incl. Bail)</Text>
@@ -405,7 +405,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         <View style={styles.cardHeaderRow}>
                           <View style={styles.cardHeaderLeft}>
                             <View style={styles.cardHeaderIconTile}>
-                              <Feather name="clock" size={18} color="#3B5998" />
+                              <Feather name="clock" size={18} color="#7C5CBF" />
                             </View>
                             <View>
                               <Text style={styles.cardTitle}>Hearing History</Text>
@@ -430,7 +430,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         <View style={styles.cardHeaderRow}>
                           <View style={styles.cardHeaderLeft}>
                             <View style={styles.cardHeaderIconTile}>
-                              <Feather name="file" size={18} color="#3B5998" />
+                              <Feather name="file" size={18} color="#7C5CBF" />
                             </View>
                             <View>
                               <Text style={styles.cardTitle}>Orders & Judgments</Text>
@@ -441,7 +441,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         <View style={styles.cardContent}>
                           {data.orders.slice().reverse().map((o, i) => (
                             <View key={i} style={styles.historyItem}>
-                              <Feather name={o.type === 'Judgment' ? 'award' : 'file'} size={14} color="#3B5998" style={{ marginRight: spacing.xs }} />
+                              <Feather name={o.type === 'Judgment' ? 'award' : 'file'} size={14} color="#7C5CBF" style={{ marginRight: spacing.xs }} />
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.historyBusiness}>{o.title}</Text>
                                 <Text style={styles.historyDate}>{formatDate(o.date)}</Text>
@@ -458,7 +458,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                         <View style={styles.cardHeaderRow}>
                           <View style={styles.cardHeaderLeft}>
                             <View style={styles.cardHeaderIconTile}>
-                              <Feather name="grid" size={18} color="#3B5998" />
+                              <Feather name="grid" size={18} color="#7C5CBF" />
                             </View>
                             <View>
                               <Text style={styles.cardTitle}>Other Details</Text>
@@ -478,7 +478,7 @@ export default function CaseDetailsScreen({ navigation, route }) {
                     {/* Disclaimer Banner */}
                     <View style={styles.infoBanner}>
                       <View style={styles.infoIconTile}>
-                        <Feather name="info" size={16} color="#3B82F6" />
+                        <Feather name="info" size={16} color='#7C5CBF' />
                       </View>
                       <Text style={styles.disclaimer}>{data.note}</Text>
                     </View>
@@ -538,19 +538,19 @@ const styles = StyleSheet.create({
   },
   overviewContainer: {
     width: '100%',
-    backgroundColor: '#F5F8FF',
+    backgroundColor: '#F9F6FE',
     borderRadius: 16,
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderWidth: 1,
-    borderColor: '#E8F0FE',
+    borderColor: '#EDE8F7',
   },
   overviewGridRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E8EEF9',
+    borderBottomColor: '#EDE8F7',
   },
   overviewGridRowMobile: {
     flexDirection: 'column',
@@ -568,7 +568,7 @@ const styles = StyleSheet.create({
   overviewValue: {
     ...typography.bodySmall,
     fontFamily: 'PublicSans_600SemiBold',
-    color: '#3B5998',
+    color: '#3A2458',
     flexWrap: 'wrap',
   },
 
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F3EFFE',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 8,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F3EFFE',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -767,7 +767,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F3EFFE',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -776,7 +776,7 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     fontFamily: 'PublicSans_600SemiBold',
     fontSize: 12,
-    color: '#3B5998',
+    color: '#7C5CBF',
   },
   fullWidth: {
     width: '100%',
@@ -826,7 +826,7 @@ const styles = StyleSheet.create({
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#F3EFFE',
     padding: spacing.md,
     borderRadius: 12,
     gap: spacing.md,
@@ -837,13 +837,13 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#DBEAFE',
+    backgroundColor: '#DDD0F5',
     alignItems: 'center',
     justifyContent: 'center',
   },
   disclaimer: {
     ...typography.caption,
-    color: '#1E40AF',
+    color: '#4A3070',
     flex: 1,
   },
 });
