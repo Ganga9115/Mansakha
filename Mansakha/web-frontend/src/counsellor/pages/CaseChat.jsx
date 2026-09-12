@@ -317,14 +317,21 @@ export default function CaseChat() {
           </div>
 
           {/* ── Green call button — always visible ── */}
-          <a
-            href={data?.phone ? `tel:${data.phone}` : undefined}
+          <button
+            onClick={() => {
+              if (data?.phone) {
+                window.location.href = `tel:${data.phone}`;
+              } else {
+                toast.error('No phone number on file for this user');
+              }
+            }}
+            type="button"
             className="w-10 h-10 rounded-full border-2 border-[#22C55E] bg-white flex items-center justify-center text-[#22C55E] hover:bg-emerald-50 active:bg-emerald-100 transition shrink-0 shadow-sm"
             title={data?.phone ? `Call ${data.userName || 'User'}` : 'No phone number on file'}
             aria-label="Call User"
           >
             <Phone size={18} />
-          </a>
+          </button>
         </div>
 
         {/* ── Scrollable message thread ── */}
