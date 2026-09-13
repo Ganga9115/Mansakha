@@ -106,10 +106,10 @@ export default function MyUsers() {
                 )}
 
                 <div className="pt-2 border-t border-gray-50 flex justify-end">
-                  <div className="relative inline-block w-full xs:w-auto">
+                  <div className="relative inline-block w-full sm:w-auto">
                     <button
                       onClick={() => navigate(`/counsellor/case-detail/${item.userId}`)}
-                      className="w-full xs:w-auto px-4 py-2 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-lg text-xs font-semibold transition text-center"
+                      className="w-full sm:w-auto px-4 py-2 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-lg text-xs font-semibold transition text-center"
                     >
                       View Case File
                     </button>
@@ -194,7 +194,7 @@ export default function MyUsers() {
         </div>
 
         {/* PAGINATION FOOTER */}
-        <div className="flex flex-col xs:flex-row items-center justify-between gap-3 text-xs text-gray-500 pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500 pt-2">
           <span>{total === 0 ? 'No cases' : `Page ${page} of ${totalPages} (${total} cases)`}</span>
           <div className="flex items-center gap-1">
             <button

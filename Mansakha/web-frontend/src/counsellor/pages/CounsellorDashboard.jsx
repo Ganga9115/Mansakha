@@ -73,14 +73,14 @@ export default function CounsellorDashboard() {
 
         {/* RECENT ALERTS SECTION */}
         <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-4 sm:p-6">
-          <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-3 mb-5">
+          <div className="flex items-center justify-between gap-4 mb-5">
             <div>
               <h3 className="font-bold text-gray-900 text-base">Recent Alerts</h3>
               <p className="text-xs text-gray-400 mt-0.5">Latest alerts that need your attention</p>
             </div>
             <button 
               onClick={() => navigate('/counsellor/alerts')} 
-              className="self-start xs:self-auto px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer"
+              className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer shrink-0"
             >
               View All Alerts
             </button>
@@ -95,15 +95,15 @@ export default function CounsellorDashboard() {
               {(alertsData.alerts || []).slice(0, 6).map((a) => (
                 <div 
                   key={a.alertId} 
-                  className="py-3.5 flex flex-col xs:flex-row xs:items-center justify-between gap-2"
+                  className="py-3.5 flex items-center justify-between gap-3"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-gray-900 text-sm">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="font-bold text-gray-900 text-sm truncate">
                       Case {a.userId.slice(0, 8)}
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3 self-end xs:self-auto">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[a.status] || 'bg-gray-100 text-gray-600'}`}>
                       {a.status}
                     </span>
@@ -136,9 +136,9 @@ export default function CounsellorDashboard() {
           ) : (
             <div className="divide-y divide-gray-100">
               {scheduledData.sessions.map((s) => (
-                <div key={s.sessionId} className="py-3.5 flex flex-col xs:flex-row xs:items-center justify-between gap-1 text-xs">
-                  <span className="font-bold text-gray-800 text-sm">Case {s.userId.slice(0, 8)}</span>
-                  <span className="text-gray-500 font-medium">{new Date(s.scheduledAt).toLocaleString()}</span>
+                <div key={s.sessionId} className="py-3.5 flex items-center justify-between gap-3 text-xs">
+                  <span className="font-bold text-gray-800 text-sm truncate">Case {s.userId.slice(0, 8)}</span>
+                  <span className="text-gray-500 font-medium shrink-0">{new Date(s.scheduledAt).toLocaleString()}</span>
                 </div>
               ))}
             </div>

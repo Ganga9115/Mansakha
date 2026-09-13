@@ -165,41 +165,41 @@ export default function NotificationBell() {
             </div>
 
             <dl className="space-y-2.5 text-xs sm:text-sm text-gray-700 mb-6">
-              <div className="flex flex-col xs:flex-row xs:justify-between gap-0.5 xs:gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">User</dt>
-                <dd className="font-medium text-gray-800 xs:text-right">{selected.userName || 'Unknown'}</dd>
+                <dd className="font-medium text-gray-800 sm:text-right">{selected.userName || 'Unknown'}</dd>
               </div>
-              <div className="flex flex-col xs:flex-row xs:justify-between gap-0.5 xs:gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Priority</dt>
-                <dd className={`font-medium xs:text-right capitalize ${selected.priority === 'urgent' ? 'text-rose-600' : 'text-gray-800'}`}>
+                <dd className={`font-medium sm:text-right capitalize ${selected.priority === 'urgent' ? 'text-rose-600' : 'text-gray-800'}`}>
                   {selected.priority || 'normal'}
                 </dd>
               </div>
               {selected.riskLevel && (
-                <div className="flex flex-col xs:flex-row xs:justify-between gap-0.5 xs:gap-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                   <dt className="text-gray-400">Risk Level</dt>
-                  <dd className="font-medium text-gray-800 xs:text-right">{selected.riskLevel}</dd>
+                  <dd className="font-medium text-gray-800 sm:text-right">{selected.riskLevel}</dd>
                 </div>
               )}
               {selected.scoreValue !== null && selected.scoreValue !== undefined && (
-                <div className="flex flex-col xs:flex-row xs:justify-between gap-0.5 xs:gap-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                   <dt className="text-gray-400">Distress Score</dt>
-                  <dd className="font-medium text-gray-800 xs:text-right">{selected.scoreValue}</dd>
+                  <dd className="font-medium text-gray-800 sm:text-right">{selected.scoreValue}</dd>
                 </div>
               )}
-              <div className="flex flex-col xs:flex-row xs:justify-between gap-0.5 xs:gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Status</dt>
-                <dd className="font-medium text-gray-800 xs:text-right">{selected.status || 'Open'}</dd>
+                <dd className="font-medium text-gray-800 sm:text-right">{selected.status || 'Open'}</dd>
               </div>
-              <div className="flex flex-col xs:flex-row xs:justify-between gap-0.5 xs:gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Occurred</dt>
-                <dd className="font-medium text-gray-800 xs:text-right">
+                <dd className="font-medium text-gray-800 sm:text-right">
                   {selected.triggeredAt ? new Date(selected.triggeredAt).toLocaleString() : 'Unknown'}
                 </dd>
               </div>
-              <div className="flex flex-col xs:flex-row xs:justify-between gap-0.5 xs:gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Notified</dt>
-                <dd className="font-medium text-gray-800 xs:text-right">
+                <dd className="font-medium text-gray-800 sm:text-right">
                   {selected.notifiedAt ? new Date(selected.notifiedAt).toLocaleString() : 'Unknown'}
                 </dd>
               </div>

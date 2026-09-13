@@ -202,9 +202,9 @@ export default function Settings() {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-1 xs:gap-4 border-b border-gray-50 last:border-0 pb-3 last:pb-0">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 border-b border-gray-50 last:border-0 pb-3 last:pb-0">
       <span className="text-xs text-gray-500">{label}</span>
-      <span className="text-xs font-semibold text-gray-800 xs:text-right break-all">{value}</span>
+      <span className="text-xs font-semibold text-gray-800 sm:text-right break-all">{value}</span>
     </div>
   );
 }

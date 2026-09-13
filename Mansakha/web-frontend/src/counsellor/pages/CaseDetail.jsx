@@ -199,13 +199,13 @@ export default function CaseDetail() {
 
         {/* CASE ACTION BAR */}
         {(otherLinkedCases.length > 0 || chatWithUserButton) && (
-          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-3">
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div>
               {otherLinkedCases.length > 0 && (
                 <SwitchCaseDropdown cases={otherLinkedCases} onSelect={(id) => navigate(`/counsellor/case-detail/${id}`)} />
               )}
             </div>
-            <div className="self-end xs:self-auto">
+            <div className="self-end sm:self-auto">
               {chatWithUserButton}
             </div>
           </div>

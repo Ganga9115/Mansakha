@@ -36,7 +36,7 @@ export default function CaseNotes() {
         <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
 
-          <div className="flex flex-col xs:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={noteText}
