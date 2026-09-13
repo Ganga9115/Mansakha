@@ -359,7 +359,7 @@ export default function CounsellorChatScreen({ navigation }) {
         <View style={{ flex: 1 }} />
         {!!counsellor && (
           <Pressable onPress={handleCall} style={styles.callIconBtn} hitSlop={8} accessibilityLabel="Call counsellor">
-            <Feather name="phone" size={18} color={colors.primary} />
+            <Feather name="phone" size={18} color={colors.success} />
           </Pressable>
         )}
       </View>
@@ -618,9 +618,9 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.pill,
-    backgroundColor: '#F7F4FD',
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: colors.success,
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -9,3 +9,23 @@ web-build/
 # Misc
 *.log
 .DS_Store
+.env
+*.sqlite3
+*.db
+
+# Python & Virtual Environments
+**/venv/
+**/.venv/
+**/env/
+**/__pycache__/
+*.py[cod]
+
+# Large Model Weights & Data (>100MB)
+Mansakha/Mansakha-Ai/
+*.safetensors
+*.bin
+*.pt
+*.pkl
+
+# External test directories
+video reply/

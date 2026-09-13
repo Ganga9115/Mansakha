@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>AI_FEATURE_MAPPING_AND_ARCHITECTURE.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/*
+
+Arduino® Light Theme - Stefania Mellai <s.mellai@arduino.cc>
+
+*/
+
+.hljs {
+  display: block;
+  overflow-x: auto;
+  padding: 0.5em;
+  background: #FFFFFF;
+}
+
+.hljs,
+.hljs-subst {
+  color: #434f54;
+}
+
+.hljs-keyword,
+.hljs-attribute,
+.hljs-selector-tag,
+.hljs-doctag,
+.hljs-name {
+  color: #00979D;
+}
+
+.hljs-built_in,
+.hljs-literal,
+.hljs-bullet,
+.hljs-code,
+.hljs-addition {
+  color: #D35400;
+}
+
+.hljs-regexp,
+.hljs-symbol,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-link,
+.hljs-selector-attr,
+.hljs-selector-pseudo {
+  color: #00979D;
+}
+
+.hljs-type,
+.hljs-string,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-quote,
+.hljs-template-tag,
+.hljs-deletion {
+  color: #005C5F;
+}
+
+.hljs-title,
+.hljs-section {
+  color: #880000;
+  font-weight: bold;
+}
+
+.hljs-comment {
+  color: rgba(149,165,166,.8);
+}
+
+.hljs-meta-keyword {
+  color: #728E00;
+}
+
+.hljs-meta {
+  color: #434f54;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
+.hljs-function {
+  color: #728E00;
+}
+
+.hljs-number {
+  color: #8A7B52;  
+}
+
+</style>
+
+<style>
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family:   "HelveticaNeue-Light", sans-serif, "宋体","Segoe WPC", "Segoe UI", "SFUIText-Light","Droid Sans Fallback";
+	font-size: 18px;
+	padding: 0 12px;
+	line-height: 1.6;
+	word-wrap: break-word;
+	color: #333333;
+}
+
+.content-wrapper{
+	max-width: 860px;
+    margin: 0 auto;
+    padding: 0 30px;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	color: #4080D0;
+	text-decoration: none;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom: 1px solid #eee;
+}
+
+
+h2{
+	padding-bottom: .3em;
+    font-size: 2em;
+    line-height: 1.225;
+    border-bottom: 1px solid #eee;
+}
+
+h3{
+	font-size: 1.75em;
+    line-height: 1.225;
+}
+
+h1, h2, h3 {
+	font-weight: bold;
+}
+
+h1 code,
+h2 code,
+h3 code,
+h4 code,
+h5 code,
+h6 code {
+	font-size: inherit;
+	line-height: auto;
+}
+
+a:hover {
+	color: #4080D0;
+	text-decoration: underline;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left: 5px solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 14px;
+	line-height: 19px;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+.mac code {
+	font-size: 12px;
+	line-height: 18px;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+/** Theming */
+
+.vscode-light,
+.vscode-light pre code {
+	color: rgb(30, 30, 30);
+}
+
+.vscode-dark,
+.vscode-dark pre code {
+	color: #DDD;
+}
+
+.vscode-high-contrast,
+.vscode-high-contrast pre code {
+	color: white;
+}
+
+.vscode-light code {
+	color: #A31515;
+}
+
+.vscode-dark code {
+	color: #D7BA7D;
+}
+
+.vscode-light pre:not(.hljs),
+.vscode-light code > div {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre:not(.hljs),
+.vscode-dark code > div {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre:not(.hljs),
+.vscode-high-contrast code > div {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+.vscode-light blockquote,
+.vscode-dark blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.vscode-high-contrast blockquote {
+	background: transparent;
+	border-color: #fff;
+}
+</style>
+
+<style>
+/* Obsidian syntax defaults for legacy export (PDF / HTML / DOCX) */
+
+.callout {
+	--callout-accent: #0969da;
+	margin: 12px 0;
+	border-radius: 6px;
+	border-left: 4px solid var(--callout-accent);
+	background: rgba(9, 105, 218, 0.08);
+	color: #333333;
+	overflow: hidden;
+}
+
+.callout[data-callout="note"],
+.callout[data-callout="abstract"],
+.callout[data-callout="info"],
+.callout[data-callout="todo"],
+.callout[data-subtype="note"],
+.callout[data-subtype="abstract"],
+.callout[data-subtype="info"],
+.callout[data-subtype="todo"],
+.callout[data-callout="note" i],
+.callout[data-callout="abstract" i],
+.callout[data-callout="info" i],
+.callout[data-callout="todo" i],
+.callout[data-subtype="note" i],
+.callout[data-subtype="abstract" i],
+.callout[data-subtype="info" i],
+.callout[data-subtype="todo" i] {
+	--callout-accent: #0969da;
+	border-left-color: #0969da;
+	background: rgba(9, 105, 218, 0.08);
+}
+
+.callout[data-callout="tip"],
+.callout[data-callout="hint"],
+.callout[data-subtype="tip"],
+.callout[data-subtype="hint"],
+.callout[data-callout="tip" i],
+.callout[data-callout="hint" i],
+.callout[data-subtype="tip" i],
+.callout[data-subtype="hint" i] {
+	--callout-accent: #116329;
+	border-left-color: #116329;
+	background: rgba(17, 99, 41, 0.08);
+}
+
+.callout[data-callout="important"],
+.callout[data-subtype="important"],
+.callout[data-callout="important" i],
+.callout[data-subtype="important" i] {
+	--callout-accent: #8250df;
+	border-left-color: #8250df;
+	background: rgba(130, 80, 223, 0.08);
+}
+
+.callout[data-callout="warning"],
+.callout[data-subtype="warning"],
+.callout[data-callout="warning" i],
+.callout[data-subtype="warning" i] {
+	--callout-accent: #bc4c00;
+	border-left-color: #bc4c00;
+	background: rgba(188, 76, 0, 0.08);
+}
+
+.callout[data-callout="caution"],
+.callout[data-callout="danger"],
+.callout[data-callout="error"],
+.callout[data-callout="bug"],
+.callout[data-callout="fail"],
+.callout[data-subtype="caution"],
+.callout[data-subtype="danger"],
+.callout[data-subtype="error"],
+.callout[data-subtype="bug"],
+.callout[data-subtype="fail"],
+.callout[data-callout="caution" i],
+.callout[data-callout="danger" i],
+.callout[data-callout="error" i],
+.callout[data-callout="bug" i],
+.callout[data-callout="fail" i],
+.callout[data-subtype="caution" i],
+.callout[data-subtype="danger" i],
+.callout[data-subtype="error" i],
+.callout[data-subtype="bug" i],
+.callout[data-subtype="fail" i] {
+	--callout-accent: #cf222e;
+	border-left-color: #cf222e;
+	background: rgba(207, 34, 46, 0.08);
+}
+
+.callout[data-callout="question"],
+.callout[data-callout="help"],
+.callout[data-callout="faq"],
+.callout[data-subtype="question"],
+.callout[data-subtype="help"],
+.callout[data-subtype="faq"],
+.callout[data-callout="question" i],
+.callout[data-callout="help" i],
+.callout[data-callout="faq" i],
+.callout[data-subtype="question" i],
+.callout[data-subtype="help" i],
+.callout[data-subtype="faq" i] {
+	--callout-accent: #9a6700;
+	border-left-color: #9a6700;
+	background: rgba(154, 103, 0, 0.08);
+}
+
+.callout .callout-title,
+.callout .callout-info {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px 14px 0;
+	margin-bottom: 10px;
+	color: var(--callout-accent);
+}
+
+.callout .callout-title-icon,
+.callout .callout-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
+	color: var(--callout-accent);
+}
+
+.callout .callout-title-icon svg {
+	width: 16px;
+	height: 16px;
+}
+
+.callout .callout-title-inner,
+.callout .callout-info > .callout-title {
+	font-weight: 700;
+	font-size: 0.95em;
+	line-height: 1.35;
+	color: var(--callout-accent);
+}
+
+.callout .callout-content {
+	padding: 6px 14px 12px;
+	color: #333333;
+}
+
+.callout .callout-content > :first-child {
+	margin-top: 0;
+}
+
+.callout .callout-content > :last-child {
+	margin-bottom: 0;
+}
+
+.obsidian-wikilink {
+	color: #7c3aed;
+	text-decoration: underline;
+}
+
+.obsidian-wikilink-embed {
+	display: inline-block;
+	padding: 2px 8px;
+	border: 1px dashed #d0d7de;
+	border-radius: 4px;
+	color: #7c3aed;
+}
+
+.obsidian-tag {
+	color: #7c3aed;
+	background: rgba(124, 58, 237, 0.12);
+	border-radius: 4px;
+	padding: 0 4px;
+}
+
+mark {
+	background: rgba(154, 103, 0, 0.35);
+	color: inherit;
+	padding: 0 2px;
+	border-radius: 2px;
+}
+
+[data-type="yaml-front-matter"] {
+	margin: 0 0 16px;
+}
+
+.vditor-properties {
+	border: 1px solid #d0d7de;
+	border-radius: 8px;
+	background: #f6f8fa;
+	overflow: hidden;
+}
+
+.vditor-properties__heading {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border-bottom: 1px solid #d0d7de;
+	background: #f3f4f6;
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: #6b7280;
+}
+
+.vditor-properties__heading-icon::before {
+	content: "☰";
+	opacity: 0.75;
+}
+
+.vditor-properties__table {
+	display: flex;
+	flex-direction: column;
+}
+
+.vditor-properties__row {
+	display: grid;
+	grid-template-columns: minmax(120px, 34%) 1fr;
+	gap: 8px 12px;
+	align-items: start;
+	padding: 8px 12px;
+	border-top: 1px solid rgba(208, 215, 222, 0.45);
+}
+
+.vditor-properties__row:first-child {
+	border-top: none;
+}
+
+.vditor-properties__key {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	color: #6b7280;
+	font-size: 0.85rem;
+}
+
+.vditor-properties__key-icon {
+	flex-shrink: 0;
+	width: 14px;
+	height: 14px;
+	opacity: 0.72;
+	text-align: center;
+}
+
+.vditor-properties__key-icon[data-icon="tag"]::before { content: "#"; }
+.vditor-properties__key-icon[data-icon="alias"]::before { content: "⛓"; }
+.vditor-properties__key-icon[data-icon="date"]::before { content: "📅"; }
+.vditor-properties__key-icon[data-icon="toggle"]::before { content: "◉"; }
+.vditor-properties__key-icon[data-icon="number"]::before { content: "#"; }
+.vditor-properties__key-icon[data-icon="list"]::before { content: "≡"; }
+.vditor-properties__key-icon[data-icon="text"]::before { content: "T"; }
+
+.vditor-properties__key-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.vditor-properties__value {
+	min-width: 0;
+	font-size: 0.92rem;
+	color: #333333;
+	word-break: break-word;
+}
+
+.vditor-properties__value--tags,
+.vditor-properties__value--aliases {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.vditor-properties__value--aliases {
+	gap: 6px;
+}
+
+.vditor-properties__list {
+	margin: 0;
+	padding-left: 1.1rem;
+}
+
+.vditor-properties__checkbox {
+	display: inline-block;
+	width: 14px;
+	height: 14px;
+	margin-right: 6px;
+	border: 1px solid #d0d7de;
+	border-radius: 3px;
+	vertical-align: -2px;
+	background: #ffffff;
+}
+
+.vditor-properties__checkbox[is-checked="true"] {
+	background: #7c3aed;
+	border-color: #7c3aed;
+	box-shadow: inset 0 0 0 2px #ffffff;
+}
+
+.vditor-properties__empty {
+	opacity: 0.45;
+}
+
+</style>
+
+<style>
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+.table-of-contents li{
+	list-style-type: initial;
+}
+
+</style>
+
+<style>
+@font-face{font-display:block;font-family:KaTeX_AMS;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_AMS-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_AMS-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_AMS-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Caligraphic;font-style:normal;font-weight:700;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Caligraphic-Bold.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Caligraphic-Bold.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Caligraphic-Bold.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Caligraphic;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Caligraphic-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Caligraphic-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Caligraphic-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Fraktur;font-style:normal;font-weight:700;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Fraktur-Bold.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Fraktur-Bold.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Fraktur-Bold.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Fraktur;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Fraktur-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Fraktur-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Fraktur-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Main;font-style:normal;font-weight:700;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Bold.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Bold.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Bold.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Main;font-style:italic;font-weight:700;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-BoldItalic.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-BoldItalic.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-BoldItalic.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Main;font-style:italic;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Italic.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Italic.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Italic.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Main;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Main-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Math;font-style:italic;font-weight:700;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Math-BoldItalic.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Math-BoldItalic.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Math-BoldItalic.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Math;font-style:italic;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Math-Italic.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Math-Italic.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Math-Italic.ttf") format("truetype")}@font-face{font-display:block;font-family:"KaTeX_SansSerif";font-style:normal;font-weight:700;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Bold.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Bold.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Bold.ttf") format("truetype")}@font-face{font-display:block;font-family:"KaTeX_SansSerif";font-style:italic;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Italic.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Italic.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Italic.ttf") format("truetype")}@font-face{font-display:block;font-family:"KaTeX_SansSerif";font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_SansSerif-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Script;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Script-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Script-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Script-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Size1;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size1-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size1-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size1-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Size2;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size2-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size2-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size2-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Size3;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size3-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size3-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size3-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Size4;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size4-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size4-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Size4-Regular.ttf") format("truetype")}@font-face{font-display:block;font-family:KaTeX_Typewriter;font-style:normal;font-weight:400;src:url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Typewriter-Regular.woff2") format("woff2"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Typewriter-Regular.woff") format("woff"),url("https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/fonts/KaTeX_Typewriter-Regular.ttf") format("truetype")}.katex{font:normal 1.21em KaTeX_Main,Times New Roman,serif;line-height:1.2;position:relative;text-indent:0;text-rendering:auto}.katex *{-ms-high-contrast-adjust:none!important;border-color:currentColor}.katex .katex-version:after{content:"0.16.47"}.katex .katex-mathml{border:0;-webkit-clip-path:inset(50%);clip-path:inset(50%);height:1px;overflow:hidden;padding:0;position:absolute;width:1px}.katex .katex-html>.newline{display:block}.katex .base{position:relative;white-space:nowrap;width:-webkit-min-content;width:-moz-min-content;width:min-content}.katex .base,.katex .strut{display:inline-block}.katex .textbf{font-weight:700}.katex .textit{font-style:italic}.katex .textrm{font-family:KaTeX_Main}.katex .textsf{font-family:KaTeX_SansSerif}.katex .texttt{font-family:KaTeX_Typewriter}.katex .mathnormal{font-family:KaTeX_Math;font-style:italic}.katex .mathit{font-family:KaTeX_Main;font-style:italic}.katex .mathrm{font-style:normal}.katex .mathbf{font-family:KaTeX_Main;font-weight:700}.katex .boldsymbol{font-family:KaTeX_Math;font-style:italic;font-weight:700}.katex .amsrm,.katex .mathbb,.katex .textbb{font-family:KaTeX_AMS}.katex .mathcal{font-family:KaTeX_Caligraphic}.katex .mathfrak,.katex .textfrak{font-family:KaTeX_Fraktur}.katex .mathboldfrak,.katex .textboldfrak{font-family:KaTeX_Fraktur;font-weight:700}.katex .mathtt{font-family:KaTeX_Typewriter}.katex .mathscr,.katex .textscr{font-family:KaTeX_Script}.katex .mathsf,.katex .textsf{font-family:KaTeX_SansSerif}.katex .mathboldsf,.katex .textboldsf{font-family:KaTeX_SansSerif;font-weight:700}.katex .mathitsf,.katex .mathsfit,.katex .textitsf{font-family:KaTeX_SansSerif;font-style:italic}.katex .mainrm{font-family:KaTeX_Main;font-style:normal}.katex .vlist-t{border-collapse:collapse;display:inline-table;table-layout:fixed}.katex .vlist-r{display:table-row}.katex .vlist{display:table-cell;position:relative;vertical-align:bottom}.katex .vlist>span{display:block;height:0;position:relative}.katex .vlist>span>span{display:inline-block}.katex .vlist>span>.pstrut{overflow:hidden;width:0}.katex .vlist-t2{margin-right:-2px}.katex .vlist-s{display:table-cell;font-size:1px;min-width:2px;vertical-align:bottom;width:2px}.katex .vbox{align-items:baseline;display:inline-flex;flex-direction:column}.katex .hbox{width:100%}.katex .hbox,.katex .thinbox{display:inline-flex;flex-direction:row}.katex .thinbox{max-width:0;width:0}.katex .msupsub{text-align:left}.katex .mfrac>span>span{text-align:center}.katex .mfrac .frac-line{border-bottom-style:solid;display:inline-block;width:100%}.katex .hdashline,.katex .hline,.katex .mfrac .frac-line,.katex .overline .overline-line,.katex .rule,.katex .underline .underline-line{min-height:1px}.katex .mspace{display:inline-block}.katex .smash{display:inline;line-height:0}.katex .clap,.katex .llap,.katex .rlap{position:relative;width:0}.katex .clap>.inner,.katex .llap>.inner,.katex .rlap>.inner{position:absolute}.katex .clap>.fix,.katex .llap>.fix,.katex .rlap>.fix{display:inline-block}.katex .llap>.inner{right:0}.katex .clap>.inner,.katex .rlap>.inner{left:0}.katex .clap>.inner>span{margin-left:-50%;margin-right:50%}.katex .rule{border:0 solid;display:inline-block;position:relative}.katex .hline,.katex .overline .overline-line,.katex .underline .underline-line{border-bottom-style:solid;display:inline-block;width:100%}.katex .hdashline{border-bottom-style:dashed;display:inline-block;width:100%}.katex .sqrt>.root{margin-left:.2777777778em;margin-right:-.5555555556em}.katex .fontsize-ensurer.reset-size1.size1,.katex .sizing.reset-size1.size1{font-size:1em}.katex .fontsize-ensurer.reset-size1.size2,.katex .sizing.reset-size1.size2{font-size:1.2em}.katex .fontsize-ensurer.reset-size1.size3,.katex .sizing.reset-size1.size3{font-size:1.4em}.katex .fontsize-ensurer.reset-size1.size4,.katex .sizing.reset-size1.size4{font-size:1.6em}.katex .fontsize-ensurer.reset-size1.size5,.katex .sizing.reset-size1.size5{font-size:1.8em}.katex .fontsize-ensurer.reset-size1.size6,.katex .sizing.reset-size1.size6{font-size:2em}.katex .fontsize-ensurer.reset-size1.size7,.katex .sizing.reset-size1.size7{font-size:2.4em}.katex .fontsize-ensurer.reset-size1.size8,.katex .sizing.reset-size1.size8{font-size:2.88em}.katex .fontsize-ensurer.reset-size1.size9,.katex .sizing.reset-size1.size9{font-size:3.456em}.katex .fontsize-ensurer.reset-size1.size10,.katex .sizing.reset-size1.size10{font-size:4.148em}.katex .fontsize-ensurer.reset-size1.size11,.katex .sizing.reset-size1.size11{font-size:4.976em}.katex .fontsize-ensurer.reset-size2.size1,.katex .sizing.reset-size2.size1{font-size:.8333333333em}.katex .fontsize-ensurer.reset-size2.size2,.katex .sizing.reset-size2.size2{font-size:1em}.katex .fontsize-ensurer.reset-size2.size3,.katex .sizing.reset-size2.size3{font-size:1.1666666667em}.katex .fontsize-ensurer.reset-size2.size4,.katex .sizing.reset-size2.size4{font-size:1.3333333333em}.katex .fontsize-ensurer.reset-size2.size5,.katex .sizing.reset-size2.size5{font-size:1.5em}.katex .fontsize-ensurer.reset-size2.size6,.katex .sizing.reset-size2.size6{font-size:1.6666666667em}.katex .fontsize-ensurer.reset-size2.size7,.katex .sizing.reset-size2.size7{font-size:2em}.katex .fontsize-ensurer.reset-size2.size8,.katex .sizing.reset-size2.size8{font-size:2.4em}.katex .fontsize-ensurer.reset-size2.size9,.katex .sizing.reset-size2.size9{font-size:2.88em}.katex .fontsize-ensurer.reset-size2.size10,.katex .sizing.reset-size2.size10{font-size:3.4566666667em}.katex .fontsize-ensurer.reset-size2.size11,.katex .sizing.reset-size2.size11{font-size:4.1466666667em}.katex .fontsize-ensurer.reset-size3.size1,.katex .sizing.reset-size3.size1{font-size:.7142857143em}.katex .fontsize-ensurer.reset-size3.size2,.katex .sizing.reset-size3.size2{font-size:.8571428571em}.katex .fontsize-ensurer.reset-size3.size3,.katex .sizing.reset-size3.size3{font-size:1em}.katex .fontsize-ensurer.reset-size3.size4,.katex .sizing.reset-size3.size4{font-size:1.1428571429em}.katex .fontsize-ensurer.reset-size3.size5,.katex .sizing.reset-size3.size5{font-size:1.2857142857em}.katex .fontsize-ensurer.reset-size3.size6,.katex .sizing.reset-size3.size6{font-size:1.4285714286em}.katex .fontsize-ensurer.reset-size3.size7,.katex .sizing.reset-size3.size7{font-size:1.7142857143em}.katex .fontsize-ensurer.reset-size3.size8,.katex .sizing.reset-size3.size8{font-size:2.0571428571em}.katex .fontsize-ensurer.reset-size3.size9,.katex .sizing.reset-size3.size9{font-size:2.4685714286em}.katex .fontsize-ensurer.reset-size3.size10,.katex .sizing.reset-size3.size10{font-size:2.9628571429em}.katex .fontsize-ensurer.reset-size3.size11,.katex .sizing.reset-size3.size11{font-size:3.5542857143em}.katex .fontsize-ensurer.reset-size4.size1,.katex .sizing.reset-size4.size1{font-size:.625em}.katex .fontsize-ensurer.reset-size4.size2,.katex .sizing.reset-size4.size2{font-size:.75em}.katex .fontsize-ensurer.reset-size4.size3,.katex .sizing.reset-size4.size3{font-size:.875em}.katex .fontsize-ensurer.reset-size4.size4,.katex .sizing.reset-size4.size4{font-size:1em}.katex .fontsize-ensurer.reset-size4.size5,.katex .sizing.reset-size4.size5{font-size:1.125em}.katex .fontsize-ensurer.reset-size4.size6,.katex .sizing.reset-size4.size6{font-size:1.25em}.katex .fontsize-ensurer.reset-size4.size7,.katex .sizing.reset-size4.size7{font-size:1.5em}.katex .fontsize-ensurer.reset-size4.size8,.katex .sizing.reset-size4.size8{font-size:1.8em}.katex .fontsize-ensurer.reset-size4.size9,.katex .sizing.reset-size4.size9{font-size:2.16em}.katex .fontsize-ensurer.reset-size4.size10,.katex .sizing.reset-size4.size10{font-size:2.5925em}.katex .fontsize-ensurer.reset-size4.size11,.katex .sizing.reset-size4.size11{font-size:3.11em}.katex .fontsize-ensurer.reset-size5.size1,.katex .sizing.reset-size5.size1{font-size:.5555555556em}.katex .fontsize-ensurer.reset-size5.size2,.katex .sizing.reset-size5.size2{font-size:.6666666667em}.katex .fontsize-ensurer.reset-size5.size3,.katex .sizing.reset-size5.size3{font-size:.7777777778em}.katex .fontsize-ensurer.reset-size5.size4,.katex .sizing.reset-size5.size4{font-size:.8888888889em}.katex .fontsize-ensurer.reset-size5.size5,.katex .sizing.reset-size5.size5{font-size:1em}.katex .fontsize-ensurer.reset-size5.size6,.katex .sizing.reset-size5.size6{font-size:1.1111111111em}.katex .fontsize-ensurer.reset-size5.size7,.katex .sizing.reset-size5.size7{font-size:1.3333333333em}.katex .fontsize-ensurer.reset-size5.size8,.katex .sizing.reset-size5.size8{font-size:1.6em}.katex .fontsize-ensurer.reset-size5.size9,.katex .sizing.reset-size5.size9{font-size:1.92em}.katex .fontsize-ensurer.reset-size5.size10,.katex .sizing.reset-size5.size10{font-size:2.3044444444em}.katex .fontsize-ensurer.reset-size5.size11,.katex .sizing.reset-size5.size11{font-size:2.7644444444em}.katex .fontsize-ensurer.reset-size6.size1,.katex .sizing.reset-size6.size1{font-size:.5em}.katex .fontsize-ensurer.reset-size6.size2,.katex .sizing.reset-size6.size2{font-size:.6em}.katex .fontsize-ensurer.reset-size6.size3,.katex .sizing.reset-size6.size3{font-size:.7em}.katex .fontsize-ensurer.reset-size6.size4,.katex .sizing.reset-size6.size4{font-size:.8em}.katex .fontsize-ensurer.reset-size6.size5,.katex .sizing.reset-size6.size5{font-size:.9em}.katex .fontsize-ensurer.reset-size6.size6,.katex .sizing.reset-size6.size6{font-size:1em}.katex .fontsize-ensurer.reset-size6.size7,.katex .sizing.reset-size6.size7{font-size:1.2em}.katex .fontsize-ensurer.reset-size6.size8,.katex .sizing.reset-size6.size8{font-size:1.44em}.katex .fontsize-ensurer.reset-size6.size9,.katex .sizing.reset-size6.size9{font-size:1.728em}.katex .fontsize-ensurer.reset-size6.size10,.katex .sizing.reset-size6.size10{font-size:2.074em}.katex .fontsize-ensurer.reset-size6.size11,.katex .sizing.reset-size6.size11{font-size:2.488em}.katex .fontsize-ensurer.reset-size7.size1,.katex .sizing.reset-size7.size1{font-size:.4166666667em}.katex .fontsize-ensurer.reset-size7.size2,.katex .sizing.reset-size7.size2{font-size:.5em}.katex .fontsize-ensurer.reset-size7.size3,.katex .sizing.reset-size7.size3{font-size:.5833333333em}.katex .fontsize-ensurer.reset-size7.size4,.katex .sizing.reset-size7.size4{font-size:.6666666667em}.katex .fontsize-ensurer.reset-size7.size5,.katex .sizing.reset-size7.size5{font-size:.75em}.katex .fontsize-ensurer.reset-size7.size6,.katex .sizing.reset-size7.size6{font-size:.8333333333em}.katex .fontsize-ensurer.reset-size7.size7,.katex .sizing.reset-size7.size7{font-size:1em}.katex .fontsize-ensurer.reset-size7.size8,.katex .sizing.reset-size7.size8{font-size:1.2em}.katex .fontsize-ensurer.reset-size7.size9,.katex .sizing.reset-size7.size9{font-size:1.44em}.katex .fontsize-ensurer.reset-size7.size10,.katex .sizing.reset-size7.size10{font-size:1.7283333333em}.katex .fontsize-ensurer.reset-size7.size11,.katex .sizing.reset-size7.size11{font-size:2.0733333333em}.katex .fontsize-ensurer.reset-size8.size1,.katex .sizing.reset-size8.size1{font-size:.3472222222em}.katex .fontsize-ensurer.reset-size8.size2,.katex .sizing.reset-size8.size2{font-size:.4166666667em}.katex .fontsize-ensurer.reset-size8.size3,.katex .sizing.reset-size8.size3{font-size:.4861111111em}.katex .fontsize-ensurer.reset-size8.size4,.katex .sizing.reset-size8.size4{font-size:.5555555556em}.katex .fontsize-ensurer.reset-size8.size5,.katex .sizing.reset-size8.size5{font-size:.625em}.katex .fontsize-ensurer.reset-size8.size6,.katex .sizing.reset-size8.size6{font-size:.6944444444em}.katex .fontsize-ensurer.reset-size8.size7,.katex .sizing.reset-size8.size7{font-size:.8333333333em}.katex .fontsize-ensurer.reset-size8.size8,.katex .sizing.reset-size8.size8{font-size:1em}.katex .fontsize-ensurer.reset-size8.size9,.katex .sizing.reset-size8.size9{font-size:1.2em}.katex .fontsize-ensurer.reset-size8.size10,.katex .sizing.reset-size8.size10{font-size:1.4402777778em}.katex .fontsize-ensurer.reset-size8.size11,.katex .sizing.reset-size8.size11{font-size:1.7277777778em}.katex .fontsize-ensurer.reset-size9.size1,.katex .sizing.reset-size9.size1{font-size:.2893518519em}.katex .fontsize-ensurer.reset-size9.size2,.katex .sizing.reset-size9.size2{font-size:.3472222222em}.katex .fontsize-ensurer.reset-size9.size3,.katex .sizing.reset-size9.size3{font-size:.4050925926em}.katex .fontsize-ensurer.reset-size9.size4,.katex .sizing.reset-size9.size4{font-size:.462962963em}.katex .fontsize-ensurer.reset-size9.size5,.katex .sizing.reset-size9.size5{font-size:.5208333333em}.katex .fontsize-ensurer.reset-size9.size6,.katex .sizing.reset-size9.size6{font-size:.5787037037em}.katex .fontsize-ensurer.reset-size9.size7,.katex .sizing.reset-size9.size7{font-size:.6944444444em}.katex .fontsize-ensurer.reset-size9.size8,.katex .sizing.reset-size9.size8{font-size:.8333333333em}.katex .fontsize-ensurer.reset-size9.size9,.katex .sizing.reset-size9.size9{font-size:1em}.katex .fontsize-ensurer.reset-size9.size10,.katex .sizing.reset-size9.size10{font-size:1.2002314815em}.katex .fontsize-ensurer.reset-size9.size11,.katex .sizing.reset-size9.size11{font-size:1.4398148148em}.katex .fontsize-ensurer.reset-size10.size1,.katex .sizing.reset-size10.size1{font-size:.2410800386em}.katex .fontsize-ensurer.reset-size10.size2,.katex .sizing.reset-size10.size2{font-size:.2892960463em}.katex .fontsize-ensurer.reset-size10.size3,.katex .sizing.reset-size10.size3{font-size:.337512054em}.katex .fontsize-ensurer.reset-size10.size4,.katex .sizing.reset-size10.size4{font-size:.3857280617em}.katex .fontsize-ensurer.reset-size10.size5,.katex .sizing.reset-size10.size5{font-size:.4339440694em}.katex .fontsize-ensurer.reset-size10.size6,.katex .sizing.reset-size10.size6{font-size:.4821600771em}.katex .fontsize-ensurer.reset-size10.size7,.katex .sizing.reset-size10.size7{font-size:.5785920926em}.katex .fontsize-ensurer.reset-size10.size8,.katex .sizing.reset-size10.size8{font-size:.6943105111em}.katex .fontsize-ensurer.reset-size10.size9,.katex .sizing.reset-size10.size9{font-size:.8331726133em}.katex .fontsize-ensurer.reset-size10.size10,.katex .sizing.reset-size10.size10{font-size:1em}.katex .fontsize-ensurer.reset-size10.size11,.katex .sizing.reset-size10.size11{font-size:1.1996142719em}.katex .fontsize-ensurer.reset-size11.size1,.katex .sizing.reset-size11.size1{font-size:.2009646302em}.katex .fontsize-ensurer.reset-size11.size2,.katex .sizing.reset-size11.size2{font-size:.2411575563em}.katex .fontsize-ensurer.reset-size11.size3,.katex .sizing.reset-size11.size3{font-size:.2813504823em}.katex .fontsize-ensurer.reset-size11.size4,.katex .sizing.reset-size11.size4{font-size:.3215434084em}.katex .fontsize-ensurer.reset-size11.size5,.katex .sizing.reset-size11.size5{font-size:.3617363344em}.katex .fontsize-ensurer.reset-size11.size6,.katex .sizing.reset-size11.size6{font-size:.4019292605em}.katex .fontsize-ensurer.reset-size11.size7,.katex .sizing.reset-size11.size7{font-size:.4823151125em}.katex .fontsize-ensurer.reset-size11.size8,.katex .sizing.reset-size11.size8{font-size:.578778135em}.katex .fontsize-ensurer.reset-size11.size9,.katex .sizing.reset-size11.size9{font-size:.6945337621em}.katex .fontsize-ensurer.reset-size11.size10,.katex .sizing.reset-size11.size10{font-size:.8336012862em}.katex .fontsize-ensurer.reset-size11.size11,.katex .sizing.reset-size11.size11{font-size:1em}.katex .delimsizing.size1{font-family:KaTeX_Size1}.katex .delimsizing.size2{font-family:KaTeX_Size2}.katex .delimsizing.size3{font-family:KaTeX_Size3}.katex .delimsizing.size4{font-family:KaTeX_Size4}.katex .delimsizing.mult .delim-size1>span{font-family:KaTeX_Size1}.katex .delimsizing.mult .delim-size4>span{font-family:KaTeX_Size4}.katex .nulldelimiter{display:inline-block;width:.12em}.katex .delimcenter,.katex .op-symbol{position:relative}.katex .op-symbol.small-op{font-family:KaTeX_Size1}.katex .op-symbol.large-op{font-family:KaTeX_Size2}.katex .accent>.vlist-t,.katex .op-limits>.vlist-t{text-align:center}.katex .accent .accent-body{position:relative}.katex .accent .accent-body:not(.accent-full){width:0}.katex .overlay{display:block}.katex .mtable .vertical-separator{display:inline-block;min-width:1px}.katex .mtable .arraycolsep{display:inline-block}.katex .mtable .col-align-c>.vlist-t{text-align:center}.katex .mtable .col-align-l>.vlist-t{text-align:left}.katex .mtable .col-align-r>.vlist-t{text-align:right}.katex .svg-align{text-align:left}.katex svg{fill:currentColor;stroke:currentColor;display:block;height:inherit;position:absolute;width:100%}.katex svg path{stroke:none}.katex svg{fill-rule:nonzero;fill-opacity:1;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1}.katex img{border-style:none;max-height:none;max-width:none;min-height:0;min-width:0}.katex .stretchy{display:block;overflow:hidden;position:relative;width:100%}.katex .stretchy:after,.katex .stretchy:before{content:""}.katex .hide-tail{overflow:hidden;position:relative;width:100%}.katex .halfarrow-left{left:0;overflow:hidden;position:absolute;width:50.2%}.katex .halfarrow-right{overflow:hidden;position:absolute;right:0;width:50.2%}.katex .brace-left{left:0;overflow:hidden;position:absolute;width:25.1%}.katex .brace-center{left:25%;overflow:hidden;position:absolute;width:50%}.katex .brace-right{overflow:hidden;position:absolute;right:0;width:25.1%}.katex .x-arrow-pad{padding:0 .5em}.katex .cd-arrow-pad{padding:0 .55556em 0 .27778em}.katex .mover,.katex .munder,.katex .x-arrow{text-align:center}.katex .boxpad{padding:0 .3em}.katex .fbox,.katex .fcolorbox{border:.04em solid;box-sizing:border-box}.katex .cancel-pad{padding:0 .2em}.katex .cancel-lap{margin-left:-.2em;margin-right:-.2em}.katex .sout{border-bottom-style:solid;border-bottom-width:.08em}.katex .angl{border-right:.049em solid;border-top:.049em solid;box-sizing:border-box;margin-right:.03889em}.katex .anglpad{padding:0 .03889em}.katex .eqn-num:before{content:"(" counter(katexEqnNo) ")";counter-increment:katexEqnNo}.katex .mml-eqn-num:before{content:"(" counter(mmlEqnNo) ")";counter-increment:mmlEqnNo}.katex .mtr-glue{width:50%}.katex .cd-vert-arrow{display:inline-block;position:relative}.katex .cd-label-left{display:inline-block;position:absolute;right:calc(50% + .3em);text-align:left}.katex .cd-label-right{display:inline-block;left:calc(50% + .3em);position:absolute;text-align:right}.katex-display{display:block;margin:1em 0;text-align:center}.katex-display>.katex{display:block;text-align:center;white-space:nowrap}.katex-display>.katex>.katex-html{display:block;position:relative}.katex-display>.katex>.katex-html>.tag{position:absolute;right:0}.katex-display.leqno>.katex>.katex-html>.tag{left:0;right:auto}.katex-display.fleqn>.katex{padding-left:2em;text-align:left}body{counter-reset:katexEqnNo mmlEqnNo}
+
+</style>
+<style>
+body {
+    padding-top: 25px;
+}
+</style>
+</head>
+<body>
+    <div class="content-wrapper">
+        <h1 id="mansakha-ai-architecture%3A-frontend-feature-mapping-%26-integration-changelog" tabindex="-1">Mansakha AI Architecture: Frontend Feature Mapping &amp; Integration Changelog</h1>
+<h2 id="1.-executive-summary" tabindex="-1">1. Executive Summary</h2>
+<p>This document provides an exhaustive technical reference and system architecture map of all Artificial Intelligence (AI), Machine Learning (ML), 3D Computer Graphics, and Speech Processing features across the <strong>Mansakha Mobile App</strong> (<code>frontend/</code>) and the <strong>Administrative &amp; Counsellor Web Portal</strong> (<code>web-frontend/</code>), along with signal pipelines, mathematical formulations, conversational boundaries, and a complete changelog of all files created and modified.</p>
+<p>The system is designed with <strong>100% local, Sovereign AI execution</strong> (zero external cloud API dependencies, zero recurring Gemini/OpenAI cloud costs, complete data privacy under India's Digital Personal Data Protection Act):</p>
+<ol>
+<li><strong>Django AI Inference Backend (<code>AI-backend/</code>)</strong>: PyTorch, HuggingFace Transformers, faster-whisper, and scikit-learn models running on port <code>8000</code>.</li>
+<li><strong>Local Ollama LLM Instance</strong>: Quantized <code>gemma3:4b</code> running on port <code>11434</code> for empathetic conversational therapy, clinical reasoning, case notes, and adaptive check-ins.</li>
+<li><strong>Node.js Gateway Backend (<code>backend/</code>)</strong>: Express.js orchestrator on port <code>4000</code> coordinating between Supabase PostgreSQL, Django AI, Ollama, and client applications.</li>
+<li><strong>Three.js 3D WebGL Avatar Engine</strong>: Client-side hardware-accelerated 3D avatar rendering with bone-level emotional kinetics, real-time viseme lip-sync, and holographic particle shaders.</li>
+</ol>
+<hr>
+<h2 id="2.-core-ai-models%2C-graphics-engines-%26-algorithms-catalog" tabindex="-1">2. Core AI Models, Graphics Engines &amp; Algorithms Catalog</h2>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Model / Engine Identifier</th>
+<th style="text-align:left">Architecture / Framework</th>
+<th style="text-align:left">Location in Workspace</th>
+<th style="text-align:left">Purpose &amp; Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong><code>casual_male.glb</code></strong></td>
+<td style="text-align:left">ReadyPlayerMe 3D GLB Model</td>
+<td style="text-align:left"><code>frontend/public/models/casual_male.glb</code></td>
+<td style="text-align:left">Production male AI counsellor model (brown hair, trimmed beard, blue collared polo shirt; exact match for <code>avatar_male_counsellor.png</code>).</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong><code>readyplayer.glb</code></strong></td>
+<td style="text-align:left">ReadyPlayerMe 3D GLB Model</td>
+<td style="text-align:left"><code>frontend/public/models/readyplayer.glb</code></td>
+<td style="text-align:left">Production female AI counsellor model.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong><code>Avatar3DController.js</code></strong></td>
+<td style="text-align:left">Three.js WebGL Engine</td>
+<td style="text-align:left"><code>frontend/src/user/chat/components/Avatar3DController.js</code></td>
+<td style="text-align:left">3D avatar controller managing skeletal bone kinematics (head tilt, nodding, eye gaze), procedural breathing, natural blinking, and real-time lip-sync.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Holographic 3D Particle Canvas</strong></td>
+<td style="text-align:left">HTML5 2D Canvas + 3D Projection Math</td>
+<td style="text-align:left"><code>frontend/src/user/chat/components/MansakhaCallModal.js</code></td>
+<td style="text-align:left">Symmetrical 1:1 gyroscope hologram with 160 depth-sorted particles, 3 multi-axis planetary rings, ambient radial aura, and 28-bar audio frequency equalizer for Voice Call mode.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong><code>pitch_emotion_model_v2.pkl</code></strong></td>
+<td style="text-align:left"><code>VotingClassifier</code> Ensemble (Random Forest, SVM, Gradient Boosting on acoustic prosody)</td>
+<td style="text-align:left"><code>Mansakha-Ai/pitch_emotion_model_v2.pkl</code></td>
+<td style="text-align:left">Analyzes vocal pitch (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>F</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">F_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1389em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>), jitter, shimmer, spectral centroid, and RMS energy via <code>librosa</code> to compute continuous <strong>Voice Stress Score</strong> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.0</mn><mo>−</mo><mn>1.0</mn></mrow><annotation encoding="application/x-tex">0.0 - 1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.0</span></span></span></span>).</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong><code>PS094_Sentiment_Model</code></strong></td>
+<td style="text-align:left">Fine-Tuned Transformer (RoBERTa/BERT architecture)</td>
+<td style="text-align:left"><code>Mansakha-Ai/PS094_Sentiment_Model/</code></td>
+<td style="text-align:left">Classifies victim narrative text into positive, neutral, and negative trauma sentiment; outputs raw sentiment score (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1.0</mn></mrow><annotation encoding="application/x-tex">-1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">1.0</span></span></span></span> to <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>+</mo><mn>1.0</mn></mrow><annotation encoding="application/x-tex">+1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">+</span><span class="mord">1.0</span></span></span></span>).</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong><code>MultilingualEmotion</code></strong></td>
+<td style="text-align:left">XLM-RoBERTa (11 Emotion Classes)</td>
+<td style="text-align:left"><code>Mansakha-Ai/MultilingualEmotion/</code></td>
+<td style="text-align:left">Evaluates multilingual text for fear, sadness, anger, joy, optimism, etc. Weights negative trauma emotions into an <strong>Emotion Distress Score</strong> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.0</mn><mo>−</mo><mn>1.0</mn></mrow><annotation encoding="application/x-tex">0.0 - 1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0.0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.0</span></span></span></span>).</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong><code>faster-whisper</code></strong></td>
+<td style="text-align:left">CTranslate2-accelerated Whisper (<code>base</code> / <code>small</code>)</td>
+<td style="text-align:left">Loaded inside <code>AI-backend/api/ai_services.py</code></td>
+<td style="text-align:left">Transcribes spoken audio into text with high accuracy and low CPU latency for subsequent NLP sentiment and emotion analysis.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>IIT Madras Speech Lab ASR API</strong></td>
+<td style="text-align:left">IITM SpeechLab v2 Decode Engine</td>
+<td style="text-align:left"><code>AI-backend/api/ai_services.py</code> &amp; <code>useSpeechToText.js</code></td>
+<td style="text-align:left">Primary Indian-accented Automatic Speech Recognition pipeline with local IndicWhisper fallback.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Local Ollama <code>gemma3:4b</code></strong></td>
+<td style="text-align:left">4-Billion Parameter Quantized LLM</td>
+<td style="text-align:left">Local daemon (<code>http://127.0.0.1:11434</code>)</td>
+<td style="text-align:left">Generates empathetic companion chat turns, dynamic check-in questions, clinical rationales, and objective case note summaries.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Dynamic Distress Scoring Engine</strong></td>
+<td style="text-align:left">Multimodal Fusion Matrix</td>
+<td style="text-align:left"><code>backend/src/ai/scoring.js</code></td>
+<td style="text-align:left">Fuses sentiment, voice stress, emotion, and behavioral engagement delta into the unified <strong>Dynamic Distress Score (0–100)</strong>.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Predictive Risk &amp; Escalation Modeler</strong></td>
+<td style="text-align:left">Ordinary Least Squares (OLS) Linear Regression</td>
+<td style="text-align:left"><code>backend/src/ai/scoring.js</code> (<code>predictEscalationRiskBatch</code>)</td>
+<td style="text-align:left">Analyzes chronological distress trends to calculate distress velocity (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>pts/day</mtext></mrow><annotation encoding="application/x-tex">\text{pts/day}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">pts/day</span></span></span></span></span>) and projected days until crossing into High or Critical risk tiers.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="3.-frontend-feature-to-ai-model-mapping" tabindex="-1">3. Frontend Feature-to-AI Model Mapping</h2>
+<h3 id="a.-mobile-victim-app-(frontend%2F)" tabindex="-1">A. Mobile Victim App (<code>frontend/</code>)</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Screen / Component File</th>
+<th style="text-align:left">Feature &amp; User Interaction</th>
+<th style="text-align:left">Underlying AI Model / Engine</th>
+<th style="text-align:left">Input Signals <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Output Signals</th>
+<th style="text-align:left">Clinical &amp; Operational Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>[ChatScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/chat/screens/ChatScreen.js)</strong></td>
+<td style="text-align:left"><strong>24/7 Empathetic Chat Companion</strong><br>Conversational companion for emotional grounding</td>
+<td style="text-align:left"><strong>Ollama <code>gemma3:4b</code></strong><br>(Trauma-informed system prompt)</td>
+<td style="text-align:left">User text message <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Grounded, comforting reply (2–3 sentences max)</td>
+<td style="text-align:left">Immediate emotional support; validates feelings without diagnostic labeling.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[MansakhaCallModal.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/chat/components/MansakhaCallModal.js)</strong></td>
+<td style="text-align:left"><strong>WhatsApp-Style Fullscreen Live Call (Voice &amp; Video)</strong><br>Full-screen WhatsApp overlay with dual voice/video modes</td>
+<td style="text-align:left"><strong>3D Canvas Hologram</strong> (Voice) / <strong>Three.js 3D Avatar</strong> (Video) + <strong>Ollama <code>gemma3:4b</code></strong></td>
+<td style="text-align:left">Speech synthesis &amp; recognition + Camera stream <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Real-time interactive 3D dialogue</td>
+<td style="text-align:left">Seamless live voice/video companion call with WhatsApp-grade privacy and clarity.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[Avatar3DController.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/chat/components/Avatar3DController.js)</strong></td>
+<td style="text-align:left"><strong>Emotional 3D Avatar Kinematics &amp; Lip Sync</strong><br>Human facial expressions, nodding, head tilts &amp; visemes</td>
+<td style="text-align:left"><strong>WebGL Three.js</strong> + <strong>GLTF Morph Targets</strong> + <strong>Speech Boundary Tracking</strong></td>
+<td style="text-align:left">TTS syllable boundaries &amp; user emotional keywords <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Real-time visemes, 5° empathic head tilt, nods, smiles</td>
+<td style="text-align:left">Provides comforting non-verbal human presence and active listening gestures.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[AiChatButton.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/shared/components/AiChatButton.js)</strong></td>
+<td style="text-align:left"><strong>Context-Aware Floating AI Button</strong><br>Universal FAB across app, hidden inside chat</td>
+<td style="text-align:left"><strong>React Navigation Active Route Detection</strong></td>
+<td style="text-align:left">Navigation route state <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Dynamically hidden on <code>/MainTabs/Chatbot</code>, visible elsewhere</td>
+<td style="text-align:left">Guarantees instant 1-tap access to Mansakha across app while eliminating clutter inside chat.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[ChatScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/chat/screens/ChatScreen.js)</strong></td>
+<td style="text-align:left"><strong>Voice Note Multimodal Input</strong><br>Audio recording sent with Whisper STT &amp; stress</td>
+<td style="text-align:left"><strong>faster-whisper</strong> + <strong>pitch_emotion_model_v2</strong> + <strong>PS094 Sentiment</strong></td>
+<td style="text-align:left">Audio voice note <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> STT transcript + acoustic voice stress score + distress screening</td>
+<td style="text-align:left">Transcribes victim voice with Whisper and computes vocal tension stress (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0..1</mn></mrow><annotation encoding="application/x-tex">0..1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0..1</span></span></span></span>) via Django AI.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[CheckinScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/wellness/screens/CheckinScreen.js)</strong></td>
+<td style="text-align:left"><strong>Adaptive Check-In Questionnaire</strong><br>Contextual follow-up check-in questions</td>
+<td style="text-align:left"><strong>Ollama <code>gemma3:4b</code></strong> (<code>generateInteractiveQuestion</code>)</td>
+<td style="text-align:left">User past history context <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Dynamic multiple-choice questions &amp; gentle options</td>
+<td style="text-align:left">Prevents questionnaire fatigue by personalizing questions based on past session context.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[CheckinScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/wellness/screens/CheckinScreen.js)</strong></td>
+<td style="text-align:left"><strong>Multimodal Check-In Scoring</strong><br>Post-checkin holistic distress evaluation</td>
+<td style="text-align:left"><strong>Phase 2 Multimodal Fusion Matrix</strong> (Sentiment + Voice Stress + Emotion + Engagement)</td>
+<td style="text-align:left">Check-in transcript &amp; voice <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> <strong>Dynamic Distress Score (0–100)</strong> + Risk Level</td>
+<td style="text-align:left">Accurately classifies victim risk (Low, Moderate, High, Critical) with multimodal validation.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[HomeScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/wellness/screens/HomeScreen.js)</strong></td>
+<td style="text-align:left"><strong>Distress Hero Card &amp; Risk Badge</strong><br>Real-time mental wellness status &amp; alerts</td>
+<td style="text-align:left"><strong>Dynamic Distress Scoring Engine</strong> (<code>backend/src/ai/scoring.js</code>)</td>
+<td style="text-align:left">Latest check-in reading <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Score badge (<code>score/100</code>), status tier, proactive check-in nudges</td>
+<td style="text-align:left">Transparent mental wellness status for the victim; nudges proactive help when score drops.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[DistressHistoryScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/wellness/screens/DistressHistoryScreen.js)</strong></td>
+<td style="text-align:left"><strong>Distress Trend 14-Day Bar Chart</strong><br>Longitudinal visual recovery timeline</td>
+<td style="text-align:left"><strong>Temporal Score Tracking</strong> (<code>distress_scores</code> timeseries)</td>
+<td style="text-align:left">Historical distress readings <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Color-coded chronological trend bars</td>
+<td style="text-align:left">Empowers victims to visualize recovery trajectory and identify high-stress triggers.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[JournalScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/wellness/screens/JournalScreen.js)</strong></td>
+<td style="text-align:left"><strong>Voice-to-Text Reflective Journaling</strong><br>Speech input &amp; baseline tracking</td>
+<td style="text-align:left"><strong>Web Speech API / faster-whisper</strong> + <strong>Engagement Baseline Tracker</strong></td>
+<td style="text-align:left">Spoken voice journal <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Real-time text transcription + response length baseline</td>
+<td style="text-align:left">Therapeutic private journaling with unobtrusive baseline tracking for early disengagement.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[ThreatReportScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/wellness/screens/ThreatReportScreen.js)</strong> &amp; <strong>[RequestInterventionScreen.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/wellness/screens/RequestInterventionScreen.js)</strong></td>
+<td style="text-align:left"><strong>Statutory Intervention Triage</strong><br>Protection, Medical, Relocation, Legal Aid</td>
+<td style="text-align:left"><strong>Ollama <code>gemma3:4b</code></strong> &amp; <strong>Rule Classifier</strong> (<code>resolveInterventionTypeId</code>)</td>
+<td style="text-align:left">Free-text threat description <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Recommended statutory intervention category</td>
+<td style="text-align:left">Immediately routes urgent protection or relocation requests to Protection Officers.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h3 id="b.-counsellor-%26-administrative-web-portal-(web-frontend%2F)" tabindex="-1">B. Counsellor &amp; Administrative Web Portal (<code>web-frontend/</code>)</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Portal / Page File</th>
+<th style="text-align:left">Feature &amp; Administrative UI</th>
+<th style="text-align:left">Underlying AI Model / Engine</th>
+<th style="text-align:left">Input Signals <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Output Signals</th>
+<th style="text-align:left">Administrative &amp; Legal Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>[CaseDetail.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/counsellor/pages/CaseDetail.jsx)</strong></td>
+<td style="text-align:left"><strong>Explainable AI Multi-Signal Breakdown</strong><br>Transparent sub-score cards</td>
+<td style="text-align:left"><strong>Multimodal Disaggregation</strong> (4 individual feature channels)</td>
+<td style="text-align:left">Audio + NLP inputs <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> 4 sub-scores: Sentiment, Voice Stress, Emotion, Engagement Delta</td>
+<td style="text-align:left">Provides clinical explainability so counsellors see exactly why a case was flagged.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[CaseDetail.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/counsellor/pages/CaseDetail.jsx)</strong></td>
+<td style="text-align:left"><strong>Explainable Clinical Rationale</strong><br>Context box explaining distress drivers</td>
+<td style="text-align:left"><strong>Ollama <code>gemma3:4b</code></strong> (Clinical reasoning prompt)</td>
+<td style="text-align:left">Conversation transcript <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Sentence highlighting specific trauma cues/words</td>
+<td style="text-align:left">Pinpoints specific grievance topics (e.g. intimidation by accused) for the counsellor.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[CaseDetail.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/counsellor/pages/CaseDetail.jsx)</strong></td>
+<td style="text-align:left"><strong>Predictive Risk &amp; Escalation Warning</strong><br>Forward-looking trajectory warning</td>
+<td style="text-align:left"><strong>OLS Linear Trend Regression</strong> (<code>predictEscalationRisk</code>)</td>
+<td style="text-align:left">Historical score readings <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Velocity (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>pts/day</mtext></mrow><annotation encoding="application/x-tex">\text{pts/day}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">pts/day</span></span></span></span></span>) &amp; ETA (e.g. <em>&quot;Critical in ~5.4d&quot;</em>)</td>
+<td style="text-align:left">Enables proactive scheduling of sessions before acute psychological crisis occurs.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[CaseNotes.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/counsellor/pages/CaseNotes.jsx)</strong></td>
+<td style="text-align:left"><strong>AI-Drafted Clinical Case Notes</strong><br>Feed entries tagged <code>[AI-drafted]</code></td>
+<td style="text-align:left"><strong>Ollama <code>gemma3:4b</code></strong> (<code>generateCaseNoteDraft</code>)</td>
+<td style="text-align:left">Check-in transcript <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> 2–4 sentence objective, factual clinical summary</td>
+<td style="text-align:left">Eliminates repetitive documentation overhead for counsellors while ensuring rigorous case notes.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[AlertsFeed.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/counsellor/pages/AlertsFeed.jsx)</strong> &amp; <strong>[AdminAlerts.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/district_admin/pages/AdminAlerts.jsx)</strong></td>
+<td style="text-align:left"><strong>Distress Spike &amp; SOS Alert Feed</strong><br>Urgent triage queue for crisis response</td>
+<td style="text-align:left"><strong>Dynamic Distress Threshold Engine</strong> (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mo>≥</mo><mn>20</mn></mrow><annotation encoding="application/x-tex">\Delta \ge 20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8193em;vertical-align:-0.136em;"></span><span class="mord">Δ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span> pts or Score <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≥</mo><mn>80</mn></mrow><annotation encoding="application/x-tex">\ge 80</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719em;vertical-align:-0.136em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">80</span></span></span></span>)</td>
+<td style="text-align:left">Distress score shift <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> High-priority operational alert dispatched to counsellor/IO</td>
+<td style="text-align:left">Guarantees that acute trauma or sudden threats trigger rapid, auditable interventions.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[AdminDashboard.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/district_admin/pages/AdminDashboard.jsx)</strong></td>
+<td style="text-align:left"><strong>Predicted Escalations Metric Card</strong><br>Jurisdiction-wide early warning counter</td>
+<td style="text-align:left"><strong>Batch Predictive Regression</strong> (<code>predictEscalationRiskBatch</code>)</td>
+<td style="text-align:left">All district victim score streams <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Total cases projected to escalate within 14d</td>
+<td style="text-align:left">Shifts administrative posture from reactive policing to proactive early intervention.</td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>[Analysis.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/state_admin/pages/Analysis.jsx)</strong> &amp; <strong>[Analysis.jsx](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/web-frontend/src/national_admin/pages/Analysis.jsx)</strong></td>
+<td style="text-align:left"><strong>Jurisdiction Intelligence &amp; Demand Surge</strong><br>Qualitative themes &amp; workload forecast</td>
+<td style="text-align:left"><strong>Ollama <code>gemma3:4b</code></strong> (<code>generateJurisdictionAnalytics</code>)</td>
+<td style="text-align:left">Aggregated incident narratives <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span> Emerging risk themes + Counsellor demand surge</td>
+<td style="text-align:left">Guides allocation of counsellors, legal representatives, and protection squads.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="4.-3d-avatar-%26-visual-graphics-subsystem-deep-dive" tabindex="-1">4. 3D Avatar &amp; Visual Graphics Subsystem Deep Dive</h2>
+<h3 id="a.-avatar-skeletal-architecture-%26-bone-control" tabindex="-1">A. Avatar Skeletal Architecture &amp; Bone Control</h3>
+<p>The 3D Avatar Controller ([Avatar3DController.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/chat/components/Avatar3DController.js)) controls bone transformations and morph targets:</p>
+<ul>
+<li><strong>Captured Bones</strong>:
+<ul>
+<li><code>Head</code> / <code>mixamorigHead</code>: Rotated along X (pitch/nodding), Y (yaw/glance), and Z (roll/empathic tilt).</li>
+<li><code>Neck</code> / <code>mixamorigNeck</code>: Micro-sway for physiological breathing (0.28Hz).</li>
+<li><code>LeftEye</code> &amp; <code>RightEye</code>: Saccadic eye micro-movements for lifelike cognitive presence.</li>
+</ul>
+</li>
+<li><strong>Dynamic Camera Positioning</strong>:
+<ul>
+<li>Distance set to <code>0.78m</code> with target centered at <code>(0, 1.62, 0)</code> with FOV 34°.</li>
+<li>Produces standard portrait/passport framing (head, neck, collar, and chest in clear view without intrusive zoom).</li>
+</ul>
+</li>
+</ul>
+<h3 id="b.-procedural-emotional-kinetics-engine" tabindex="-1">B. Procedural Emotional Kinetics Engine</h3>
+<p>The avatar transitions smoothly across four primary emotional states based on user speech keywords:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align:left">Emotion State</th>
+<th style="text-align:left">Target Triggers</th>
+<th style="text-align:left">Kinematic Motion &amp; Bone Poses</th>
+<th style="text-align:left">Morph Targets Activated</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left"><strong>Empathy (<code>empathy</code>)</strong></td>
+<td style="text-align:left"><em>&quot;overwhelmed&quot;</em>, <em>&quot;anxious&quot;</em>, <em>&quot;scared&quot;</em>, <em>&quot;hurt&quot;</em>, <em>&quot;pain&quot;</em>, <em>&quot;threat&quot;</em>, <em>&quot;crying&quot;</em></td>
+<td style="text-align:left">5° Head Tilt (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Z</mi><mo>=</mo><mo>+</mo><mn>0.055</mn><mtext> rad</mtext></mrow><annotation encoding="application/x-tex">Z = +0.055\text{ rad}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.0715em;">Z</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">+</span><span class="mord">0.055</span><span class="mord text"><span class="mord"> rad</span></span></span></span></span>), slow affirmative nodding at <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.4</mn><mtext> Hz</mtext></mrow><annotation encoding="application/x-tex">0.4\text{ Hz}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord">0.4</span><span class="mord text"><span class="mord"> Hz</span></span></span></span></span></td>
+<td style="text-align:left"><code>browInnerUp: 0.35</code>, <code>eyeSquint: 0.15</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Reassuring (<code>reassuring</code>)</strong></td>
+<td style="text-align:left">AI calming speech, <em>&quot;better&quot;</em>, <em>&quot;relief&quot;</em>, <em>&quot;thank you&quot;</em>, <em>&quot;okay&quot;</em></td>
+<td style="text-align:left">Direct forward gaze with gentle speech emphasis nod</td>
+<td style="text-align:left"><code>mouthSmile: 0.38</code>, <code>eyeWide: 0.08</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Thinking (<code>thinking</code>)</strong></td>
+<td style="text-align:left">During Ollama inference / speech processing turn</td>
+<td style="text-align:left">8° Cognitive glance to side (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Y</mi><mo>=</mo><mo>+</mo><mn>0.085</mn><mtext> rad</mtext></mrow><annotation encoding="application/x-tex">Y = +0.085\text{ rad}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">+</span><span class="mord">0.085</span><span class="mord text"><span class="mord"> rad</span></span></span></span></span>), slight upward tilt</td>
+<td style="text-align:left"><code>browOuterUp: 0.20</code>, <code>mouthPucker: 0.10</code></td>
+</tr>
+<tr>
+<td style="text-align:left"><strong>Listening (<code>listening</code>)</strong></td>
+<td style="text-align:left">Default idle state while user is speaking</td>
+<td style="text-align:left">Attentive forward posture with natural breathing sway</td>
+<td style="text-align:left">Neutral expressions with random natural blinks</td>
+</tr>
+</tbody>
+</table>
+<h3 id="c.-real-time-lip-sync-synthesis" tabindex="-1">C. Real-Time Lip-Sync Synthesis</h3>
+<ul>
+<li><strong>Speech Boundary Driven</strong>: Bound to Web Speech API <code>utterance.onboundary = 'word'</code>.</li>
+<li><strong>Viseme Morph Mapping</strong>: Dynamically modulates ReadyPlayerMe viseme morph targets:<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>effectiveJaw</mtext><mo>=</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>0.92</mn><mo separator="true">,</mo><mtext>jawOpen</mtext><mo>×</mo><mn>1.25</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{effectiveJaw} = \min(0.92, \text{jawOpen} \times 1.25)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">effectiveJaw</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord">0.92</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text"><span class="mord">jawOpen</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1.25</span><span class="mclose">)</span></span></span></span></span></p>
+Targets <code>viseme_aa</code>, <code>mouthOpen</code>, <code>viseme_O</code>, <code>viseme_U</code> with natural phonetic syllabic open/close decay cycles.</li>
+</ul>
+<h3 id="d.-voice-call-holographic-particle-gyroscope" tabindex="-1">D. Voice Call Holographic Particle Gyroscope</h3>
+<p>In Voice Call mode (<code>!isVideoMode</code>), [MansakhaCallModal.js](file:///c:/Users/krish/Documents/RMK%20Engineering%20College/SIH-2026/Mansakha/frontend/src/user/chat/components/MansakhaCallModal.js) renders a 3D hologram:</p>
+<ul>
+<li><strong>Aspect Ratio Locking</strong>: Styled with <code>aspectRatio: 1</code>, rendered with high-DPI canvas buffer (<code>canvas.width = cssSize * dpr</code>, <code>ctx.setTransform(dpr, 0, 0, dpr, 0, 0)</code>) to eliminate oval squishing.</li>
+<li><strong>3D Particles</strong>: 160 depth-sorted points rotated along 3 axes (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>X</mi><mo separator="true">,</mo><mi>Y</mi></mrow><annotation encoding="application/x-tex">X, Y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0785em;">X</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.2222em;">Y</span></span></span></span>) using 3D perspective projection (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>scale</mtext><mo>=</mo><mfrac><mn>250</mn><mrow><mn>250</mn><mo>+</mo><msub><mi>z</mi><mn>2</mn></msub></mrow></mfrac></mrow><annotation encoding="application/x-tex">\text{scale} = \frac{250}{250 + z_2}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord text"><span class="mord">scale</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2902em;vertical-align:-0.4451em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">250</span><span class="mbin mtight">+</span><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.044em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3173em;"><span style="top:-2.357em;margin-left:-0.044em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">250</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4451em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span>) and glow shadows.</li>
+<li><strong>Orbital Gyroscope Rings</strong>: 3 planetary rings rotating at contrasting angular velocities with elliptical 3D tilt.</li>
+<li><strong>Soundwave Visualizer</strong>: 28-bar animated audio frequency equalizer oscillating with speaking and breathing frequencies.</li>
+</ul>
+<hr>
+<h2 id="5.-multimodal-distress-scoring-%26-threshold-mathematics" tabindex="-1">5. Multimodal Distress Scoring &amp; Threshold Mathematics</h2>
+<h3 id="multi-signal-fusion-formulas" tabindex="-1">Multi-Signal Fusion Formulas</h3>
+<h4 id="case-a%3A-multimodal-input-(voice-%2B-text-provided)-%E2%80%94-phase-2-weights" tabindex="-1">Case A: Multimodal Input (Voice + Text Provided) — Phase 2 Weights</h4>
+<p>When the victim records audio, acoustic vocal stress is extracted:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>Score</mtext><mo>=</mo><mrow><mo fence="true">(</mo><mn>0.40</mn><mo>⋅</mo><msub><mtext>Sentiment</mtext><mtext>raw</mtext></msub><mo>+</mo><mn>0.30</mn><mo>⋅</mo><mtext>VoiceStress</mtext><mo>+</mo><mn>0.20</mn><mo>⋅</mo><mtext>Emotion</mtext><mo>+</mo><mn>0.10</mn><mo>⋅</mo><mtext>EngagementDrop</mtext><mo fence="true">)</mo></mrow><mo>×</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">\text{Score} = \left( 0.40 \cdot \text{Sentiment}_{\text{raw}} + 0.30 \cdot \text{VoiceStress} + 0.20 \cdot \text{Emotion} + 0.10 \cdot \text{EngagementDrop} \right) \times 100
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">Score</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord">0.40</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord text"><span class="mord">Sentiment</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">raw</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.30</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">VoiceStress</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.20</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">Emotion</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.10</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">EngagementDrop</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></span></p>
+<h4 id="case-b%3A-text-only-input-(no-audio)-%E2%80%94-phase-1-weights" tabindex="-1">Case B: Text-Only Input (No Audio) — Phase 1 Weights</h4>
+<p>When no audio is attached:</p>
+<p><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>Score</mtext><mo>=</mo><mrow><mo fence="true">(</mo><mn>0.50</mn><mo>⋅</mo><msub><mtext>Sentiment</mtext><mtext>raw</mtext></msub><mo>+</mo><mn>0.35</mn><mo>⋅</mo><mtext>Emotion</mtext><mo>+</mo><mn>0.15</mn><mo>⋅</mo><mtext>EngagementDrop</mtext><mo fence="true">)</mo></mrow><mo>×</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">\text{Score} = \left( 0.50 \cdot \text{Sentiment}_{\text{raw}} + 0.35 \cdot \text{Emotion} + 0.15 \cdot \text{EngagementDrop} \right) \times 100
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord text"><span class="mord">Score</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord">0.50</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord text"><span class="mord">Sentiment</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">raw</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.35</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">Emotion</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord">0.15</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord text"><span class="mord">EngagementDrop</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></span></p>
+<h3 id="risk-tiers-%26-clinical-response-matrix" tabindex="-1">Risk Tiers &amp; Clinical Response Matrix</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align:center">Distress Score (<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mo>−</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">0-100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span>)</th>
+<th style="text-align:center">Risk Classification</th>
+<th style="text-align:left">System Behavior</th>
+<th style="text-align:left">Statutory Protocol</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:center"><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn><mo>−</mo><mn>29</mn></mrow><annotation encoding="application/x-tex">0 - 29</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">29</span></span></span></span></strong></td>
+<td style="text-align:center"><strong>Low</strong></td>
+<td style="text-align:left">Normal dashboard display, self-guided journaling and wellness tips.</td>
+<td style="text-align:left">Standard bi-weekly follow-up.</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>30</mn><mo>−</mo><mn>59</mn></mrow><annotation encoding="application/x-tex">30 - 59</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">30</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">59</span></span></span></span></strong></td>
+<td style="text-align:center"><strong>Moderate</strong></td>
+<td style="text-align:left">Nudge periodic check-ins, suggest wellness exercises, notify counsellor.</td>
+<td style="text-align:left">Routine counsellor review.</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>60</mn><mo>−</mo><mn>79</mn></mrow><annotation encoding="application/x-tex">60 - 79</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">60</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">79</span></span></span></span></strong></td>
+<td style="text-align:center"><strong>High</strong></td>
+<td style="text-align:left">High-risk alert created for assigned Counsellor; 14566 helpline appended.</td>
+<td style="text-align:left">Mandatory counselling session scheduling within 48h.</td>
+</tr>
+<tr>
+<td style="text-align:center"><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>80</mn><mo>−</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">80 - 100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">80</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></strong></td>
+<td style="text-align:center"><strong>Critical (SOS)</strong></td>
+<td style="text-align:left">Immediate urgent alert dispatched to Counsellor and District Admin; SOS modal triggered.</td>
+<td style="text-align:left">Emergency intervention: Protection Officer &amp; DLSA legal aid alerted.</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="6.-ai-conversational-%26-clinical-guardrails-(boundaries)" tabindex="-1">6. AI Conversational &amp; Clinical Guardrails (Boundaries)</h2>
+<h3 id="1.-clinical-%26-medical-boundaries" tabindex="-1">1. Clinical &amp; Medical Boundaries</h3>
+<ul>
+<li><strong>No Clinical Diagnoses</strong>: Mansakha is an emotional companion, not a licensed physician or psychiatrist. It never diagnoses disorders (e.g. PTSD, BPD) or prescribes medication.</li>
+<li><strong>Supportive Bridge</strong>: Flagged distress cases are routed directly to assigned human counsellors.</li>
+</ul>
+<h3 id="2.-legal-%26-statutory-boundaries" tabindex="-1">2. Legal &amp; Statutory Boundaries</h3>
+<ul>
+<li><strong>No Cross-Examination</strong>: Victims of caste atrocities often face traumatic institutional friction. Mansakha <strong>never</strong> interrogates, demands evidence, asks for proof, or challenges incident timelines.</li>
+<li><strong>No Authoritative Legal Advice</strong>: Does not guarantee case outcomes or replace official DLSA legal representatives.</li>
+</ul>
+<h3 id="3.-conversational-persona-boundaries" tabindex="-1">3. Conversational Persona Boundaries</h3>
+<ul>
+<li><strong>Break the Interrogation Trap</strong>: Never ends every message with a question; validates feelings and sits in silence/calm reflection.</li>
+<li><strong>Eliminate Clichés &amp; Toxic Positivity</strong>: Forbids hollow scripts like <em>&quot;I hear you...&quot;</em> or fake optimism.</li>
+<li><strong>Strict Turn Conciseness</strong>: 1–2 short spoken sentences in live calls; 2–3 sentences in text chat.</li>
+<li><strong>Language Uniformity</strong>: Answers strictly in the victim's language (English, Hindi, Tamil, Telugu, etc.).</li>
+</ul>
+<h3 id="4.-safety-%26-emergency-escalation-protocol" tabindex="-1">4. Safety &amp; Emergency Escalation Protocol</h3>
+<ul>
+<li><strong>National Atrocity Helpline (14566)</strong>: Appended automatically when severe distress is expressed.</li>
+<li><strong>Separation of Emergency SOS</strong>: Urgent police dispatch remains the sole responsibility of the <strong>Red Emergency Call Button</strong> (<code>GetHelpButton</code>), keeping Mansakha focused purely on therapeutic presence.</li>
+</ul>
+<hr>
+<h2 id="7.-changelog%3A-files-created%2C-modified%2C-and-maintained" tabindex="-1">7. Changelog: Files Created, Modified, and Maintained</h2>
+<h3 id="a.-new-components-%26-modules-(new)" tabindex="-1">A. New Components &amp; Modules (<code>NEW</code>)</h3>
+<ol>
+<li><strong><code>frontend/src/user/chat/components/MansakhaCallModal.js</code></strong>
+<ul>
+<li>Fullscreen WhatsApp-styled voice &amp; video call modal with 1:1 circular 3D hologram particle sphere, 28-bar equalizer soundbars, and full-screen 3D avatar integration.</li>
+</ul>
+</li>
+<li><strong><code>frontend/src/user/chat/components/Avatar3DController.js</code></strong>
+<ul>
+<li>Three.js WebGL controller supporting GLTF models, bone kinematics, affective emotional poses, and lip-sync.</li>
+</ul>
+</li>
+<li><strong><code>frontend/public/models/casual_male.glb</code></strong>
+<ul>
+<li>Official 3D male avatar model with modern brown hair, trimmed beard, and blue polo shirt.</li>
+</ul>
+</li>
+<li><strong><code>frontend/assets/avatar_male_counsellor.png</code></strong>
+<ul>
+<li>Canonical 2D reference artwork for the male counsellor.</li>
+</ul>
+</li>
+<li><strong><code>backend/src/ai/djangoAiClient.js</code></strong>
+<ul>
+<li>REST bridge connecting Node.js Express to Django AI (<code>http://127.0.0.1:8000</code>).</li>
+</ul>
+</li>
+<li><strong><code>Mansakha/AI-backend/</code></strong>
+<ul>
+<li>Independent Django REST API environment hosting faster-whisper, PyTorch, and scikit-learn models.</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3 id="b.-modified-files-(modified)" tabindex="-1">B. Modified Files (<code>MODIFIED</code>)</h3>
+<ol>
+<li><strong><code>frontend/src/user/shared/components/AiChatButton.js</code></strong>
+<ul>
+<li>Updated route detection to hide FAB strictly on <code>/MainTabs/Chatbot</code> while maintaining universal visibility on <code>Home</code> and other screens.</li>
+</ul>
+</li>
+<li><strong><code>frontend/src/user/chat/screens/ChatScreen.js</code></strong>
+<ul>
+<li>Integrated <code>MansakhaCallModal</code>, voice note recording with Whisper STT &amp; voice stress analysis, and turn logging.</li>
+</ul>
+</li>
+<li><strong><code>backend/src/ai/ai.js</code></strong>
+<ul>
+<li>Integrated <code>analyzeMultimodalViaDjango</code> and enabled Phase 2 multimodal scoring.</li>
+</ul>
+</li>
+<li><strong><code>backend/src/ai/scoring.js</code></strong>
+<ul>
+<li>Implemented dynamic weights and regression trend forecasting.</li>
+</ul>
+</li>
+<li><strong><code>backend/src/ai/ollama.js</code></strong>
+<ul>
+<li>Complete migration from cloud Gemini API to local <code>gemma3:4b</code>.</li>
+</ul>
+</li>
+<li><strong><code>backend/src/ai/gemini.js</code></strong>
+<ul>
+<li>Seamless rerouting of all legacy cloud calls to local Ollama.</li>
+</ul>
+</li>
+<li><strong><code>backend/src/user/routes/user.routes.js</code></strong>
+<ul>
+<li>Multi-signal check-in processing and distress score logging.</li>
+</ul>
+</li>
+</ol>
+<hr>
+<h3 id="c.-untouched-%26-preserved-components-(preserved)" tabindex="-1">C. Untouched &amp; Preserved Components (<code>PRESERVED</code>)</h3>
+<ol>
+<li><strong><code>frontend/src/user/shared/components/GetHelpButton.js</code> &amp; <code>TopRightActions.js</code></strong>
+<ul>
+<li>Dedicated red emergency call button in header preserved exclusively for police emergency dispatch (PCR 100) and urgent alerts.</li>
+</ul>
+</li>
+</ol>
+
+    </div>
+</body>
+</html>

@@ -17,11 +17,13 @@ const router = express.Router();
 // a future separate AI service would call, guarded by a shared secret instead of a
 // user JWT since no human account should ever be able to reach it.
 router.post('/analyze-interaction', requireInternalSecret, async (req, res) => {
-  const { userId, text } = req.body;
-  if (!userId || !text) return fail(res, 'userId and text are required', 400);
+  const { userId, text, audioBase64 } = req.body;
+  if (!userId || (!text && !audioBase64)) {
+    return fail(res, 'userId and either text or audioBase64 are required', 400);
+  }
 
   try {
-    const result = await analyzeInteraction(userId, text);
+    const result = await analyzeInteraction(userId, text || '', { audioBase64 });
     return ok(res, result);
   } catch (err) {
     return fail(res, `AI analysis failed: ${err.message}`, 502);
@@ -44,7 +46,7 @@ router.post('/analyze-interaction', requireInternalSecret, async (req, res) => {
 // call gets exactly the same "assign + notify" treatment as prolonged
 // inactivity, just triggered immediately instead of on the next scan tick.
 router.post('/ivrs-call-result', requireInternalSecret, async (req, res) => {
-  const { userId, answered, durationSeconds, transcriptText } = req.body;
+  const { userId, answered, durationSeconds, transcriptText, audioBase64 } = req.body;
   if (!userId || typeof answered !== 'boolean') {
     return fail(res, 'userId and answered (boolean) are required', 400);
   }
@@ -63,21 +65,31 @@ router.post('/ivrs-call-result', requireInternalSecret, async (req, res) => {
     }
   }
 
-  // Ollama-only, per how this feature was specced - a transcript (once the
-  // real IVRS integration can actually deliver one) gets scored the exact
-  // same way a chat-log threshold-crossing or a 105-answer weekly check-in
-  // does: one more distress_scores row, no separate table.
   let scored = false;
   let scoreValue = null;
   let riskLevel = null;
-  if (typeof transcriptText === 'string' && transcriptText.trim()) {
+  let effectiveTranscript = transcriptText;
+
+  // If audioBase64 is provided, run full multimodal analysis (Voice Stress + STT)
+  if (audioBase64 || (typeof effectiveTranscript === 'string' && effectiveTranscript.trim())) {
     try {
-      const analysis = await analyzeCallTranscript(transcriptText);
-      const { interactionId } = await recordInteraction({ userId, channelName: 'IVRS', transcriptText });
-      const result = await recordOllamaDistressScore(userId, interactionId, analysis, 'ollama-ivrs-v1');
+      const fullAnalysis = await analyzeInteraction(userId, effectiveTranscript || '', { audioBase64 });
+      const finalTranscript = fullAnalysis.transcript || effectiveTranscript || 'IVRS audio recording';
+      const { interactionId } = await recordInteraction({ userId, channelName: 'IVRS', transcriptText: finalTranscript });
+      
+      const analysisPayload = {
+        score: fullAnalysis.scoreValue,
+        sentiment: fullAnalysis.sentimentRaw,
+        emotion: fullAnalysis.emotion,
+        voiceStress: fullAnalysis.voiceStressScore || 0,
+        reason: fullAnalysis.reason,
+        suggestedIntervention: fullAnalysis.suggestedInterventionTypeId,
+      };
+
+      const result = await recordOllamaDistressScore(userId, interactionId, analysisPayload, 'multimodal-ivrs-v2');
       await applyStressResponse(userId, result.scoreId, result.riskLevel);
       scored = true;
-      scoreValue = analysis.score;
+      scoreValue = fullAnalysis.scoreValue;
       riskLevel = result.riskLevel;
     } catch (err) {
       if (!(err instanceof PipelineError)) console.error('ivrs-call-result: transcript scoring failed:', err.message);

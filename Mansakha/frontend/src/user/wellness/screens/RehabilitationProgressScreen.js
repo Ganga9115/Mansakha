@@ -25,7 +25,7 @@ function getTimelineStatusMeta(status) {
       return { bg: '#E6F4EA', color: '#1E8E3E', icon: 'check-circle', label: 'Completed' };
     case 'In Progress':
     case 'Open':
-      return { bg: '#EDE8F7', color: '#7C5CBF', icon: 'clock', label: 'In Progress' };
+      return { bg: '#E8F0FE', color: '#1A73E8', icon: 'clock', label: 'In Progress' };
     default:
       return { bg: '#F1F5F9', color: '#64748B', icon: 'clock', label: 'Pending' };
   }
@@ -312,7 +312,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.md,
-    backgroundColor: '#EDE8F7',
+    backgroundColor: '#E8F0FE',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: radius.md,
-    backgroundColor: '#EDE8F7',
+    backgroundColor: '#E8F0FE',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -424,12 +424,12 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   timelineIconCompleted: {
-    backgroundColor: '#7C5CBF',
-    borderColor: '#7C5CBF',
+    backgroundColor: '#1A73E8',
+    borderColor: '#1A73E8',
   },
   timelineIconInProgress: {
-    backgroundColor: '#EDE8F7',
-    borderColor: '#7C5CBF',
+    backgroundColor: '#E8F0FE',
+    borderColor: '#1A73E8',
   },
   timelineLine: {
     width: 2,
@@ -507,7 +507,7 @@ const styles = StyleSheet.create({
   infoBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3EFFE',
+    backgroundColor: '#E8F0FE',
     borderRadius: radius.md,
     padding: spacing.md,
     gap: spacing.md,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   infoBannerText: {
     ...typography.caption,
     fontSize: 11,
-    color: '#4A3070',
+    color: '#1A73E8',
     flex: 1,
     lineHeight: 16,
   },

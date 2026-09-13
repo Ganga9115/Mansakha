@@ -50,11 +50,14 @@ function computeDistressScore(sentimentRaw, voiceStress, emotion, engagementDelt
   const emotionNorm = clamp(emotion, 0, 1);
   const engagementNorm = clamp(engagementDelta, 0, 1);
 
+  // Automatically activate Phase 2 weights when voice stress analytics is active
+  const activeWeights = (weights === PHASE_1_WEIGHTS && voiceStress > 0) ? PHASE_2_WEIGHTS : weights;
+
   const weighted =
-    weights.sentiment * sentimentNorm +
-    weights.voiceStress * voiceStressNorm +
-    weights.emotion * emotionNorm +
-    weights.engagement * engagementNorm;
+    activeWeights.sentiment * sentimentNorm +
+    activeWeights.voiceStress * voiceStressNorm +
+    activeWeights.emotion * emotionNorm +
+    activeWeights.engagement * engagementNorm;
 
   const scoreValue = clamp(Math.round(weighted * 100), 0, 100);
 

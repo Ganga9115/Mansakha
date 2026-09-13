@@ -299,24 +299,18 @@ router.get('/dashboard', async (req, res) => {
 // feed (see ai/ai.js's analyzeInteractionFromClientAi).
 router.post('/checkin', async (req, res) => {
   const userId = req.auth.userId;
-  const { channel, responses, aiAnalysis } = req.body;
-  if (!channel || !Array.isArray(responses) || responses.length === 0) {
-    return fail(res, 'channel and a non-empty responses[] are required', 400);
+  const { channel, responses, aiAnalysis, audioBase64 } = req.body;
+  if (!channel || (!Array.isArray(responses) && !audioBase64)) {
+    return fail(res, 'channel and responses[] or audioBase64 are required', 400);
   }
-  if (
-    !aiAnalysis ||
-    typeof aiAnalysis.sentiment !== 'number' ||
-    typeof aiAnalysis.emotion !== 'number' ||
-    typeof aiAnalysis.summary !== 'string' ||
-    !aiAnalysis.summary.trim()
-  ) {
-    return fail(res, 'aiAnalysis (sentiment, emotion, summary) is required', 400);
+  const text = Array.isArray(responses) ? responses.join(' ') : '';
+  if (!text && !audioBase64) {
+    return fail(res, 'responses[] or audioBase64 is required', 400);
   }
-  const text = responses.join(' ');
 
   let interactionId;
   try {
-    ({ interactionId } = await recordInteraction({ userId, channelName: channel, transcriptText: text }));
+    ({ interactionId } = await recordInteraction({ userId, channelName: channel, transcriptText: text || 'Voice check-in' }));
   } catch (err) {
     if (err instanceof PipelineError) return fail(res, err.message, err.status);
     throw err;
@@ -324,7 +318,13 @@ router.post('/checkin', async (req, res) => {
 
   let analysis;
   try {
-    analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis);
+    if (audioBase64) {
+      analysis = await analyzeInteraction(userId, text, { audioBase64 });
+    } else if (aiAnalysis && typeof aiAnalysis.sentiment === 'number') {
+      analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis);
+    } else {
+      analysis = await analyzeInteraction(userId, text);
+    }
   } catch (err) {
     return fail(res, `Check-in recorded, but analysis failed: ${err.message}`, 502);
   }

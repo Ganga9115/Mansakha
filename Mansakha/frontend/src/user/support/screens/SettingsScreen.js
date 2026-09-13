@@ -586,7 +586,7 @@ const styles = StyleSheet.create({
 
   /* Profile Hero Banner */
   heroBox: {
-    backgroundColor: '#EDE8F7',
+    backgroundColor: '#EDF5FC',
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
@@ -624,7 +624,7 @@ const styles = StyleSheet.create({
   },
   heroTitle: {
     ...typography.bodyStrong,
-    color: '#3A2458',
+    color: '#2B4A6F',
     fontSize: 18,
     fontWeight: '700',
   },
@@ -634,7 +634,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   badgeCheckCircle: {
-    backgroundColor: '#7C5CBF',
+    backgroundColor: '#5298D4',
     borderRadius: radius.pill,
     width: 24,
     height: 24,
@@ -668,7 +668,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.md,
-    backgroundColor: '#EDE8F7',
+    backgroundColor: '#EBF3FA',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,
@@ -696,8 +696,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   docketPillActive: {
-    backgroundColor: '#4A3070',
-    borderColor: '#4A3070',
+    backgroundColor: '#2D6296',
+    borderColor: '#2D6296',
   },
   docketPillInactive: {
     backgroundColor: '#F8FAFC',
@@ -723,7 +723,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginTop: spacing.md,
     borderWidth: 1,
-    borderColor: '#EDE8F7',
+    borderColor: '#EBF3FA',
   },
   docketDetailGridMobile: {
     paddingHorizontal: spacing.xs,
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   },
   fieldValueBold: {
     ...typography.bodyStrong,
-    color: '#3A2458',
+    color: '#2B4A6F',
     fontSize: 14,
     fontWeight: '700',
   },
@@ -781,7 +781,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.md,
-    backgroundColor: '#EDE8F7',
+    backgroundColor: '#EBF3FA',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm,

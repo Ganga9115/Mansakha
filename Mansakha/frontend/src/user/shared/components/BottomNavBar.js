@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   activeNavLabel: {
-    color: colors.primary || '#7C5CBF',
+    color: colors.primary || '#3B82F6',
     fontWeight: '700',
   },
   inactiveNavLabel: {
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
     bottom: -2,
     width: 16,
     height: 3,
-    backgroundColor: colors.primary || '#7C5CBF',
+    backgroundColor: colors.primary || '#3B82F6',
     borderRadius: 2,
   },
 });

@@ -279,11 +279,11 @@ const styles = StyleSheet.create({
   journalBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F3EFFE',
+    backgroundColor: '#EFF6FF',
     borderRadius: radius.xl,
     padding: spacing.xl,
     borderWidth: 1,
-    borderColor: '#DDD0F5',
+    borderColor: '#DBEAFE',
     marginBottom: spacing.xl,
     position: 'relative',
     overflow: 'hidden',

@@ -14,8 +14,8 @@ import { topBarHeight } from '../theme/layout';
 const SIDEBAR = {
   bg: colors.sidebarBg,       // #3D5A80
   active: colors.sidebarAccent, // #519BCE
-  textInactive: '#C4B5E8',    // Muted lavender for inactive sidebar items
-  tagline: '#C4B5E8',         // Muted lavender for sidebar tagline
+  textInactive: '#C7D9F0',    // Tailwind blue-100 equivalent
+  tagline: '#BFDBFE',         // Tailwind blue-200 equivalent
   textActive: colors.sidebarTextActive, // #FFFFFF
   divider: 'rgba(255,255,255,0.15)',
   pressedOverlay: 'rgba(255,255,255,0.1)',

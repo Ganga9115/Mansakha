@@ -29,23 +29,15 @@ export default function AiChatButton() {
 
   const currentRouteName = useNavigationState(state => {
     if (!state) return null;
-    const currentRoute = state.routes[state.index];
-    // If it's a nested navigator (like the Drawer or Tab), get its active route
-    if (currentRoute.state && currentRoute.state.routes) {
-      return currentRoute.state.routes[currentRoute.state.index].name;
+    let r = state.routes[state.index];
+    while (r && r.state && r.state.routes && r.state.index !== undefined) {
+      r = r.state.routes[r.state.index];
     }
-    return currentRoute.name;
+    return r ? r.name : null;
   });
 
-  // Also hidden on the counsellor chat screen - registered under two route
-  // names depending on tier/entry point ('mycounsellor' for the phone tab
-  // bar and desktop drawer item, 'CounsellorChat' for the desktop drawer's
-  // second entry and the stack-pushed path from Home's quick actions). That
-  // screen has its own composer with a Send button pinned to the same
-  // bottom-right corner this FAB occupies, so the two visually overlapped
-  // and the FAB intercepted taps meant for Send (confirmed live via
-  // automated testing).
-  if (currentRouteName === 'Chatbot' || currentRouteName === 'CounsellorChat' || currentRouteName === 'mycounsellor') {
+  // Only remove from the AI Chatbot screen, visible everywhere else
+  if (currentRouteName === 'Chatbot') {
     return null;
   }
 

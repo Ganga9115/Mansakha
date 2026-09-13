@@ -1,12 +1,11 @@
-
 export const colors = {
   // Brand Palette
-  primary: '#7C5CBF',        // Main soft-purple accent / CTA color
-  primaryDark: '#4A3070',    // Deep purple for headings & primary buttons
-  primaryLight: '#F0EAFB',   // Very soft lavender tint for light card backgrounds & icon containers
+  primary: '#519BCE',        // Main soft-blue accent / CTA color
+  primaryDark: '#3D5A80',    // Dark navy-blue for headings & primary buttons
+  primaryLight: '#EBF4FA',   // Very soft sky-blue tint for light card backgrounds & icon containers
   onPrimary: '#FFFFFF',      // White text/icons on dark or primary surfaces
 
-  accent: '#7C5CBF',        // Secondary accent color
+  accent: '#519BCE',        // Secondary accent color
 
   // Neutral Colors
   background: '#F8F9FA',    // Soft off-white screen background
@@ -15,7 +14,7 @@ export const colors = {
   borderStrong: '#9D9D9D',  // Mid-gray for distinct borders & inputs
 
   // Text Colors
-  textPrimary: '#4A3070',   // Deep purple for titles & bold text
+  textPrimary: '#3D5A80',   // Dark navy-blue for titles & bold text
   textSecondary: '#9D9D9D', // Gray for subtitles, captions, & placeholders
 
   // Risk Levels (Standard Semantic Colors)
@@ -34,15 +33,15 @@ export const colors = {
   warning: '#F59E0B',
   warningLight: '#FFFBEB',
   dangerLight: '#FEE2E2',
-  infoLight: '#F0EAFB',
+  infoLight: '#EBF4FA',
 
   // Focus & Accessibility Rings
-  focusRing: '#7C5CBF',
+  focusRing: '#519BCE',
   focusRingWidth: 2,
 
   // Navigation & Shell
-  sidebarBg: '#4A3070',
-  sidebarText: '#C4B5E8',
+  sidebarBg: '#3D5A80',
+  sidebarText: '#9D9D9D',
   sidebarTextActive: '#FFFFFF',
-  sidebarAccent: '#7C5CBF',
+  sidebarAccent: '#519BCE',
 };

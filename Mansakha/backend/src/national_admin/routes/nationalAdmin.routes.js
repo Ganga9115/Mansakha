@@ -9,7 +9,7 @@ const { requireJurisdiction } = require('../../core/middleware/requireJurisdicti
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { createUser, updateUser, ProvisioningError } = require('../../user/services/userProvisioning');
-const { generateJurisdictionAnalytics } = require('../../ai/gemini');
+const { generateJurisdictionAnalytics } = require('../../ai/ollama');
 const { predictEscalationRiskBatch } = require('../../ai/scoring');
 const { resolveDateWindow, bucketize } = require('../../core/services/reportBuckets');
 // Detailed PDF Reports - National tier only ever computes/renders its own
