@@ -16,6 +16,8 @@
     "seed:police-stations": "node src/core/db/seedPoliceStations.js",
     "seed:coordinators": "node src/core/db/seedCoordinators.js",
     "seed:rehab-officers": "node src/core/db/seedRehabOfficers.js",
+    "seed:counsellors": "node src/core/db/seedCounsellors.js",
+    "seed:data-operators": "node src/core/db/seedDataOperators.js",
     "seed:cases": "node src/core/db/seedCases.js"
   },
   "dependencies": {

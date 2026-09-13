@@ -30,14 +30,14 @@ export default function CounsellorDashboard() {
 
   return (
     <StaffLayout title="Counsellor Dashboard">
-      <div className="space-y-4 bg-[#f8fafc] p-3 min-h-screen">
+      <div className="space-y-6">
 
         {countsError && (
           <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-xl">{countsError}</div>
         )}
 
         {/* METRIC CARDS GRID */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3 sm:gap-4">
           <MetricCard
             label="TOTAL CASES"
             count={countsLoading ? '...' : counts?.total ?? 0}
@@ -67,20 +67,20 @@ export default function CounsellorDashboard() {
             label="PREDICTED ESCALATIONS"
             count={countsLoading ? '...' : counts?.predictedEscalations ?? 0}
             hint="Trending toward a higher risk tier within 14 days"
-            className="col-span-2 sm:col-span-1"
+            className="col-span-2 sm:col-span-3 md:col-span-2 lg:col-span-1"
           />
         </div>
 
         {/* RECENT ALERTS SECTION */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
-          <div className="flex justify-between items-start mb-6">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-4 sm:p-6">
+          <div className="flex flex-col xs:flex-row xs:items-center justify-between gap-3 mb-5">
             <div>
               <h3 className="font-bold text-gray-900 text-base">Recent Alerts</h3>
               <p className="text-xs text-gray-400 mt-0.5">Latest alerts that need your attention</p>
             </div>
             <button 
               onClick={() => navigate('/counsellor/alerts')} 
-              className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer"
+              className="self-start xs:self-auto px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer"
             >
               View All Alerts
             </button>
@@ -95,7 +95,7 @@ export default function CounsellorDashboard() {
               {(alertsData.alerts || []).slice(0, 6).map((a) => (
                 <div 
                   key={a.alertId} 
-                  className="py-3.5 flex items-center justify-between"
+                  className="py-3.5 flex flex-col xs:flex-row xs:items-center justify-between gap-2"
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-gray-900 text-sm">
@@ -103,7 +103,7 @@ export default function CounsellorDashboard() {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 self-end xs:self-auto">
                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${STATUS_STYLE[a.status] || 'bg-gray-100 text-gray-600'}`}>
                       {a.status}
                     </span>
@@ -118,7 +118,7 @@ export default function CounsellorDashboard() {
         </div>
 
         {/* SCHEDULED COUNSELLINGS SECTION */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-5">
+        <div className="bg-white rounded-2xl border border-gray-100 shadow-xs p-4 sm:p-6">
           <div className="mb-5">
             <h3 className="font-bold text-gray-900 text-base">Scheduled Counsellings</h3>
             <p className="text-xs text-gray-400 mt-0.5">Manage your upcoming counselling sessions</p>
@@ -136,7 +136,7 @@ export default function CounsellorDashboard() {
           ) : (
             <div className="divide-y divide-gray-100">
               {scheduledData.sessions.map((s) => (
-                <div key={s.sessionId} className="py-3.5 flex items-center justify-between text-xs">
+                <div key={s.sessionId} className="py-3.5 flex flex-col xs:flex-row xs:items-center justify-between gap-1 text-xs">
                   <span className="font-bold text-gray-800 text-sm">Case {s.userId.slice(0, 8)}</span>
                   <span className="text-gray-500 font-medium">{new Date(s.scheduledAt).toLocaleString()}</span>
                 </div>
@@ -152,11 +152,11 @@ export default function CounsellorDashboard() {
 
 function MetricCard({ label, count, hint, className = '' }) {
   return (
-    <div className={`bg-white p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-center items-center text-center ${className}`} title={hint}>
-      <span className="text-[10px] font-bold text-gray-500 tracking-wider uppercase max-w-[100px] leading-snug mb-2">
+    <div className={`bg-white p-3 sm:p-4 rounded-2xl border border-gray-100 shadow-xs flex flex-col justify-center items-center text-center ${className}`} title={hint}>
+      <span className="text-[10px] font-bold text-gray-500 tracking-wider uppercase leading-snug mb-1.5 px-1">
         {label}
       </span>
-      <div className="text-2xl font-black text-gray-900">{count}</div>
+      <div className="text-xl sm:text-2xl font-black text-gray-900">{count}</div>
     </div>
   );
 }

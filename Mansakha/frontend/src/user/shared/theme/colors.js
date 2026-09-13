@@ -20,9 +20,10 @@ export const colors = {
 
   // Risk Levels (Standard Semantic Colors)
   low: '#10B981',
-  moderate: '#F59E0B',
-  high: '#EF4444',
-  danger: '#DC2626',
+  moderate: '#F59E0B',      // Original warm amber yellow
+  high: '#EA580C',          // Dark Orange
+  critical: '#B91C1C',      // Dark Red / Crimson
+  danger: '#B91C1C',        // Dark Red / Crimson
 
   // Utility Colors
   white: '#FFFFFF',

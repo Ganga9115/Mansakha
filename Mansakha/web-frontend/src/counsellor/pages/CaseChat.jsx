@@ -293,30 +293,30 @@ export default function CaseChat() {
 
   return (
     <StaffLayout title={`Chat: ${userId ? userId.slice(0, 8) : ''}`}>
-      <div className="h-[calc(100vh-8rem)] flex flex-col bg-white rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+      <div className="h-[calc(100vh-5.5rem)] sm:h-[calc(100vh-7.5rem)] flex flex-col bg-white rounded-xl sm:rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
         
         {/* ── Header — white background, matches victim app ── */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-white shrink-0 shadow-sm">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-100 bg-white shrink-0 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => navigate(`/counsellor/case-detail/${userId}`)}
-              className="p-1.5 -ml-1 rounded-full hover:bg-gray-100 transition text-gray-600"
+              className="p-1 -ml-1 rounded-full hover:bg-gray-100 transition text-gray-600 shrink-0"
               aria-label="Back to Case File"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
             </button>
-            <div className="w-10 h-10 rounded-full bg-[#EBF3FA] border border-[#CBD5E1] flex items-center justify-center shrink-0">
-              <User size={20} className="text-[#3D5A80]" />
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#EBF3FA] border border-[#CBD5E1] flex items-center justify-center shrink-0">
+              <User size={18} className="text-[#3D5A80] sm:w-5 sm:h-5" />
             </div>
-            <div className="flex flex-col">
-              <h1 className="text-sm font-bold text-[#0F172A] leading-tight">
+            <div className="flex flex-col min-w-0">
+              <h1 className="text-xs sm:text-sm font-bold text-[#0F172A] leading-tight truncate">
                 {data?.userName || 'User Support'}
               </h1>
-              <p className="text-xs text-[#64748B]">Private, opted-in support</p>
+              <p className="text-[10px] sm:text-xs text-[#64748B] truncate">Private, opted-in support</p>
             </div>
           </div>
 
-          {/* ── Green call button — always visible ── */}
+          {/* ── Call button — always visible ── */}
           <button
             onClick={() => {
               if (data?.phone) {
@@ -326,26 +326,26 @@ export default function CaseChat() {
               }
             }}
             type="button"
-            className="w-10 h-10 rounded-full border-2 border-[#7C5CBF] bg-[#F7F4FD] flex items-center justify-center text-[#7C5CBF] hover:bg-[#EDE8F7] active:bg-[#DDD0F5] transition shrink-0 shadow-sm"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-[#7C5CBF] bg-[#F7F4FD] flex items-center justify-center text-[#7C5CBF] hover:bg-[#EDE8F7] active:bg-[#DDD0F5] transition shrink-0 shadow-sm"
             title={data?.phone ? `Call ${data.userName || 'User'}` : 'No phone number on file'}
             aria-label="Call User"
           >
-            <Phone size={18} />
+            <Phone size={15} className="sm:w-[18px] sm:h-[18px]" />
           </button>
         </div>
 
         {/* ── Scrollable message thread ── */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 space-y-6 no-scrollbar bg-white">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6 no-scrollbar bg-white">
           {loading && !data ? (
             <p className="text-xs text-center text-gray-400 mt-8">Loading messages...</p>
           ) : messageGroups.length === 0 ? (
             <p className="text-xs text-center text-gray-400 mt-8">No messages yet — say hello.</p>
           ) : (
             messageGroups.map((group) => (
-              <div key={group.label} className="space-y-4">
+              <div key={group.label} className="space-y-3 sm:space-y-4">
                 {/* Date badge */}
                 <div className="flex justify-center mb-2">
-                  <span className="bg-white px-4 py-1.5 rounded-full border border-gray-100 shadow-sm text-[11px] font-semibold text-gray-400">
+                  <span className="bg-white px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-gray-100 shadow-sm text-[10px] sm:text-[11px] font-semibold text-gray-400">
                     {group.label}
                   </span>
                 </div>
@@ -358,40 +358,40 @@ export default function CaseChat() {
                   return (
                     <div
                       key={m.messageId}
-                      className={`flex items-end gap-3 ${isUser ? 'justify-start' : 'justify-end'}`}
+                      className={`flex items-end gap-2 sm:gap-3 ${isUser ? 'justify-start' : 'justify-end'}`}
                     >
                       {/* Victim avatar — left, light blue */}
                       {isUser && (
-                        <div className="w-8 h-8 rounded-full bg-[#F0F4F8] flex items-center justify-center shrink-0 mb-6">
-                          <User size={16} className="text-[#3D5A80]" />
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#F0F4F8] flex items-center justify-center shrink-0 mb-5">
+                          <User size={14} className="text-[#3D5A80] sm:w-4 sm:h-4" />
                         </div>
                       )}
 
-                      <div className={`flex flex-col max-w-[70%] ${isUser ? 'items-start' : 'items-end'}`}>
+                      <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[70%] ${isUser ? 'items-start' : 'items-end'}`}>
                         {isVoice ? (
                           <button
                             type="button"
                             onClick={() => handleTogglePlay(m)}
-                            className={`flex items-center gap-3 px-5 py-3 rounded-3xl shadow-sm transition min-w-[170px] ${
+                            className={`flex items-center gap-2 sm:gap-3 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-3xl shadow-sm transition min-w-[150px] sm:min-w-[170px] ${
                               isUser
                                 ? 'bg-white border border-gray-100 text-[#0F172A]'
                                 : 'bg-[#F0F4F8] text-[#1E293B]'
                             }`}
                           >
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'}`}>
-                              {isThisPlaying ? <Pause size={14} /> : <Play size={14} className="ml-1" />}
+                            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'}`}>
+                              {isThisPlaying ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
                             </div>
                             <div className="flex-1 flex items-center gap-0.5 h-4">
                               {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
                                 <span key={idx} className={`w-0.5 rounded-full ${isUser ? 'bg-gray-300' : 'bg-[#3D5A80]/40'}`} style={{ height: `${h}px` }} />
                               ))}
                             </div>
-                            <span className={`text-xs font-medium tabular-nums ${isUser ? 'text-[#0F172A]' : 'text-[#1E293B]'}`}>
+                            <span className={`text-[11px] sm:text-xs font-medium tabular-nums ${isUser ? 'text-[#0F172A]' : 'text-[#1E293B]'}`}>
                               {formatDuration(m.durationSeconds)}
                             </span>
                           </button>
                         ) : (
-                          <div className={`px-5 py-2.5 rounded-3xl shadow-sm text-[15px] leading-relaxed ${
+                          <div className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-2xl sm:rounded-3xl shadow-sm text-sm sm:text-[15px] leading-relaxed break-words ${
                             isUser
                               ? 'bg-white text-[#0F172A] border border-gray-100'
                               : 'bg-[#F0F4F8] text-[#1E293B]'
@@ -400,7 +400,7 @@ export default function CaseChat() {
                           </div>
                         )}
 
-                        <div className="flex items-center gap-1 mt-1.5 px-2">
+                        <div className="flex items-center gap-1 mt-1 px-2">
                           <span className="text-[10px] text-gray-400 font-medium">{formatTime(m.sentAt)}</span>
                           {!isUser && <CheckCircle2 size={11} className="text-[#93C5FD]" />}
                         </div>
@@ -408,8 +408,8 @@ export default function CaseChat() {
 
                       {/* Counsellor avatar — right, dark blue filled */}
                       {!isUser && (
-                        <div className="w-8 h-8 rounded-full bg-[#7CA8D8] flex items-center justify-center shrink-0 text-white mb-6">
-                          <User size={16} />
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#7CA8D8] flex items-center justify-center shrink-0 text-white mb-5">
+                          <User size={14} className="sm:w-4 sm:h-4" />
                         </div>
                       )}
                     </div>
@@ -425,7 +425,7 @@ export default function CaseChat() {
 
         {/* Emoji Grid Popup */}
         {showEmojiPicker && (
-          <div className="bg-white border-t border-gray-200 p-3 max-h-48 overflow-y-auto shrink-0 shadow-lg">
+          <div className="bg-white border-t border-gray-200 p-2 sm:p-3 max-h-48 overflow-y-auto shrink-0 shadow-lg">
             <div className="flex justify-between items-center mb-2 px-1">
               <span className="text-xs font-semibold text-[#64748B]">Select Emoji</span>
               <button
@@ -436,13 +436,13 @@ export default function CaseChat() {
                 <X size={18} />
               </button>
             </div>
-            <div className="grid grid-cols-10 gap-1 text-center">
+            <div className="grid grid-cols-6 xs:grid-cols-8 sm:grid-cols-10 gap-1 text-center">
               {QUICK_EMOJIS.map((emoji, index) => (
                 <button
                   key={index}
                   type="button"
                   onClick={() => handleSelectEmoji(emoji)}
-                  className="p-1.5 text-xl hover:bg-gray-100 rounded transition"
+                  className="p-1 sm:p-1.5 text-lg sm:text-xl hover:bg-gray-100 rounded transition"
                 >
                   {emoji}
                 </button>
@@ -452,8 +452,8 @@ export default function CaseChat() {
         )}
 
         {/* ── Composer bar ── */}
-        <div className="px-4 pb-6 pt-2 bg-white shrink-0">
-          <div className="flex items-center gap-2 bg-white rounded-[28px] border border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] px-4 py-2.5 max-w-5xl mx-auto">
+        <div className="px-2 sm:px-4 pb-3 sm:pb-5 pt-2 bg-white shrink-0 border-t border-gray-100 sm:border-0">
+          <div className="flex items-center gap-1 sm:gap-2 bg-white rounded-[28px] border border-gray-200 sm:border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] px-2 sm:px-4 py-1.5 sm:py-2.5 max-w-5xl mx-auto">
             {isRecording ? (
               <div className="flex-1 flex items-center gap-3 px-2 py-1.5">
                 <button

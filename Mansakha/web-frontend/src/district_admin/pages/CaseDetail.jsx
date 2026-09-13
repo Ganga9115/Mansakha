@@ -5,10 +5,10 @@ import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { useCaseDetail, useCaseNotes } from '../services/hooks';
 
 const RISK_BADGE = {
-  Critical: 'bg-purple-100 text-purple-700',
-  High: 'bg-rose-100 text-rose-700',
+  Critical: 'bg-red-100 text-red-800 border border-red-300',
+  High: 'bg-orange-100 text-orange-800 border border-orange-300',
   Moderate: 'bg-amber-100 text-amber-700',
-  Low: 'bg-emerald-100 text-emerald-700',
+  Low: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
 };
 
 const TREND_META = {

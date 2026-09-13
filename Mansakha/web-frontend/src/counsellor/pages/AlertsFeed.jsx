@@ -72,12 +72,12 @@ export default function AlertsFeed() {
       <div className="space-y-6">
 
         {/* FILTER BAR */}
-        <div className="inline-flex items-center gap-1 bg-white p-1 rounded-xl border border-gray-200 text-xs">
+        <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-xl border border-gray-200 text-xs w-full sm:w-auto max-w-full overflow-x-auto">
           {['All', 'Open', 'Acknowledged', 'Resolved'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition ${filter === f ? 'bg-[#519BCE] text-white' : 'text-gray-600 hover:text-gray-900'}`}
+              className={`px-3 py-1.5 rounded-lg font-medium transition shrink-0 ${filter === f ? 'bg-[#519BCE] text-white' : 'text-gray-600 hover:text-gray-900'}`}
             >
               {f} <span className="ml-1 text-[10px] opacity-75">{counts[f]}</span>
             </button>
@@ -95,15 +95,15 @@ export default function AlertsFeed() {
           ) : alerts.map((item) => (
             <div
               key={item.alertId}
-              className={`bg-white p-4 rounded-xl border transition flex items-center justify-between ${
+              className={`bg-white p-4 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 ${
                 item.source === 'sos' || item.priority === 'urgent' ? 'border-l-4 border-l-rose-600 border-y border-r border-gray-200/80 shadow-sm'
                   : item.status === 'Open' ? 'border-[#519BCE]/60 shadow-sm' : 'border-gray-200/80'
               }`}
             >
-              <div className="flex items-center gap-4">
-                <span className={`w-2 h-2 rounded-full ${item.status === 'Open' ? 'bg-[#519BCE]' : 'bg-transparent'}`}></span>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.status === 'Open' ? 'bg-[#519BCE]' : 'bg-transparent'}`}></span>
                 <div>
-                  <h4 className="font-bold text-sm text-gray-800 flex items-center gap-2">
+                  <h4 className="font-bold text-sm text-gray-800 flex items-center gap-2 flex-wrap">
                     Case {item.userId.slice(0, 8)}
                     {item.priority === 'urgent' && item.source !== 'sos' && (
                       <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-bold uppercase">Urgent</span>
@@ -113,8 +113,8 @@ export default function AlertsFeed() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-6 text-xs">
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${STATUS_STYLE[item.status] || 'bg-gray-100 text-gray-600'}`}>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-xs justify-end pt-2 sm:pt-0 border-t border-gray-50 sm:border-0">
+                <span className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${STATUS_STYLE[item.status] || 'bg-gray-100 text-gray-600'}`}>
                   {item.status}
                 </span>
                 {item.status === 'Open' && (

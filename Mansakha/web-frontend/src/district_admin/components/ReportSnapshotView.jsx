@@ -11,10 +11,10 @@ import React from 'react';
 // the no-shared-imports convention (each tier's own byte-similar copy).
 
 const RISK_BADGE = {
-  Critical: 'text-[#7c3aed] bg-[#f1e9fd]',
-  High: 'text-[#dc4545] bg-[#fce6e6]',
+  Critical: 'text-[#b91c1c] bg-[#fee2e2]',
+  High: 'text-[#ea580c] bg-[#ffedd5]',
   Moderate: 'text-[#b8860b] bg-[#fdf3d9]',
-  Low: 'text-[#519BCE] bg-[#EBF4FA]',
+  Low: 'text-[#059669] bg-[#ecfdf5]',
 };
 
 const RECIPIENT_BADGE = {
@@ -26,10 +26,10 @@ const RECIPIENT_BADGE = {
 function MiniStat({ label, value, tone }) {
   const tones = {
     total: 'text-[#3D5A80] bg-[#EBF4FA] border-[#D6E8F5]',
-    critical: 'text-[#7c3aed] bg-[#f1e9fd] border-[#e4d3fb]',
-    high: 'text-[#dc4545] bg-[#fce6e6] border-[#f7c9c9]',
+    critical: 'text-[#b91c1c] bg-[#fee2e2] border-[#fca5a5]',
+    high: 'text-[#ea580c] bg-[#ffedd5] border-[#fed7aa]',
     moderate: 'text-[#b8860b] bg-[#fdf3d9] border-[#f5e2ad]',
-    low: 'text-[#519BCE] bg-[#EBF4FA] border-[#D6E8F5]',
+    low: 'text-[#059669] bg-[#ecfdf5] border-[#a7f3d0]',
   };
   return (
     <div className={`rounded-lg border px-3 py-2.5 ${tones[tone] || tones.total}`}>
@@ -108,8 +108,8 @@ function JurisdictionRollupTable({ rows, label }) {
             <tr key={r.jurisdictionId}>
               <td className="py-2 pr-3 font-semibold text-gray-700 whitespace-nowrap">{r.name}</td>
               <td className="py-2 pr-3 text-gray-600">{r.totalCases}</td>
-              <td className="py-2 pr-3 text-[#7c3aed] font-semibold">{r.criticalCases}</td>
-              <td className="py-2 pr-3 text-[#dc4545] font-semibold">{r.highRiskCases}</td>
+              <td className="py-2 pr-3 text-[#b91c1c] font-semibold">{r.criticalCases}</td>
+              <td className="py-2 pr-3 text-[#ea580c] font-semibold">{r.highRiskCases}</td>
               <td className="py-2 pr-3 text-[#b8860b] font-semibold">{r.moderateCases}</td>
             </tr>
           ))}

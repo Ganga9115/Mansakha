@@ -376,7 +376,8 @@ export default function SettingsScreen({ navigation }) {
               <Switch
                 disabled={updateCounsellorPreference.isPending}
                 onValueChange={handleToggleCounsellorPreference}
-                thumbColor={colors.white}
+                thumbColor="#F4F3F4"
+                activeThumbColor="#F4F3F4"
                 trackColor={{ false: colors.border, true: colors.primary }}
                 value={localOptedForCounsellor}
               />

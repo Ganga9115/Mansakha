@@ -1,5 +1,5 @@
 // Provisions Counsellor accounts with structured IDs.
-// ID scheme: CON-001, CON-002... (alphabetical by full name)
+// ID scheme: CON-001, CON-002...
 // Email: slug-of-fullname + 3-digit-counter + @mansakha.gov.in
 //   e.g. "Sunita Sharma" → CON-001 → sunitasharma001@mansakha.gov.in
 // Password: Mansakha@2026
@@ -7,7 +7,7 @@
 
 require('dotenv').config();
 const bcrypt = require('bcrypt');
-const { supabase } = require('./supabaseClient');
+const { pool } = require('./pgPool');
 
 const PASSWORD = 'Mansakha@2026';
 const DOMAIN = '@mansakha.gov.in';
@@ -21,21 +21,38 @@ function pad(n, width = 3) {
 }
 
 async function main() {
-  const { data: role } = await supabase.from('roles').select('role_id').eq('role_name', 'Counsellor').single();
-  if (!role) throw new Error('Counsellor role not found');
+  const roleRes = await pool.query("SELECT role_id FROM roles WHERE role_name = 'Counsellor'");
+  if (!roleRes.rows[0]) throw new Error('Counsellor role not found');
+  const roleId = roleRes.rows[0].role_id;
 
-  // Find all existing Counsellor accounts sorted by name for stable ID assignment
-  const { data: allOfficials } = await supabase.from('officials')
-    .select('official_id, full_name, email').order('full_name');
+  const res = await pool.query(`
+    SELECT o.official_id, o.full_name, o.email
+    FROM officials o
+    JOIN official_roles obr ON o.official_id = obr.official_id
+    WHERE obr.role_id = $1 AND obr.revoked_at IS NULL
+  `, [roleId]);
 
-  const { data: conRoles } = await supabase.from('official_roles')
-    .select('official_id').eq('role_id', role.role_id).is('revoked_at', null);
-  const conOfficialIds = new Set(conRoles.map((r) => r.official_id));
-  const counsellors = (allOfficials || []).filter((o) => conOfficialIds.has(o.official_id));
+  const rawCounsellors = res.rows;
+  console.log(`Found ${rawCounsellors.length} existing Counsellor accounts to update.`);
 
-  console.log(`Found ${counsellors.length} existing Counsellor accounts to update.`);
+  // Sort with Sunita Sharma as CON-001 (explicitly specified: CON-001 -> sunitasharma001@mansakha.gov.in),
+  // followed by Nusrat, Riya, Sam, then dummy accounts.
+  const counsellors = rawCounsellors.sort((a, b) => {
+    if (a.full_name?.toLowerCase().includes('sunita')) return -1;
+    if (b.full_name?.toLowerCase().includes('sunita')) return 1;
+    if (a.full_name?.toLowerCase().includes('nusrat')) return -1;
+    if (b.full_name?.toLowerCase().includes('nusrat')) return 1;
+    if (a.full_name?.toLowerCase().includes('riya')) return -1;
+    if (b.full_name?.toLowerCase().includes('riya')) return 1;
+    if (a.full_name?.toLowerCase().includes('sam')) return -1;
+    if (b.full_name?.toLowerCase().includes('sam')) return 1;
+    return (a.full_name || '').localeCompare(b.full_name || '');
+  });
 
   const passwordHash = await bcrypt.hash(PASSWORD, 12);
+
+  // Clear existing official_identifier and assign temp emails on counsellors to avoid unique constraint collision during re-indexing
+  await pool.query("UPDATE officials SET official_identifier = NULL, email = 'temp_' || official_id || '@mansakha.gov.in' WHERE official_id = ANY($1)", [counsellors.map(c => c.official_id)]);
 
   for (let i = 0; i < counsellors.length; i++) {
     const c = counsellors[i];
@@ -44,22 +61,21 @@ async function main() {
     const nameSlug = slugify(c.full_name || `counsellor${idx}`);
     const newEmail = `${nameSlug}${idx}${DOMAIN}`;
 
-    await supabase.from('officials').update({
-      password_hash: passwordHash,
-      must_change_password: false,
-      staff_id: officialIdentifier,
-      official_identifier: officialIdentifier,
-      email: newEmail,
-    }).eq('official_id', c.official_id);
+    await pool.query(`
+      UPDATE officials
+      SET password_hash = $1,
+          must_change_password = false,
+          staff_id = $2,
+          official_identifier = $3,
+          email = $4
+      WHERE official_id = $5
+    `, [passwordHash, officialIdentifier, officialIdentifier, newEmail, c.official_id]);
 
     console.log(`  Updated: ${c.full_name} → ${officialIdentifier} / ${newEmail}`);
   }
 
-  if (counsellors.length === 0) {
-    console.log('No existing Counsellor accounts found. Create them via District Admin UI and re-run.');
-  }
-
   console.log(`\nDone. Password: ${PASSWORD}`);
+  process.exit(0);
 }
 
 main().catch((err) => { console.error('Seed failed:', err.message); process.exit(1); });

@@ -10,10 +10,10 @@ import {
 import { useToast } from '../../shared/context/ToastContext';
 
 const RISK_BADGE = {
-  Critical: 'bg-purple-100 text-purple-700',
-  High: 'bg-rose-100 text-rose-700',
+  Critical: 'bg-red-100 text-red-800 border border-red-300',
+  High: 'bg-orange-100 text-orange-800 border border-orange-300',
   Moderate: 'bg-amber-100 text-amber-700',
-  Low: 'bg-emerald-100 text-emerald-700',
+  Low: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
 };
 
 const TREND_META = {
@@ -23,9 +23,9 @@ const TREND_META = {
 };
 
 const RISK_DOT_COLOR = {
-  Critical: '#7e22ce',
-  High: '#dc2626',
-  Moderate: '#d97706',
+  Critical: '#b91c1c',
+  High: '#ea580c',
+  Moderate: '#f59e0b',
   Low: '#059669',
 };
 
@@ -197,68 +197,66 @@ export default function CaseDetail() {
     <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
       <div className="space-y-6">
 
-        {/* CASE ACTION BAR - switch-case on the left (only if this person
-            has other cases), primary chat action on the right. No search
-            here - search stays on My Users only, per explicit request. */}
+        {/* CASE ACTION BAR */}
         {(otherLinkedCases.length > 0 || chatWithUserButton) && (
-          <div className="bg-white p-3 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between">
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col xs:flex-row items-stretch xs:items-center justify-between gap-3">
             <div>
               {otherLinkedCases.length > 0 && (
                 <SwitchCaseDropdown cases={otherLinkedCases} onSelect={(id) => navigate(`/counsellor/case-detail/${id}`)} />
               )}
             </div>
-            {chatWithUserButton}
+            <div className="self-end xs:self-auto">
+              {chatWithUserButton}
+            </div>
           </div>
         )}
 
         {/* TOP SUMMARY HEADER */}
-        <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-10 flex-wrap">
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case ID</span>
-              <span className="text-base font-bold text-gray-800">{userId.slice(0, 8)}</span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case Stage</span>
-              <span className="text-xs font-bold text-gray-700">{data.caseStage || '-'}</span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Risk Level</span>
-              <span className={`text-xs font-bold px-2.5 py-0.5 rounded ${RISK_BADGE[data.riskLevel] || 'bg-gray-100 text-gray-600'}`}>
-                {data.riskLevel}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Distress Score</span>
-              <span className="font-bold text-xs text-gray-800">{data.score}/100 {data.previousScore != null && <span className="text-gray-400 font-normal">(was {data.previousScore})</span>}</span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block" title="Which channel produced the latest score - hover a dot on the trend chart below for older readings.">Source</span>
-              <span className="text-xs font-bold text-gray-700">{data.scoreSource || 'Unknown'}</span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Trend</span>
-              <span className={`flex items-center gap-1 text-xs font-bold mt-0.5 ${trend.color}`}>
-                <TrendIcon size={14} /> {trend.label}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block" title="Forward-looking projection from this case's score history - distinct from Trend, which only looks backward.">Predicted Risk</span>
-              <span className={`flex items-center gap-1 text-xs font-bold mt-0.5 ${predictedLabel.color}`}>
-                <predictedLabel.Icon size={14} /> {predictedLabel.text}
-              </span>
-            </div>
-            <div>
-              <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Intervention</span>
-              <span className="text-xs font-bold text-gray-700">{data.interventionStatus}</span>
-            </div>
+        <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200/80 shadow-sm grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 sm:gap-6">
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case ID</span>
+            <span className="text-sm sm:text-base font-bold text-gray-800 truncate block">{userId.slice(0, 8)}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case Stage</span>
+            <span className="text-xs font-bold text-gray-700 block truncate">{data.caseStage || '-'}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-1">Risk Level</span>
+            <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded ${RISK_BADGE[data.riskLevel] || 'bg-gray-100 text-gray-600'}`}>
+              {data.riskLevel}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Distress Score</span>
+            <span className="font-bold text-xs text-gray-800 block">{data.score}/100 {data.previousScore != null && <span className="text-gray-400 font-normal text-[11px]">(was {data.previousScore})</span>}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block" title="Channel that produced the latest score">Source</span>
+            <span className="text-xs font-bold text-gray-700 block truncate">{data.scoreSource || 'Unknown'}</span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Trend</span>
+            <span className={`flex items-center gap-1 text-xs font-bold mt-0.5 ${trend.color}`}>
+              <TrendIcon size={14} className="shrink-0" /> <span className="truncate">{trend.label}</span>
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block" title="Forward-looking projection">Predicted Risk</span>
+            <span className={`flex items-center gap-1 text-xs font-bold mt-0.5 ${predictedLabel.color}`}>
+              <predictedLabel.Icon size={14} className="shrink-0" /> <span className="truncate">{predictedLabel.text}</span>
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Intervention</span>
+            <span className="text-xs font-bold text-gray-700 block truncate">{data.interventionStatus}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* LEFT COLUMN */}
-          <div className="col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
 
             {/* Contributing signals */}
             <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm">

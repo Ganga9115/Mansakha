@@ -27,7 +27,23 @@ async function findOfficialForLogin(identifier, allowedRoleNames) {
       .select('official_id, email, password_hash, must_change_password, official_identifier, staff_id, phone')
       .ilike('email', normalised)
       .maybeSingle();
-    official = byEmail;
+    // Backward-compatible fallback for generic legacy emails
+    if (!official && normalised === 'counsellor@mansakha.gov.in') {
+      const { data: byAlias } = await supabase
+        .from('officials')
+        .select('official_id, email, password_hash, must_change_password, official_identifier, staff_id, phone')
+        .ilike('official_identifier', 'CON-001')
+        .maybeSingle();
+      official = byAlias;
+    }
+    if (!official && normalised === 'dataoperator@mansakha.gov.in') {
+      const { data: byAlias } = await supabase
+        .from('officials')
+        .select('official_id, email, password_hash, must_change_password, official_identifier, staff_id, phone')
+        .ilike('official_identifier', 'DO-001')
+        .maybeSingle();
+      official = byAlias;
+    }
   }
 
   if (!official) return null;

@@ -22,16 +22,16 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
 
   return (
     <StaffLayout title={title} headerAction={headerAction}>
-      <div className="flex gap-5 h-[calc(100vh-8rem)]">
-        <aside className="w-52 shrink-0 flex flex-col gap-5">
+      <div className="flex flex-col md:flex-row gap-3 sm:gap-5 min-h-[calc(100vh-10rem)] md:h-[calc(100vh-8rem)]">
+        <aside className="w-full md:w-52 shrink-0 flex flex-row md:flex-col items-center md:items-start justify-between md:justify-start gap-3 md:gap-5 pb-2 md:pb-0 border-b md:border-b-0 border-gray-100">
           <button
             onClick={() => setComposing(true)}
-            className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full bg-[#519BCE] text-white text-sm font-semibold shadow-sm hover:shadow-md hover:bg-[#3d83b3] transition w-fit"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full bg-[#519BCE] text-white text-xs sm:text-sm font-semibold shadow-sm hover:shadow-md hover:bg-[#3d83b3] transition shrink-0"
           >
-            <PenSquare size={16} /> Compose
+            <PenSquare size={15} /> Compose
           </button>
 
-          <nav className="space-y-1">
+          <nav className="flex flex-row md:flex-col gap-1 overflow-x-auto w-full no-scrollbar">
             {FOLDERS.map((f) => {
               const Icon = f.icon;
               return (
@@ -40,15 +40,15 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
                   to={`${basePath}${f.suffix}`}
                   end
                   className={({ isActive }) =>
-                    `flex items-center gap-3 pl-4 pr-3 py-2 rounded-r-full text-sm transition ${
+                    `flex items-center gap-2 sm:gap-3 px-3 py-1.5 sm:py-2 rounded-full md:rounded-l-none md:rounded-r-full text-xs sm:text-sm transition shrink-0 md:shrink ${
                       isActive ? 'bg-[#D6E8F5] text-[#3D5A80] font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'
                     }`
                   }
                 >
-                  <Icon size={16} />
+                  <Icon size={15} />
                   <span className="flex-1">{f.label}</span>
                   {f.key === 'inbox' && unread?.count > 0 && (
-                    <span className="text-xs font-bold text-[#3D5A80]">{unread.count}</span>
+                    <span className="text-xs font-bold text-[#3D5A80] ml-1">{unread.count}</span>
                   )}
                 </NavLink>
               );
@@ -56,7 +56,7 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
           </nav>
         </aside>
 
-        <div className="flex-1 min-w-0">{children}</div>
+        <div className="flex-1 min-w-0 h-[calc(100vh-14rem)] md:h-auto">{children}</div>
       </div>
 
       {composing && (

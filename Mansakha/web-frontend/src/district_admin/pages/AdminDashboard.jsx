@@ -5,10 +5,10 @@ import { FileDown, FileText, ShieldCheck, AlertCircle, ShieldAlert, TrendingUp, 
 import { useMyJurisdiction, useAdminDashboard, useExportReportCsv, useAdminAlerts, useReportsAnalytics, useMe } from '../services/hooks';
 
 const RISK_BADGE = {
-  Critical: 'bg-rose-100 text-rose-700',
-  High: 'bg-rose-100 text-rose-700',
+  Critical: 'bg-red-100 text-red-800 border border-red-300',
+  High: 'bg-orange-100 text-orange-800 border border-orange-300',
   Moderate: 'bg-amber-100 text-amber-700',
-  Low: 'bg-emerald-100 text-emerald-700',
+  Low: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
 };
 
 // Matches AdminAlerts.jsx's own STATUS_STYLE - alerts carry a status

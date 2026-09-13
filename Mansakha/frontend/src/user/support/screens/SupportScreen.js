@@ -172,7 +172,9 @@ export default function SupportScreen({ navigation }) {
                 value={optedForCounsellor}
                 onValueChange={handleToggleCounsellorPreference}
                 disabled={updateCounsellorPreference.isPending}
-                trackColor={{ true: colors.primary }}
+                thumbColor="#F4F3F4"
+                activeThumbColor="#F4F3F4"
+                trackColor={{ false: colors.border, true: colors.primary }}
               />
             </View>
           </Card>

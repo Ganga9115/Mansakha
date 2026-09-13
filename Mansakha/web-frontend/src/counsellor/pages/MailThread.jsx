@@ -112,7 +112,7 @@ export default function MailThread() {
       }
     >
       <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-blue-50/60 shrink-0">
+        <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 border-b border-gray-200 bg-blue-50/60 shrink-0">
           <button
             onClick={() => navigate('/counsellor/mail')}
             className="p-1.5 -ml-1 rounded-full hover:bg-white/70 transition text-[#3D5A80]"
@@ -127,14 +127,14 @@ export default function MailThread() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 no-scrollbar">
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 sm:py-4 space-y-3 sm:space-y-4 no-scrollbar">
           {loading && !data ? (
             <p className="text-xs text-gray-400">Loading...</p>
           ) : (data?.messages || []).map((m) => {
             const isMine = m.senderId === me?.officialId;
             return (
               <div key={m.messageId} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${isMine ? 'bg-[#519BCE] text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
+                <div className={`max-w-[90%] sm:max-w-[80%] md:max-w-[70%] px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-2xl text-xs sm:text-sm leading-relaxed whitespace-pre-wrap ${isMine ? 'bg-[#519BCE] text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
                   {!isMine && <p className="text-xs font-bold mb-1 opacity-80">{m.senderName}</p>}
                   {m.body}
                   {m.attachments.length > 0 && (

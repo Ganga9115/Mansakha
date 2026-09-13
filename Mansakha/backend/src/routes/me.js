@@ -113,7 +113,7 @@ async function getUserNotifications(userId) {
       [userId]
     ),
     pool.query(
-      `select cs.session_id, cs.scheduled_at, o.full_name
+      `select cs.session_id, cs.scheduled_at, cs.created_at, o.full_name
        from counselling_sessions cs
        join officials o on o.official_id = cs.counsellor_id
        where cs.user_id = $1 and cs.status = 'upcoming' and cs.scheduled_at > now()
@@ -160,7 +160,8 @@ async function getUserNotifications(userId) {
     })),
     ...sessions.map((s) => ({
       notificationId: s.session_id,
-      notifiedAt: s.scheduled_at,
+      notifiedAt: s.created_at || s.scheduled_at,
+      scheduledAt: s.scheduled_at,
       type: 'session',
       message: `Upcoming session with ${s.full_name || 'your counsellor'} on ${new Date(s.scheduled_at).toLocaleString()}`,
     })),
