@@ -63,8 +63,8 @@ graph TD
     end
 
     subgraph "Logic 3: Two Independent Risk Axes"
-        Distress["AI Distress Score (0-100)<br/>Internal Mental State -> Counsellor Care"]
-        Threat["Rule-Based Threat Tier (Low - Severe)<br/>External Physical Danger -> Police / Protection"]
+        Distress["AI Distress Score (0-100)<br/>Levels: Low | Moderate | High | Critical<br/>Internal Mental State -> Counsellor Care"]
+        Threat["Rule-Based Threat Tier<br/>Tiers: Routine | Guarded | Elevated | Severe<br/>External Physical Danger -> Police / Protection"]
     end
 
     subgraph "Logic 4: Structural DVMC Escalation"
@@ -91,9 +91,21 @@ Victims upload essential documentation (caste certificate, FIR copy, bank passbo
 Once verified, downstream agency referrals and payment milestones unlock automatically—eliminating repeated physical paperwork.
 
 ### 3. Two Axes of Risk, Kept Strictly Independent
-To prevent clinical trauma from being confused with physical witness intimidation, the system computes two completely independent risk metrics:
-- **Axis A: AI-Derived Distress Score ($0-100$)**: Evaluates internal psychological trauma, depression, and affective distress. Directly drives the **Counsellor** therapeutic queue.
-- **Axis B: Rule-Based Threat Tier (Low / Moderate / High / Severe)**: Evaluates external physical safety, accused bail status, and witness tampering. Directly drives the **Protection Officer** and **Police** response queue.
+To prevent clinical trauma from being confused with physical witness intimidation, the system computes two completely independent risk metrics with mutually exclusive vocabularies:
+
+- **Axis A: AI-Derived Distress Score ($0-100$) — Mental Health State**:
+  - Risk Levels: **Low** ($0-29$), **Moderate** ($30-59$), **High** ($60-79$), **Critical** ($80-100$).
+  - Evaluates internal psychological trauma, depression, voice stress, and affective distress from check-ins, chats, voice notes, and IVRS calls.
+  - Directly drives the **Counsellor** therapeutic care queue.
+- **Axis B: Rule-Based Threat Tier — Physical Security & Danger**:
+  - Threat Tiers: **Routine**, **Guarded**, **Elevated**, **Severe**.
+  - Evaluates external physical safety, accused bail status, and witness intimidation through deterministic, auditable statutory rules:
+    - **Severe**: Accused is *Absconding* OR survivor has triggered $\ge 2$ SOS emergency events in the past 7 days.
+    - **Elevated**: Accused is *Out on Bail* in a case marked *Witness Facing Intimidation or Threats* OR survivor has triggered $\ge 1$ SOS events in the past 7 days.
+    - **Guarded**: Accused is *Out on Bail* (standard atrocity charge).
+    - **Routine**: Accused is confirmed *In Custody* or *Convicted*.
+    - *Not Yet Assessed*: Initial state before IO status entry and SOS logs.
+  - Directly drives the **Protection Officer** and **Police** physical security queue.
 
 ### 4. Structural Escalation to the District Collector (DVMC Oversight)
 Statutory compliance is enforced algorithmically. An automated escalation daemon continuously scans all active cases against statutory timelines:
@@ -113,6 +125,19 @@ Activating the emergency SOS trigger executes a coordinated parallel protocol:
 1. Opens the native device dialler directly to the **Police Control Room (PCR 100)** or **Atrocity Helpline (14566)**.
 2. Captures GPS coordinates (best-effort, with explicit user permission).
 3. Simultaneously broadcasts real-time high-priority alerts to the **Assigned Counsellor**, **District Administration**, **State Administration**, and **Protection Officer**.
+
+### 7. Telephonic IVRS Outreach & Automated Disengagement Logic
+To ensure universal accessibility for rural, illiterate, or non-smartphone populations, the platform integrates automated Interactive Voice Response System (IVRS) telephony:
+- **Automated Outbound Calling**: Outbound check-in calls are dispatched in the survivor's regional language via telecom gateways connected to the National Atrocity Prevention Helpline (14566).
+- **The 5-Second Disengagement Protocol**:
+  - If an IVRS check-in call is **unanswered**, OR
+  - If the survivor answers but disconnects within **$< 5$ seconds**,  
+    the system algorithmically flags this as potential disengagement, silent distress, or active intimidation. It immediately assigns a human counsellor and issues a high-priority follow-up alert.
+- **Multimodal Acoustic Scoring on Completed Calls**:
+  - When an IVRS call is completed, the voice audio is passed through local ASR and acoustic prosody models.
+  - Extracts vocal tension ($F_0$ pitch instability, jitter, shimmer), transcribes text, evaluates trauma sentiment/emotion, and calculates the Dynamic Distress Score asynchronously.
+- **Ministry-Level Telephony Audit Log**:
+  - All queued, attempted, and completed IVRS calls are logged in a central registry accessible to State and National Ministry officials to monitor rural outreach parity.
 
 ---
 
@@ -309,14 +334,14 @@ $$\text{Velocity } (m) = \frac{N \sum_{i=1}^N (t_i S_i) - \sum_{i=1}^N t_i \sum_
 
 $$\text{Estimated Days to Critical Threshold} = \frac{80 - S_{\text{latest}}}{m} \quad (\text{when } m > 0)$$
 
-### Clinical Risk Thresholds & System Protocols
+### Clinical Distress Thresholds vs. Statutory Threat Tiers
 
-| Distress Score | Risk Tier | Clinical Interpretation | System Protocol & Action |
-| :---: | :---: | :--- | :--- |
-| **$0 - 29$** | **Low** | Stable emotional baseline, normal coping. | Standard dashboard, self-guided wellness exercises, bi-weekly check-in prompt. |
-| **$30 - 59$** | **Moderate** | Mild situational anxiety, early trauma markers. | Periodic check-in nudges, grounding exercises, flagged for routine counsellor review. |
-| **$60 - 79$** | **High** | Acute trauma markers, severe distress, withdrawal. | High-priority counsellor alert, mandatory session within 48 hours, 14566 helpline displayed. |
-| **$80 - 100$** | **Critical (SOS)** | Crisis state, severe helplessness, potential self-harm. | Immediate real-time alert to Counsellor & District Admin; emergency SOS modal activated; Protection Officer notified. |
+To ensure clinical staff and police units never conflate psychological trauma with external physical danger, the system enforces strict separation between both metrics:
+
+| Axis | Metric | Vocabulary Tiers | Primary Signals Evaluated | Responsible Authority & Queue |
+| :--- | :--- | :--- | :--- | :--- |
+| **Internal Mind** | **Dynamic Distress Score (0–100)** | **Low** ($0-29$)<br>**Moderate** ($30-59$)<br>**High** ($60-79$)<br>**Critical** ($80-100$) | Voice stress ($F_0$, jitter, shimmer), NLP trauma sentiment, multilingual emotion, engagement cadence from mobile check-ins & **IVRS calls**. | **Assigned Counsellor**<br>(Clinical care, therapeutic chat, case notes) |
+| **External Safety** | **Rule-Based Threat Tier** | **Routine**<br>**Guarded**<br>**Elevated**<br>**Severe** | Investigating Officer's custody facts (`In Custody`, `Out on Bail`, `Absconding`), witness intimidation case tags, and 7-day SOS event history. | **Protection Officer & Police**<br>(Physical security, safe houses, police escorts) |
 
 ---
 
