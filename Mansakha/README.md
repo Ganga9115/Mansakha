@@ -7,54 +7,70 @@
 
 ---
 
-## 1. Problem Statement Mapping & Vision (PS 094)
+## 1. Problem Statement Mapping & Systemic Vision (PS 094)
 
-Under the **Scheduled Castes and the Scheduled Tribes (Prevention of Atrocities) Act, 1989 (PoA Act)**, a victim of a caste-based atrocity does not deal with a single government agency. Instead, their case passes through a fragmented web of separate institutional desks:
-1. **The Police Station**: Registers the FIR and conducts the investigation.
-2. **The District Welfare Officer (DWO)**: Verifies documents and sanctions statutory financial relief.
-3. **The District Legal Services Authority (DLSA)**: Assigns free legal representation under NALSA entitlements.
-4. **The Protection Officer & Local Police**: Monitors witness intimidation and assesses physical threats.
-5. **The District Collector’s Vigilance & Monitoring Committee (DVMC)**: Mandated by law to review case pendency and welfare delivery.
-6. **Rehabilitation Centres & District Mental Health Programme (DMHP)**: Coordinates post-closure psychosocial and vocational rehabilitation.
+Under the **Scheduled Castes and the Scheduled Tribes (Prevention of Atrocities) Act, 1989 (PoA Act)**, an atrocity survivor must navigate a complex, fragmented network of separate government departments:
+1. **The Police Station**: Registers the First Information Report (FIR) and conducts the investigation.
+2. **The District Welfare Officer (DWO)**: Verifies social welfare documentation and sanctions statutory financial relief.
+3. **The District Legal Services Authority (DLSA)**: Mandated under NALSA guidelines to assign free legal counsel.
+4. **The Protection Officer & Police Unit**: Evaluates physical security threats, witness intimidation, and safe-house needs.
+5. **The District Collector’s Vigilance & Monitoring Committee (DVMC)**: Statutory committee mandated by law to review case pendency and welfare delivery.
+6. **Rehabilitation Centres & District Mental Health Programme (DMHP)**: Manages post-trial recovery, vocational training, and long-term psychosocial care.
 
-### The Systemic Breakdown Addressed by PS 094
-- **Repeated Trauma Re-Narration**: Each department maintains its own physical paper trail. A survivor is forced to re-tell their traumatic experience at every desk they visit.
-- **Disconnected Mental Health Support**: Psychological care, if available at all, is completely divorced from legal and administrative proceedings.
-- **Opaque Financial Relief**: Victims have no visibility into whether their statutory compensation under the Dr. Ambedkar Scheme is being processed or delayed.
-- **Unactioned Physical Threats**: Threats and intimidation raised at one office often never reach the Protection Officer or Police Station empowered to act.
-- **Passive Committee Oversight**: Statutory oversight committees rely on retrospective paper registers rather than real-time tracking of missed legal deadlines.
+```
+       ┌─────────────────────────────────────────────────────────────────┐
+       │               THE CURRENT SYSTEMIC BREAKDOWN                    │
+       ├────────────────────────────────┬────────────────────────────────┤
+       │ 1. Repeated Trauma Narration   │ Victim re-narrates incident at │
+       │                                │ every separate official desk.  │
+       ├────────────────────────────────┼────────────────────────────────┤
+       │ 2. Disconnected Mental Health  │ Psychological care is entirely │
+       │                                │ isolated from legal processes. │
+       ├────────────────────────────────┼────────────────────────────────┤
+       │ 3. Opaque Financial Relief     │ No tracking for multi-stage    │
+       │                                │ statutory compensation disbursal│
+       ├────────────────────────────────┼────────────────────────────────┤
+       │ 4. Unactioned Threats          │ Intimidation raised at welfare │
+       │                                │ never reaches the police unit. │
+       ├────────────────────────────────┼────────────────────────────────┤
+       │ 5. Passive Committee Oversight │ DVMC reviews paper registers   │
+       │                                │ long after legal deadlines lapse│
+       └────────────────────────────────┴────────────────────────────────┘
+```
 
-### The Mansakha Solution
-**Mansakha (मानसखा — "Companion of the Mind")** solves PS 094 through a unified dual-interface architecture: **one continuous, private mobile app for the victim** and **ten role-scoped web portals for government officials**, connected by a shared coordination and sovereign AI engine. A single continuous master docket record (`DOC-XXXXXX`) follows the survivor across all desks—eliminating repetitive narration, automating statutory deadlines, keeping mental wellness continuously monitored, and ensuring transparent financial relief.
+### The Mansakha Solution Plan
+**Mansakha (मानसखा — "Companion of the Mind")** resolves PS 094 by replacing disconnected physical paper trails with a synchronized dual-interface ecosystem:
+- **For the Beneficiary / Survivor**: A single, continuous mobile companion providing 24/7 empathetic conversational grounding, proactive distress monitoring, a real-time 3-stage compensation tracker, and one-tap emergency SOS dispatch.
+- **For Government Stakeholders**: Ten role-scoped web portals connected to a single continuous case docket (`DOC-XXXXXX`). Every agency works from its own specialized queue while reading from and writing to a single shared truth.
 
 ---
 
-## 2. Core Architectural Innovations (PS 094)
+## 2. Core Architectural Innovations & System Logics
 
-The platform is designed around four foundational innovations that address the core bottlenecks of atrocity victim rehabilitation:
+The architecture is built upon six foundational structural logics designed to resolve the systemic delays and institutional trauma of atrocity case management:
 
 ```mermaid
 graph TD
-    subgraph "Innovation 1: Single Continuous Docket"
-        DOC["Docket Number DOC-XXXXXX<br/>One Master Record Across All Desks"]
+    subgraph "Logic 1: Single Continuous Docket"
+        DOC["Master Docket Number: DOC-XXXXXX<br/>One Unified Record Across All 10 Government Desks"]
     end
 
-    subgraph "Innovation 2: Proof Travels With The Case"
-        Upload["Victim Uploads Proof Once (Caste Cert / FIR / Passbook)"]
-        Verify["Specialist Verifies Proof (DLSA / DWO / Police)"]
-        AutoRef["Auto-Generates Downstream Agency Referrals"]
+    subgraph "Logic 2: Proof Travels With The Case"
+        Upload["Victim Uploads Proof Once (Caste Cert / FIR / Bank Passbook)"]
+        Verify["Statutory Specialist Verifies Proof (DLSA / DWO / Police)"]
+        AutoRef["Auto-Generates Downstream Agency Tasks & Referrals"]
         Upload --> Verify --> AutoRef
     end
 
-    subgraph "Innovation 3: Two Independent Risk Axes"
-        Distress["AI Dynamic Distress Score (0-100)<br/>Psychological State -> Counsellor Care"]
-        Threat["Rule-Based Threat Tier (Low - Severe)<br/>Physical Danger -> Police / Protection"]
+    subgraph "Logic 3: Two Independent Risk Axes"
+        Distress["AI Distress Score (0-100)<br/>Internal Mental State -> Counsellor Care"]
+        Threat["Rule-Based Threat Tier (Low - Severe)<br/>External Physical Danger -> Police / Protection"]
     end
 
-    subgraph "Innovation 4: Structural SLA Escalation"
-        SLA["Statutory Deadlines (e.g. 48h DLSA Counsel SLA)"]
-        Checker["Automated Background Escalation Checker"]
-        Collector["Automatic Escalation to District Collector (DVMC Desk)"]
+    subgraph "Logic 4: Structural DVMC Escalation"
+        SLA["Statutory Deadlines (48h DLSA Counsel SLA, Compensation Milestones)"]
+        Checker["Automated Background Escalation Daemon"]
+        Collector["Direct Task Placement on District Collector Desk (DVMC)"]
         SLA --> Checker --> Collector
     end
 
@@ -63,108 +79,126 @@ graph TD
     DOC --- SLA
 ```
 
-### 1. Single Continuous Case Docket (`DOC-XXXXXX`)
-Instead of each department maintaining a separate paper file, every registered atrocity case receives a permanent master docket identifier. Every official portal reads from and writes to its own jurisdictional section of this single docket record.
+### 1. The Single Continuous Case Docket (`DOC-XXXXXX`)
+Instead of each department maintaining an independent physical file, every registered incident is assigned a permanent master docket identifier (`DOC-XXXXXX`). This record persists across the survivor's entire journey—from initial police intake and welfare sanctioning through court trial and post-verdict rehabilitation.
 
-### 2. Proof Travels with the Case (Single Verification Pipeline)
-Victims upload their caste certificate, FIR copy, and bank passbook **once** through the mobile app. The specific statutory authority legally mandated to verify that proof (e.g., DLSA for caste entitlements, DWO for bank details, Police for FIR) inspects it once. Approving the proof automatically creates the downstream operational referral, eliminating repetitive photocopying and bureaucratic delays.
+### 2. "Proof Travels with the Case" (Single-Verification Pipeline)
+Victims upload essential documentation (caste certificate, FIR copy, bank passbook) **only once** through the mobile interface. Verification is performed exclusively by the statutory specialist legally designated for that proof:
+- **Caste Certificate**: Verified by the **DLSA Coordinator** to unlock free legal counsel.
+- **Bank Passbook**: Verified by the **District Welfare Officer** to unlock Direct Benefit Transfer (DBT) relief.
+- **FIR Copy**: Verified by the **Investigating Officer** to confirm police registration.
+
+Once verified, downstream agency referrals and payment milestones unlock automatically—eliminating repeated physical paperwork.
 
 ### 3. Two Axes of Risk, Kept Strictly Independent
-To prevent catastrophic misclassification, the system maintains two separate, non-conflated risk evaluations:
-- **Axis A: AI-Derived Distress Score ($0-100$)**: Measures internal psychological trauma, depression, and anxiety via multimodal sentiment, voice stress, emotion, and engagement drops. Directly drives the **Counsellor** response queue.
-- **Axis B: Rule-Based Threat Tier (Low / Moderate / High / Severe)**: Measures external physical danger, witness intimidation, and accused bail status. Directly drives the **Protection Officer** and **Police** operational queue.
+To prevent clinical trauma from being confused with physical witness intimidation, the system computes two completely independent risk metrics:
+- **Axis A: AI-Derived Distress Score ($0-100$)**: Evaluates internal psychological trauma, depression, and affective distress. Directly drives the **Counsellor** therapeutic queue.
+- **Axis B: Rule-Based Threat Tier (Low / Moderate / High / Severe)**: Evaluates external physical safety, accused bail status, and witness tampering. Directly drives the **Protection Officer** and **Police** response queue.
 
-### 4. Structural Escalation to the District Collector (DVMC Chair)
-Statutory deadlines are enforced structurally rather than relying on manual reminders. Background workers monitor every active task (e.g., the **48-hour SLA** on DLSA legal-aid counsel assignment, chargesheet filing deadlines, and staged compensation milestones). If an SLA lapses, the task automatically elevates itself onto the **District Collector's** desk as the head of the District Vigilance & Monitoring Committee.
+### 4. Structural Escalation to the District Collector (DVMC Oversight)
+Statutory compliance is enforced algorithmically. An automated escalation daemon continuously scans all active cases against statutory timelines:
+- If DLSA fails to assign panel counsel within the mandatory **48-hour SLA**,
+- If chargesheet status is not updated within statutory periods, or
+- If approved compensation stages remain undisbursed,  
+the task automatically elevates onto the **District Collector’s** dashboard, operationalizing the statutory oversight mandate of the District Vigilance & Monitoring Committee (DVMC).
 
 ### 5. Transparent 3-Stage Statutory Compensation Tracker
-Grounded directly in the **Dr. Ambedkar National Relief Scheme** and the PoA Act compensation rules, the victim app provides a real-time 3-stage visual payment tracker tied to verifiable case milestones:
+Grounded directly in the **Dr. Ambedkar National Relief Scheme** and the PoA Act statutory compensation schedules, the victim interface displays an auditable 3-stage visual progress tracker:
 - **Stage 1 (Immediate Relief / 25%)**: Disbursed upon FIR registration and initial welfare verification.
-- **Stage 2 (Investigation Complete / 50%)**: Disbursed when the Investigating Officer files the chargesheet in court.
-- **Stage 3 (Trial Conclusion / 25%)**: Disbursed upon trial verdict or final court judgment.
+- **Stage 2 (Investigation Complete / 50%)**: Disbursed when the Investigating Officer files the chargesheet in the Special Court.
+- **Stage 3 (Trial Conclusion / 25%)**: Disbursed upon trial verdict or final judicial pronouncement.
 
-### 6. One-Tap Emergency SOS Fan-Out
-When a survivor activates the emergency SOS trigger, the system simultaneously:
-1. Opens the native device dialler to the **Police Control Room (PCR 100)** or the **National Atrocity Prevention Helpline (14566)**.
-2. Captures GPS coordinates (best-effort, with explicit consent).
-3. Dispatches high-priority emergency alerts in parallel to the **Assigned Counsellor**, **District Administration**, **State Administration**, and **Protection Officer**.
+### 6. One-Tap Emergency Multi-Agency Fan-Out
+Activating the emergency SOS trigger executes a coordinated parallel protocol:
+1. Opens the native device dialler directly to the **Police Control Room (PCR 100)** or **Atrocity Helpline (14566)**.
+2. Captures GPS coordinates (best-effort, with explicit user permission).
+3. Simultaneously broadcasts real-time high-priority alerts to the **Assigned Counsellor**, **District Administration**, **State Administration**, and **Protection Officer**.
 
 ---
 
-## 3. System Architecture & Topology
+## 3. System Architecture & Component Roles
 
-The platform deploys a 4-tier sovereign architecture ensuring 100% on-premises execution without external third-party cloud API dependencies:
+The platform is structured into four sovereign tiers, ensuring data privacy and operational autonomy across government infrastructure:
 
 ```mermaid
 graph TD
-    subgraph "Client Tier"
-        MobileApp["Victim Mobile App (React Native / Expo)<br/>Android / iOS / Web<br/>Port: 8081"]
-        WebPortal["10 Role-Scoped Web Portals (React + Vite)<br/>Counsellors, Admins, Statutory Agencies<br/>Port: 3000"]
+    subgraph "Client Layer"
+        MobileApp["Victim Mobile Application<br/>24/7 AI Companion, 3D Avatar, Check-Ins, SOS"]
+        WebPortal["Multi-Agency Governance Portals<br/>10 Specialized Official Role Interfaces"]
     end
 
-    subgraph "API Gateway & Orchestration Tier"
-        NodeBackend["Node.js / Express API Gateway (Port: 4000)<br/>Auth, RBAC, Dispatch Workers, Background Daemons"]
-        SupabaseDB[("PostgreSQL Relational Database (Supabase)<br/>Cases, Scores, Proofs, Referrals, Audit Logs")]
+    subgraph "Central Orchestration Gateway"
+        Gateway["API Orchestrator & Rule Engine<br/>Auth, RBAC, Dispatch Workers, Background Daemons"]
+        Database[("Relational Case Data Store<br/>Cases, Proofs, Distress Scores, Referrals, Audit Logs")]
     end
 
-    subgraph "Sovereign AI & Speech Engine Tier"
-        DjangoAI["Django AI Inference Microservice (Port: 8000)<br/>Whisper ASR, Librosa Prosody, HuggingFace Transformers"]
-        OllamaLLM["Local Ollama Daemon (Port: 11434)<br/>Model: gemma3:4b (Quantized)"]
+    subgraph "Sovereign AI & Speech Engine Layer"
+        MLMicroservice["Speech & Acoustic Inference Microservice<br/>Speech-to-Text, Voice Stress Prosody, Emotion NLP"]
+        LocalLLM["Local Quantized LLM Daemon (gemma3:4b)<br/>Empathetic Grounding, Check-in Logic, Case Note Summaries"]
     end
 
-    MobileApp <-->|REST / WebSockets| NodeBackend
-    WebPortal <-->|REST / WebSockets| NodeBackend
-    NodeBackend <-->|SQL Queries / Auth| SupabaseDB
-    NodeBackend <-->|Inference API / HTTP| DjangoAI
-    NodeBackend <-->|Prompt Completion / HTTP| OllamaLLM
-    DjangoAI <-->|Direct Local In-Memory| Models["Local AI Models<br/>pitch_emotion_model_v2, PS094_Sentiment, MultilingualEmotion"]
+    MobileApp <-->|Encrypted REST / WebSockets| Gateway
+    WebPortal <-->|Encrypted REST / WebSockets| Gateway
+    Gateway <-->|Relational Queries & Auth| Database
+    Gateway <-->|Internal Service Calls| MLMicroservice
+    Gateway <-->|Local Inference Prompts| LocalLLM
 ```
 
+### Functional Tier Breakdown
+
+| System Layer | Architectural Role & Scope | Key Operational Responsibilities |
+| :--- | :--- | :--- |
+| **Client Experience Layer** | Mobile & Web Interfaces | Native mobile experience for victims (Android/iOS/Web); ten dedicated, role-scoped browser portals for government officials. |
+| **Central Orchestration Gateway** | API & Rules Engine | Enforces Role-Based Access Control (RBAC), manages the single case docket lifecycle, executes automated background escalation daemons, and maintains immutable audit logs. |
+| **Relational Data Store** | Relational Database | Secure persistence for multi-agency case records, evidence documents (behind time-limited signed URLs), longitudinal distress timeseries, and inter-agency referral logs. |
+| **Speech & Acoustic Microservice** | Edge ML Inference | Local execution of Indian-accented speech-to-text transcription, acoustic vocal prosody extraction ($F_0$ pitch, jitter, shimmer), and multilingual trauma emotion classification. |
+| **Local LLM Daemon** | Generative Reasoning | Sovereign, on-premises language model generating empathetic conversational therapy turns, adaptive check-in questions, clinical rationales, and objective case notes. |
+
 ---
 
-## 4. End-to-End Case Lifecycle & Operational Flows
+## 4. End-to-End Operational Workflows & Lifecycles
 
-### A. Case Lifecycle: Registration to Closure
+### A. Case Lifecycle: Registration to Post-Closure Rehabilitation
 
 ```mermaid
 graph TD
-    Reg["1. Case Registered by Data Operator<br/>Docket DOC-XXXXXX Issued"] --> AssignIO["2. Auto-Assigned to Police Station IO<br/>(Station of the FIR)"]
-    AssignIO --> Investigate["3. IO Investigates<br/>Records Arrest / Bail / Chargesheet Status"]
+    Reg["1. Case Registration (Data Operator)<br/>Master Docket DOC-XXXXXX Issued"] --> AssignIO["2. Auto-Assignment to Police Station IO<br/>(Station with FIR Jurisdiction)"]
+    AssignIO --> Investigate["3. IO Investigation Phase<br/>Arrest, Bail, and Witness Threat Tracking"]
     
-    Investigate --> ThreatCheck{"Threat Detected?"}
-    ThreatCheck -->|Yes| AlertPO["Immediate Alert to Protection Officer<br/>Jurisdiction-Scoped Referral Created"]
-    ThreatCheck -->|No| CaseProgress["Case Progress Displayed to Victim<br/>(Confidential Evidence Redacted)"]
+    Investigate --> ThreatCheck{"Witness Threat Detected?"}
+    ThreatCheck -->|Yes| AlertPO["Immediate Referral to Protection Officer<br/>Protection Orders & Safe House Deployment"]
+    ThreatCheck -->|No| CaseProgress["Case Milestones Displayed to Victim<br/>(Confidential Evidence Redacted)"]
     AlertPO --> CaseProgress
     
-    CaseProgress --> Chargesheet{"Chargesheet Filed?"}
+    CaseProgress --> Chargesheet{"Chargesheet Filed in Court?"}
     Chargesheet -->|Yes| UnlockStage2["case_stage: Investigation -> Trial<br/>Compensation Stage 2 Unlocked (50%)"]
     Chargesheet -->|No| Investigate
     
-    UnlockStage2 --> Trial["4. Special Court Trial Proceedings<br/>DLSA Panel Counsel Represents Victim"]
-    Trial --> CaseClose["5. Case Verdict / Closure by Data Operator<br/>Compensation Stage 3 Unlocked (25%)"]
+    UnlockStage2 --> Trial["4. Special Court Trial Proceedings<br/>DLSA Panel Advocate Represents Victim"]
+    Trial --> CaseClose["5. Case Verdict & Formal Closure (Data Operator)<br/>Compensation Stage 3 Unlocked (25%)"]
     
     CaseClose --> RehabOptIn{"Victim Opts into Rehabilitation?"}
-    RehabOptIn -->|Yes| RehabCentre["Rehabilitation Officer Tracks Centre Progress<br/>(Skill Training / Housing / Psychosocial Care)"]
-    RehabOptIn -->|No| Deactivate["Account Safely Archived on Victim Request"]
+    RehabOptIn -->|Yes| RehabCentre["Rehabilitation Officer Manages Centre Recovery<br/>(Vocational Skills / Housing / DMHP Therapy)"]
+    RehabOptIn -->|No| Deactivate["Account Securely Archived on Victim Request"]
 ```
 
-### B. Proof Routing & Assistance Pipeline
+### B. Proof Routing & Downstream Agency Activation
 
 ```mermaid
 graph LR
-    VictimReq["Victim Submits Assistance Request<br/>+ Uploads Proof Document"] --> TypeSplit{"Relief Category"}
+    VictimReq["Victim Submits Relief Request<br/>+ Uploads Proof Document"] --> TypeSplit{"Relief Category"}
     
     TypeSplit -->|Financial Relief| DWO["District Welfare Officer<br/>Verifies Bank Passbook"]
     TypeSplit -->|Legal Aid| DLSA["DLSA Coordinator<br/>Verifies Caste Certificate"]
-    TypeSplit -->|Witness Protection| PO["Protection Officer<br/>Verifies Threat / Incident"]
-    TypeSplit -->|Post-Trial Rehab| Admin["District Administration<br/>Approves Centre Intake"]
+    TypeSplit -->|Witness Protection| PO["Protection Officer<br/>Verifies Security Threat"]
+    TypeSplit -->|Rehabilitation| Admin["District Administration<br/>Approves Centre Placement"]
     
-    DWO -->|Approved| RefDWO["Referral Created:<br/>Immediate Relief / Compensation Stage Tracked"]
-    DLSA -->|Approved| RefDLSA["Referral Created:<br/>Panel Counsel Assigned (48h SLA)"]
-    PO -->|Approved| RefPO["Referral Created:<br/>Protection Order & Threat Tier Tracked"]
-    Admin -->|Approved| RefAdmin["Referral Created:<br/>Rehabilitation Officer Assigned"]
+    DWO -->|Verified| RefDWO["Referral Activated:<br/>Immediate Relief & Compensation Tracked"]
+    DLSA -->|Verified| RefDLSA["Referral Activated:<br/>Panel Counsel Assigned within 48h SLA"]
+    PO -->|Verified| RefPO["Referral Activated:<br/>Threat Tier & Escort Deployment Tracked"]
+    Admin -->|Verified| RefAdmin["Referral Activated:<br/>Rehabilitation Officer Assigned"]
     
-    RefDWO --> LiveStatus["Victim Views Real-Time Docket Status in Mobile App"]
+    RefDWO --> LiveStatus["Victim Views Real-Time Docket Status on Mobile App"]
     RefDLSA --> LiveStatus
     RefPO --> LiveStatus
     RefAdmin --> LiveStatus
@@ -172,58 +206,73 @@ graph LR
 
 ---
 
-## 5. Directory of the 10 Specialized Government Roles
+## 5. Directory of the 10 Specialized Government Portals
 
-Each portal in the web application maps directly to a real statutory office or legal mandate under the SC/ST (PoA) Act:
+Each official portal is scoped to a single-purpose statutory queue, preventing cognitive overload and ensuring clear accountability:
 
-| Role Title | Jurisdiction Scope | Statutory Mandate under the Act | Core Responsibilities in Mansakha |
+```
+National Super Admin (Ministry of Social Justice and Empowerment)
+ └── State Administrator (State Social Welfare & Home Departments)
+      └── District Administrator (District Magistrate / Social Welfare Office)
+           ├── Assigned Counsellor (Clinical Psychologist / DMHP Specialist)
+           ├── Investigating Officer (Police Station / DSP Investigating Unit)
+           ├── District Welfare Officer (Disbursing Authority for Compensation)
+           ├── DLSA Coordinator (District Legal Services Authority / NALSA)
+           ├── Protection Officer (Witness & Victim Protection Cell)
+           ├── District Collector (Chair, District Vigilance & Monitoring Committee)
+           ├── Rehabilitation Officer (DMHP / Centre-Specific Recovery Staff)
+           └── Data Operator (Front-Desk Registration & Formal Case Closure)
+```
+
+| Portal Role | Jurisdictional Level | Statutory Function under the Act | Core Responsibilities & Queue Scope |
 | :--- | :--- | :--- | :--- |
-| **Ministry (MoSJE)** | National | National nodal authority under the PoA Act. | Provisions official accounts, configures nationwide relief schedules, audits systemic compliance, inspects global immutable audit logs. |
-| **State Administration** | State | State Social Welfare & Home Department oversight. | Monitors cross-district atrocity heatmaps, identifies emerging hotspots, manages state-level resource allocation and budget disbursals. |
-| **District Administration** | District | District Magistrate / Social Welfare machinery. | District-wide oversight across all agency queues, manual cross-agency referrals, and rehabilitation program approvals. |
-| **Data Operator** | Desk / Helpline | Front-desk case intake & helpline registration staff. | Registers initial cases, issues victim docket numbers (`DOC-XXXXXX`), and holds exclusive auditable authority to transition cases to `Closed`. |
-| **Assigned Counsellor** | Clinical | Mental health professional (DMHP / clinical psychologist). | 24/7 empathetic chat companion monitoring, reviews explainable multi-signal breakdowns, authors and signs AI-drafted case notes. |
-| **Investigating Officer (IO)** | Police Station | Police officer (DSP rank under PoA Act) at FIR station. | Records investigation milestones (arrest, bail, chargesheet filing), alerts Protection Officer on detected threats, advances case to `Trial`. |
-| **District Welfare Officer (DWO)** | District | District Social Welfare Department disbursing authority. | Approves fast Immediate Relief and verifies + disburses 3-stage statutory compensation directly to victim bank accounts. |
-| **DLSA Coordinator** | District | District Legal Services Authority (NALSA statutory mandate). | Enforces free legal aid entitlement gated on caste proof; assigns panel advocates under a mandatory **48-hour SLA**; tracks trial progress. |
-| **Protection Officer** | District / Division | Witness and victim protection officer under PoA Act Rules. | Evaluates physical threat tiers, manages safe-house relocations, receives IO threat alerts, and coordinates immediate emergency SOS responses. |
-| **District Collector** | District | Chair of the District Vigilance & Monitoring Committee (DVMC). | Automatically receives all escalated tasks—missed 48h legal SLAs, stale referrals, unpaid compensation stages—and issues binding directives. |
-| **Rehabilitation Officer** | Centre-Specific | Staff at Government (DMHP) or NGO rehabilitation centres. | Manages post-closure survivor recovery, psychological counseling sessions, vocational training, and housing rehabilitation programs. |
+| **Ministry (MoSJE)** | National | National nodal authority under PoA Act. | Configures nationwide relief rules, provisions official accounts, audits compliance across states, inspects immutable audit logs. |
+| **State Administration** | State | State Social Welfare & Home oversight. | Analyzes cross-district distress heatmaps, identifies systemic atrocity spikes, balances inter-district counsellor and protection resources. |
+| **District Administration** | District | District Magistrate administrative machinery. | Oversees all district queues, reviews cross-agency bottlenecks, and approves specialized rehabilitation placements. |
+| **Data Operator** | Desk / Helpline | Front-desk intake & helpline registration. | Registers incoming cases, issues master docket numbers (`DOC-XXXXXX`), and holds exclusive auditable authority to formally mark cases `Closed`. |
+| **Assigned Counsellor** | Clinical | Mental health professional (DMHP / clinical). | 24/7 empathetic chat monitoring, reviews 4-signal explainable distress triage, and reviews/signs AI-drafted clinical case notes. |
+| **Investigating Officer (IO)** | Police Station | Investigating Police Officer (DSP rank). | Maintains custody of arrest, bail, and chargesheet facts; alerts Protection Officer on witness intimidation; advances stage to `Trial`. |
+| **District Welfare Officer (DWO)** | District | Disbursing authority for statutory relief. | Approves fast Immediate Relief and verifies + disburses 3-stage statutory compensation directly to victim bank accounts. |
+| **DLSA Coordinator** | District | District Legal Services Authority (NALSA). | Administers free legal aid gated on caste proof; enforces the **48-hour SLA** for panel counsel assignment; monitors trial hearings. |
+| **Protection Officer** | District / Division | Witness and victim protection cell. | Evaluates physical threat tiers, deploys police escorts and safe houses, and coordinates rapid emergency SOS interventions. |
+| **District Collector** | District | Chair of District Vigilance & Monitoring Committee (DVMC). | Automatically receives all escalated tasks—missed 48h legal SLAs, stale referrals, unpaid compensation stages—and issues binding directives. |
+| **Rehabilitation Officer** | Centre-Specific | Government (DMHP) or NGO rehabilitation centre. | Manages post-verdict long-term recovery plans, skill training, psychosocial rehabilitation, and tracks victim progress until completion. |
+| **Legal Representative** | Judicial | DLSA-assigned panel advocate / Special PP. | Accesses legal case files, records court hearing outcomes, and files bail objections on behalf of the victim. |
 
 ---
 
-## 6. Multimodal AI & Predictive Distress Pipeline
+## 6. Multimodal Distress Prediction & Algorithmic Logic
 
-The AI engine combines natural language processing, acoustic prosody analysis, and longitudinal behavioral tracking into a unified distress evaluation:
+The intelligence engine evaluates psychological trauma across acoustic, linguistic, and behavioral dimensions:
 
 ```mermaid
 graph LR
     subgraph "Input Signals"
-        Audio["Spoken Audio (WAV/M4A)"]
+        Audio["Voice Note / Call Audio (WAV)"]
         Text["Narrative Text (Chat/Check-In)"]
-        History["Historical Response Timeseries"]
+        History["Longitudinal Historical Baselines"]
     end
 
     subgraph "Feature Extraction"
-        ASR["faster-whisper / IIT Madras ASR"]
-        Prosody["Acoustic Analysis (librosa)<br/>F0 Pitch, Jitter, Shimmer, RMS"]
-        Sentiment["PS094_Sentiment_Model (Transformer)"]
-        Emotion["MultilingualEmotion (XLM-RoBERTa)"]
-        Engagement["Baseline Engagement Tracker"]
+        ASR["faster-whisper / Local ASR"]
+        Prosody["Acoustic Analysis (librosa)<br/>F0 Pitch, Jitter, Shimmer, RMS Energy"]
+        Sentiment["Trauma Sentiment Transformer"]
+        Emotion["Multilingual Emotion Model (11 Classes)"]
+        Engagement["Response Length & Cadence Baseline"]
     end
 
-    subgraph "Signal Normalization"
-        VSS["Voice Stress Score (0.0 - 1.0)"]
-        SRS["Sentiment Score (0.0 - 1.0)"]
-        EMS["Emotion Score (0.0 - 1.0)"]
+    subgraph "Normalized Signals"
+        VSS["Voice Stress (0.0 - 1.0)"]
+        SRS["Sentiment Polarity (0.0 - 1.0)"]
+        EMS["Emotion Intensity (0.0 - 1.0)"]
         EDS["Engagement Drop (0.0 - 1.0)"]
     end
 
-    subgraph "Multimodal Fusion Matrix"
-        Fusion{"Dynamic Distress Fusion Formula"}
+    subgraph "Fusion & Forecasting"
+        Fusion{"Multimodal Fusion Matrix"}
         Score["Dynamic Distress Score (0 - 100)"]
         Tiers{"Risk Classification<br/>Low | Moderate | High | Critical"}
-        OLS["OLS Linear Trend Analysis<br/>Distress Velocity (pts/day)"]
+        OLS["OLS Linear Trend Regression<br/>Distress Velocity (pts/day)"]
     end
 
     Audio --> ASR --> Text
@@ -243,62 +292,62 @@ graph LR
 
 ### Mathematical Formulations
 
-#### 1. Multimodal Input Fusion (Voice + Text Provided)
-When voice audio is recorded, acoustic vocal stress is fused with linguistic and behavioral signals:
+#### 1. Multimodal Fusion Matrix (Voice Audio + Text Provided)
+When voice notes or calls are recorded, acoustic prosody is mathematically fused with textual sentiment, emotion, and behavioral engagement:
 
 $$\text{Distress Score} = \left( 0.40 \cdot \text{Sentiment}_{\text{raw}} + 0.30 \cdot \text{VoiceStress} + 0.20 \cdot \text{Emotion} + 0.10 \cdot \text{EngagementDrop} \right) \times 100$$
 
-#### 2. Text-Only Input Fusion (No Voice Attached)
+#### 2. Text-Only Fusion Matrix (No Audio Attached)
 When communication is text-based only:
 
 $$\text{Distress Score} = \left( 0.50 \cdot \text{Sentiment}_{\text{raw}} + 0.35 \cdot \text{Emotion} + 0.15 \cdot \text{EngagementDrop} \right) \times 100$$
 
 #### 3. Predictive Escalation Trajectory (OLS Linear Regression)
-To forecast psychological deterioration before crisis occurs, the platform computes the rate of score change:
+To identify acute psychological deterioration before a crisis occurs, the system evaluates the rate-of-change (velocity) across historical score readings:
 
 $$\text{Velocity } (m) = \frac{N \sum_{i=1}^N (t_i S_i) - \sum_{i=1}^N t_i \sum_{i=1}^N S_i}{N \sum_{i=1}^N t_i^2 - \left(\sum_{i=1}^N t_i\right)^2}$$
 
 $$\text{Estimated Days to Critical Threshold} = \frac{80 - S_{\text{latest}}}{m} \quad (\text{when } m > 0)$$
 
-### Clinical Risk Thresholds & Statutory Response Matrix
+### Clinical Risk Thresholds & System Protocols
 
 | Distress Score | Risk Tier | Clinical Interpretation | System Protocol & Action |
 | :---: | :---: | :--- | :--- |
 | **$0 - 29$** | **Low** | Stable emotional baseline, normal coping. | Standard dashboard, self-guided wellness exercises, bi-weekly check-in prompt. |
 | **$30 - 59$** | **Moderate** | Mild situational anxiety, early trauma markers. | Periodic check-in nudges, grounding exercises, flagged for routine counsellor review. |
-| **$60 - 79$** | **High** | Acute trauma markers, severe distress, withdrawal. | High-priority counsellor alert, mandatory session within 48h, 14566 helpline displayed. |
-| **$80 - 100$** | **Critical (SOS)** | Crisis state, severe helplessness, self-harm risk. | Real-time emergency alert to Counsellor & District Admin; emergency SOS modal activated; Protection Officer notified. |
+| **$60 - 79$** | **High** | Acute trauma markers, severe distress, withdrawal. | High-priority counsellor alert, mandatory session within 48 hours, 14566 helpline displayed. |
+| **$80 - 100$** | **Critical (SOS)** | Crisis state, severe helplessness, potential self-harm. | Immediate real-time alert to Counsellor & District Admin; emergency SOS modal activated; Protection Officer notified. |
 
 ---
 
-## 7. 3D Computer Graphics & Interactive Avatar Pipeline
+## 7. Interactive 3D Visual & Affective Companion Logic
 
-The mobile client integrates real-time hardware-accelerated 3D graphics to create a humanized, reassuring companion:
+The mobile client incorporates real-time hardware-accelerated 3D graphics to provide a humanized, reassuring presence during emotional distress:
 
 ```mermaid
 graph TD
-    subgraph "3D Graphics Engine (Avatar3DController.js)"
-        ThreeJS["Three.js WebGL Scene (expo-gl)"]
-        GLTF["ReadyPlayerMe 3D Model (casual_male.glb)"]
+    subgraph "3D Graphics Scene Controller"
+        WebGL["WebGL Canvas Scene (Three.js)"]
+        Model["3D Counsellor Model (casual_male.glb)"]
         Bones["Skeletal Bone Controls (Head, Neck, Eyes)"]
         Morphs["Facial Morph Targets (Visemes & Expressions)"]
     end
 
-    subgraph "Kinematic Controller"
+    subgraph "Procedural Kinematic Controller"
         Breathing["Physiological Breathing Sway (0.28 Hz)"]
-        Blinking["Natural Saccadic Blinking"]
+        Blinking["Natural Saccadic Blinking Intervals"]
         EmpathyPose["Affective 5° Head Tilt + Affirmative Nodding"]
-        ThinkingPose["Cognitive Lateral Gaze during AI Inference"]
+        ThinkingPose["Cognitive Lateral Gaze during AI Reasoning"]
     end
 
-    subgraph "Speech & Lip-Sync Synchronization"
+    subgraph "Phonetic Lip-Sync Synchronization"
         TTS["Speech Synthesis Syllable Boundaries"]
         VisemeMap["Phonetic Viseme Mapping (viseme_aa, mouthOpen, viseme_O, viseme_U)"]
     end
 
-    ThreeJS --> GLTF
-    GLTF --> Bones
-    GLTF --> Morphs
+    WebGL --> Model
+    Model --> Bones
+    Model --> Morphs
 
     Breathing --> Bones
     Blinking --> Morphs
@@ -309,20 +358,20 @@ graph TD
 ```
 
 ### Visual & Interactive Features
-- **ReadyPlayerMe 3D Model (`casual_male.glb`)**: Professional male counsellor model with trimmed beard, short hair, and blue collared polo shirt matching administrative iconography.
-- **Natural Bone Kinematics**: Procedural micro-movements simulating physiological breathing ($0.28\text{ Hz}$), random natural blinking intervals, and eye saccades.
+- **3D ReadyPlayerMe Male Counsellor**: Professional male model with short hair, trimmed beard, and blue collared polo shirt matching administrative iconography.
+- **Natural Bone Kinematics**: Procedural micro-movements simulating physiological breathing ($0.28\text{ Hz}$), random natural blinking intervals, and eye gaze saccades.
 - **Affective Emotional States**:
-  - **Empathy Mode**: Triggers a gentle $5^\circ$ lateral head tilt ($Z = +0.055\text{ rad}$) with slow affirmative nodding ($0.4\text{ Hz}$) upon detection of pain or trauma keywords.
-  - **Thinking Mode**: Slight upward tilt and lateral cognitive gaze during AI reasoning turns.
+  - **Empathy Mode**: Triggers a gentle $5^\circ$ lateral head tilt ($Z = +0.055\text{ rad}$) and slow affirmative nodding ($0.4\text{ Hz}$) when pain, fear, or trauma keywords are detected.
+  - **Thinking Mode**: Slight upward tilt and lateral cognitive glance during AI reasoning turns.
   - **Reassuring Mode**: Direct forward gaze with supportive facial smile morphs.
 - **Boundary-Driven Lip-Sync**: Phonetic mouth shapes dynamically synchronized with speech synthesis syllable boundaries.
-- **1:1 Holographic Particle Gyroscope (`MansakhaCallModal.js`)**: In voice call mode, renders a distortion-free 3D particle hologram with 160 depth-sorted points, 3 rotating planetary rings, ambient radial aura, and an animated 28-bar audio frequency equalizer.
+- **1:1 Holographic Particle Gyroscope**: In voice call mode, renders a distortion-free 3D particle hologram with 160 depth-sorted points, 3 rotating planetary rings, ambient radial aura, and an animated 28-bar audio frequency equalizer.
 
 ---
 
-## 8. Relational Data Model & Schema Architecture
+## 8. Relational Data Architecture & Schema Logic
 
-The relational schema is managed via PostgreSQL (Supabase) across 19 core tables:
+The relational data tier enforces multi-tenant jurisdictional isolation and strict foreign key integrity:
 
 ```mermaid
 erDiagram
@@ -388,152 +437,55 @@ erDiagram
 
 ---
 
-## 9. Privacy, Security & Low-Bandwidth Feasibility
+## 9. Sovereign Edge Deployment, Privacy & Feasibility Plan
 
-1. **Digital Personal Data Protection (DPDP) Act 2023 Compliance**: All audio transcripts, voice notes, and clinical evaluations are processed within Indian territorial jurisdiction with 100% sovereign on-device and local edge models.
-2. **PII Separation**: Personally Identifiable Information (names, phone numbers, addresses) is stored in isolated tables separate from the AI scoring and alert pipelines.
-3. **Time-Limited Signed URLs**: Uploaded proof documents (caste certificates, FIR copies, bank passbooks) are stored in secure buckets accessible only via short-lived, signed URLs.
-4. **Clinical Boundaries**: Mansakha functions strictly as an empathetic supportive companion and triage assistant; it does not issue psychiatric diagnoses or prescribe medication.
-5. **Trauma-Informed Non-Interrogative Interaction**: The AI model is strictly prohibited from cross-examining survivors, demanding evidence, or questioning incident timelines.
-6. **Rural & Low-Bandwidth Resilience**: Mobile-first architecture with lightweight data payloads, local caching, and SMS-based check-in fallbacks for low-connectivity rural areas.
+### 1. 100% Sovereign Edge Deployment (Zero External Cloud LLM Costs)
+- **Local On-Premises Execution**: All language modeling (`gemma3:4b`), speech-to-text transcription (`faster-whisper`), and prosody extraction execute on local government hardware (e.g., State Data Centres or local edge servers).
+- **DPDP Act 2023 Compliance**: Zero victim transcripts, voice recordings, or clinical assessments ever leave Indian territorial jurisdiction or traverse third-party commercial APIs.
 
----
+### 2. PII Separation & Evidence Security
+- **Data Isolation**: Personally Identifiable Information (names, phone numbers, addresses) is stored in isolated tables separated from analytical scoring pipelines.
+- **Short-Lived Signed URLs**: Evidence documents (caste certificates, FIR copies, bank passbooks) are held in encrypted object storage accessible solely via short-lived, time-limited signed URLs.
+- **Immutable Audit Logging**: Every administrative action, case transition, referral verification, and record access is cryptographically recorded in an immutable audit ledger.
 
-## 10. Setup & Execution Plan
+### 3. Rural & Low-Bandwidth Feasibility
+- **Low-Bandwidth Mobile Optimization**: The client application is optimized for low-bandwidth 2G/3G mobile networks, using compact JSON payloads and local state caching.
+- **SMS / Offline Fallback**: In remote areas lacking continuous mobile data, lightweight SMS-based check-in prompts provide an unobtrusive fallback channel to maintain baseline monitoring.
 
-The platform is engineered to run locally with zero paid cloud subscriptions:
-
-### Prerequisites
-- **Node.js** (v18.0 or higher) & **npm**
-- **Python** (v3.10 or higher) with `pip`
-- **Ollama** installed locally ([ollama.com](https://ollama.com))
-- **Git**
-
-### Execution Plan (Running the 5 Services)
-
-#### 1. Start Local Ollama LLM
-Open a terminal and start the local model daemon:
-```bash
-# Pull and start the quantized Gemma 3 4B model
-ollama run gemma3:4b
-```
-*Runs on `http://127.0.0.1:11434`.*
-
-#### 2. Start Django AI Inference Backend
-Open a second terminal:
-```bash
-cd Mansakha/AI-backend
-
-# Create and activate Python virtual environment
-python -m venv venv
-venv\Scripts\activate      # Windows (or: source venv/bin/activate on Unix)
-
-# Install machine learning dependencies
-pip install -r requirements.txt
-
-# Run migrations and start server
-python manage.py migrate
-python manage.py runserver 8000
-```
-*Runs on `http://127.0.0.1:8000`. Health check: `http://127.0.0.1:8000/api/health/`.*
-
-#### 3. Start Node.js API Gateway Backend
-Open a third terminal:
-```bash
-cd Mansakha/backend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-
-# Start development server
-npm run dev
-```
-*Runs on `http://localhost:4000`. Health check: `http://localhost:4000/health`.*
-
-#### 4. Start Web Administration & Multi-Agency Portal
-Open a fourth terminal:
-```bash
-cd Mansakha/web-frontend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-
-# Start Vite dev server
-npm run dev
-```
-*Accessible at `http://localhost:3000`.*
-
-#### 5. Start Mobile App (Victim Application)
-Open a fifth terminal:
-```bash
-cd Mansakha/frontend
-
-# Install dependencies
-npm install
-
-# Configure environment
-cp .env.example .env
-
-# Start Expo dev server
-npm start
-```
-*Runs Expo Metro bundler on `http://localhost:8081`. Press `w` for Web or run on Android/iOS via Expo Go.*
+### 4. Trauma-Informed Clinical Guardrails
+- **No Cross-Examination**: The conversational companion is strictly prohibited from interrogating survivors, demanding proof, or questioning incident narratives.
+- **Supportive Bridge**: Mansakha never issues psychiatric diagnoses or prescribes medical treatments; it functions as an empathetic first-line support bridge connecting victims to licensed human professionals.
 
 ---
 
-## 11. Repository Organization
+## 10. Functional Subsystems & Domain Organization
+
+The platform is organized into five specialized functional subsystems:
 
 ```
-Mansakha/
-├── AI-backend/               # Django REST microservice (Whisper ASR, PyTorch models)
-│   ├── api/                  # Speech, prosody, and NLP inference controllers
-│   ├── manage.py             # Django management entry point
-│   ├── requirements.txt      # Python AI/ML dependencies
-│   └── .env.example          # AI service configuration template
-├── Mansakha-Ai/              # Pretrained model weights, scalers, and tokenizers
-│   ├── PS094_Sentiment_Model/ # Fine-tuned trauma sentiment transformer
-│   ├── MultilingualEmotion/   # XLM-RoBERTa 11-class emotion transformer
-│   ├── pitch_emotion_model_v2.pkl # Acoustic voice stress ensemble classifier
-│   └── scaler.pkl            # Acoustic feature normalization scaler
-├── backend/                  # Node.js / Express.js central API gateway
-│   ├── src/
-│   │   ├── ai/               # Distress scoring formulas and OLS trajectory engine
-│   │   ├── core/             # Database clients, migrations, schema.sql
-│   │   ├── middleware/       # JWT auth, RBAC, and internal secret guards
-│   │   ├── io/               # Investigating Officer police queue
-│   │   ├── dwo/              # District Welfare Officer relief & compensation
-│   │   ├── dlsa/             # DLSA legal aid & 48h counsel allocation
-│   │   ├── protection_officer/ # Protection Officer threat registry
-│   │   ├── district_collector/ # District Collector DVMC committee review
-│   │   ├── rehabilitation_officer/ # Post-closure rehabilitation plans
-│   │   ├── counsellor/       # Clinical case queue and triage
-│   │   └── server.js         # Express server entry point & background daemons
-│   └── package.json          # Node.js dependencies
-├── frontend/                 # React Native (Expo) mobile application
-│   ├── src/
-│   │   ├── user/chat/        # AI companion, 3D avatar controller, call modal
-│   │   ├── user/wellness/    # Check-ins, journaling, compensation tracker, SOS
-│   │   ├── navigation/       # Screen routers and role-aware navigation
-│   │   └── services/         # API clients and offline state caches
-│   ├── public/models/        # ReadyPlayerMe 3D GLB models (casual_male.glb)
-│   └── package.json          # Mobile client dependencies
-├── web-frontend/             # React (Vite) multi-agency portal (10 roles)
-│   ├── src/
-│   │   ├── counsellor/       # Clinical triage, explainable breakdown, notes
-│   │   ├── district_admin/   # District monitoring and referral routing
-│   │   ├── io/               # Investigating Officer station queue
-│   │   ├── dwo/              # DWO compensation and relief disbursal
-│   │   ├── dlsa/             # DLSA legal counsel assignment
-│   │   ├── protection_officer/ # Threat tracking and safe houses
-│   │   ├── district_collector/ # DVMC committee review & escalation desk
-│   │   └── rehabilitation_officer/ # Psychosocial recovery tracking
-│   └── package.json          # Web portal dependencies
-├── CODEBASE_ANALYSIS.md      # Comprehensive source-code technical analysis
-└── README.md                 # System specification and plan (this document)
+Mansakha Platform
+│
+├── 1. Client Experience Subsystem (Mobile & Web)
+│   ├── Victim Mobile App (24/7 AI Chat, 3D Avatar Kinematics, Journaling, SOS)
+│   └── Multi-Agency Web Portal (10 Role-Scoped Queues & Administrative Dashboards)
+│
+├── 2. Central Orchestration & Governance Subsystem
+│   ├── API Gateway, RBAC Security & Session Token Handlers
+│   ├── Multi-Agency Referral Router & Task Dispatch Engine
+│   └── Background SLA Escalation Daemon (DVMC District Collector Integration)
+│
+├── 3. Relational Data & Compliance Subsystem
+│   ├── Multi-Tenant Jurisdictional Database Schema
+│   ├── Time-Limited Signed Evidence Object Storage
+│   └── Cryptographic Audit Ledger & Compliance Logging
+│
+├── 4. Speech & Acoustic Intelligence Subsystem
+│   ├── Indian-Accented Automatic Speech Recognition (ASR)
+│   ├── Acoustic Prosody Analysis (F0 Pitch, Jitter, Shimmer, Vocal Tension)
+│   └── Multilingual Trauma Emotion & Sentiment Transformers
+│
+└── 5. Generative Clinical Reasoning Subsystem
+    ├── Sovereign On-Premises LLM (Quantized gemma3:4b)
+    ├── Trauma-Informed Conversational Therapy Prompts
+    └── Automated Clinical Rationale & Case Note Drafting Engine
 ```
