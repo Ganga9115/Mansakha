@@ -39,7 +39,7 @@ Under the **Scheduled Castes and the Scheduled Tribes (Prevention of Atrocities)
 ```
 
 ### The Mansakha Solution Plan
-**Mansakha (मानसखा — "Companion of the Mind")** resolves PS 094 by replacing disconnected physical paper trails with a synchronized dual-interface ecosystem:
+**Mansakha (मानसखा — *"Mind Matters — We Are Listening"*)** resolves PS 094 by replacing disconnected physical paper trails with a synchronized dual-interface ecosystem:
 - **For the Beneficiary / Survivor**: A single, continuous mobile companion providing 24/7 empathetic conversational grounding, proactive distress monitoring, a real-time 3-stage compensation tracker, and one-tap emergency SOS dispatch.
 - **For Government Stakeholders**: Ten role-scoped web portals connected to a single continuous case docket (`DOC-XXXXXX`). Every agency works from its own specialized queue while reading from and writing to a single shared truth.
 
