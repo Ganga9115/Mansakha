@@ -1,4 +1,5 @@
 # Mansakha (मानसखा) — SIH26094
+### *Mind Matters — We Are Listening*
 
 > **AI-Powered Dynamic Mental Health Monitoring, Predictive Distress Forecasting & Rehabilitation Support Platform**  
 > *Developed for the Ministry of Social Justice and Empowerment (MoSJE), Government of India*  
