@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Pitch Emotion Detector</title>
+<style>
+  :root {
+    --anger:#e74c3c;--disgust:#8e44ad;--fear:#f39c12;
+    --happy:#2ecc71;--neutral:#95a5a6;--sad:#3498db;
+    --bg:#0f0f1a;--card:#16213e;--border:#2a2a4a;
+    --text:#e0e0f0;--muted:#7a7a9a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:24px 16px}
+  h1{font-size:1.6rem;font-weight:700;letter-spacing:.05em;margin-bottom:6px;
+    background:linear-gradient(90deg,#00d4ff,#7b61ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .subtitle{color:var(--muted);font-size:.85rem;margin-bottom:24px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;width:100%;max-width:900px}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+  .card-title{font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);margin-bottom:14px}
+  #emotion-card{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:180px;transition:border-color .4s}
+  #emotion-emoji{font-size:4.5rem;line-height:1;margin-bottom:8px}
+  #emotion-label{font-size:2rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;transition:color .4s}
+  #confidence-pct{font-size:.9rem;color:var(--muted);margin-top:6px}
+  #mic-card{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;min-height:180px}
+  #mic-btn{width:80px;height:80px;border-radius:50%;border:none;
+    background:linear-gradient(135deg,#00d4ff,#7b61ff);cursor:pointer;font-size:2.2rem;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 0 rgba(0,212,255,.5);transition:transform .15s,box-shadow .3s}
+  #mic-btn:hover{transform:scale(1.05)}
+  #mic-btn.active{animation:pulse 1.4s infinite;background:linear-gradient(135deg,#e74c3c,#f39c12)}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(231,76,60,.6)}70%{box-shadow:0 0 0 18px rgba(231,76,60,0)}100%{box-shadow:0 0 0 0 rgba(231,76,60,0)}}
+  #status-text{font-size:.85rem;color:var(--muted);text-align:center}
+  #model-badge{font-size:.7rem;background:#7b61ff22;border:1px solid #7b61ff55;color:#a08fff;
+    padding:3px 10px;border-radius:20px;letter-spacing:.08em}
+  .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .bar-label{width:60px;font-size:.8rem;color:var(--muted)}
+  .bar-track{flex:1;height:10px;background:#ffffff10;border-radius:6px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:6px;transition:width .35s ease,background .35s;width:0%}
+  .bar-pct{width:36px;font-size:.75rem;color:var(--muted);text-align:right}
+  #pitch-canvas{width:100%;height:130px;border-radius:8px;background:#ffffff06;display:block}
+  #history-card{grid-column:1/-1;padding:14px 20px}
+  #history-strip{display:flex;gap:6px;flex-wrap:nowrap;overflow:hidden;align-items:center;min-height:40px}
+  .hist-dot{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;
+    justify-content:center;font-size:1.3rem;flex-shrink:0;transition:background .3s;background:#ffffff08}
+  @media(max-width:600px){.grid{grid-template-columns:1fr}
+    #emotion-card,#mic-card,#bars-card,#pitch-card,#history-card{grid-column:1}}
+</style>
+</head>
+<body>
+<h1>&#127897;&#65039; Voice Pitch Emotion Detector</h1>
+<p class="subtitle">Real-time emotion recognition from pitch &mdash; no words needed</p>
+<div class="grid">
+  <div class="card" id="emotion-card">
+    <div class="card-title">Detected Emotion</div>
+    <div id="emotion-emoji">&#127908;</div>
+    <div id="emotion-label" style="color:#7a7a9a">LISTENING&hellip;</div>
+    <div id="confidence-pct">&mdash;</div>
+  </div>
+  <div class="card" id="mic-card">
+    <div class="card-title">Microphone</div>
+    <button id="mic-btn" title="Start / Stop">&#127897;&#65039;</button>
+    <div id="status-text">Click to start</div>
+    <div id="model-badge">v2 model &middot; 26 features</div>
+  </div>
+  <div class="card" id="bars-card">
+    <div class="card-title">Class Probabilities</div>
+    <div id="bars-container"></div>
+  </div>
+  <div class="card" id="pitch-card">
+    <div class="card-title">Live Pitch Contour (Hz)</div>
+    <canvas id="pitch-canvas"></canvas>
+  </div>
+  <div class="card" id="history-card">
+    <div class="card-title">Emotion History (newest &rarr;)</div>
+    <div id="history-strip"></div>
+  </div>
+</div>
+<script>
+const EMOTION_META={
+  anger:{emoji:'😠',color:'#e74c3c'},disgust:{emoji:'🤢',color:'#8e44ad'},
+  fear:{emoji:'😨',color:'#f39c12'},happy:{emoji:'😊',color:'#2ecc71'},
+  neutral:{emoji:'😐',color:'#95a5a6'},sad:{emoji:'😢',color:'#3498db'},
+  silence:{emoji:'🔇',color:'#444466'}
+};
+const EMOTIONS=['anger','disgust','fear','happy','neutral','sad'];
+const HIST_LEN=24;
+const WS_URL=`ws://${location.host}/ws`;
+
+// Build bars
+const barsContainer=document.getElementById('bars-container');
+EMOTIONS.forEach(e=>{
+  const m=EMOTION_META[e];
+  barsContainer.innerHTML+=`<div class="bar-row"><span class="bar-label">${e}</span>
+    <div class="bar-track"><div class="bar-fill" id="bar-${e}" style="background:${m.color}40"></div></div>
+    <span class="bar-pct" id="pct-${e}">0%</span></div>`;
+});
+
+// Pitch canvas
+const canvas=document.getElementById('pitch-canvas');
+const ctx2d=canvas.getContext('2d');
+let pitchData=[];
+function drawPitch(){
+  const W=canvas.offsetWidth,H=canvas.offsetHeight;
+  canvas.width=W;canvas.height=H;
+  ctx2d.clearRect(0,0,W,H);
+  if(pitchData.length<2)return;
+  const minHz=50,maxHz=500;
+  ctx2d.beginPath();
+  ctx2d.strokeStyle='#00d4ff';ctx2d.lineWidth=2;
+  ctx2d.shadowColor='#00d4ff';ctx2d.shadowBlur=6;
+  let started=false;
+  pitchData.forEach((val,i)=>{
+    if(val===null){started=false;return;}
+    const x=(i/(pitchData.length-1))*W;
+    const y=H-((val-minHz)/(maxHz-minHz))*H;
+    if(!started){ctx2d.moveTo(x,y);started=true;}else ctx2d.lineTo(x,y);
+  });
+  ctx2d.stroke();
+}
+
+// History
+const histStrip=document.getElementById('history-strip');
+let history=[];
+function pushHistory(emotion){
+  if(emotion==='silence')return;
+  history.push(emotion);
+  if(history.length>HIST_LEN)history=history.slice(-HIST_LEN);
+  histStrip.innerHTML='';
+  history.forEach(e=>{
+    const m=EMOTION_META[e]||EMOTION_META.silence;
+    const dot=document.createElement('div');
+    dot.className='hist-dot';dot.textContent=m.emoji;
+    dot.style.background=m.color+'33';histStrip.appendChild(dot);
+  });
+}
+
+// Update UI
+function updateUI(data){
+  const{emotion,confidence,pitch}=data;
+  const m=EMOTION_META[emotion]||EMOTION_META.silence;
+  document.getElementById('emotion-emoji').textContent=m.emoji;
+  document.getElementById('emotion-label').textContent=emotion.toUpperCase();
+  document.getElementById('emotion-label').style.color=m.color;
+  document.getElementById('emotion-card').style.borderColor=m.color+'88';
+  const topConf=confidence[emotion]??0;
+  document.getElementById('confidence-pct').textContent=
+    topConf?`confidence: ${(topConf*100).toFixed(0)}%`:'--';
+  EMOTIONS.forEach(e=>{
+    const val=confidence[e]??0;const pct=(val*100).toFixed(0);
+    const fill=document.getElementById('bar-'+e);
+    const pctEl=document.getElementById('pct-'+e);
+    if(fill&&pctEl){
+      fill.style.width=pct+'%';
+      fill.style.background=e===emotion?EMOTION_META[e].color:EMOTION_META[e].color+'40';
+      pctEl.textContent=pct+'%';
+    }
+  });
+  if(pitch&&pitch.length>0){pitchData=pitch;drawPitch();}
+  pushHistory(emotion);
+}
+
+// WebSocket + mic
+let ws=null,audioCtx=null,processor=null,source=null,stream=null;
+const micBtn=document.getElementById('mic-btn');
+const statusEl=document.getElementById('status-text');
+let running=false;
+micBtn.addEventListener('click',()=>running?stopCapture():startCapture());
+
+async function startCapture(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    audioCtx=new AudioContext();
+    source=audioCtx.createMediaStreamSource(stream);
+    processor=audioCtx.createScriptProcessor(4096,1,1);
+    source.connect(processor);processor.connect(audioCtx.destination);
+    ws=new WebSocket(WS_URL);ws.binaryType='arraybuffer';
+    ws.onopen=()=>{
+      ws.send(JSON.stringify({sampleRate:audioCtx.sampleRate}));
+      statusEl.textContent='Listening... speak now';
+      micBtn.classList.add('active');micBtn.textContent='⏹️';running=true;
+    };
+    ws.onmessage=(evt)=>{try{updateUI(JSON.parse(evt.data));}catch(e){}};
+    ws.onclose=()=>stopCapture();
+    ws.onerror=()=>{statusEl.textContent='Connection error — is server running?';stopCapture();};
+    processor.onaudioprocess=(e)=>{
+      if(ws&&ws.readyState===WebSocket.OPEN){
+        const pcm=e.inputBuffer.getChannelData(0);ws.send(pcm.buffer.slice(0));
+      }
+    };
+  }catch(err){statusEl.textContent='Mic access denied: '+err.message;}
+}
+function stopCapture(){
+  running=false;
+  if(processor){processor.disconnect();processor=null;}
+  if(source){source.disconnect();source=null;}
+  if(audioCtx){audioCtx.close();audioCtx=null;}
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  if(ws&&ws.readyState===WebSocket.OPEN)ws.close();
+  ws=null;micBtn.classList.remove('active');micBtn.textContent='🎙️';
+  statusEl.textContent='Click to start';
+  document.getElementById('emotion-label').textContent='STOPPED';
+  document.getElementById('emotion-label').style.color='#7a7a9a';
+  document.getElementById('emotion-emoji').textContent='🎤';
+}
+window.addEventListener('resize',drawPitch);
+</script>
+</body>
+</html>

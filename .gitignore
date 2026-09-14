@@ -20,10 +20,12 @@ web-build/
 **/__pycache__/
 *.py[cod]
 
-# Large Model Weights & Data (>100MB)
-Mansakha/Mansakha-Ai/
+# Large Model Binary Weights (>100MB), Raw Training Audio Datasets & Checkpoints
 *.safetensors
 *.bin
 *.pt
-*.pkl
-
+pitch_emotion_model*.pkl
+**/checkpoints/
+**/.cache/
+**/Voice Emotion Dataset/
+*.csv
