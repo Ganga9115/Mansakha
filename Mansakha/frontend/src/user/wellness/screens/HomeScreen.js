@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
@@ -320,10 +320,23 @@ export default function HomeScreen({ navigation }) {
                                       <Feather name="clock" size={13} color={colors.sidebarAccent} />
                                       <Text style={styles.sessionMetaText}>{timeStr}</Text>
                                     </View>
-                                    {/* Join Session button */}
-                                    <Pressable style={styles.joinSessionBtn} onPress={() => {/* TODO: handle join */}}>
-                                      <Text style={styles.joinSessionBtnText}>Join Session</Text>
-                                    </Pressable>
+                                    {/* Responsive Join Session button */}
+                                    <View style={styles.joinBtnWrapper}>
+                                      <Pressable
+                                        style={({ pressed }) => [
+                                          styles.joinSessionBtn,
+                                          isDesktop && styles.joinSessionBtnDesktop,
+                                          pressed && styles.joinSessionBtnPressed,
+                                        ]}
+                                        onPress={() => navigation?.navigate('CounsellorChat')}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Join Counselling Session with ${s.counsellorName || 'counsellor'}`}
+                                      >
+                                        <Feather name="video" size={13} color="#FFFFFF" style={styles.joinBtnIcon} />
+                                        <Text style={styles.joinSessionBtnText}>Join Session</Text>
+                                        <Feather name="arrow-right" size={12} color="rgba(255,255,255,0.9)" style={styles.joinBtnArrow} />
+                                      </Pressable>
+                                    </View>
                                   </View>
                                 </View>
                               </View>
@@ -653,6 +666,51 @@ const styles = StyleSheet.create({
   sessionTitle: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14, fontWeight: '700' },
   iconMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   sessionMetaText: { ...typography.caption, color: colors.textSecondary, fontSize: 12 },
+
+  /* Join Session Responsive Button */
+  joinBtnWrapper: {
+    marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  joinSessionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 7,
+    paddingHorizontal: 15,
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.28,
+    shadowRadius: 4,
+    elevation: 3,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', transition: 'all 0.15s ease' } : {}),
+  },
+  joinSessionBtnDesktop: {
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+  },
+  joinSessionBtnPressed: {
+    backgroundColor: colors.primaryDark,
+    opacity: 0.9,
+    transform: [{ scale: 0.97 }],
+  },
+  joinBtnIcon: {
+    marginRight: 6,
+  },
+  joinBtnArrow: {
+    marginLeft: 6,
+  },
+  joinSessionBtnText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.3,
+  },
 
   /* Recent Activity Box */
   activityRowItem: {
