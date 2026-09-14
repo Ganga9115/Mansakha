@@ -41,7 +41,7 @@ function AnalyticsSnapshotPanel({ jurisdictionId, insight, setInsight }) {
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5"><Sparkles size={13} className="text-[#519BCE]" /> AI Snapshot</p>
-          <p className="text-[11px] text-gray-400 mt-0.5">Optional - attaches a Gemini analytics read of this jurisdiction to the report.</p>
+          <p className="text-[11px] text-gray-400 mt-0.5">Optional - attaches an AI analytics read of this jurisdiction to the report.</p>
         </div>
         <button
           type="button"
@@ -53,7 +53,7 @@ function AnalyticsSnapshotPanel({ jurisdictionId, insight, setInsight }) {
         </button>
       </div>
       {errorMsg && <p className="text-[11px] text-rose-600">{errorMsg}</p>}
-      {generateAnalytics.loading && <p className="text-[11px] text-gray-400">Analyzing recent interaction data with Gemini...</p>}
+      {generateAnalytics.loading && <p className="text-[11px] text-gray-400">Analyzing recent interaction data with Mansakha AI...</p>}
       {!generateAnalytics.loading && insight === null && <p className="text-[11px] text-gray-400">Not enough interaction data yet for this period - report can still be submitted without a snapshot.</p>}
       {!generateAnalytics.loading && insight && (
         <div className="text-[11px] text-gray-600 space-y-1.5 border-t border-gray-200 pt-2">

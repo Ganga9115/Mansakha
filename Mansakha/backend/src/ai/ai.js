@@ -1,4 +1,4 @@
-const { callOllama: callGemini, callOllamaChat: callGeminiChat } = require('./ollama');
+const { callOllama, callOllamaChat } = require('./ollama');
 const { computeDistressScore } = require('./scoring');
 const { supabase } = require('../core/db/supabaseClient');
 const {
@@ -85,7 +85,7 @@ async function analyzeInteraction(userId, text, options = {}) {
 
   // 3. Complete assessment with Ollama clinical rationale and fallback heuristics
   if (!reason) {
-    const ollamaAssessment = await callGemini(effectiveText);
+    const ollamaAssessment = await callOllama(effectiveText);
     if (sentimentRaw === 0) sentimentRaw = ollamaAssessment.sentimentRaw;
     if (emotion === 0.2) emotion = ollamaAssessment.emotion;
     reason = ollamaAssessment.reason;
@@ -159,7 +159,7 @@ async function analyzeChatMessage(userId, text) {
     }
   } else {
     // 2. Fallback to direct Ollama chat
-    const ollamaChat = await callGeminiChat(text);
+    const ollamaChat = await callOllamaChat(text);
     sentimentRaw = ollamaChat.sentimentRaw;
     emotion = ollamaChat.emotion;
     reason = ollamaChat.reason;
