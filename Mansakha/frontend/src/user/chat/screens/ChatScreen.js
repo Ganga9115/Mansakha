@@ -10,7 +10,7 @@ import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import Svg, { Path } from 'react-native-svg';
 import TopRightActions from '../../shared/components/TopRightActions';
-import { useCheckin, useLogChatTurn } from '../../shared/services/hooks';
+import { useCheckin, useLogChatTurn, useChatHistory } from '../../shared/services/hooks';
 import MansakhaCallModal from '../components/MansakhaCallModal';
 import { useSpeechToText } from '../../shared/hooks/useSpeechToText';
 
@@ -91,6 +91,7 @@ export default function ChatScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const submitMutation = useCheckin();
   const logChatTurn = useLogChatTurn();
+  const chatHistory = useChatHistory('text');
   // useSpeechToText takes onResult as a plain function argument (see
   // JournalScreen.js's own call, or the hook's own signature) - this used
   // to pass an { onResult } object instead, so the hook's internal
@@ -135,6 +136,23 @@ export default function ChatScreen({ navigation }) {
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     };
   }, []);
+
+  // Restores the typed-text thread on reload/remount - seeds once from
+  // whatever's already persisted (GET /api/user/chat?channel=text, via
+  // logChatTurn's own POST after every turn below), then leaves `messages`
+  // to plain local state for the rest of this session instead of re-syncing
+  // on every background refetch, which would fight the optimistic append
+  // askOllama already does the instant a reply comes back.
+  const [hasSeededHistory, setHasSeededHistory] = useState(false);
+  useEffect(() => {
+    if (hasSeededHistory || !chatHistory.data?.messages) return;
+    setHasSeededHistory(true);
+    if (chatHistory.data.messages.length === 0) return;
+    setMessages(chatHistory.data.messages.map((m) => ({
+      role: m.sender === 'ai' ? 'assistant' : 'user',
+      content: m.body,
+    })));
+  }, [chatHistory.data, hasSeededHistory]);
 
   const stopMediaStream = () => {
     if (mediaStreamRef.current) {
@@ -409,7 +427,7 @@ export default function ChatScreen({ navigation }) {
             setMessages(prev => [...prev, msg]);
             if (msg.role === 'assistant') {
               const lastUserMsg = messages[messages.length - 1]?.content || 'Live spoken query';
-              logChatTurn.mutate({ userMessage: lastUserMsg, aiMessage: msg.content });
+              logChatTurn.mutate({ userMessage: lastUserMsg, aiMessage: msg.content, channel: msg.channel || 'voice_call' });
             }
           }}
         />

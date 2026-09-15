@@ -462,13 +462,31 @@ router.post('/chat', userChatLimiter, async (req, res) => {
 
 // Chat history for the thread UI - oldest first, matching DistressHistoryScreen's
 // existing convention for time-series data.
+//
+// ?channel filters to one of 'text' | 'voice_call' | 'video_call'
+// (migration_047) - ChatScreen.js's own composer thread requests
+// channel=text specifically, so a live voice/video call's turns (logged to
+// this same table via /chat/log below) are recorded for scoring/analytics
+// but never get replayed back into the typed-message thread on reload -
+// they were never typed bubbles to begin with. Omit the param to get every
+// channel (e.g. for a future counsellor/admin view over the full history).
 router.get('/chat', async (req, res) => {
-  const { rows } = await pool.query(
-    `select message_id, sender, body, sent_at from chat_messages where user_id = $1 order by sent_at asc`,
-    [req.auth.userId]
-  );
+  const { channel } = req.query;
+  if (channel && !['text', 'voice_call', 'video_call'].includes(channel)) {
+    return fail(res, "channel must be one of: text, voice_call, video_call", 400);
+  }
+
+  const { rows } = channel
+    ? await pool.query(
+        `select message_id, sender, body, sent_at, channel from chat_messages where user_id = $1 and channel = $2 order by sent_at asc`,
+        [req.auth.userId, channel]
+      )
+    : await pool.query(
+        `select message_id, sender, body, sent_at, channel from chat_messages where user_id = $1 order by sent_at asc`,
+        [req.auth.userId]
+      );
   return ok(res, {
-    messages: rows.map((m) => ({ messageId: m.message_id, sender: m.sender, body: m.body, sentAt: m.sent_at })),
+    messages: rows.map((m) => ({ messageId: m.message_id, sender: m.sender, body: m.body, sentAt: m.sent_at, channel: m.channel })),
   });
 });
 
@@ -492,14 +510,17 @@ function countWords(text) {
   return (text || '').trim().split(/\s+/).filter(Boolean).length;
 }
 
+const CHAT_CHANNELS = ['text', 'voice_call', 'video_call'];
+
 router.post('/chat/log', async (req, res) => {
   const userId = req.auth.userId;
-  const { userMessage, aiMessage } = req.body;
+  const { userMessage, aiMessage, channel = 'text' } = req.body;
   if (typeof userMessage !== 'string' || !userMessage.trim()) return fail(res, 'userMessage is required', 400);
+  if (!CHAT_CHANNELS.includes(channel)) return fail(res, `channel must be one of: ${CHAT_CHANNELS.join(', ')}`, 400);
 
-  const toInsert = [{ user_id: userId, sender: 'user', body: userMessage.trim() }];
+  const toInsert = [{ user_id: userId, sender: 'user', body: userMessage.trim(), channel }];
   if (typeof aiMessage === 'string' && aiMessage.trim()) {
-    toInsert.push({ user_id: userId, sender: 'ai', body: aiMessage.trim() });
+    toInsert.push({ user_id: userId, sender: 'ai', body: aiMessage.trim(), channel });
   }
   const { error: insertError } = await supabase.from('chat_messages').insert(toInsert);
   if (insertError) return fail(res, `Could not save chat message: ${insertError.message}`, 500);
@@ -607,46 +628,15 @@ router.post('/urgent-help', async (req, res) => {
     }
   }
 
-  // Multi-case support: an SOS is relevant to Administration in every
-  // jurisdiction this person has an open case in, not just the case that
-  // happened to trigger it (same reasoning/decision as applyStressResponse's
-  // Critical-alert routing in stressResponse.js). userId is always the
-  // anchor already (see auth.user.routes.js's login).
+  // Multi-case support: an SOS is relevant to every jurisdiction this person
+  // has an open case in, not just the case that happened to trigger it
+  // (same reasoning as applyStressResponse's Critical-alert routing in
+  // stressResponse.js). userId is always the anchor already (see
+  // auth.user.routes.js's login). Used below to scope the Protection
+  // Officer lookup - District/State Administration are deliberately NOT
+  // notified here any more (explicit request: this alert goes to the
+  // counsellor and Protection Officer only, not district/state admin).
   const jurisdictionIds = await getJurisdictionIdsForCaseFamily(userId);
-  const adminIdSet = new Set();
-  // Each jurisdiction's own 3-step walk (district -> parent -> admin roles)
-  // is a genuine dependency chain, but a person with several linked cases
-  // has several INDEPENDENT jurisdictions to walk - those now run
-  // concurrently (Promise.all) instead of one full chain after another,
-  // which used to make an SOS - the single most time-critical action in the
-  // app - wait out N x 2 sequential PostgREST round trips before ever
-  // notifying anyone.
-  const adminIdsPerJurisdiction = await Promise.all(jurisdictionIds.map(async (jid) => {
-    // Walk the jurisdiction tree up from this district to find its parent
-    // state - State Administration is scoped to that state row, not the
-    // district itself, so this can't be a simple eq() on jid alone.
-    const { rows: districtRows } = await pool.query(`select parent_id from jurisdictions where jurisdiction_id = $1 limit 1`, [jid]);
-    const districtRow = districtRows[0];
-    let stateJurisdictionId = null;
-    if (districtRow?.parent_id) {
-      const { rows: parentRows } = await pool.query(`select jurisdiction_id, level from jurisdictions where jurisdiction_id = $1 limit 1`, [districtRow.parent_id]);
-      const parentRow = parentRows[0];
-      if (parentRow?.level === 'state') stateJurisdictionId = parentRow.jurisdiction_id;
-    }
-
-    const idsToCheck = stateJurisdictionId ? [jid, stateJurisdictionId] : [jid];
-    const { rows: adminRoles } = await pool.query(
-      `select orr.official_id, r.role_name
-       from official_roles orr
-       join roles r on r.role_id = orr.role_id
-       where orr.jurisdiction_id = any($1::uuid[]) and orr.revoked_at is null`,
-      [idsToCheck]
-    );
-    return (adminRoles || []).filter((r) => r.role_name === 'Administration').map((r) => r.official_id);
-  }));
-  for (const ids of adminIdsPerJurisdiction) {
-    for (const id of ids) adminIdSet.add(id);
-  }
 
   // Protection Officer assigned to the victim's own district(s) - "nearby
   // PO", same jurisdiction_id scoping protectionOfficer.routes.js's own
@@ -704,7 +694,7 @@ router.post('/urgent-help', async (req, res) => {
     console.error('POST /urgent-help: no Protection Officer assigned to this district', { userId, jurisdictionIds });
   }
 
-  const recipientIds = [...new Set([counsellorId, ...adminIdSet, ...protectionOfficerIds].filter(Boolean))];
+  const recipientIds = [...new Set([counsellorId, ...protectionOfficerIds].filter(Boolean))];
 
   if (recipientIds.length > 0) {
     const { error: notifyError } = await supabase
@@ -716,7 +706,7 @@ router.post('/urgent-help', async (req, res) => {
       await enqueueAlertDispatch(null, userId, recipientIds);
     }
   } else {
-    console.error('POST /urgent-help: no counsellor or admin available to notify', { sosEventId: sosEvent.sos_event_id, userId });
+    console.error('POST /urgent-help: no counsellor or Protection Officer available to notify', { sosEventId: sosEvent.sos_event_id, userId });
   }
 
   await writeAuditLog({ userId, action: 'create', entityType: 'sos_event', entityId: sosEvent.sos_event_id });

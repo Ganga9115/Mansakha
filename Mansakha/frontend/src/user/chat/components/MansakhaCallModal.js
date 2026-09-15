@@ -280,7 +280,7 @@ export default function MansakhaCallModal({
     }
 
     if (onNewMessage) {
-      onNewMessage({ role: 'user', content: userText });
+      onNewMessage({ role: 'user', content: userText, channel: isVideoMode ? 'video_call' : 'voice_call' });
     }
 
     try {
@@ -306,7 +306,7 @@ export default function MansakhaCallModal({
       }
 
       if (onNewMessage) {
-        onNewMessage({ role: 'assistant', content: aiReply });
+        onNewMessage({ role: 'assistant', content: aiReply, channel: isVideoMode ? 'video_call' : 'voice_call' });
       }
 
       setCallStatus('Connected');
