@@ -17,8 +17,15 @@ const getAssetUri = (asset) => {
   return '';
 };
 
-const OLLAMA_URL = "http://127.0.0.1:11434/api/chat";
-const OLLAMA_MODEL = "gemma3:4b";
+// Unlike this constant, ChatScreen.js and ollamaClient.js already read
+// EXPO_PUBLIC_OLLAMA_BASE_URL - this one was hardcoded to 127.0.0.1 (i.e.
+// only ever the current device), which is what made it impossible to point
+// the live call at a friend's/teammate's machine running Ollama, even
+// though the env var existed and worked for the other two Ollama call
+// sites.
+const OLLAMA_BASE_URL = process.env.EXPO_PUBLIC_OLLAMA_BASE_URL || "http://127.0.0.1:11434";
+const OLLAMA_URL = OLLAMA_BASE_URL + "/api/chat";
+const OLLAMA_MODEL = process.env.EXPO_PUBLIC_OLLAMA_MODEL || "gemma3:4b";
 
 const CALL_COMPANION_PROMPT = `You are Mansakha, a warm, compassionate, and attentive conversational companion on a live call with a person navigating distress or trauma under India's SC/ST (Prevention of Atrocities) Act. You are NOT an intake counselor, an interviewer, or an interrogator.
 

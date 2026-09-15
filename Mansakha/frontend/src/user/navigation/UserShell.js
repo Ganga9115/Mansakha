@@ -54,6 +54,47 @@ function CheckinTab() {
   );
 }
 
+// The `savedRoute` fallback each navigator below uses for `initialRouteName`
+// reads RootNavigator.js's `mansakha_active_page` - written from the ROOT
+// NavigationContainer's onStateChange as whatever the deepest leaf route
+// happens to be at that instant, from ANY navigator in the tree, not just
+// this one. Two different ways that bites a Tab/Drawer.Navigator here:
+//  1. One level too deep: 'checkin' nests its own CheckinStack
+//     ('CheckinMain'/'CheckinConfirmation') - a saved leaf from inside it
+//     isn't a screen name this navigator itself owns.
+//  2. One level too shallow, from a totally different navigator: right
+//     after login, the ROOT Stack.Navigator's own transition to 'UserShell'
+//     fires onStateChange before MainTabs has mounted any nested state of
+//     its own, so the "leaf" captured at that instant is 'UserShell' - not
+//     a screen this navigator owns either (confirmed live: this crashed
+//     every fresh login with "Couldn't find a screen named 'UserShell'...").
+// Both crash identically ("Couldn't find a screen named '...' to use as
+// 'initialRouteName'") because React Navigation takes this prop on faith.
+// Rather than enumerate every foreign/nested name that could show up here,
+// validate against the screen names this navigator actually registers
+// below and only use the saved value if it's genuinely one of them.
+const NESTED_LEAF_TO_TAB = {
+  CheckinMain: 'checkin',
+  CheckinConfirmation: 'checkin',
+};
+
+function resolveTopLevelRoute(savedRoute, validNames) {
+  if (!savedRoute) return null;
+  const mapped = NESTED_LEAF_TO_TAB[savedRoute] || savedRoute;
+  return validNames.has(mapped) ? mapped : null;
+}
+
+// Mirrors exactly the <Tab.Screen>/<Drawer.Screen> names registered below -
+// keep in sync if either list changes.
+const MOBILE_TAB_SCREEN_NAMES = new Set(['home', 'checkin', 'wellbeing', 'history', 'mycounsellor', 'settings', 'Journal', 'MyEntry']);
+const DESKTOP_DRAWER_SCREEN_NAMES = new Set([
+  'home', 'checkin', 'wellbeing', 'history', 'mycounsellor', 'settings',
+  'Chatbot', 'Journal', 'MyEntry', 'CounsellorChat', 'support', 'AtrocitiesAct',
+  'CaseDetails', 'RequestIntervention', 'RehabilitationProgress', 'RehabilitationOptIn',
+  'LegalAidHub', 'LegalAidRequest', 'LegalAidRepresentative', 'ThreatReport',
+  'FinancialAid', 'Compensation',
+]);
+
 const SCREENS = {
   home: HomeScreen,
   checkin: CheckinTab,
@@ -97,7 +138,7 @@ function TabNavigator() {
 
   return (
     <Tab.Navigator
-      initialRouteName={savedRoute || 'home'}
+      initialRouteName={resolveTopLevelRoute(savedRoute, MOBILE_TAB_SCREEN_NAMES) || 'home'}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -190,7 +231,7 @@ function DesktopNavigator() {
 
   return (
     <Drawer.Navigator
-      initialRouteName={savedRoute || 'home'}
+      initialRouteName={resolveTopLevelRoute(savedRoute, DESKTOP_DRAWER_SCREEN_NAMES) || 'home'}
       useLegacyImplementation={false}
       screenOptions={{
         headerShown: false,
