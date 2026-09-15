@@ -14,10 +14,7 @@ import CounsellorCaseChat from './counsellor/pages/CaseChat';
 import AlertsFeed from './counsellor/pages/AlertsFeed';
 import CounsellorAnalysis from './counsellor/pages/Analysis';
 import CounsellorSettings from './counsellor/pages/Settings';
-import CounsellorMailInbox from './counsellor/pages/MailInbox';
-import CounsellorMailSent from './counsellor/pages/MailSent';
-import CounsellorMailArchived from './counsellor/pages/MailArchived';
-import CounsellorMailThread from './counsellor/pages/MailThread';
+
 
 import DistrictAdminDashboard from './district_admin/pages/AdminDashboard';
 import DistrictAnalysis from './district_admin/pages/Analysis';
@@ -148,10 +145,7 @@ export default function App() {
         <Route path="/counsellor/case-detail/:id/chat" element={<RequireAuth><CounsellorCaseChat /></RequireAuth>} />
         <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
         <Route path="/counsellor/analysis" element={<RequireAuth><CounsellorAnalysis /></RequireAuth>} />
-        <Route path="/counsellor/mail" element={<RequireAuth><CounsellorMailInbox /></RequireAuth>} />
-        <Route path="/counsellor/mail/sent" element={<RequireAuth><CounsellorMailSent /></RequireAuth>} />
-        <Route path="/counsellor/mail/archived" element={<RequireAuth><CounsellorMailArchived /></RequireAuth>} />
-        <Route path="/counsellor/mail/thread/:threadId" element={<RequireAuth><CounsellorMailThread /></RequireAuth>} />
+
         <Route path="/counsellor/profile" element={<RequireAuth><CounsellorSettings /></RequireAuth>} />
 
         {/* District Admin - case-level dashboard is the default view;

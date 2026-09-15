@@ -472,10 +472,10 @@ function SeverityStackedChart({ severityDistribution }) {
         {severityDistribution.map((item, i) => (
           <div key={i} className="flex flex-col items-center gap-2 w-8">
             <div className="w-4 h-28 flex flex-col justify-end gap-1 rounded overflow-hidden">
-              <div className="bg-purple-700 w-full rounded-sm" style={{ height: `${(item.critical / maxTotal) * 100}%` }}></div>
-              <div className="bg-red-600 w-full rounded-sm" style={{ height: `${(item.high / maxTotal) * 100}%` }}></div>
-              <div className="bg-amber-500 w-full rounded-sm" style={{ height: `${(item.moderate / maxTotal) * 100}%` }}></div>
-              <div className="bg-emerald-600 w-full rounded-sm" style={{ height: `${(item.low / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#b91c1c] w-full rounded-sm" style={{ height: `${(item.critical / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#ea580c] w-full rounded-sm" style={{ height: `${(item.high / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#f59e0b] w-full rounded-sm" style={{ height: `${(item.moderate / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#10b981] w-full rounded-sm" style={{ height: `${(item.low / maxTotal) * 100}%` }}></div>
             </div>
           </div>
         ))}
@@ -490,16 +490,16 @@ function SeverityStackedChart({ severityDistribution }) {
 
       <div className="flex items-center gap-4 text-[11px] font-semibold text-gray-600 pt-1">
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-purple-700"></span> Critical
+          <span className="w-2 h-2 rounded-full bg-[#b91c1c]"></span> Critical
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-red-600"></span> High
+          <span className="w-2 h-2 rounded-full bg-[#ea580c]"></span> High
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-amber-500"></span> Moderate
+          <span className="w-2 h-2 rounded-full bg-[#f59e0b]"></span> Moderate
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-600"></span> Low
+          <span className="w-2 h-2 rounded-full bg-[#10b981]"></span> Low
         </span>
       </div>
     </div>

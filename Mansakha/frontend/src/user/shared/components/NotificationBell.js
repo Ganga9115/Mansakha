@@ -52,6 +52,7 @@ const ICON_BY_TYPE = { message: 'message-circle', session: 'calendar', legal_aid
 export default function NotificationBell({ size = 18, color = colors.primaryDark }) {
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
   const navigation = useNavigation();
   const { data, isLoading } = useMyNotifications();
   const notifications = data?.notifications || [];
@@ -62,17 +63,28 @@ export default function NotificationBell({ size = 18, color = colors.primaryDark
       .catch(() => {});
   }, []);
 
-  // Previously just `notifications.length > 0` - the dot showed for ANY
-  // notification that had ever arrived and never went away, even after
-  // opening the panel, since nothing tracked what had already been seen
-  // (unlike every web-frontend copy of this bell, which does).
-  const unreadCount = notifications.filter((n) => new Date(n.notifiedAt).getTime() > lastSeen).length;
+  const maxTimestamp = notifications.reduce((max, n) => {
+    const t = new Date(n.notifiedAt).getTime();
+    return !isNaN(t) && t > max ? t : max;
+  }, 0);
+
+  useEffect(() => {
+    if (notifications.some((n) => new Date(n.notifiedAt).getTime() > lastSeen)) {
+      setDismissed(false);
+    }
+  }, [notifications, lastSeen]);
+
+  // When bell is touched/opened or explicitly dismissed, hide red dot immediately
+  const unreadCount = (open || dismissed)
+    ? 0
+    : notifications.filter((n) => new Date(n.notifiedAt).getTime() > lastSeen).length;
 
   const handleOpen = () => {
     setOpen(true);
-    const now = Date.now();
-    setLastSeen(now);
-    AsyncStorage.setItem(LAST_SEEN_KEY, String(now)).catch(() => {});
+    setDismissed(true);
+    const targetSeen = Math.max(Date.now(), maxTimestamp);
+    setLastSeen(targetSeen);
+    AsyncStorage.setItem(LAST_SEEN_KEY, String(targetSeen)).catch(() => {});
   };
 
   const handleNotificationPress = (n) => {
@@ -111,7 +123,7 @@ export default function NotificationBell({ size = 18, color = colors.primaryDark
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.message}>{n.message}</Text>
-                      <Text style={styles.timestamp}>{timeAgo(n.notifiedAt)}</Text>
+                      <Text style={styles.timestamp}>{n.type === 'session' && n.scheduledAt ? timeAgo(n.scheduledAt) : timeAgo(n.notifiedAt)}</Text>
                     </View>
                     {!!ROUTE_BY_TYPE[n.type] && <Feather name="chevron-right" size={16} color={colors.textSecondary} />}
                   </Pressable>

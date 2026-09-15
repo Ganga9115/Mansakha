@@ -8,13 +8,67 @@ import { radius } from '../../shared/theme/radius';
 import { typography } from '../../shared/theme/typography';
 import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
+import Svg, { Path } from 'react-native-svg';
 import TopRightActions from '../../shared/components/TopRightActions';
-import { useCheckin, useLogChatTurn } from '../../shared/services/hooks';
+import { useCheckin, useLogChatTurn, useChatHistory } from '../../shared/services/hooks';
+import MansakhaCallModal from '../components/MansakhaCallModal';
+import { useSpeechToText } from '../../shared/hooks/useSpeechToText';
 
-const OLLAMA = "http://127.0.0.1:11434";
+const OLLAMA = process.env.EXPO_PUBLIC_OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const CHAT = OLLAMA + "/api/chat";
 const TAGS = OLLAMA + "/api/tags";
-const SYSTEM = `You are Mansakha, a calm and supportive conversational companion. Listen with empathy. Keep replies short and natural. Ask one gentle question at a time. Do not diagnose mental-health conditions. Do not assign risk levels or distress scores. Do not claim to be a doctor, counsellor, lawyer or police officer. Do not claim you contacted anyone. A separate post-conversation distress analysis handles distress scoring. If immediate danger is described, do not ask same question again and again, encourage immediate local emergency help.`;
+
+const SYSTEM = `You are Mansakha, a warm, compassionate, and attentive conversational companion for individuals navigating distress or trauma under India's SC/ST (Prevention of Atrocities) Act. You are NOT an intake counselor, an interviewer, or a Q&A bot.
+
+Follow these conversational boundaries strictly:
+
+1. BREAK THE INTERROGATION PATTERN:
+- Do NOT end every message with a question.
+- In most turns, ask NO questions at all. Simply sit with what the user shared, validate their feelings, or offer a comforting, calming reflection.
+- A supportive conversation is about presence and active listening, not continuous questioning.
+
+2. NEVER REPEAT QUESTIONS OR USE GENERIC PROMPTS:
+- Never ask repetitive filler questions like:
+  * "Can you tell me more about that?"
+  * "How does that make you feel?"
+  * "What's on your mind?"
+  * "Would you like to explore that further?"
+- If you asked a question in a previous turn, do NOT ask another one in the next turn. Let the user guide the direction.
+- Only ask a question if the user explicitly opens a specific story or topic, and make it deeply specific to what they just said—never a generic prompt.
+
+3. ELIMINATE THERAPIST CLICHÉS:
+- Never use formulaic, clinical phrases such as:
+  * "I hear you..."
+  * "Thank you for being so brave and sharing that with me..."
+  * "It takes a lot of courage to admit that..."
+- Speak naturally, like an empathetic friend who cares, not an automated support ticket or psychiatric screening bot.
+
+4. VARY YOUR CONVERSATIONAL CADENCE:
+- Mode A (Empathetic Reflection): Simply acknowledge how heavy or real their experience is without demanding more information from them.
+- Mode B (Gentle Grounding): Offer a calm perspective, reminding them it is okay to feel depleted, rest, or take things one moment at a time.
+- Mode C (Organic Interaction): Respond directly to what was said with genuine human resonance.
+
+5. CONCISENESS & FLOW:
+- Keep replies strictly between 2 to 3 sentences.
+- Never lecture, preach, or offer unsolicited step-by-step solutions unless they ask for advice.
+
+6. LANGUAGE CONSISTENCY:
+- Always reply entirely in the exact language the user used (e.g., pure English, pure Hindi, pure Tamil, etc.). Never mix languages or switch to another language.
+
+7. NO FORENSIC SCRUTINY OR CROSS-EXAMINATION:
+- Never interrogate, cross-examine, or ask for evidence, proof, or timeline justifications.
+
+8. NO TOXIC POSITIVITY:
+- Never minimize suffering with platitudes such as "Everything happens for a reason" or "Look on the bright side".
+
+9. NO FALSE LEGAL GUARANTEES:
+- Never make guarantees about specific court sentences, convictions, or compensation dates.
+
+10. NO PSYCHIATRIC LABELS:
+- Do not label the user with clinical disorders. Normalize their emotions as understandable human responses to immense hardship.
+
+11. PRESERVE DIGNITY & AGENCY:
+- Never condescend to the user or treat them as helpless. Empower their own choices and emotional pace.`;
 
 function Bubble({ message }) {
   const isUser = message.role === 'user';
@@ -37,16 +91,23 @@ export default function ChatScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const submitMutation = useCheckin();
   const logChatTurn = useLogChatTurn();
+  const chatHistory = useChatHistory('text');
+  // useSpeechToText takes onResult as a plain function argument (see
+  // JournalScreen.js's own call, or the hook's own signature) - this used
+  // to pass an { onResult } object instead, so the hook's internal
+  // `onResult(transcript)` call was invoking that object as a function and
+  // throwing, silently swallowed, which is why speech never reached the
+  // textbox no matter what the mic actually recorded.
+  const speech = useSpeechToText((text) => setDraft(prev => (prev ? prev + ' ' : '') + text));
   const [model, setModel] = useState('gemma3:4b');
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
   const [status, setStatus] = useState('Connecting to Ollama...');
 
-  // Call & Video States
+  // Live Voice Call State
   const [inCall, setInCall] = useState(false);
-  const [isVideoCall, setIsVideoCall] = useState(false);
-  const [facingMode, setFacingMode] = useState('user');
+  const [isCallModalVisible, setIsCallModalVisible] = useState(false);
   const [voiceState, setVoiceState] = useState('Ready to talk');
 
   // Layout Toggle & Recording States
@@ -75,6 +136,23 @@ export default function ChatScreen({ navigation }) {
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
     };
   }, []);
+
+  // Restores the typed-text thread on reload/remount - seeds once from
+  // whatever's already persisted (GET /api/user/chat?channel=text, via
+  // logChatTurn's own POST after every turn below), then leaves `messages`
+  // to plain local state for the rest of this session instead of re-syncing
+  // on every background refetch, which would fight the optimistic append
+  // askOllama already does the instant a reply comes back.
+  const [hasSeededHistory, setHasSeededHistory] = useState(false);
+  useEffect(() => {
+    if (hasSeededHistory || !chatHistory.data?.messages) return;
+    setHasSeededHistory(true);
+    if (chatHistory.data.messages.length === 0) return;
+    setMessages(chatHistory.data.messages.map((m) => ({
+      role: m.sender === 'ai' ? 'assistant' : 'user',
+      content: m.body,
+    })));
+  }, [chatHistory.data, hasSeededHistory]);
 
   const stopMediaStream = () => {
     if (mediaStreamRef.current) {
@@ -139,13 +217,52 @@ export default function ChatScreen({ navigation }) {
     }
 
     if (audioBlob || audioUrl || isRecording) {
-      const textMessage = `🎤 [Voice Note - ${recordingTime}s]`;
+      const activeBlob = audioBlob;
+      const recTime = recordingTime;
       deleteRecording();
-      setStatus("Mansakha is thinking...");
-      try {
-        await askOllama(textMessage, messages);
-        requestAnimationFrame(() => listRef.current?.scrollToEnd?.({ animated: true }));
-      } catch (err) {}
+      setStatus("Transcribing with IIT Madras Speech Lab ASR & Analyzing Voice Stress...");
+
+      if (activeBlob && Platform.OS === 'web') {
+        try {
+          const reader = new FileReader();
+          reader.readAsDataURL(activeBlob);
+          reader.onloadend = async () => {
+            const base64Data = reader.result.includes(',') ? reader.result.split(',')[1] : reader.result;
+            try {
+              const res = await fetch("http://127.0.0.1:8000/api/ai/multimodal/", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ audio_base64: base64Data }),
+              });
+
+              let textToSend = `🎤 Voice Note (${recTime}s)`;
+              if (res.ok) {
+                const data = await res.json();
+                const transcript = data.transcript?.trim();
+                const stress = data.voice_stress_score;
+                const stressPct = Math.round((stress || 0) * 100);
+                if (transcript) {
+                  textToSend = `🎤 "${transcript}" [Voice Stress: ${stressPct}%]`;
+                }
+              }
+
+              await askOllama(textToSend, messages);
+              requestAnimationFrame(() => listRef.current?.scrollToEnd?.({ animated: true }));
+            } catch (networkErr) {
+              console.warn("Could not reach Django AI backend, using fallback:", networkErr);
+              const fallbackText = `🎤 [Voice Note - ${recTime}s]`;
+              await askOllama(fallbackText, messages);
+              requestAnimationFrame(() => listRef.current?.scrollToEnd?.({ animated: true }));
+            }
+          };
+        } catch (err) {
+          const fallbackText = `🎤 [Voice Note - ${recTime}s]`;
+          await askOllama(fallbackText, messages);
+        }
+      } else {
+        const fallbackText = `🎤 [Voice Note - ${recTime}s]`;
+        await askOllama(fallbackText, messages);
+      }
       return;
     }
 
@@ -160,56 +277,14 @@ export default function ChatScreen({ navigation }) {
   };
 
   const toggleVoiceCall = () => {
-    if (inCall && !isVideoCall) {
-      endCall();
-    } else {
-      stopMediaStream();
-      setIsVideoCall(false);
-      setInCall(true);
-      setVoiceState("Voice Call Active");
-    }
-  };
-
-  const toggleVideoCall = async (mode = 'user') => {
-    if (inCall && isVideoCall) {
-      endCall();
-      return;
-    }
-
-    if (Platform.OS !== 'web' || !navigator.mediaDevices?.getUserMedia) {
-      setIsVideoCall(true);
-      setInCall(true);
-      setVoiceState("Video Call Active");
-      return;
-    }
-
-    try {
-      stopMediaStream();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: mode },
-        audio: true,
-      });
-      mediaStreamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
-      setIsVideoCall(true);
-      setInCall(true);
-      setFacingMode(mode);
-      setVoiceState("Video Call Active");
-    } catch (err) {
-      alert("Could not access camera/microphone: " + err.message);
-    }
-  };
-
-  const toggleCameraFacing = () => {
-    const nextMode = facingMode === 'user' ? 'environment' : 'user';
-    toggleVideoCall(nextMode);
+    setIsCallModalVisible(true);
+    setInCall(true);
   };
 
   const endCall = () => {
+    setIsCallModalVisible(false);
     setInCall(false);
-    setIsVideoCall(false);
-    stopMediaStream();
-    setVoiceState("Call ended");
+    setStatus(`● Connected • ${model}`);
   };
 
   // Toggle vertical box state on click
@@ -322,7 +397,7 @@ export default function ChatScreen({ navigation }) {
     setShowRecorderBox(false);
   };
 
-  const isSendActive = draft.trim().length > 0 || isRecording || audioBlob !== null || audioUrl !== null;
+  const isSendActive = draft.trim().length > 0;
 
   return (
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -344,24 +419,18 @@ export default function ChatScreen({ navigation }) {
       </View>
 
       <View style={[styles.body, { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center', paddingTop: spacing.md }]}>
-        {/* Video Overlay UI */}
-        {inCall && isVideoCall && (
-          <View style={styles.videoContainer}>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              style={{ width: '100%', height: 220, borderRadius: radius.md, backgroundColor: '#000', objectFit: 'cover' }}
-            />
-            <View style={styles.videoOverlayControls}>
-              <Pressable style={styles.videoControlBtn} onPress={toggleCameraFacing}>
-                <Feather name="refresh-cw" size={14} color={colors.white} />
-                <Text style={styles.videoControlText}>{facingMode === 'user' ? ' Back Camera' : ' Front Camera'}</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
+        {/* WhatsApp-Style Fullscreen 3D Animated Voice Call Modal */}
+        <MansakhaCallModal
+          visible={isCallModalVisible}
+          onEndCall={endCall}
+          onNewMessage={(msg) => {
+            setMessages(prev => [...prev, msg]);
+            if (msg.role === 'assistant') {
+              const lastUserMsg = messages[messages.length - 1]?.content || 'Live spoken query';
+              logChatTurn.mutate({ userMessage: lastUserMsg, aiMessage: msg.content, channel: msg.channel || 'voice_call' });
+            }
+          }}
+        />
 
         {/* Message Stream */}
         <FlatList
@@ -375,143 +444,57 @@ export default function ChatScreen({ navigation }) {
 
         {/* Dynamic Action Input Panel */}
         <View style={styles.inputSectionContainer}>
-          {/* Vertical Icon-Only Recording Overlay Box */}
-          {showRecorderBox && (
-            <View style={styles.verticalRecorderBox}>
-              <View style={styles.recorderTimerHeader}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingTimeText}>{recordingTime}s</Text>
-              </View>
+          <View style={styles.singleInputWrapper}>
+            {/* Live AI Call Floating Button centered at top of textbox */}
+            <Pressable
+              style={styles.floatingCallTriggerBtn}
+              onPress={toggleVoiceCall}
+              accessibilityLabel="Start Live Call with Mansakha AI"
+            >
+              <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M12 2C12 7.52285 7.52285 12 2 12C7.52285 12 12 16.4772 12 22C12 16.4772 16.4772 12 22 12C16.4772 12 12 7.52285 12 2Z"
+                  fill="#FFFFFF"
+                />
+              </Svg>
+            </Pressable>
 
-              <View style={styles.verticalActionsContainer}>
-                {/* Pause / Play Icon */}
-                <Pressable
-                  style={[styles.verticalActionIconBtn, { backgroundColor: colors.primary + '15' }]}
-                  onPress={isRecording ? pauseVoiceRecording : togglePlayback}
-                >
-                  <Feather
-                    name={isRecording ? (isPaused ? "play" : "pause") : (isPlaying ? "pause" : "play")}
-                    size={20}
-                    color={colors.primary}
-                  />
-                </Pressable>
+            <View style={styles.textInputRow}>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Type a message..."
+                placeholderTextColor={colors.textSecondary}
+                value={draft}
+                onChangeText={setDraft}
+                onKeyPress={(e) => {
+                  if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                multiline
+              />
 
-                {/* Delete Icon */}
-                <Pressable
-                  style={[styles.verticalActionIconBtn, { backgroundColor: colors.danger + '15' }]}
-                  onPress={deleteRecording}
-                >
-                  <Feather name="trash-2" size={20} color={colors.danger} />
-                </Pressable>
-
-                {/* Send Icon */}
-                <Pressable
-                  style={[styles.verticalActionIconBtn, { backgroundColor: colors.primary }]}
-                  onPress={handleSend}
-                >
-                  <Feather name="send" size={18} color={colors.white} />
-                </Pressable>
-              </View>
-            </View>
-          )}
-
-          {!showExpandedMenu ? (
-            /* NORMAL MODE: Single Input Box with Center Wave Icon */
-            <View style={styles.singleInputWrapper}>
-              <Pressable
-                style={styles.floatingWaveTriggerBtn}
-                onPress={() => setShowExpandedMenu(true)}
+              {/* Mic Button */}
+              <Pressable 
+                style={[styles.micBtn, speech.listening && styles.micBtnActive]} 
+                onPress={speech.listening ? speech.stop : speech.start}
+                hitSlop={6}
               >
-                <Feather name="activity" size={20} color={colors.white} />
+                <Feather name={speech.listening ? "mic-off" : "mic"} size={18} color={speech.listening ? colors.white : colors.primary} />
               </Pressable>
 
-              <View style={styles.textInputRow}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder={isRecording || audioUrl ? "Voice note recorded..." : "Type a message..."}
-                  placeholderTextColor={colors.textSecondary}
-                  value={draft}
-                  onChangeText={setDraft}
-                  editable={!isRecording && !audioUrl}
-                  onKeyPress={(e) => {
-                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  multiline
-                />
-
-                {/* Universal Send Button */}
-                <Pressable
-                  style={[styles.sendBtn, !isSendActive && styles.sendBtnDisabled]}
-                  onPress={handleSend}
-                  disabled={!isSendActive}
-                >
-                  <Feather name="send" size={18} color={colors.white} />
-                </Pressable>
-              </View>
+              {/* Universal Send Button */}
+              <Pressable
+                style={[styles.sendBtn, !isSendActive && styles.sendBtnDisabled]}
+                onPress={handleSend}
+                disabled={!isSendActive}
+                hitSlop={6}
+              >
+                <Feather name="send" size={18} color={colors.white} />
+              </Pressable>
             </View>
-          ) : (
-            /* EXPANDED MODE */
-            <View style={styles.expandedMenuContainer}>
-              <View style={styles.sideActionsGroup}>
-                <Pressable
-                  style={[styles.actionCircleBtn, inCall && isVideoCall && { backgroundColor: colors.danger }]}
-                  onPress={() => toggleVideoCall('user')}
-                >
-                  <Feather
-                    name={inCall && isVideoCall ? "video-off" : "video"}
-                    size={18}
-                    color={inCall && isVideoCall ? colors.white : colors.textPrimary}
-                  />
-                </Pressable>
-                <Pressable
-                  style={[styles.actionCircleBtn, inCall && !isVideoCall && { backgroundColor: colors.danger }]}
-                  onPress={toggleVoiceCall}
-                >
-                  <Feather
-                    name={inCall && !isVideoCall ? "phone-off" : "phone"}
-                    size={18}
-                    color={inCall && !isVideoCall ? colors.white : colors.textPrimary}
-                  />
-                </Pressable>
-              </View>
-
-              <View style={[styles.textInputRow, { flex: 1, marginBottom: 0 }]}>
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Type..."
-                  placeholderTextColor={colors.textSecondary}
-                  value={draft}
-                  onChangeText={setDraft}
-                  onKeyPress={(e) => {
-                    if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                />
-              </View>
-
-              <View style={styles.sideActionsGroup}>
-                {/* Always stays a microphone icon; toggles menu on click */}
-                <Pressable
-                  style={[styles.actionCircleBtn, showRecorderBox && { backgroundColor: colors.primary + '20' }]}
-                  onPress={handleRecorderClick}
-                >
-                  <Feather name="mic" size={18} color={showRecorderBox ? colors.primary : colors.textPrimary} />
-                </Pressable>
-
-                <Pressable
-                  style={[styles.actionCircleBtn, styles.cancelCircleBtn]}
-                  onPress={() => setShowExpandedMenu(false)}
-                >
-                  <Feather name="x" size={18} color={colors.white} />
-                </Pressable>
-              </View>
-            </View>
-          )}
+          </View>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -528,6 +511,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  headerPhoneBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.xs,
   },
   backBtn: { padding: spacing.xs, marginRight: spacing.sm },
   headerIconTile: {
@@ -547,19 +541,6 @@ const styles = StyleSheet.create({
   bubbleText: { ...typography.body, color: colors.textPrimary },
   bubbleTextUser: { color: colors.white },
 
-  videoContainer: {
-    marginBottom: spacing.md,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  videoOverlayControls: { position: 'absolute', bottom: 8, right: 8 },
-  videoControlBtn: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill,
-  },
-  videoControlText: { color: colors.white, fontSize: 12, fontWeight: '600' },
 
   inputSectionContainer: {
     marginBottom: spacing.md,
@@ -618,7 +599,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     paddingTop: 16,
   },
-  floatingWaveTriggerBtn: {
+  floatingCallTriggerBtn: {
     position: 'absolute',
     top: -4,
     alignSelf: 'center',
@@ -660,33 +641,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginLeft: 4,
   },
   sendBtnDisabled: { opacity: 0.5 },
-
-  expandedMenuContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: colors.border,
-    elevation: 3,
+  micBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center', marginLeft: 4,
   },
-  sideActionsGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  actionCircleBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelCircleBtn: {
-    backgroundColor: colors.textSecondary,
+  micBtnActive: {
+    backgroundColor: colors.primary,
   },
 });

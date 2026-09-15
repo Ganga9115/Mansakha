@@ -61,23 +61,39 @@ export default function MailThreadList({ threads, loading, q, onSearchChange, ba
           <div
             key={t.threadId}
             onClick={() => navigate(`${basePath}/thread/${t.threadId}`)}
-            className={`group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50/80 hover:shadow-sm transition ${t.unread ? 'bg-[#EBF4FA]/40' : ''}`}
+            className={`group flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-2.5 cursor-pointer hover:bg-gray-50/80 hover:shadow-sm transition ${t.unread ? 'bg-[#EBF4FA]/40' : ''}`}
           >
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.unread ? 'bg-[#519BCE]' : 'bg-transparent'}`} />
 
-            <span className={`w-36 shrink-0 truncate text-sm ${t.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-600'}`}>
+            {/* Mobile layout (< sm) */}
+            <div className="flex-1 min-w-0 sm:hidden">
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className={`truncate text-xs ${t.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-700'}`}>
+                  {t.latestSenderName}
+                </span>
+                <span className="text-[10px] text-gray-400 shrink-0">{formatRelative(t.latestSentAt)}</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className={`truncate text-xs flex-1 ${t.unread ? 'font-semibold text-gray-900' : 'text-gray-800'}`}>{t.subject}</span>
+                {t.attachmentCount > 0 && <Paperclip size={11} className="text-gray-400 shrink-0" />}
+              </div>
+              <p className="truncate text-[11px] text-gray-400 mt-0.5">{t.snippet}</p>
+            </div>
+
+            {/* Desktop layout (>= sm) */}
+            <span className={`hidden sm:inline-block w-32 md:w-36 shrink-0 truncate text-xs md:text-sm ${t.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-600'}`}>
               {t.latestSenderName}
             </span>
 
-            <span className="flex-1 min-w-0 truncate text-sm">
+            <span className="hidden sm:inline-block flex-1 min-w-0 truncate text-xs md:text-sm">
               <span className={t.unread ? 'font-semibold text-gray-900' : 'text-gray-700'}>{t.subject}</span>
               <span className="text-gray-400"> — {t.snippet}</span>
             </span>
 
-            {t.attachmentCount > 0 && <Paperclip size={13} className="text-gray-400 shrink-0" />}
+            {t.attachmentCount > 0 && <Paperclip size={13} className="hidden sm:inline-block text-gray-400 shrink-0" />}
 
             {/* Quick actions - swap in for the date on hover, same slot */}
-            <span className="shrink-0 w-14 flex items-center justify-end">
+            <span className="hidden sm:flex shrink-0 w-14 items-center justify-end">
               <span className="hidden group-hover:flex items-center gap-1">
                 {folder !== 'sent' && (
                   <button

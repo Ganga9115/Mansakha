@@ -73,23 +73,23 @@ export default function Settings() {
       <div className="space-y-6">
 
         {/* COUNSELLOR PROFILE MATRIX */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-gray-800">Counsellor Profile Matrix</h3>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             {me?.profileImageUrl ? (
               <img
                 src={me.profileImageUrl}
                 alt={me?.fullName || 'Profile'}
-                className="w-16 h-16 rounded-full object-cover"
+                className="w-16 h-16 rounded-full object-cover shrink-0"
               />
             ) : (
               <div className="w-16 h-16 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
                 <User size={28} className="text-[#3D5A80]" />
               </div>
             )}
-            <div>
-              <h4 className="font-bold text-gray-800 text-base">{me?.fullName || 'Loading...'}</h4>
+            <div className="min-w-0">
+              <h4 className="font-bold text-gray-800 text-base truncate">{me?.fullName || 'Loading...'}</h4>
               <p className="text-xs text-gray-500">Counsellor</p>
               <input
                 type="file"
@@ -101,7 +101,7 @@ export default function Settings() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={photoUploading}
-                className="text-xs text-[#519BCE] font-semibold mt-1 hover:underline disabled:opacity-60"
+                className="text-xs text-[#519BCE] font-semibold mt-1 hover:underline disabled:opacity-60 block"
               >
                 {photoUploading ? 'Uploading...' : 'Change Profile Photo'}
               </button>
@@ -124,7 +124,7 @@ export default function Settings() {
         </div>
 
         {/* ROLE DETAILS */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
           <h3 className="font-bold text-sm text-gray-800">Counsellor Details</h3>
           <DetailRow label="Assigned District" value={role?.jurisdictionName || '-'} />
           <DetailRow label="Mobile Number (login credential)" value={me?.phone || '-'} />
@@ -132,7 +132,7 @@ export default function Settings() {
         </div>
 
         {/* ACCOUNT SECURITY */}
-        <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-5">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-5">
           <h3 className="font-bold text-sm text-gray-800">Account Security</h3>
 
           <div className="space-y-4">
@@ -144,7 +144,7 @@ export default function Settings() {
             </button>
 
             {showPasswordForm && (
-              <div className="p-4 bg-[#F8F9FA] rounded-lg space-y-3">
+              <div className="p-3 sm:p-4 bg-[#F8F9FA] rounded-lg space-y-3">
                 <div className="relative">
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -202,9 +202,9 @@ export default function Settings() {
 
 function DetailRow({ label, value }) {
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-gray-50 last:border-0 pb-3 last:pb-0">
+    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-4 border-b border-gray-50 last:border-0 pb-3 last:pb-0">
       <span className="text-xs text-gray-500">{label}</span>
-      <span className="text-xs font-semibold text-gray-800 text-right">{value}</span>
+      <span className="text-xs font-semibold text-gray-800 sm:text-right break-all">{value}</span>
     </div>
   );
 }

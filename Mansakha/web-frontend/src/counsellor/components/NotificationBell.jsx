@@ -25,6 +25,7 @@ export default function NotificationBell() {
   const notifications = data?.notifications || [];
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
   // The notification the detail modal is showing, or null when closed. Kept
   // separate from `open` (the dropdown) so opening a detail view doesn't
   // have to also tear down the list behind it.
@@ -58,20 +59,33 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const unreadCount = notifications.filter((n) => new Date(n.notifiedAt).getTime() > lastSeen).length;
+  const maxTimestamp = notifications.reduce((max, n) => {
+    const t = new Date(n.notifiedAt).getTime();
+    return !isNaN(t) && t > max ? t : max;
+  }, 0);
+
+  useEffect(() => {
+    if (notifications.some((n) => new Date(n.notifiedAt).getTime() > lastSeen)) {
+      setDismissed(false);
+    }
+  }, [notifications, lastSeen]);
+
+  // Once touched/clicked, red dot is immediately cleared
+  const unreadCount = (open || dismissed)
+    ? 0
+    : notifications.filter((n) => new Date(n.notifiedAt).getTime() > lastSeen).length;
 
   const toggleOpen = () => {
     const next = !open;
     setOpen(next);
-    if (next) {
-      const now = Date.now();
-      setLastSeen(now);
-      if (storageKey) {
-        try {
-          localStorage.setItem(storageKey, String(now));
-        } catch {
-          // best-effort only
-        }
+    setDismissed(true);
+    const targetSeen = Math.max(Date.now(), maxTimestamp);
+    setLastSeen(targetSeen);
+    if (storageKey) {
+      try {
+        localStorage.setItem(storageKey, String(targetSeen));
+      } catch {
+        // best-effort only
       }
     }
   };
@@ -93,7 +107,7 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl border border-gray-200 shadow-lg z-20 overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 w-72 sm:w-80 max-w-[calc(100vw-2rem)] bg-white rounded-xl border border-gray-200 shadow-lg z-20 overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100">
             <h4 className="text-xs font-bold text-gray-800 uppercase tracking-wide">Notifications</h4>
           </div>
@@ -135,7 +149,7 @@ export default function NotificationBell() {
           onClick={() => setSelected(null)}
         >
           <div
-            className="bg-white rounded-xl shadow-xl w-full max-w-md p-6"
+            className="bg-white rounded-xl shadow-xl w-full max-w-md p-4 sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between mb-4">
@@ -150,42 +164,42 @@ export default function NotificationBell() {
               </button>
             </div>
 
-            <dl className="space-y-2 text-sm text-gray-700 mb-6">
-              <div className="flex justify-between gap-4">
+            <dl className="space-y-2.5 text-xs sm:text-sm text-gray-700 mb-6">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">User</dt>
-                <dd className="font-medium text-gray-800 text-right">{selected.userName || 'Unknown'}</dd>
+                <dd className="font-medium text-gray-800 sm:text-right">{selected.userName || 'Unknown'}</dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Priority</dt>
-                <dd className={`font-medium text-right capitalize ${selected.priority === 'urgent' ? 'text-rose-600' : 'text-gray-800'}`}>
+                <dd className={`font-medium sm:text-right capitalize ${selected.priority === 'urgent' ? 'text-rose-600' : 'text-gray-800'}`}>
                   {selected.priority || 'normal'}
                 </dd>
               </div>
               {selected.riskLevel && (
-                <div className="flex justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                   <dt className="text-gray-400">Risk Level</dt>
-                  <dd className="font-medium text-gray-800 text-right">{selected.riskLevel}</dd>
+                  <dd className="font-medium text-gray-800 sm:text-right">{selected.riskLevel}</dd>
                 </div>
               )}
               {selected.scoreValue !== null && selected.scoreValue !== undefined && (
-                <div className="flex justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                   <dt className="text-gray-400">Distress Score</dt>
-                  <dd className="font-medium text-gray-800 text-right">{selected.scoreValue}</dd>
+                  <dd className="font-medium text-gray-800 sm:text-right">{selected.scoreValue}</dd>
                 </div>
               )}
-              <div className="flex justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Status</dt>
-                <dd className="font-medium text-gray-800 text-right">{selected.status || 'Open'}</dd>
+                <dd className="font-medium text-gray-800 sm:text-right">{selected.status || 'Open'}</dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Occurred</dt>
-                <dd className="font-medium text-gray-800 text-right">
+                <dd className="font-medium text-gray-800 sm:text-right">
                   {selected.triggeredAt ? new Date(selected.triggeredAt).toLocaleString() : 'Unknown'}
                 </dd>
               </div>
-              <div className="flex justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between gap-0.5 sm:gap-4">
                 <dt className="text-gray-400">Notified</dt>
-                <dd className="font-medium text-gray-800 text-right">
+                <dd className="font-medium text-gray-800 sm:text-right">
                   {selected.notifiedAt ? new Date(selected.notifiedAt).toLocaleString() : 'Unknown'}
                 </dd>
               </div>

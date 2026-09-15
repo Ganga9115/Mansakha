@@ -11,7 +11,7 @@ import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import { useToast } from '../../shared/context/ToastContext';
 import { useCheckin, useUserDashboard, useUserHistory, useAppendInteraction } from '../../shared/services/hooks';
-import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING } from '../../shared/services/ollamaClient';
+import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING, SECOND_QUESTION } from '../../shared/services/ollamaClient';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
@@ -47,26 +47,94 @@ export default function CheckinScreen({ navigation }) {
     }
   }, [historyQuery.data]);
 
-  // 15 to match TOTAL_QUESTIONS - only ever seen back-to-back if Ollama
-  // stays offline for a whole check-in, so having a full, non-repeating set
-  // matters more at this length than it did at 5.
-  const FALLBACK_QUESTIONS = [
-    "Take your time. Can you tell me a little more about how you're feeling?",
-    "I'm here to listen. What else is on your mind?",
-    "Is there anything else you'd like to share today?",
-    "How has everything been affecting your daily life?",
-    "Are you receiving any support from family, friends, or your community right now?",
-    "How would you describe your sleep over the last few days?",
-    "Have you been able to eat regularly lately?",
-    "Is there anything specific that's been worrying you recently?",
-    "How are you feeling about your safety right now?",
-    "Have you been able to talk to anyone about how you're feeling?",
-    "What has been the hardest part of your day today?",
-    "Is there anything that has helped you feel a little better recently?",
-    "How are you coping with everything going on with your case?",
-    "Is there something you need right now that you haven't been able to get?",
-    "Before we finish, is there anything else you'd like us to know?",
-  ];
+  // Only ever used from question 3 onward (questions 1-2 are fixed and
+  // identical for every user - see OPENING_GREETING/SECOND_QUESTION) and
+  // only when Ollama is offline/slow, so this is the check-in's entire
+  // offline experience for most of its length - worth being as varied and
+  // case-appropriate as the live AI path, not a generic filler list.
+  // Grouped by broad case theme (never shown or referenced to the user) so
+  // even the offline fallback stays roughly relevant without ever naming
+  // the case type, the offense, or using the word "victim" anywhere below.
+  const FALLBACK_QUESTIONS_BY_TRACK = {
+    general: [
+      { q: "How has your appetite been lately?", o: ['Eating normally', 'Not much of an appetite', 'Eating more than usual', 'It varies day to day'] },
+      { q: "Who have you been spending time with recently?", o: ['Family', 'Friends', 'Mostly by myself', 'My counsellor or support worker'] },
+      { q: "What's something that's helped you feel a little steadier lately?", o: ['Talking to someone', 'Keeping busy', 'Just resting', 'Nothing in particular has helped'] },
+      { q: "How connected do you feel to the people around you right now?", o: ['Very connected', 'Somewhat', 'A bit distant', 'Quite isolated'] },
+      { q: "How has your day-to-day routine been going?", o: ['Pretty normal', 'A bit disrupted', 'Hard to keep up with', "I've made some changes that help"] },
+      { q: "Do you feel like you have someone to talk to when things feel heavy?", o: ['Yes, definitely', 'Sometimes', 'Not really', "I'd like to, but haven't yet"] },
+      { q: "How would you describe your mood over the past few days?", o: ['Fairly steady', 'Up and down', 'Low most of the time', 'Better than before'] },
+      { q: "Is there anything practical - money, work, daily needs - on your mind right now?", o: ['Not really', 'A little', 'Yes, quite a bit', 'I could use some guidance'] },
+      { q: "How are you feeling about the days ahead?", o: ['Hopeful', 'Uncertain', 'Anxious', 'Taking it one day at a time'] },
+      { q: "What would make today feel a little easier?", o: ['Some rest', 'Company', 'A distraction', 'Nothing comes to mind'] },
+      { q: "How have you been taking care of yourself lately?", o: ['Pretty well', 'Trying my best', 'Not really focused on it', 'I could use some ideas'] },
+      { q: "Before we wrap up, is there anything on your mind you'd like noted?", o: ["No, I'm okay", 'Yes, something small', 'Yes, something important', "I'd rather discuss it directly with my counsellor"] },
+    ],
+    violence: [
+      { q: "How are things at home right now?", o: ['Stable', 'Stressful but manageable', 'Really difficult', "I'd rather not go into it"] },
+      { q: "How is the rest of your family coping these days?", o: ['Doing okay', 'Struggling a bit', 'Finding it hard', "Not sure, we don't talk about it much"] },
+      { q: "Is there anything practical - money, housing, safety - weighing on you?", o: ['Not really', 'A little', 'Yes, quite a bit', 'I need help with something specific'] },
+      { q: "How connected do you feel to your community or neighbours right now?", o: ['Supported', "It's mixed", 'A bit distant', 'Rather isolated'] },
+      { q: "How has your physical health been?", o: ['Fine', 'A few aches or issues', 'Still recovering from something', 'I should get this checked'] },
+      { q: "What's helped you get through the harder days recently?", o: ['Family', 'Keeping busy', 'Rest', 'Honestly, nothing has helped much'] },
+      { q: "How do you feel about the people supporting you right now?", o: ['Well supported', 'Somewhat', 'I could use more support', 'I feel mostly on my own'] },
+      { q: "How's your sense of safety at home lately?", o: ['I feel safe', 'Mostly, with some worry', 'Not very safe', "I'd like to talk about this"] },
+      { q: "Are any responsibilities feeling heavier than usual right now?", o: ['Not really', 'A bit', 'Yes, quite a lot', 'I need some help managing things'] },
+      { q: "How are you feeling about things day to day?", o: ['Managing okay', 'Some good days, some hard ones', 'Mostly difficult', 'Better than a few weeks ago'] },
+    ],
+    sexual: [
+      { q: "Who do you feel most comfortable talking to these days?", o: ['Family', 'Friends', 'My counsellor', 'I mostly keep to myself'] },
+      { q: "Do you feel safe in the place you're currently staying?", o: ['Yes', 'Mostly, with a little unease', 'Not really', "I'd rather discuss this privately"] },
+      { q: "How has your mood been the past few days?", o: ['Fairly steady', 'Up and down', 'Low most days', 'Better than before'] },
+      { q: "Is there anything that's been helping you feel a bit calmer lately?", o: ['Talking to someone', 'Being alone for a while', 'Staying busy', 'Nothing in particular'] },
+      { q: "How connected do you feel to people who care about you right now?", o: ['Very connected', 'Somewhat', 'A little distant', 'Quite alone'] },
+      { q: "How has your sleep been this week?", o: ['Sleeping okay', 'Some restless nights', 'Struggling to sleep', 'Sleeping much more than usual'] },
+      { q: "Would it help to have someone check in with you more regularly?", o: ['Yes, that would help', 'Maybe', "I'm okay for now", "I'd rather not say"] },
+      { q: "How are you feeling about the days ahead?", o: ['Hopeful', 'Uncertain', 'Anxious', 'Taking it slowly, one day at a time'] },
+      { q: "Is there anything you need right now that you haven't been able to get?", o: ["No, I'm okay", 'A little support', 'Yes, something specific', "I'd rather tell my counsellor directly"] },
+      { q: "Right now, in this moment, how are you feeling?", o: ['Calm', 'A bit anxious', 'Tired', 'Better than when we started'] },
+    ],
+    caste: [
+      { q: "How are people in your neighbourhood or community treating you lately?", o: ['No real change', 'A bit distant', 'Some tension', "I'd rather not say"] },
+      { q: "Do you feel like you can go about your daily routine without worry?", o: ['Yes, mostly', 'Some days are harder', 'I feel on edge often', 'Not at all right now'] },
+      { q: "How is your family holding up these days?", o: ['Doing okay', "It's difficult", 'Mixed - some better, some worse', "We don't talk about it much"] },
+      { q: "Do you feel supported by people around you right now?", o: ['Yes, well supported', 'Somewhat', 'Not really', 'I feel quite alone in this'] },
+      { q: "How has going to work, school, or your usual places felt lately?", o: ['Normal', 'A bit uncomfortable', 'Difficult', "I've been avoiding some places"] },
+      { q: "What's helped you feel a bit more at ease recently?", o: ['Family', 'Friends', 'Staying busy', 'Nothing has really helped'] },
+      { q: "How confident do you feel about things improving over time?", o: ['Fairly hopeful', 'Uncertain', 'Not very hopeful', 'Taking it day by day'] },
+      { q: "Is there anything about your daily safety on your mind right now?", o: ['Not really', 'A little', 'Yes, quite a bit', "I'd like to discuss this further"] },
+      { q: "How connected do you feel to your wider community right now?", o: ['Still connected', "It's changed a bit", 'Quite distant', 'Very isolated'] },
+      { q: "Before we finish, is there anything you'd like your counsellor to know?", o: ["No, I'm okay", 'Something small', 'Something important', "I'll share it directly"] },
+    ],
+    witness: [
+      { q: "Have you noticed any unwanted contact or pressure from anyone connected to the case?", o: ['No, nothing', 'A little, nothing serious', "Yes, and it's concerning me", "I'd rather discuss this privately"] },
+      { q: "How confident do you feel about your safety right now?", o: ['Fairly confident', 'Somewhat unsure', 'Quite worried', 'I need support with this'] },
+      { q: "How has your daily routine been affected lately?", o: ['Not much change', 'Some adjustments', 'Significantly disrupted', "I've had to change my routine for safety"] },
+      { q: "Do you feel supported by the people around you right now?", o: ['Yes, well supported', 'Somewhat', 'Not really', 'I feel mostly on my own'] },
+      { q: "How has your sleep been given everything going on?", o: ['Sleeping okay', 'A bit restless', 'Struggling to sleep', 'Sleeping much more than usual'] },
+      { q: "Is there anyone you trust that you can talk to if something feels off?", o: ['Yes, definitely', 'Somewhat', 'Not really', "I'd like to identify someone"] },
+      { q: "How are you feeling about the road ahead?", o: ['Steady', 'Anxious', 'Uncertain', 'Taking it one step at a time'] },
+      { q: "What would help you feel a bit safer or calmer right now?", o: ['More regular check-ins', 'Practical safety advice', 'Just talking it through', 'Nothing specific comes to mind'] },
+      { q: "How connected do you feel to your normal support system right now?", o: ['Still connected', 'A bit distant', 'Quite isolated', 'I could use reconnecting'] },
+      { q: "Before we finish, is there anything about your safety you'd like noted?", o: ["No, I'm okay", 'Something small', 'Something important', "I'd rather tell my counsellor directly"] },
+    ],
+  };
+
+  const CASE_TYPE_TO_TRACK = {
+    'Murder': 'violence',
+    'Grievous Hurt': 'violence',
+    'Arson': 'violence',
+    'Murder / Grievous Hurt / Arson': 'violence',
+    'Rape': 'sexual',
+    'Gang Rape': 'sexual',
+    'Rape / Gang Rape': 'sexual',
+    'Family Affected by Caste-Based Violence': 'caste',
+    'Witness Facing Intimidation or Threats': 'witness',
+  };
+
+  const caseType = dashboardQuery.data?.caseType || null;
+  const fallbackTrack = CASE_TYPE_TO_TRACK[caseType] || 'general';
+  const fallbackQuestions = FALLBACK_QUESTIONS_BY_TRACK[fallbackTrack];
 
   const loadNextQuestion = async (history) => {
     setLoading(true);
@@ -77,7 +145,7 @@ export default function CheckinScreen({ navigation }) {
         conversation.push({ role: 'user', content: item.a });
       }
 
-      const nextQ = await generateInteractiveQuestion(conversation, pastContext);
+      const nextQ = await generateInteractiveQuestion(conversation, pastContext, caseType);
       setCurrentQuestion({
         text: nextQ.question,
         type: nextQ.type || 'single',
@@ -87,11 +155,14 @@ export default function CheckinScreen({ navigation }) {
       setDraft('');
     } catch (err) {
       toast.error('Ollama is offline or slow. Using a fallback question so you can continue.');
-      const fallbackQ = FALLBACK_QUESTIONS[history.length % FALLBACK_QUESTIONS.length];
+      // -2: the first two fixed questions never draw from this pool, so the
+      // pool starts at question 3 (history.length === 2 at that point).
+      const fallbackIndex = Math.max(0, history.length - 2) % fallbackQuestions.length;
+      const fallbackQ = fallbackQuestions[fallbackIndex];
       setCurrentQuestion({
-        text: fallbackQ,
+        text: fallbackQ.q,
         type: 'single',
-        options: ['Yes', 'No', 'A little bit', 'Other...']
+        options: fallbackQ.o,
       });
       setSelectedOptions([]);
       setDraft('');
@@ -117,6 +188,13 @@ export default function CheckinScreen({ navigation }) {
     if (newHistory.length >= TOTAL_QUESTIONS) {
       setIsFinished(true);
       await handleSubmit(newHistory);
+    } else if (newHistory.length === 1) {
+      // Question 2 is fixed and identical for every user, same as question 1
+      // (OPENING_GREETING) - no AI/fallback call, no case-type branching yet.
+      // Adaptive, case-aware questions only start from question 3 onward.
+      setCurrentQuestion(SECOND_QUESTION);
+      setSelectedOptions([]);
+      setDraft('');
     } else {
       await loadNextQuestion(newHistory);
     }

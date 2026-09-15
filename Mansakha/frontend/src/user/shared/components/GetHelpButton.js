@@ -33,11 +33,12 @@ const FALLBACK_PCR_NUMBER = '100';
 // Replaces the previously-removed SosButton with the same two-step-confirm
 // UX (tap the icon opens a modal, a second explicit tap actually sends) but
 // wired to POST /api/user/urgent-help instead of the old SOS endpoint. That
-// call notifies the assigned counsellor, the user's District Administration,
-// and that district's State Administration server-side; it does NOT place a
-// phone call itself (Exotel/IVRS is a deliberate stub), so on success this
-// also opens the device's native dialer pre-filled with the Police Control
-// Room number the backend returns.
+// call notifies the assigned counsellor and the victim's district's
+// Protection Officer server-side only (District/State Administration are
+// deliberately not alerted here); it does NOT place a phone call itself
+// (Exotel/IVRS is a deliberate stub), so on success this also opens the
+// device's native dialer pre-filled with the Police Control Room number the
+// backend returns.
 //
 // As a header icon this now also replaces the old "Talk to Mansakha by
 // voice" phone-call button (that AI-chatbot entry point still exists via
@@ -98,9 +99,8 @@ export default function GetHelpButton({ asHeaderIcon = false }) {
             </View>
             <Text style={styles.confirmTitle}>Get Help Now?</Text>
             <Text style={styles.confirmBody}>
-              This will immediately notify your counsellor, your Protection Officer, your district administration,
-              and your state administration that you need urgent help, share your current location if permitted,
-              and will help connect you to the Police Control Room.
+              This will immediately notify your counsellor and your Protection Officer that you need urgent help,
+              share your current location if permitted, and will help connect you to the Police Control Room.
             </Text>
             <Pressable style={styles.confirmDeleteBtn} onPress={handleConfirm} disabled={triggerUrgentHelp.isPending}>
               <Text style={styles.confirmDeleteBtnText}>{triggerUrgentHelp.isPending ? 'Sending...' : 'Yes, Get Help Now'}</Text>

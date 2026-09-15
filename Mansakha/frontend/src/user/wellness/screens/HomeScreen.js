@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
@@ -320,10 +320,21 @@ export default function HomeScreen({ navigation }) {
                                       <Feather name="clock" size={13} color={colors.sidebarAccent} />
                                       <Text style={styles.sessionMetaText}>{timeStr}</Text>
                                     </View>
-                                    {/* Join Session button */}
-                                    <Pressable style={styles.joinSessionBtn} onPress={() => {/* TODO: handle join */}}>
-                                      <Text style={styles.joinSessionBtnText}>Join Session</Text>
-                                    </Pressable>
+                                    {/* Compact Responsive Join Session button */}
+                                    <View style={styles.joinBtnWrapper}>
+                                      <Pressable
+                                        style={({ pressed }) => [
+                                          styles.joinSessionBtn,
+                                          pressed && styles.joinSessionBtnPressed,
+                                        ]}
+                                        onPress={() => navigation?.navigate('CounsellorChat')}
+                                        accessibilityRole="button"
+                                        accessibilityLabel={`Join Counselling Session with ${s.counsellorName || 'counsellor'}`}
+                                      >
+                                        <Feather name="video" size={11} color="#FFFFFF" style={styles.joinBtnIcon} />
+                                        <Text style={styles.joinSessionBtnText}>Join Session</Text>
+                                      </Pressable>
+                                    </View>
                                   </View>
                                 </View>
                               </View>
@@ -351,7 +362,7 @@ export default function HomeScreen({ navigation }) {
                               <Feather
                                 name={i === 0 ? "check-circle" : "plus-circle"}
                                 size={20}
-                                color={i === 0 ? colors.success || "#10B981" : colors.primary}
+                                color={i === 0 ? colors.primary : colors.primary}
                               />
                             </View>
                             <View style={styles.activityContent}>
@@ -653,6 +664,45 @@ const styles = StyleSheet.create({
   sessionTitle: { ...typography.bodyStrong, color: colors.textPrimary, fontSize: 14, fontWeight: '700' },
   iconMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   sessionMetaText: { ...typography.caption, color: colors.textSecondary, fontSize: 12 },
+
+  /* Join Session Responsive Button (Compact) */
+  joinBtnWrapper: {
+    marginTop: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  joinSessionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    paddingVertical: 4,
+    paddingHorizontal: 11,
+    borderRadius: radius.pill,
+    alignSelf: 'flex-start',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 2,
+    elevation: 1,
+    ...(Platform.OS === 'web' ? { cursor: 'pointer', transition: 'all 0.15s ease' } : {}),
+  },
+  joinSessionBtnPressed: {
+    backgroundColor: colors.primaryDark,
+    opacity: 0.88,
+    transform: [{ scale: 0.97 }],
+  },
+  joinBtnIcon: {
+    marginRight: 4,
+  },
+  joinSessionBtnText: {
+    ...typography.caption,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 0.1,
+  },
 
   /* Recent Activity Box */
   activityRowItem: {

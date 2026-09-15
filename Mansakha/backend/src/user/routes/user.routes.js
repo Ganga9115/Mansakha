@@ -165,6 +165,7 @@ router.get('/dashboard', async (req, res) => {
     openAlertsResult,
     lastInteractionResult,
     caseFamilyResult,
+    rehabilitationStatusResult,
   ] = await Promise.all([
     pool.query(
       `select status, preferred_language, opted_for_manual_counsellor, sms_checkin_enabled, assigned_counsellor_id
@@ -214,6 +215,20 @@ router.get('/dashboard', async (req, res) => {
        where u.user_id = $1 or u.linked_to_user_id = $1`,
       [anchorUserId]
     ),
+    // Inlined rather than the getRehabilitationStatus(anchorUserId) helper -
+    // that helper re-resolves the anchor id via its own extra round trip
+    // (resolveAnchorId), which is redundant here: req.auth.userId already
+    // IS the anchor (every login token carries it, never a dependent's own
+    // id - see auth.user.routes.js). Folding this into the same Promise.all
+    // as everything else removes a full sequential round trip from a route
+    // that's on the critical path of every screen's initial load.
+    pool.query(
+      `select rs.opted_in_at, rs.declined_at, rs.closed_at, rp.name as provider_name
+       from rehabilitation_status rs
+       left join rehabilitation_providers rp on rp.provider_id = rs.provider_id
+       where rs.anchor_user_id = $1`,
+      [anchorUserId]
+    ),
   ]);
 
   const user = userResult.rows[0];
@@ -225,10 +240,18 @@ router.get('/dashboard', async (req, res) => {
   const lastInteraction = lastInteractionResult.rows[0];
   const caseFamily = caseFamilyResult.rows;
 
-  // migration_045 - one rehabilitation answer for the whole family
-  // (rehabilitationStatus.js), not per-docket - so every case in
-  // linkedCases reports the SAME opted-in/declined facts.
-  const rehabStatus = await getRehabilitationStatus(anchorUserId);
+  // migration_045 - one rehabilitation answer for the whole family, not
+  // per-docket - so every case in linkedCases reports the SAME opted-in/
+  // declined facts. rehabilitationStatusResult may have no row at all (a
+  // person who's never been asked yet) - default every field to falsy/null
+  // exactly like getRehabilitationStatus's own "never asked" shape.
+  const rehabRow = rehabilitationStatusResult.rows[0];
+  const rehabStatus = {
+    optedInAt: rehabRow?.opted_in_at || null,
+    declinedAt: rehabRow?.declined_at || null,
+    closedAt: rehabRow?.closed_at || null,
+    providerName: rehabRow?.provider_name || null,
+  };
 
   const linkedCases = (caseFamily || []).map((c) => ({
     userId: c.user_id,
@@ -260,7 +283,13 @@ router.get('/dashboard', async (req, res) => {
     ? new Date(new Date(lastInteraction.occurred_at).getTime() + NEXT_CHECKIN_CADENCE_DAYS * 86400000)
     : new Date();
 
-  await writeAuditLog({ userId: anchorUserId, action: 'read', entityType: 'user_dashboard', entityId: activeUserId });
+  // Not awaited - this is the single most-loaded route in the app (every
+  // screen's initial data), and writeAuditLog already swallows its own
+  // errors internally (never throws), so there's nothing for the response
+  // to legitimately wait on here. Confirmed live this call alone was
+  // costing ~500-650ms of Supabase REST round-trip on the critical path of
+  // every dashboard load, on top of the Promise.all above.
+  writeAuditLog({ userId: anchorUserId, action: 'read', entityType: 'user_dashboard', entityId: activeUserId });
 
   return ok(res, {
     fullName: identity?.full_name || null,
@@ -299,24 +328,18 @@ router.get('/dashboard', async (req, res) => {
 // feed (see ai/ai.js's analyzeInteractionFromClientAi).
 router.post('/checkin', async (req, res) => {
   const userId = req.auth.userId;
-  const { channel, responses, aiAnalysis } = req.body;
-  if (!channel || !Array.isArray(responses) || responses.length === 0) {
-    return fail(res, 'channel and a non-empty responses[] are required', 400);
+  const { channel, responses, aiAnalysis, audioBase64 } = req.body;
+  if (!channel || (!Array.isArray(responses) && !audioBase64)) {
+    return fail(res, 'channel and responses[] or audioBase64 are required', 400);
   }
-  if (
-    !aiAnalysis ||
-    typeof aiAnalysis.sentiment !== 'number' ||
-    typeof aiAnalysis.emotion !== 'number' ||
-    typeof aiAnalysis.summary !== 'string' ||
-    !aiAnalysis.summary.trim()
-  ) {
-    return fail(res, 'aiAnalysis (sentiment, emotion, summary) is required', 400);
+  const text = Array.isArray(responses) ? responses.join(' ') : '';
+  if (!text && !audioBase64) {
+    return fail(res, 'responses[] or audioBase64 is required', 400);
   }
-  const text = responses.join(' ');
 
   let interactionId;
   try {
-    ({ interactionId } = await recordInteraction({ userId, channelName: channel, transcriptText: text }));
+    ({ interactionId } = await recordInteraction({ userId, channelName: channel, transcriptText: text || 'Voice check-in' }));
   } catch (err) {
     if (err instanceof PipelineError) return fail(res, err.message, err.status);
     throw err;
@@ -324,7 +347,13 @@ router.post('/checkin', async (req, res) => {
 
   let analysis;
   try {
-    analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis);
+    if (audioBase64) {
+      analysis = await analyzeInteraction(userId, text, { audioBase64 });
+    } else if (aiAnalysis && typeof aiAnalysis.sentiment === 'number') {
+      analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis);
+    } else {
+      analysis = await analyzeInteraction(userId, text);
+    }
   } catch (err) {
     return fail(res, `Check-in recorded, but analysis failed: ${err.message}`, 502);
   }
@@ -433,13 +462,31 @@ router.post('/chat', userChatLimiter, async (req, res) => {
 
 // Chat history for the thread UI - oldest first, matching DistressHistoryScreen's
 // existing convention for time-series data.
+//
+// ?channel filters to one of 'text' | 'voice_call' | 'video_call'
+// (migration_047) - ChatScreen.js's own composer thread requests
+// channel=text specifically, so a live voice/video call's turns (logged to
+// this same table via /chat/log below) are recorded for scoring/analytics
+// but never get replayed back into the typed-message thread on reload -
+// they were never typed bubbles to begin with. Omit the param to get every
+// channel (e.g. for a future counsellor/admin view over the full history).
 router.get('/chat', async (req, res) => {
-  const { rows } = await pool.query(
-    `select message_id, sender, body, sent_at from chat_messages where user_id = $1 order by sent_at asc`,
-    [req.auth.userId]
-  );
+  const { channel } = req.query;
+  if (channel && !['text', 'voice_call', 'video_call'].includes(channel)) {
+    return fail(res, "channel must be one of: text, voice_call, video_call", 400);
+  }
+
+  const { rows } = channel
+    ? await pool.query(
+        `select message_id, sender, body, sent_at, channel from chat_messages where user_id = $1 and channel = $2 order by sent_at asc`,
+        [req.auth.userId, channel]
+      )
+    : await pool.query(
+        `select message_id, sender, body, sent_at, channel from chat_messages where user_id = $1 order by sent_at asc`,
+        [req.auth.userId]
+      );
   return ok(res, {
-    messages: rows.map((m) => ({ messageId: m.message_id, sender: m.sender, body: m.body, sentAt: m.sent_at })),
+    messages: rows.map((m) => ({ messageId: m.message_id, sender: m.sender, body: m.body, sentAt: m.sent_at, channel: m.channel })),
   });
 });
 
@@ -463,14 +510,17 @@ function countWords(text) {
   return (text || '').trim().split(/\s+/).filter(Boolean).length;
 }
 
+const CHAT_CHANNELS = ['text', 'voice_call', 'video_call'];
+
 router.post('/chat/log', async (req, res) => {
   const userId = req.auth.userId;
-  const { userMessage, aiMessage } = req.body;
+  const { userMessage, aiMessage, channel = 'text' } = req.body;
   if (typeof userMessage !== 'string' || !userMessage.trim()) return fail(res, 'userMessage is required', 400);
+  if (!CHAT_CHANNELS.includes(channel)) return fail(res, `channel must be one of: ${CHAT_CHANNELS.join(', ')}`, 400);
 
-  const toInsert = [{ user_id: userId, sender: 'user', body: userMessage.trim() }];
+  const toInsert = [{ user_id: userId, sender: 'user', body: userMessage.trim(), channel }];
   if (typeof aiMessage === 'string' && aiMessage.trim()) {
-    toInsert.push({ user_id: userId, sender: 'ai', body: aiMessage.trim() });
+    toInsert.push({ user_id: userId, sender: 'ai', body: aiMessage.trim(), channel });
   }
   const { error: insertError } = await supabase.from('chat_messages').insert(toInsert);
   if (insertError) return fail(res, `Could not save chat message: ${insertError.message}`, 500);
@@ -578,46 +628,15 @@ router.post('/urgent-help', async (req, res) => {
     }
   }
 
-  // Multi-case support: an SOS is relevant to Administration in every
-  // jurisdiction this person has an open case in, not just the case that
-  // happened to trigger it (same reasoning/decision as applyStressResponse's
-  // Critical-alert routing in stressResponse.js). userId is always the
-  // anchor already (see auth.user.routes.js's login).
+  // Multi-case support: an SOS is relevant to every jurisdiction this person
+  // has an open case in, not just the case that happened to trigger it
+  // (same reasoning as applyStressResponse's Critical-alert routing in
+  // stressResponse.js). userId is always the anchor already (see
+  // auth.user.routes.js's login). Used below to scope the Protection
+  // Officer lookup - District/State Administration are deliberately NOT
+  // notified here any more (explicit request: this alert goes to the
+  // counsellor and Protection Officer only, not district/state admin).
   const jurisdictionIds = await getJurisdictionIdsForCaseFamily(userId);
-  const adminIdSet = new Set();
-  // Each jurisdiction's own 3-step walk (district -> parent -> admin roles)
-  // is a genuine dependency chain, but a person with several linked cases
-  // has several INDEPENDENT jurisdictions to walk - those now run
-  // concurrently (Promise.all) instead of one full chain after another,
-  // which used to make an SOS - the single most time-critical action in the
-  // app - wait out N x 2 sequential PostgREST round trips before ever
-  // notifying anyone.
-  const adminIdsPerJurisdiction = await Promise.all(jurisdictionIds.map(async (jid) => {
-    // Walk the jurisdiction tree up from this district to find its parent
-    // state - State Administration is scoped to that state row, not the
-    // district itself, so this can't be a simple eq() on jid alone.
-    const { rows: districtRows } = await pool.query(`select parent_id from jurisdictions where jurisdiction_id = $1 limit 1`, [jid]);
-    const districtRow = districtRows[0];
-    let stateJurisdictionId = null;
-    if (districtRow?.parent_id) {
-      const { rows: parentRows } = await pool.query(`select jurisdiction_id, level from jurisdictions where jurisdiction_id = $1 limit 1`, [districtRow.parent_id]);
-      const parentRow = parentRows[0];
-      if (parentRow?.level === 'state') stateJurisdictionId = parentRow.jurisdiction_id;
-    }
-
-    const idsToCheck = stateJurisdictionId ? [jid, stateJurisdictionId] : [jid];
-    const { rows: adminRoles } = await pool.query(
-      `select orr.official_id, r.role_name
-       from official_roles orr
-       join roles r on r.role_id = orr.role_id
-       where orr.jurisdiction_id = any($1::uuid[]) and orr.revoked_at is null`,
-      [idsToCheck]
-    );
-    return (adminRoles || []).filter((r) => r.role_name === 'Administration').map((r) => r.official_id);
-  }));
-  for (const ids of adminIdsPerJurisdiction) {
-    for (const id of ids) adminIdSet.add(id);
-  }
 
   // Protection Officer assigned to the victim's own district(s) - "nearby
   // PO", same jurisdiction_id scoping protectionOfficer.routes.js's own
@@ -675,7 +694,7 @@ router.post('/urgent-help', async (req, res) => {
     console.error('POST /urgent-help: no Protection Officer assigned to this district', { userId, jurisdictionIds });
   }
 
-  const recipientIds = [...new Set([counsellorId, ...adminIdSet, ...protectionOfficerIds].filter(Boolean))];
+  const recipientIds = [...new Set([counsellorId, ...protectionOfficerIds].filter(Boolean))];
 
   if (recipientIds.length > 0) {
     const { error: notifyError } = await supabase
@@ -687,7 +706,7 @@ router.post('/urgent-help', async (req, res) => {
       await enqueueAlertDispatch(null, userId, recipientIds);
     }
   } else {
-    console.error('POST /urgent-help: no counsellor or admin available to notify', { sosEventId: sosEvent.sos_event_id, userId });
+    console.error('POST /urgent-help: no counsellor or Protection Officer available to notify', { sosEventId: sosEvent.sos_event_id, userId });
   }
 
   await writeAuditLog({ userId, action: 'create', entityType: 'sos_event', entityId: sosEvent.sos_event_id });

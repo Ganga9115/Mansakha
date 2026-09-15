@@ -1,0 +1,20 @@
+{
+  "base_model": "IndicBERTv2 (local)",
+  "dataset": "AI4Bharat IndicSentiment (local)",
+  "train_samples": 11282,
+  "val_samples": 1610,
+  "epochs": 3,
+  "batch_size": 8,
+  "gradient_accumulation_steps": 4,
+  "effective_batch_size": 32,
+  "learning_rate": 2e-05,
+  "max_length": 128,
+  "seed": 42,
+  "gpu": "NVIDIA GeForce RTX 2050",
+  "training_time_minutes": 10.64127010901769,
+  "best_val_macro_f1": 0.965216049382716,
+  "peak_gpu_memory_mb": 2818.188288,
+  "frozen_layers": "bert.embeddings",
+  "trainable_parameters": 85646594,
+  "total_parameters": 278042882
+}

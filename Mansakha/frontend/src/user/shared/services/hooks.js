@@ -518,14 +518,20 @@ export function useCheckin() {
 // 5,000 - see POST /api/user/chat/log. Fire-and-forget from the caller's
 // perspective (ChatScreen.js doesn't need to block on this to keep
 // chatting), but still surfaces errors so a persistent failure isn't silent.
+// `channel`: 'text' | 'voice_call' | 'video_call' (migration_047) - defaults
+// to 'text' for ChatScreen.js's own composer; MansakhaCallModal.js passes
+// 'voice_call'/'video_call' explicitly per its own call mode.
 export function useLogChatTurn() {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ userMessage, aiMessage }) => apiClient.post('/api/user/chat/log', { userMessage, aiMessage }, token),
-    onSuccess: (data) => {
+    mutationFn: ({ userMessage, aiMessage, channel = 'text' }) => apiClient.post('/api/user/chat/log', { userMessage, aiMessage, channel }, token),
+    onSuccess: (data, variables) => {
       if (data?.scored) {
         queryClient.invalidateQueries({ queryKey: ['user', 'dashboard'] });
+      }
+      if ((variables?.channel || 'text') === 'text') {
+        queryClient.invalidateQueries({ queryKey: ['user', 'chat', 'text'] });
       }
     },
   });
@@ -592,9 +598,15 @@ export function useAppendInteraction() {
 
 // --- AI Chat (Feature Catalog: Check-in & Interaction > AI Chat) ---
 
-export function useChatHistory() {
+// `channel`: 'text' | 'voice_call' | 'video_call' | undefined (every
+// channel). ChatScreen.js's own typed-message thread requests channel=text
+// specifically - a live voice/video call's turns are recorded server-side
+// (migration_047) for scoring/analytics but were never typed bubbles, so
+// they don't get replayed back into that thread on reload.
+export function useChatHistory(channel) {
   const token = useToken();
-  return useQuery({ queryKey: ['user', 'chat'], queryFn: () => apiClient.get('/api/user/chat', token), enabled: !!token });
+  const qs = channel ? `?channel=${channel}` : '';
+  return useQuery({ queryKey: ['user', 'chat', channel || 'all'], queryFn: () => apiClient.get(`/api/user/chat${qs}`, token), enabled: !!token });
 }
 
 export function useSendChatMessage() {
@@ -616,12 +628,11 @@ export function useTriggerIvrsCall() {
 // --- Get Help Now / urgent-help (replaces the old SOS button) ---
 
 // Notifies the assigned counsellor (or auto-assigns the least-loaded one
-// nationwide), every District Administration official in the user's
-// district, and every State Administration official in that district's
-// parent state. Returns { sosEventId, triggeredAt, pcrNumber,
-// contactNumber } - the caller dials `tel:${pcrNumber}` client-side, since
-// the backend's IVRS/Exotel dispatch is a deliberate stub that doesn't
-// actually place calls.
+// nationwide) and the Protection Officer for the user's district only -
+// District/State Administration are deliberately not alerted here. Returns
+// { sosEventId, triggeredAt, pcrNumber, contactNumber } - the caller dials
+// `tel:${pcrNumber}` client-side, since the backend's IVRS/Exotel dispatch
+// is a deliberate stub that doesn't actually place calls.
 export function useTriggerUrgentHelp() {
   const token = useToken();
   return useMutation({ mutationFn: (location) => apiClient.post('/api/user/urgent-help', { location }, token) });

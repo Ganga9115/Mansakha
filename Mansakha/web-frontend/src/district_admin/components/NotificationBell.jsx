@@ -14,6 +14,7 @@ export default function NotificationBell() {
   const notifications = data?.notifications || [];
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState(0);
+  const [dismissed, setDismissed] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => refetch(), 15000);
@@ -40,20 +41,33 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const unreadCount = notifications.filter((n) => new Date(n.notifiedAt).getTime() > lastSeen).length;
+  const maxTimestamp = notifications.reduce((max, n) => {
+    const t = new Date(n.notifiedAt).getTime();
+    return !isNaN(t) && t > max ? t : max;
+  }, 0);
+
+  useEffect(() => {
+    if (notifications.some((n) => new Date(n.notifiedAt).getTime() > lastSeen)) {
+      setDismissed(false);
+    }
+  }, [notifications, lastSeen]);
+
+  // Once touched/clicked, red dot is immediately cleared
+  const unreadCount = (open || dismissed)
+    ? 0
+    : notifications.filter((n) => new Date(n.notifiedAt).getTime() > lastSeen).length;
 
   const toggleOpen = () => {
     const next = !open;
     setOpen(next);
-    if (next) {
-      const now = Date.now();
-      setLastSeen(now);
-      if (storageKey) {
-        try {
-          localStorage.setItem(storageKey, String(now));
-        } catch {
-          // best-effort only
-        }
+    setDismissed(true);
+    const targetSeen = Math.max(Date.now(), maxTimestamp);
+    setLastSeen(targetSeen);
+    if (storageKey) {
+      try {
+        localStorage.setItem(storageKey, String(targetSeen));
+      } catch {
+        // best-effort only
       }
     }
   };

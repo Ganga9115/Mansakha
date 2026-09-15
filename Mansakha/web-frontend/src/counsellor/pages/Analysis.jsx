@@ -57,13 +57,13 @@ export default function Analysis() {
       <div className="space-y-6">
 
         {/* TOP CONTROLS & DATE FILTER */}
-        <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
+        <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-col sm:flex-row flex-wrap items-start sm:items-center gap-3">
+          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
             {['Last 7 Days', 'Last 30 Days', 'Last 90 Days', 'Custom Range'].map((r) => (
               <button
                 key={r}
                 onClick={() => setTimeRange(r)}
-                className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
+                className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition ${
                   timeRange === r
                     ? 'bg-[#519BCE]/15 text-[#519BCE]'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -75,7 +75,7 @@ export default function Analysis() {
           </div>
 
           {isCustom && (
-            <div className="flex flex-wrap items-center gap-2 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-xs pt-2 sm:pt-0 border-t sm:border-0 border-gray-100 w-full sm:w-auto">
               <label className="flex items-center gap-1.5 text-gray-600 font-semibold">
                 From
                 <input
@@ -97,14 +97,14 @@ export default function Analysis() {
                 />
               </label>
               {customRangeInvalid && (
-                <span className="text-rose-600 font-semibold">End date can't be before start date.</span>
+                <span className="text-rose-600 font-semibold text-xs">End date can't be before start date.</span>
               )}
             </div>
           )}
         </div>
 
         {/* TOP ROW: 2 CHARTS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
 
           {/* Average Distress Severity Trends */}
           <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
@@ -172,19 +172,19 @@ export default function Analysis() {
             title="VULNERABLE (MODERATE)"
             value={moderate}
             subtitle="Requires monitoring"
-            accent="emerald"
+            accent="amber"
           />
           <StatCard
             title="HIGH-RISK CASES"
             value={high}
             subtitle="High risk level"
-            accent="rose"
+            accent="orange"
           />
           <StatCard
             title="CRITICAL CASES"
             value={critical}
             subtitle="Immediate attention"
-            accent="purple"
+            accent="red"
           />
         </div>
 
@@ -283,10 +283,10 @@ function SeverityStackedChart({ severityDistribution }) {
         {severityDistribution.map((item, i) => (
           <div key={i} className="flex flex-col items-center gap-2 w-8">
             <div className="w-4 h-28 flex flex-col justify-end gap-1 rounded overflow-hidden">
-              <div className="bg-purple-700 w-full rounded-sm" style={{ height: `${(item.critical / maxTotal) * 100}%` }}></div>
-              <div className="bg-red-600 w-full rounded-sm" style={{ height: `${(item.high / maxTotal) * 100}%` }}></div>
-              <div className="bg-amber-500 w-full rounded-sm" style={{ height: `${(item.moderate / maxTotal) * 100}%` }}></div>
-              <div className="bg-emerald-600 w-full rounded-sm" style={{ height: `${(item.low / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#b91c1c] w-full rounded-sm" style={{ height: `${(item.critical / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#ea580c] w-full rounded-sm" style={{ height: `${(item.high / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#f59e0b] w-full rounded-sm" style={{ height: `${(item.moderate / maxTotal) * 100}%` }}></div>
+              <div className="bg-[#10b981] w-full rounded-sm" style={{ height: `${(item.low / maxTotal) * 100}%` }}></div>
             </div>
           </div>
         ))}
@@ -302,16 +302,16 @@ function SeverityStackedChart({ severityDistribution }) {
       {/* Legend */}
       <div className="flex items-center gap-4 text-[11px] font-semibold text-gray-600 pt-1">
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-purple-700"></span> Critical
+          <span className="w-2 h-2 rounded-full bg-[#b91c1c]"></span> Critical
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-red-600"></span> High
+          <span className="w-2 h-2 rounded-full bg-[#ea580c]"></span> High
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-amber-500"></span> Moderate
+          <span className="w-2 h-2 rounded-full bg-[#f59e0b]"></span> Moderate
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-emerald-600"></span> Low
+          <span className="w-2 h-2 rounded-full bg-[#10b981]"></span> Low
         </span>
       </div>
     </div>
@@ -336,27 +336,35 @@ function InterventionDonut({ interventionPhases }) {
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-around py-4">
-      {/* SVG Donut */}
-      <div className="relative w-40 h-40">
-        <svg className="w-full h-full -rotate-90 drop-shadow-sm" viewBox="0 0 36 36">
-          <path
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+      {/* Donut graphic */}
+      <div className="relative w-40 h-40 flex items-center justify-center">
+        <svg className="w-full h-full -rotate-90 transform" viewBox="0 0 36 36">
+          {/* Background circle */}
+          <circle
+            cx="18"
+            cy="18"
+            r="15.91549430918954"
             fill="none"
             stroke="#F3F4F6"
             strokeWidth="4"
           />
-          {/* Completed */}
-          <path
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          {/* Segment 1: Completed */}
+          <circle
+            cx="18"
+            cy="18"
+            r="15.91549430918954"
             fill="none"
             stroke="#10B981"
             strokeWidth="4"
             strokeDasharray={`${completedPct}, 100`}
+            strokeDashoffset="0"
             className="transition-all duration-1000 ease-out"
           />
-          {/* In Progress */}
-          <path
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          {/* Segment 2: In Progress */}
+          <circle
+            cx="18"
+            cy="18"
+            r="15.91549430918954"
             fill="none"
             stroke="#3B82F6"
             strokeWidth="4"
@@ -364,9 +372,11 @@ function InterventionDonut({ interventionPhases }) {
             strokeDashoffset={`${-completedPct}`}
             className="transition-all duration-1000 ease-out delay-150"
           />
-          {/* Planned */}
-          <path
-            d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+          {/* Segment 3: Planned */}
+          <circle
+            cx="18"
+            cy="18"
+            r="15.91549430918954"
             fill="none"
             stroke="#F59E0B"
             strokeWidth="4"
@@ -404,6 +414,9 @@ function InterventionDonut({ interventionPhases }) {
 function StatCard({ title, value, subtitle, accent = 'gray' }) {
   const accents = {
     blue: 'border-blue-200 bg-blue-50/50 text-blue-600',
+    amber: 'border-amber-200 bg-amber-50/50 text-amber-600',
+    orange: 'border-orange-200 bg-orange-50/50 text-orange-600',
+    red: 'border-red-200 bg-red-50/50 text-red-600',
     emerald: 'border-emerald-200 bg-emerald-50/50 text-emerald-600',
     purple: 'border-purple-200 bg-purple-50/50 text-purple-600',
     rose: 'border-rose-200 bg-rose-50/50 text-rose-600',

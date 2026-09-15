@@ -1,68 +1,230 @@
 import { useCallback, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 
-// Speech-to-text only exists via the browser's Web Speech API - CheckinScreen.js's
-// Call mode was the first place this app used it (its own always-listening,
-// speak-then-listen conversational loop is tightly coupled to that screen's call
-// state machine and not a clean drop-in elsewhere). This hook extracts just the
-// reusable bit - "tap to start dictating, get the transcribed text back" - for any
-// screen that wants a simple mic-to-text button next to a text field.
+/**
+ * Universal Speech-to-Text hook powered by IIT Madras Speech Lab ASR API:
+ * Documentation: https://speech-lab-iitm.github.io/SpeechLab/api.html
+ * Supported languages: English, Tamil, Hindi, Gujarati, Kannada, Marathi, Telugu
+ */
 export const SPEECH_TO_TEXT_SUPPORTED =
-  Platform.OS === 'web' && typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  Platform.OS === 'web' &&
+  typeof window !== 'undefined' &&
+  typeof navigator !== 'undefined' &&
+  !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
 
-// `onResult(text)` fires once per completed utterance with the final
-// transcript - callers append it to whatever's already typed.
-export function useSpeechToText(onResult) {
+const IITM_SPEECHLAB_API_URL = 'https://asr.iitm.ac.in/asr/v2/decode';
+const LOCAL_DJANGO_AI_TRANSCRIBE_URL = 'http://127.0.0.1:8000/api/ai/transcribe/';
+
+/**
+ * Transcribes audio blob using the official IIT Madras Speech Lab ASR specification:
+ * POST -F 'file=@audio.wav' -F 'language=english' -F 'vtt=false' https://asr.iitm.ac.in/asr/v2/decode
+ * With seamless fallback to local IndicWhisper engine via Django AI backend.
+ */
+async function transcribeAudioBlob(blob, language = 'english') {
+  const langLower = (language || 'english').toLowerCase();
+
+  // 1. Direct IIT Madras Speech Lab ASR API
+  try {
+    const formData = new FormData();
+    formData.append('file', blob, 'speech_recording.wav');
+    formData.append('language', langLower);
+    formData.append('vtt', 'false');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const res = await fetch(IITM_SPEECHLAB_API_URL, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === 'success' && data.transcript?.trim()) {
+        return {
+          transcript: data.transcript.trim(),
+          source: 'IIT Madras Speech Lab API (ASR v2)',
+        };
+      }
+    }
+  } catch (_) {
+    // Fall through to Django AI backend if IITM public endpoint is behind campus proxy or CORS
+  }
+
+  // 2. Django AI backend transcribe pipeline (IIT Madras + AI4Bharat IndicWhisper local model)
+  try {
+    const formData = new FormData();
+    formData.append('audio', blob, 'recording.wav');
+    formData.append('language', langLower);
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    const res = await fetch(LOCAL_DJANGO_AI_TRANSCRIBE_URL, {
+      method: 'POST',
+      body: formData,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.transcript?.trim()) {
+        return {
+          transcript: data.transcript.trim(),
+          source: data.source || 'IIT Madras / AI4Bharat Speech Lab Engine',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[SpeechToText] Local transcribe service unreachable:', err.message);
+  }
+
+  return null;
+}
+
+export function useSpeechToText(onResult, options = {}) {
+  const { language = 'english' } = options;
   const [listening, setListening] = useState(false);
-  const recognitionRef = useRef(null);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const streamRef = useRef(null);
+  const browserRecognitionRef = useRef(null);
+  const browserTranscriptRef = useRef('');
 
   const stop = useCallback(() => {
-    try {
-      recognitionRef.current?.stop();
-    } catch (e) {
-      // no-op - stop() on an already-stopped/never-started recognizer throws in some browsers
+    setListening(false);
+
+    // Stop MediaRecorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch (_) {}
+    }
+
+    // Stop audio stream tracks
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+
+    // Stop optional browser recognition
+    if (browserRecognitionRef.current) {
+      try {
+        browserRecognitionRef.current.stop();
+      } catch (_) {}
     }
   }, []);
 
-  const start = useCallback(() => {
+  const start = useCallback(async () => {
     if (!SPEECH_TO_TEXT_SUPPORTED || listening) return;
-    
-    // Explicitly request mic permission first to prevent the browser's permission prompt 
-    // from interrupting or timing out the SpeechRecognition's delicate first-run state machine.
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then(() => {
-        const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognition = new SpeechRecognitionCtor();
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        recognition.lang = 'en-IN';
-        recognition.onstart = () => setListening(true);
-        recognition.onresult = (event) => {
-          let finalText = '';
-          for (let i = event.resultIndex; i < event.results.length; i++) {
-            if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
-          }
-          if (finalText.trim()) onResult(finalText.trim());
-        };
-        recognition.onerror = () => setListening(false);
-        recognition.onend = () => setListening(false);
-        recognitionRef.current = recognition;
-        try {
-          recognition.start();
-        } catch (e) {
-          setListening(false);
+
+    audioChunksRef.current = [];
+    browserTranscriptRef.current = '';
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+
+      // Setup MediaRecorder for capturing raw audio for IIT Madras Speech Lab API
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4';
+
+      const recorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
         }
-      })
-      .catch((err) => {
-        console.warn('Mic permission denied or unavailable:', err);
-        setListening(false);
-      });
-  }, [listening, onResult]);
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/wav' });
+        if (audioBlob.size > 0) {
+          setIsTranscribing(true);
+          try {
+            const result = await transcribeAudioBlob(audioBlob, language);
+            if (result && result.transcript) {
+              onResult(result.transcript);
+            } else if (browserTranscriptRef.current.trim()) {
+              // Fallback to browser transcript if remote/local STT returned empty
+              onResult(browserTranscriptRef.current.trim());
+            }
+          } catch (e) {
+            if (browserTranscriptRef.current.trim()) {
+              onResult(browserTranscriptRef.current.trim());
+            }
+          } finally {
+            setIsTranscribing(false);
+          }
+        }
+      };
+
+      recorder.start(250);
+      setListening(true);
+
+      // Optional: run Web Speech API alongside for real-time interim captions
+      const SpeechRecognitionCtor = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognitionCtor) {
+        try {
+          const recognition = new SpeechRecognitionCtor();
+          recognition.continuous = true;
+          // Set to true to get real-time typing effect
+          recognition.interimResults = true;
+          recognition.lang = language === 'hindi' ? 'hi-IN' : language === 'tamil' ? 'ta-IN' : 'en-IN';
+
+          recognition.onresult = (event) => {
+            let interimText = '';
+            let finalText = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+              if (event.results[i].isFinal) {
+                finalText += event.results[i][0].transcript + ' ';
+              } else {
+                interimText += event.results[i][0].transcript;
+              }
+            }
+            
+            // Immediately dispatch final recognized sentences so they appear in real-time
+            if (finalText.trim()) {
+              onResult(finalText.trim());
+              browserTranscriptRef.current = (browserTranscriptRef.current + ' ' + finalText).trim();
+            }
+          };
+
+          recognition.onerror = () => {};
+          recognition.onend = () => {};
+          browserRecognitionRef.current = recognition;
+          recognition.start();
+        } catch (_) {}
+      }
+    } catch (err) {
+      console.warn('Microphone permission denied or unavailable:', err);
+      setListening(false);
+    }
+  }, [listening, language, onResult]);
 
   const toggle = useCallback(() => {
-    if (listening) stop();
-    else start();
+    if (listening) {
+      stop();
+    } else {
+      start();
+    }
   }, [listening, start, stop]);
 
-  return { listening, toggle, supported: SPEECH_TO_TEXT_SUPPORTED };
+  return {
+    listening,
+    isTranscribing,
+    toggle,
+    start,
+    stop,
+    supported: SPEECH_TO_TEXT_SUPPORTED,
+  };
 }

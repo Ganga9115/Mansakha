@@ -1,25 +1,23 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { useNavigation, useNavigationState } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { shadow } from '../theme/shadow';
-import { useResponsive } from '../hooks/useResponsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BOTTOM_NAV_BAR_HEIGHT } from './BottomNavBar';
+import { useResponsive } from '../hooks/useResponsive';
 
-// Extra breathing room above the bottom nav bar so the FAB never touches
-// (let alone overlaps) it - roughly the 20-30px buffer requested on top of
-// the nav bar's own height and safe-area inset.
-const FAB_GAP_ABOVE_NAV_BAR = 28;
+// The floating button sits this far above the bottom nav bar (if present)
+const FAB_GAP_ABOVE_NAV_BAR = 16;
 
 export default function AiChatButton() {
   const navigation = useNavigation();
-  const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-
+  const { isDesktop } = useResponsive();
+  
   // Mirrors BottomNavBar's own `bottom: Math.max(insets.bottom, 12)` so this
   // stays clear of it on every device - phones with a large safe-area inset
   // (e.g. the home-indicator gesture area) push the nav bar further up than
@@ -27,25 +25,27 @@ export default function AiChatButton() {
   // collide before.
   const mobileBottom = Math.max(insets.bottom, 12) + BOTTOM_NAV_BAR_HEIGHT + FAB_GAP_ABOVE_NAV_BAR;
 
-  const currentRouteName = useNavigationState(state => {
+  // useNavigationState is a live subscription to the nav tree - it re-renders
+  // this component the instant ANY navigator's state changes, anywhere in
+  // the app, on every platform including web. That already made the
+  // now-removed web-only workaround (a custom window event fired from only
+  // ONE of the two navigators - DesktopNavigator, never TabNavigator, the
+  // one phone/tablet/mobile-web actually uses - plus a sessionStorage read
+  // that only ran once on mount) both unnecessary and the actual source of
+  // the bug: on mobile-web, no event ever fired, so the FAB's hidden state
+  // only ever updated on a full page reload, one navigation behind.
+  const currentRouteName = useNavigationState((state) => {
     if (!state) return null;
-    const currentRoute = state.routes[state.index];
-    // If it's a nested navigator (like the Drawer or Tab), get its active route
-    if (currentRoute.state && currentRoute.state.routes) {
-      return currentRoute.state.routes[currentRoute.state.index].name;
+    let r = state.routes[state.index];
+    while (r && r.state && r.state.routes && r.state.index !== undefined) {
+      r = r.state.routes[r.state.index];
     }
-    return currentRoute.name;
+    return r ? r.name : null;
   });
 
-  // Also hidden on the counsellor chat screen - registered under two route
-  // names depending on tier/entry point ('mycounsellor' for the phone tab
-  // bar and desktop drawer item, 'CounsellorChat' for the desktop drawer's
-  // second entry and the stack-pushed path from Home's quick actions). That
-  // screen has its own composer with a Send button pinned to the same
-  // bottom-right corner this FAB occupies, so the two visually overlapped
-  // and the FAB intercepted taps meant for Send (confirmed live via
-  // automated testing).
-  if (currentRouteName === 'Chatbot' || currentRouteName === 'CounsellorChat' || currentRouteName === 'mycounsellor') {
+  const isHidden = currentRouteName === 'Chatbot' || currentRouteName === 'mycounsellor' || currentRouteName === 'CounsellorChat';
+
+  if (isHidden) {
     return null;
   }
 
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     ...shadow.pop,
     // Above BottomNavBar's navCard (elevation: 6) so the FAB always draws on
     // top of it on Android, in addition to sitting clear of it vertically.
-    elevation: 10,
-    zIndex: 20,
+    elevation: 99,
+    zIndex: 9999,
   },
 });

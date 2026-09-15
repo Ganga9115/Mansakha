@@ -1,0 +1,15 @@
+PS 094 Sentiment Model -- Held-out Test Set Classification Report
+======================================================================
+
+              precision    recall  f1-score   support
+
+    NEGATIVE       0.93      0.95      0.94      1610
+    POSITIVE       0.95      0.93      0.94      1624
+
+    accuracy                           0.94      3234
+   macro avg       0.94      0.94      0.94      3234
+weighted avg       0.94      0.94      0.94      3234
+
+Macro F1:    0.9403
+Weighted F1: 0.9403
+Accuracy:    0.9403

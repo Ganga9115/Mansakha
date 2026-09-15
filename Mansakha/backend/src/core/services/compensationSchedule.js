@@ -34,9 +34,9 @@ function getCompensationSchedule(caseTypeName) {
 // directly - no new tracking needed for "has the chargesheet been filed
 // yet", since case_stage moving to 'Trial' already means exactly that.
 const COMPENSATION_STAGES = [
-  { stage: 'FIR / Initial Stage', percentage: 50, unlocksAtCaseStage: 'Investigation' },
-  { stage: 'Chargesheet Filed', percentage: 25, unlocksAtCaseStage: 'Trial' },
-  { stage: 'Final Stage (Court Outcome)', percentage: 25, unlocksAtCaseStage: 'Compensation' },
+  { stage: 'Stage 1', percentage: 50, unlocksAtCaseStage: 'Investigation' },
+  { stage: 'Stage 2', percentage: 25, unlocksAtCaseStage: 'Trial' },
+  { stage: 'Stage 3', percentage: 25, unlocksAtCaseStage: 'Compensation' },
 ];
 // migration_045: case_stage is down to 3 real values - Rehabilitation was
 // never a distinct procedural stage (it's now a person-level opt-in fact

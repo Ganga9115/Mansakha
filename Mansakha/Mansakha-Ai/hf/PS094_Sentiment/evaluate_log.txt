@@ -1,0 +1,44 @@
+Device: cuda
+Loading trained model from C:/Users/yukes/Downloads/hf/PS094_Sentiment_Model (no retraining)...
+Loading weights:   0%|          | 0/201 [00:00<?, ?it/s]Loading weights: 100%|██████████| 201/201 [00:00<00:00, 6725.29it/s]
+Test samples: 3234
+
+=== FINAL TEST SET RESULTS (held-out, never used in training) ===
+              precision    recall  f1-score   support
+
+    NEGATIVE       0.93      0.95      0.94      1610
+    POSITIVE       0.95      0.93      0.94      1624
+
+    accuracy                           0.94      3234
+   macro avg       0.94      0.94      0.94      3234
+weighted avg       0.94      0.94      0.94      3234
+
+Macro F1:    0.9403
+Weighted F1: 0.9403
+Accuracy:    0.9403
+
+Confusion matrix saved to C:/Users/yukes/Downloads/hf/PS094_Sentiment/evaluation/confusion_matrix.png
+Confusion matrix (rows=actual, cols=predicted):
+           Pred   NEGATIVE  Pred   POSITIVE
+Actual NEGATIVE              1527              83
+Actual POSITIVE               110            1514
+
+=== PER-LANGUAGE TEST RESULTS ===
+Language     |     N |  Accuracy |  Macro F1 | Weighted F1
+----------------------------------------------------------
+Assamese     |   231 |    0.9567 |    0.9567 |      0.9567
+Bengali      |   231 |    0.9394 |    0.9394 |      0.9394
+Bodo         |   231 |    0.8615 |    0.8614 |      0.8615
+English      |   231 |    0.9567 |    0.9567 |      0.9567
+Gujarati     |   231 |    0.9437 |    0.9437 |      0.9437
+Hindi        |   231 |    0.9307 |    0.9307 |      0.9307
+Kannada      |   231 |    0.9394 |    0.9394 |      0.9394
+Malayalam    |   231 |    0.9654 |    0.9654 |      0.9653
+Marathi      |   231 |    0.9481 |    0.9480 |      0.9480
+Odia         |   231 |    0.9307 |    0.9307 |      0.9307
+Punjabi      |   231 |    0.9437 |    0.9437 |      0.9437
+Tamil        |   231 |    0.9394 |    0.9394 |      0.9394
+Telugu       |   231 |    0.9610 |    0.9610 |      0.9610
+Urdu         |   231 |    0.9481 |    0.9481 |      0.9481
+
+Saved metrics.json, classification_report.txt, per_language_metrics.csv to C:/Users/yukes/Downloads/hf/PS094_Sentiment/evaluation

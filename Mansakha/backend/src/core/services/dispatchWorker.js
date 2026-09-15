@@ -1,6 +1,6 @@
 const { supabase } = require('../db/supabaseClient');
 const { pool } = require('../db/pgPool');
-const { generateProactiveContactMessage } = require('../../ai/gemini');
+const { generateProactiveContactMessage } = require('../../ai/ollama');
 
 // Closes both "no proactive scheduling" and "no real alert-dispatch worker"
 // (Section 4.2 / Section 0b) with one mechanism: a durable dispatch_queue,

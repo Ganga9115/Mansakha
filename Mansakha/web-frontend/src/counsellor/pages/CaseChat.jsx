@@ -48,6 +48,36 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+function getDateLabel(iso) {
+  if (!iso) return 'Today';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return 'Today';
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const isSameDay = (d1, d2) =>
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate();
+  if (isSameDay(d, today)) return 'Today';
+  if (isSameDay(d, yesterday)) return 'Yesterday';
+  return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function groupMessagesByDate(messages) {
+  const groups = [];
+  let currentGroup = null;
+  messages.forEach((msg) => {
+    const label = getDateLabel(msg.sentAt);
+    if (!currentGroup || currentGroup.label !== label) {
+      currentGroup = { label, data: [] };
+      groups.push(currentGroup);
+    }
+    currentGroup.data.push(msg);
+  });
+  return groups;
+}
+
 function pickRecorderMimeType() {
   const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/ogg', 'audio/mp4'];
   if (typeof MediaRecorder === 'undefined' || !MediaRecorder.isTypeSupported) return undefined;
@@ -259,142 +289,134 @@ export default function CaseChat() {
   };
 
   const sendDisabled = (!draft.trim() && !isRecording) || sendMessage.loading;
+  const messageGroups = groupMessagesByDate(data?.messages || []);
 
   return (
     <StaffLayout title={`Chat: ${userId ? userId.slice(0, 8) : ''}`}>
-      <div className="h-[calc(100vh-8rem)] flex flex-col bg-[#F8FAFC] rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+      <div className="h-[calc(100vh-5.5rem)] sm:h-[calc(100vh-7.5rem)] flex flex-col bg-white rounded-xl sm:rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
         
-        {/* Top Header Matching UI Spec */}
-        <div className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 bg-[#EBF3FA] shrink-0">
-          <div className="flex items-center gap-3">
+        {/* ── Header — white background, matches victim app ── */}
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-100 bg-white shrink-0 shadow-sm">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               onClick={() => navigate(`/counsellor/case-detail/${userId}`)}
-              className="p-1.5 -ml-1 rounded-full hover:bg-white/60 transition text-[#1E293B]"
+              className="p-1 -ml-1 rounded-full hover:bg-gray-100 transition text-gray-600 shrink-0"
               aria-label="Back to Case File"
             >
-              <ArrowLeft size={20} />
+              <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
             </button>
-            <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-full bg-white/80 border border-[#CBD5E1] flex items-center justify-center text-[#1E293B] shrink-0">
-                <User size={22} />
-              </div>
-              <div className="flex flex-col">
-                <h1 className="text-base font-bold text-[#0F172A] leading-tight">
-                  {data?.userName || 'User Support'}
-                </h1>
-                <p className="text-xs text-[#64748B]">Private, opted-in support</p>
-              </div>
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#EBF3FA] border border-[#CBD5E1] flex items-center justify-center shrink-0">
+              <User size={18} className="text-[#3D5A80] sm:w-5 sm:h-5" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <h1 className="text-xs sm:text-sm font-bold text-[#0F172A] leading-tight truncate">
+                {data?.userName || 'User Support'}
+              </h1>
+              <p className="text-[10px] sm:text-xs text-[#64748B] truncate">Private, opted-in support</p>
             </div>
           </div>
 
-          {data?.phone && (
-            <a
-              href={`tel:${data.phone}`}
-              className="w-9 h-9 rounded-full border-2 border-[#22C55E] bg-white flex items-center justify-center text-[#22C55E] hover:bg-emerald-50 transition shrink-0 shadow-xs"
-              title="Call User"
-              aria-label="Call User"
-            >
-              <Phone size={18} />
-            </a>
-          )}
+          {/* ── Call button — always visible ── */}
+          <button
+            onClick={() => {
+              if (data?.phone) {
+                window.location.href = `tel:${data.phone}`;
+              } else {
+                toast.error('No phone number on file for this user');
+              }
+            }}
+            type="button"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-[#7C5CBF] bg-[#F7F4FD] flex items-center justify-center text-[#7C5CBF] hover:bg-[#EDE8F7] active:bg-[#DDD0F5] transition shrink-0 shadow-sm"
+            title={data?.phone ? `Call ${data.userName || 'User'}` : 'No phone number on file'}
+            aria-label="Call User"
+          >
+            <Phone size={15} className="sm:w-[18px] sm:h-[18px]" />
+          </button>
         </div>
 
-        {/* Scrollable Message Thread */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4 no-scrollbar">
-          <div className="flex justify-center my-1">
-            <div className="bg-white px-3 py-1 rounded-full border border-gray-100 shadow-xs">
-              <span className="text-[11px] font-semibold text-[#64748B]">Today</span>
-            </div>
-          </div>
-
+        {/* ── Scrollable message thread ── */}
+        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6 no-scrollbar bg-white">
           {loading && !data ? (
-            <p className="text-xs text-center text-gray-400 mt-4">Loading messages...</p>
-          ) : (data?.messages || []).length === 0 ? (
-            <p className="text-xs text-center text-gray-400 mt-4">No messages yet - say hello.</p>
+            <p className="text-xs text-center text-gray-400 mt-8">Loading messages...</p>
+          ) : messageGroups.length === 0 ? (
+            <p className="text-xs text-center text-gray-400 mt-8">No messages yet — say hello.</p>
           ) : (
-            data.messages.map((m) => {
-              const isUser = m.senderType === 'user';
-              const isVoice = m.messageType === 'voice';
-              const isThisPlaying = isVoice && playingMessageId === m.messageId;
+            messageGroups.map((group) => (
+              <div key={group.label} className="space-y-3 sm:space-y-4">
+                {/* Date badge */}
+                <div className="flex justify-center mb-2">
+                  <span className="bg-white px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-gray-100 shadow-sm text-[10px] sm:text-[11px] font-semibold text-gray-400">
+                    {group.label}
+                  </span>
+                </div>
 
-              return (
-                <div
-                  key={m.messageId}
-                  className={`flex items-end gap-2 ${isUser ? 'justify-start' : 'justify-end'}`}
-                >
-                  {isUser && (
-                    <div className="w-8 h-8 rounded-full bg-[#EBF3FA] flex items-center justify-center shrink-0">
-                      <User size={16} className="text-[#3D5A80]" />
-                    </div>
-                  )}
+                {group.data.map((m) => {
+                  const isUser = m.senderType === 'user';
+                  const isVoice = m.messageType === 'voice';
+                  const isThisPlaying = isVoice && playingMessageId === m.messageId;
 
-                  <div className={`flex flex-col max-w-[75%] ${isUser ? 'items-start' : 'items-end'}`}>
-                    {isVoice ? (
-                      <button
-                        type="button"
-                        onClick={() => handleTogglePlay(m)}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xs transition min-w-[170px] ${
-                          isUser
-                            ? 'bg-white border border-gray-100 rounded-tl-xs text-[#0F172A]'
-                            : 'bg-[#EBF3FA] rounded-tr-xs text-[#1E293B]'
-                        }`}
-                      >
-                        <div
-                          className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white ${
-                            isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'
-                          }`}
-                        >
-                          {isThisPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
+                  return (
+                    <div
+                      key={m.messageId}
+                      className={`flex items-end gap-2 sm:gap-3 ${isUser ? 'justify-start' : 'justify-end'}`}
+                    >
+                      {/* Victim avatar — left, light blue */}
+                      {isUser && (
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#F0F4F8] flex items-center justify-center shrink-0 mb-5">
+                          <User size={14} className="text-[#3D5A80] sm:w-4 sm:h-4" />
                         </div>
-                        <div className="flex-1 flex items-center gap-0.5 h-4">
-                          {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
-                            <span
-                              key={idx}
-                              className={`w-0.5 rounded-full ${
-                                isUser ? 'bg-gray-300' : 'bg-[#3D5A80]/40'
-                              }`}
-                              style={{ height: `${h}px` }}
-                            />
-                          ))}
+                      )}
+
+                      <div className={`flex flex-col max-w-[85%] sm:max-w-[75%] md:max-w-[70%] ${isUser ? 'items-start' : 'items-end'}`}>
+                        {isVoice ? (
+                          <button
+                            type="button"
+                            onClick={() => handleTogglePlay(m)}
+                            className={`flex items-center gap-2 sm:gap-3 px-3.5 sm:px-5 py-2.5 sm:py-3 rounded-3xl shadow-sm transition min-w-[150px] sm:min-w-[170px] ${
+                              isUser
+                                ? 'bg-white border border-gray-100 text-[#0F172A]'
+                                : 'bg-[#F0F4F8] text-[#1E293B]'
+                            }`}
+                          >
+                            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'}`}>
+                              {isThisPlaying ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
+                            </div>
+                            <div className="flex-1 flex items-center gap-0.5 h-4">
+                              {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
+                                <span key={idx} className={`w-0.5 rounded-full ${isUser ? 'bg-gray-300' : 'bg-[#3D5A80]/40'}`} style={{ height: `${h}px` }} />
+                              ))}
+                            </div>
+                            <span className={`text-[11px] sm:text-xs font-medium tabular-nums ${isUser ? 'text-[#0F172A]' : 'text-[#1E293B]'}`}>
+                              {formatDuration(m.durationSeconds)}
+                            </span>
+                          </button>
+                        ) : (
+                          <div className={`px-4 sm:px-5 py-2 sm:py-2.5 rounded-2xl sm:rounded-3xl shadow-sm text-sm sm:text-[15px] leading-relaxed break-words ${
+                            isUser
+                              ? 'bg-white text-[#0F172A] border border-gray-100'
+                              : 'bg-[#F0F4F8] text-[#1E293B]'
+                          }`}>
+                            {m.body}
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-1 mt-1 px-2">
+                          <span className="text-[10px] text-gray-400 font-medium">{formatTime(m.sentAt)}</span>
+                          {!isUser && <CheckCircle2 size={11} className="text-[#93C5FD]" />}
                         </div>
-                        <span
-                          className={`text-xs font-medium tabular-nums ${
-                            isUser ? 'text-[#0F172A]' : 'text-[#1E293B]'
-                          }`}
-                        >
-                          {formatDuration(m.durationSeconds)}
-                        </span>
-                      </button>
-                    ) : (
-                      <div
-                        className={`px-4 py-3 rounded-2xl shadow-xs text-sm leading-relaxed ${
-                          isUser
-                            ? 'bg-white text-[#0F172A] border border-gray-100 rounded-tl-xs'
-                            : 'bg-[#EBF3FA] text-[#1E293B] rounded-tr-xs'
-                        }`}
-                      >
-                        {m.body}
                       </div>
-                    )}
 
-                    <div className="flex items-center gap-1 mt-1 px-1">
-                      <span className="text-[11px] text-[#64748B]">
-                        {formatTime(m.sentAt)}
-                      </span>
+                      {/* Counsellor avatar — right, dark blue filled */}
                       {!isUser && (
-                        <CheckCircle2 size={12} className="text-[#3D5A80] inline" />
+                        <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#7CA8D8] flex items-center justify-center shrink-0 text-white mb-5">
+                          <User size={14} className="sm:w-4 sm:h-4" />
+                        </div>
                       )}
                     </div>
-                  </div>
-
-                  {!isUser && (
-                    <div className="w-8 h-8 rounded-full bg-[#3D5A80] flex items-center justify-center shrink-0 text-white">
-                      <User size={16} />
-                    </div>
-                  )}
-                </div>
-              );
-            })
+                  );
+                })}
+              </div>
+            ))
           )}
 
           {data?.otherPartyTyping && <TypingBubble />}
@@ -403,7 +425,7 @@ export default function CaseChat() {
 
         {/* Emoji Grid Popup */}
         {showEmojiPicker && (
-          <div className="bg-white border-t border-gray-200 p-3 max-h-48 overflow-y-auto shrink-0 shadow-lg">
+          <div className="bg-white border-t border-gray-200 p-2 sm:p-3 max-h-48 overflow-y-auto shrink-0 shadow-lg">
             <div className="flex justify-between items-center mb-2 px-1">
               <span className="text-xs font-semibold text-[#64748B]">Select Emoji</span>
               <button
@@ -414,13 +436,13 @@ export default function CaseChat() {
                 <X size={18} />
               </button>
             </div>
-            <div className="grid grid-cols-10 gap-1 text-center">
+            <div className="grid grid-cols-6 xs:grid-cols-8 sm:grid-cols-10 gap-1 text-center">
               {QUICK_EMOJIS.map((emoji, index) => (
                 <button
                   key={index}
                   type="button"
                   onClick={() => handleSelectEmoji(emoji)}
-                  className="p-1.5 text-xl hover:bg-gray-100 rounded transition"
+                  className="p-1 sm:p-1.5 text-lg sm:text-xl hover:bg-gray-100 rounded transition"
                 >
                   {emoji}
                 </button>
@@ -429,15 +451,15 @@ export default function CaseChat() {
           </div>
         )}
 
-        {/* Composer Bar */}
-        <div className="p-4 bg-[#F8FAFC] shrink-0">
-          <div className="flex items-center gap-2 bg-white rounded-2xl border border-gray-200/80 shadow-sm px-3 py-1.5">
+        {/* ── Composer bar ── */}
+        <div className="px-2 sm:px-4 pb-3 sm:pb-5 pt-2 bg-white shrink-0 border-t border-gray-100 sm:border-0">
+          <div className="flex items-center gap-1 sm:gap-2 bg-white rounded-[28px] border border-gray-200 sm:border-gray-100 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.05)] px-2 sm:px-4 py-1.5 sm:py-2.5 max-w-5xl mx-auto">
             {isRecording ? (
               <div className="flex-1 flex items-center gap-3 px-2 py-1.5">
                 <button
                   type="button"
                   onClick={cancelRecording}
-                  className="text-red-500 p-1 hover:bg-red-50 rounded-full transition"
+                  className="text-red-500 p-1.5 hover:bg-red-50 rounded-full transition"
                   title="Delete recording"
                   aria-label="Delete recording"
                 >
@@ -446,14 +468,14 @@ export default function CaseChat() {
                 <button
                   type="button"
                   onClick={togglePauseRecording}
-                  className="text-[#3D5A80] p-1 hover:bg-blue-50 rounded-full transition"
+                  className="text-[#93C5FD] p-1.5 hover:bg-blue-50 rounded-full transition"
                   title={isPaused ? 'Resume recording' : 'Pause recording'}
                   aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
                 >
                   {isPaused ? <Play size={20} /> : <Pause size={20} />}
                 </button>
-                <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-sm font-medium text-[#0F172A] flex-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse" />
+                <span className="text-sm font-medium text-gray-700 flex-1 ml-2">
                   {isPaused ? 'Paused' : 'Recording...'} {formatDuration(recordSeconds)}
                 </span>
               </div>
@@ -465,25 +487,25 @@ export default function CaseChat() {
                   onChange={handleDraftChange}
                   onKeyDown={handleKeyDown}
                   placeholder="Type a message..."
-                  className="flex-1 px-2 py-2 bg-transparent border-0 outline-none resize-none text-sm text-[#0F172A] placeholder-[#64748B] max-h-24"
+                  className="flex-1 px-4 py-2 bg-transparent border-0 outline-none resize-none text-[15px] text-[#0F172A] placeholder-gray-400 max-h-24"
                 />
                 <button
                   type="button"
                   onClick={() => setShowEmojiPicker((prev) => !prev)}
-                  className={`p-2 transition rounded-full hover:bg-gray-50 ${
-                    showEmojiPicker ? 'text-[#3D5A80]' : 'text-[#64748B]'
+                  className={`p-2.5 transition rounded-full hover:bg-gray-50 ${
+                    showEmojiPicker ? 'text-[#93C5FD]' : 'text-gray-400'
                   }`}
                   aria-label="Choose emoji"
                 >
-                  <Smile size={20} />
+                  <Smile size={22} />
                 </button>
                 <button
                   type="button"
                   onClick={startRecording}
-                  className="p-2 text-[#3D5A80] hover:bg-blue-50 rounded-full transition"
+                  className="p-2.5 text-gray-400 hover:text-[#93C5FD] hover:bg-blue-50 rounded-full transition"
                   aria-label="Record voice message"
                 >
-                  <Mic size={20} />
+                  <Mic size={22} />
                 </button>
               </>
             )}
@@ -492,13 +514,13 @@ export default function CaseChat() {
               type="button"
               onClick={isRecording ? stopAndSendRecording : handleSend}
               disabled={sendDisabled}
-              className="w-10 h-10 rounded-full bg-[#3D5A80] hover:bg-[#2D4360] text-white flex items-center justify-center shrink-0 disabled:opacity-50 transition shadow-xs"
+              className="w-11 h-11 rounded-full bg-[#9CA3AF] hover:bg-[#93C5FD] text-white flex items-center justify-center shrink-0 disabled:opacity-40 transition shadow-sm ml-1"
               aria-label="Send message"
             >
-              <Send size={18} />
+              <Send size={18} className="mr-0.5 mt-0.5" />
             </button>
           </div>
-          {recordError && <p className="text-xs text-red-500 px-3 pt-1.5">{recordError}</p>}
+          {recordError && <p className="text-xs text-red-500 px-6 pt-2">{recordError}</p>}
         </div>
 
       </div>

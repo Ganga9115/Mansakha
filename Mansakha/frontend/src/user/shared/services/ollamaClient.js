@@ -21,6 +21,17 @@ Rule 5: If immediate danger is described, gently encourage them to contact the N
 
 const OPENING_GREETING = "Hello. I'm here to listen. Take your time. How are you feeling today?";
 
+// The first TWO questions of every check-in are identical for every user,
+// regardless of case type - only question 3 onward adapts (see
+// generateInteractiveQuestion's caseType param below). Both are ordinary,
+// everyday-life questions with no reference to any case or incident, so
+// nobody's very first check-in question ever singles them out.
+const SECOND_QUESTION = {
+  text: "And how has your sleep and energy been lately?",
+  type: 'single',
+  options: ['Sleeping fine, feeling okay', 'A little restless some nights', 'Struggling to rest properly', 'Sleeping a lot more than usual'],
+};
+
 const VALID_INTERVENTIONS = ['Counselling', 'Medical', 'Witness Protection', 'Relocation', 'Financial Assistance', 'Legal Aid', 'Rehabilitation'];
 
 const ANALYSIS_SYSTEM_PROMPT = `You are the distress-analysis step of Mansakha, a check-in companion for users who are victims of an atrocity under India's SC/ST (Prevention of Atrocities) Act. You will be given a full check-in conversation transcript. Read it and return ONLY a JSON object (no markdown fences, no extra text) with exactly these fields:
@@ -150,24 +161,54 @@ async function analyzeConversation(conversation, model = OLLAMA_MODEL) {
   };
 }
 
-// Generates an interactive multiple-choice question based on history and past context.
-async function generateInteractiveQuestion(conversation, pastContext = '', model = OLLAMA_MODEL) {
-  const INTERACTIVE_PROMPT = `You are Mansakha, a highly empathetic conversational companion for a user who is a victim of trauma.
-Your task is to generate the next question to check in on their mental health. 
-Use the user's past interaction summaries as context to make the question highly personalized and relevant.
+// Case types this app tracks (case_types table) grouped into broad themes so
+// the prompt below can gently steer toward relevant, safe territory (family/
+// community/safety/logistics) without ever naming the case type, the
+// offense, or the word "victim" - see CASE_TYPE_THEME_HINTS.
+const CASE_TYPE_THEME_HINTS = {
+  'Murder': 'loss, grief, and changes at home since a family member is gone',
+  'Grievous Hurt': 'physical recovery, daily routines, and safety at home',
+  'Arson': 'housing, belongings, and rebuilding a sense of stability',
+  'Murder / Grievous Hurt / Arson': 'safety at home, recovery, and daily stability',
+  'Rape': 'emotional wellbeing, comfort, and who they feel safe talking to - never anything about the incident itself',
+  'Gang Rape': 'emotional wellbeing, comfort, and who they feel safe talking to - never anything about the incident itself',
+  'Rape / Gang Rape': 'emotional wellbeing, comfort, and who they feel safe talking to - never anything about the incident itself',
+  'Family Affected by Caste-Based Violence': 'how things feel in their neighbourhood/community and daily social life',
+  'Witness Facing Intimidation or Threats': 'their sense of safety day-to-day and whether they feel any outside pressure',
+};
 
-Past Context:
+function getCaseThemeHint(caseType) {
+  return CASE_TYPE_THEME_HINTS[caseType] || 'everyday life, routine, and general wellbeing';
+}
+
+// Generates ONE interactive multiple-choice question - always the 3rd
+// question onward (CheckinScreen.js asks two fixed, identical-for-everyone
+// questions first; see SECOND_QUESTION below). `caseType` (from
+// useUserDashboard()'s own `caseType` field) only ever nudges the *theme*
+// of what's asked next, in the system prompt the user never sees - it must
+// never be named, described, or referenced in the actual question text.
+async function generateInteractiveQuestion(conversation, pastContext = '', caseType = null, model = OLLAMA_MODEL) {
+  const INTERACTIVE_PROMPT = `You are Mansakha, a warm, everyday conversational companion doing a gentle wellbeing check-in. You are NOT a clinician, an investigator, or an intake form - you are more like a caring person catching up with someone.
+
+Hard rules, no exceptions:
+- Never use the word "victim" (or "survivor", "trauma", "abuse", "assault") anywhere in the question or options - refer to the person only as "you"/"they", never by a label.
+- Never ask directly about the incident, the accused, the case, or any graphic detail. Do not reference their legal case at all.
+- Never make the person feel singled out, diagnosed, or interrogated. Keep the tone as ordinary and low-pressure as checking in with a friend.
+- Base this question on what they just said in the conversation so far - make it feel like a natural follow-up, not a scripted next item on a form.
+- You may gently lean toward the theme of ${getCaseThemeHint(caseType)}, but only if it fits naturally after what they just said - otherwise ask about ordinary daily life (sleep, appetite, energy, people around them, small routines, what's helped lately).
+- Vary your phrasing and options every time - avoid repeating the same question shape (e.g. don't default to "Yes/No/A little bit" every turn). Options should sound like things a real person would actually say.
+
+Their past check-in summaries (for continuity only - never quote or reference this directly to them):
 """
 ${pastContext || 'No past context available.'}
 """
 
-Instead of an open-ended question, you MUST provide 2 to 10 multiple-choice options for the user to select from.
-The options should represent plausible ways the user might be feeling or want to respond. Include gentle, coping-oriented options.
+Provide 2 to 6 multiple-choice options for the user to select from - natural, varied, and including at least one gentle coping-oriented option where it fits.
 
 Respond ONLY with a JSON object in this exact format:
 {
-  "question": "<your gentle, empathetic question>",
-  "type": "single", // use "single" if they should choose one, or "multi" if they can choose multiple
+  "question": "<your warm, ordinary-sounding question - no clinical or legal language>",
+  "type": "single", // "single" if they should choose one, or "multi" if they can choose multiple
   "options": ["<option 1>", "<option 2>", ...]
 }
 `;
@@ -203,4 +244,4 @@ Respond ONLY with a JSON object in this exact format:
   return parsed;
 }
 
-export { checkOllamaConnection, sendCompanionMessage, generateInteractiveQuestion, analyzeConversation, OPENING_GREETING, OLLAMA_MODEL };
+export { checkOllamaConnection, sendCompanionMessage, generateInteractiveQuestion, analyzeConversation, OPENING_GREETING, SECOND_QUESTION, OLLAMA_MODEL };

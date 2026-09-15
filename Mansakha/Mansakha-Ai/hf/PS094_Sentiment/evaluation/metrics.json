@@ -1,0 +1,151 @@
+{
+  "test_samples": 3234,
+  "accuracy": 0.940321583178726,
+  "macro_precision": 0.940415730625038,
+  "macro_recall": 0.9403566074105805,
+  "macro_f1": 0.9403206188369424,
+  "weighted_precision": 0.9404486822312472,
+  "weighted_recall": 0.940321583178726,
+  "weighted_f1": 0.9403195803150214,
+  "per_class": {
+    "NEGATIVE": {
+      "precision": 0.9328039095907147,
+      "recall": 0.9484472049689441,
+      "f1-score": 0.9405605174006776,
+      "support": 1610.0
+    },
+    "POSITIVE": {
+      "precision": 0.9480275516593613,
+      "recall": 0.9322660098522167,
+      "f1-score": 0.9400807202732071,
+      "support": 1624.0
+    },
+    "accuracy": 0.940321583178726,
+    "macro avg": {
+      "precision": 0.940415730625038,
+      "recall": 0.9403566074105805,
+      "f1-score": 0.9403206188369424,
+      "support": 3234.0
+    },
+    "weighted avg": {
+      "precision": 0.9404486822312472,
+      "recall": 0.940321583178726,
+      "f1-score": 0.9403195803150214,
+      "support": 3234.0
+    }
+  },
+  "per_language": [
+    {
+      "language_code": "en",
+      "language": "English",
+      "n_samples": 231,
+      "accuracy": 0.9567099567099567,
+      "macro_f1": 0.9567091454272864,
+      "weighted_f1": 0.9567099567099567
+    },
+    {
+      "language_code": "as",
+      "language": "Assamese",
+      "n_samples": 231,
+      "accuracy": 0.9567099567099567,
+      "macro_f1": 0.9567026540710751,
+      "weighted_f1": 0.9567002198581146
+    },
+    {
+      "language_code": "bd",
+      "language": "Bodo",
+      "n_samples": 231,
+      "accuracy": 0.8614718614718615,
+      "macro_f1": 0.8614484930274404,
+      "weighted_f1": 0.861456282508914
+    },
+    {
+      "language_code": "bn",
+      "language": "Bengali",
+      "n_samples": 231,
+      "accuracy": 0.9393939393939394,
+      "macro_f1": 0.9393928035982009,
+      "weighted_f1": 0.9393916678024625
+    },
+    {
+      "language_code": "gu",
+      "language": "Gujarati",
+      "n_samples": 231,
+      "accuracy": 0.9437229437229437,
+      "macro_f1": 0.9437229437229437,
+      "weighted_f1": 0.9437229437229437
+    },
+    {
+      "language_code": "hi",
+      "language": "Hindi",
+      "n_samples": 231,
+      "accuracy": 0.9307359307359307,
+      "macro_f1": 0.9307346326836581,
+      "weighted_f1": 0.9307333346313855
+    },
+    {
+      "language_code": "kn",
+      "language": "Kannada",
+      "n_samples": 231,
+      "accuracy": 0.9393939393939394,
+      "macro_f1": 0.9393837156995052,
+      "weighted_f1": 0.9393803078013604
+    },
+    {
+      "language_code": "ml",
+      "language": "Malayalam",
+      "n_samples": 231,
+      "accuracy": 0.9653679653679653,
+      "macro_f1": 0.9653517324133793,
+      "weighted_f1": 0.9653484858224621
+    },
+    {
+      "language_code": "mr",
+      "language": "Marathi",
+      "n_samples": 231,
+      "accuracy": 0.948051948051948,
+      "macro_f1": 0.9480431848852902,
+      "weighted_f1": 0.9480402638297374
+    },
+    {
+      "language_code": "or",
+      "language": "Odia",
+      "n_samples": 231,
+      "accuracy": 0.9307359307359307,
+      "macro_f1": 0.9307346326836581,
+      "weighted_f1": 0.9307333346313855
+    },
+    {
+      "language_code": "pa",
+      "language": "Punjabi",
+      "n_samples": 231,
+      "accuracy": 0.9437229437229437,
+      "macro_f1": 0.9437229437229437,
+      "weighted_f1": 0.9437229437229437
+    },
+    {
+      "language_code": "ta",
+      "language": "Tamil",
+      "n_samples": 231,
+      "accuracy": 0.9393939393939394,
+      "macro_f1": 0.9393928035982009,
+      "weighted_f1": 0.9393916678024625
+    },
+    {
+      "language_code": "te",
+      "language": "Telugu",
+      "n_samples": 231,
+      "accuracy": 0.961038961038961,
+      "macro_f1": 0.961038961038961,
+      "weighted_f1": 0.961038961038961
+    },
+    {
+      "language_code": "ur",
+      "language": "Urdu",
+      "n_samples": 231,
+      "accuracy": 0.948051948051948,
+      "macro_f1": 0.9480509745127437,
+      "weighted_f1": 0.948051948051948
+    }
+  ]
+}

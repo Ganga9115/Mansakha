@@ -1,10 +1,15 @@
-const { callGemini, callGeminiChat } = require('./gemini');
+const { callOllama, callOllamaChat } = require('./ollama');
 const { computeDistressScore } = require('./scoring');
 const { supabase } = require('../core/db/supabaseClient');
+const {
+  analyzeTextViaDjango,
+  analyzeVoiceViaDjango,
+  analyzeMultimodalViaDjango,
+  chatViaDjango,
+} = require('./djangoAiClient');
 
-// Orchestrator called in-process by user/routes/user.routes.js's checkin flow (no self-HTTP
-// call - see routes/ai.js for why the HTTP route still exists separately).
-// voice_stress_score stays 0: Phase 1 deferral, per Build Prompt Section 0.
+// Orchestrator called in-process by user/routes/user.routes.js's checkin flow.
+// Multi-modal AI: Supports Voice Stress Analytics (Phase 2), fine-tuned NLP, and Ollama.
 
 const BASELINE_WINDOW = 5; // how many prior interactions define "normal" for this user
 
@@ -20,9 +25,6 @@ async function computeEngagementDelta(userId, currentResponseLength) {
     return 0; // no baseline yet - first check-in, nothing to compare against
   }
 
-  // transcript_ref is now a Supabase Storage path, not the raw text, so
-  // response length is tracked separately in transcript_length instead of
-  // being derived from transcript_ref.length.
   const baselineLengths = priorInteractions
     .map((i) => i.transcript_length || 0)
     .filter((len) => len > 0);
@@ -39,8 +41,9 @@ async function computeEngagementDelta(userId, currentResponseLength) {
 /**
  * @param {string} userId
  * @param {string} text - the check-in response text
+ * @param {object} [options] - optional { audioBase64 } for voice/audio check-in
  * @returns {{ scoreValue: number, riskLevel: string, sentimentRaw: number, emotion: number,
- *   engagementDelta: number, reason: string|null }}
+ *   voiceStressScore: number, engagementDelta: number, reason: string|null }}
  */
 async function resolveInterventionTypeId(name) {
   if (!name) return null;
@@ -48,18 +51,63 @@ async function resolveInterventionTypeId(name) {
   return data ? data.intervention_type_id : null;
 }
 
-async function analyzeInteraction(userId, text) {
-  const [{ sentimentRaw, emotion, reason, suggestedInterventionName }, engagementDelta] = await Promise.all([
-    callGemini(text),
-    computeEngagementDelta(userId, text.length),
-  ]);
+async function analyzeInteraction(userId, text, options = {}) {
+  let sentimentRaw = 0;
+  let emotion = 0.2;
+  let voiceStressScore = 0;
+  let reason = null;
+  let suggestedInterventionName = null;
+  let effectiveText = text || '';
 
-  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, 0, emotion, engagementDelta);
-  // A suggestion a Counsellor reviews and can override on Log Intervention -
-  // never auto-applied (Section 4.4 has no "AI decides" concept anywhere).
+  // 1. If audio is provided, run full multimodal pipeline (Voice Stress + STT + Sentiment + Emotion)
+  if (options.audioBase64) {
+    const multiResult = await analyzeMultimodalViaDjango(effectiveText, options.audioBase64);
+    if (multiResult && multiResult.success) {
+      sentimentRaw = multiResult.sentimentRaw;
+      emotion = multiResult.emotionScore;
+      voiceStressScore = multiResult.voiceStressScore;
+      reason = multiResult.reason;
+      suggestedInterventionName = multiResult.suggestedIntervention;
+      if (!effectiveText && multiResult.transcript) {
+        effectiveText = multiResult.transcript;
+      }
+    }
+  }
+
+  // 2. If text analysis not completed by multimodal, query Django fine-tuned models
+  if (!reason && effectiveText) {
+    const djangoTextRes = await analyzeTextViaDjango(effectiveText);
+    if (djangoTextRes && djangoTextRes.success) {
+      sentimentRaw = djangoTextRes.sentimentRaw;
+      emotion = djangoTextRes.emotionScore;
+    }
+  }
+
+  // 3. Complete assessment with Ollama clinical rationale and fallback heuristics
+  if (!reason) {
+    const ollamaAssessment = await callOllama(effectiveText);
+    if (sentimentRaw === 0) sentimentRaw = ollamaAssessment.sentimentRaw;
+    if (emotion === 0.2) emotion = ollamaAssessment.emotion;
+    reason = ollamaAssessment.reason;
+    suggestedInterventionName = ollamaAssessment.suggestedInterventionName;
+  }
+
+  const engagementDelta = await computeEngagementDelta(userId, effectiveText.length);
+  // Real voiceStressScore activates PHASE_2_WEIGHTS (0.4 sentiment, 0.3 voice stress, 0.2 emotion, 0.1 engagement)
+  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, voiceStressScore, emotion, engagementDelta);
   const suggestedInterventionTypeId = await resolveInterventionTypeId(suggestedInterventionName);
 
-  return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId };
+  return {
+    scoreValue,
+    riskLevel,
+    sentimentRaw,
+    emotion,
+    voiceStressScore,
+    engagementDelta,
+    reason,
+    suggestedInterventionTypeId,
+    transcript: effectiveText,
+  };
 }
 
 // Feature Catalog Section 1.3 "AI Chat" check-in, Ollama variant - the mobile
@@ -94,11 +142,32 @@ const HIGH_RISK_HELP_POINTER = "\n\nIf things feel unsafe or overwhelming right 
 // unchanged), sourced from callGeminiChat instead of callGemini, and
 // returns the extra `reply` field user/routes/user.routes.js's /chat sends back.
 async function analyzeChatMessage(userId, text) {
-  const [{ sentimentRaw, emotion, reason, suggestedInterventionName, reply }, engagementDelta] = await Promise.all([
-    callGeminiChat(text),
-    computeEngagementDelta(userId, text.length),
-  ]);
+  let sentimentRaw = 0;
+  let emotion = 0.2;
+  let reason = 'Conversational screening performed.';
+  let suggestedInterventionName = null;
+  let reply = '';
 
+  // 1. Try Django AI companion endpoint
+  const djangoChat = await chatViaDjango(text);
+  if (djangoChat && djangoChat.reply) {
+    reply = djangoChat.reply;
+    sentimentRaw = djangoChat.sentiment_raw || 0;
+    emotion = djangoChat.emotion_score || 0.2;
+    if (djangoChat.dominant_emotion && ['fear', 'sadness', 'anger'].includes(djangoChat.dominant_emotion)) {
+      suggestedInterventionName = 'Counselling';
+    }
+  } else {
+    // 2. Fallback to direct Ollama chat
+    const ollamaChat = await callOllamaChat(text);
+    sentimentRaw = ollamaChat.sentimentRaw;
+    emotion = ollamaChat.emotion;
+    reason = ollamaChat.reason;
+    suggestedInterventionName = ollamaChat.suggestedInterventionName;
+    reply = ollamaChat.reply;
+  }
+
+  const engagementDelta = await computeEngagementDelta(userId, text.length);
   const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, 0, emotion, engagementDelta);
   const suggestedInterventionTypeId = await resolveInterventionTypeId(suggestedInterventionName);
 
@@ -109,7 +178,25 @@ async function analyzeChatMessage(userId, text) {
     ? `${reply}${HIGH_RISK_HELP_POINTER}`
     : reply;
 
-  return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId, reply: finalReply };
+  return {
+    scoreValue,
+    riskLevel,
+    sentimentRaw,
+    emotion,
+    engagementDelta,
+    reason,
+    suggestedInterventionTypeId,
+    reply: finalReply,
+  };
 }
 
-module.exports = { analyzeInteraction, analyzeChatMessage, analyzeInteractionFromClientAi };
+async function analyzeVoiceInteraction(userId, audioBase64) {
+  return analyzeInteraction(userId, '', { audioBase64 });
+}
+
+module.exports = {
+  analyzeInteraction,
+  analyzeChatMessage,
+  analyzeInteractionFromClientAi,
+  analyzeVoiceInteraction,
+};

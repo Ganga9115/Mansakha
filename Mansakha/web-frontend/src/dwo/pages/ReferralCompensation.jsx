@@ -75,10 +75,12 @@ function CompensationCard({ r, referralId, onChanged }) {
         <div className="space-y-3">
           <p className="text-xs text-gray-600">Verified amount: <span className="font-semibold">{inr(compensation.verifiedAmount)}</span> on {new Date(compensation.verifiedAt).toLocaleDateString()}</p>
           <div className="space-y-2">
-            {compensation.stages.map((s, idx) => (
-              <div key={s.stage} className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${s.status === 'Paid' ? 'border-emerald-200 bg-emerald-50' : s.unlocked ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
+            {compensation.stages.map((s, idx) => {
+              const stageName = s.stage?.toLowerCase().startsWith('stage') ? s.stage : `Stage ${idx + 1}`;
+              return (
+              <div key={s.stage || idx} className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${s.status === 'Paid' ? 'border-emerald-200 bg-emerald-50' : s.unlocked ? 'border-gray-200 bg-white' : 'border-gray-100 bg-gray-50'}`}>
                 <div className="min-w-0">
-                  <p className="text-xs font-semibold text-gray-800">{s.stage} <span className="text-gray-400 font-normal">({s.percentage}%)</span></p>
+                  <p className="text-xs font-semibold text-gray-800">{stageName} <span className="text-gray-400 font-normal">({s.percentage}%)</span></p>
                   <p className="text-[11px] text-gray-500">{inr(s.amount)}{s.paidAt && ` • paid ${new Date(s.paidAt).toLocaleDateString()}`}</p>
                 </div>
                 {s.status === 'Paid' ? (
@@ -95,7 +97,7 @@ function CompensationCard({ r, referralId, onChanged }) {
                   <span className="flex items-center gap-1 text-gray-400 text-[11px] font-semibold shrink-0"><Lock size={12} /> Locked until {s.unlocksAtCaseStage}</span>
                 )}
               </div>
-            ))}
+            ); })}
           </div>
         </div>
       )}

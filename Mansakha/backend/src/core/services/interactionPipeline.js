@@ -81,7 +81,7 @@ async function recordInteraction({ userId, channelName, transcriptText }) {
 // ignored here). /sos never calls this - it writes its own fixed-value
 // distress_scores row directly (no interaction_signals, since there are no
 // real AI-computed values to report for a self-triggered SOS).
-async function recordAiDistressScore(userId, interactionId, analysis, modelVersion = 'gemini-phase1-v1') {
+async function recordAiDistressScore(userId, interactionId, analysis, modelVersion = 'mansakha-ai-v1') {
   const { data: signalTypes } = await supabase.from('signal_types').select('signal_type_id, name');
   const signalIdByName = Object.fromEntries((signalTypes || []).map((s) => [s.name, s.signal_type_id]));
 

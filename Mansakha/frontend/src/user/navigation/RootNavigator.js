@@ -59,6 +59,39 @@ const linking = {
   },
 };
 
+function getActiveLeafRoute(state) {
+  if (!state || !state.routes || state.index === undefined) return null;
+  let r = state.routes[state.index];
+  while (r && r.state && r.state.routes && r.state.index !== undefined) {
+    r = r.state.routes[r.state.index];
+  }
+  return r ? r.name : null;
+}
+
+function sanitizeNavState(state, preferredLeaf) {
+  if (!state) return state;
+  const cleanState = JSON.parse(JSON.stringify(state));
+  const sanitize = (r) => {
+    if (r.name === 'MainTabs') {
+      const activeChild = preferredLeaf || r.state?.routes?.[r.state.index]?.name || 'home';
+      if (activeChild) {
+        r.params = { ...r.params, screen: activeChild };
+        if (r.state?.routes) {
+          const idx = r.state.routes.findIndex((item) => item.name === activeChild);
+          if (idx >= 0) {
+            r.state.index = idx;
+          }
+        }
+      }
+    }
+    if (r.state?.routes) {
+      r.state.routes.forEach(sanitize);
+    }
+  };
+  cleanState.routes?.forEach(sanitize);
+  return cleanState;
+}
+
 export default function RootNavigator() {
   const { session, isLoading } = useAuth();
   const [isNavStateReady, setIsNavStateReady] = React.useState(!isWeb);
@@ -84,7 +117,15 @@ export default function RootNavigator() {
         // name ("UserShell") that isn't even one of its current children.
         const topRouteName = state?.routes?.[state.index ?? state.routes.length - 1]?.name;
         const isConsistentWithSession = session ? topRouteName === 'UserShell' : topRouteName !== 'UserShell';
-        if (state && isConsistentWithSession) setInitialNavState(state);
+        if (state && isConsistentWithSession) {
+          const activePage = (typeof window !== 'undefined' && window.sessionStorage)
+            ? window.sessionStorage.getItem('mansakha_active_page')
+            : null;
+
+          const activeLeaf = activePage || getActiveLeafRoute(state);
+          const cleanedState = sanitizeNavState(state, activeLeaf);
+          setInitialNavState(cleanedState);
+        }
       } finally {
         setIsNavStateReady(true);
       }
@@ -103,7 +144,19 @@ export default function RootNavigator() {
     <NavigationContainer
       linking={linking}
       initialState={isWeb ? initialNavState : undefined}
-      onStateChange={isWeb ? (state) => navStateStorage.setItem(NAV_STATE_STORAGE_KEY, JSON.stringify(state)) : undefined}
+      onStateChange={isWeb ? (state) => {
+        try {
+          if (!state) return;
+          const leaf = getActiveLeafRoute(state);
+          if (leaf && typeof window !== 'undefined' && window.sessionStorage) {
+            window.sessionStorage.setItem('mansakha_active_page', leaf);
+          }
+          const cleaned = sanitizeNavState(state, leaf);
+          navStateStorage.setItem(NAV_STATE_STORAGE_KEY, JSON.stringify(cleaned));
+        } catch {
+          navStateStorage.setItem(NAV_STATE_STORAGE_KEY, JSON.stringify(state));
+        }
+      } : undefined}
     >
       <Stack.Navigator initialRouteName={session ? 'UserShell' : (isWeb ? 'UserLogin' : 'Onboarding')} screenOptions={{ headerShown: false }}>
         {!session && (

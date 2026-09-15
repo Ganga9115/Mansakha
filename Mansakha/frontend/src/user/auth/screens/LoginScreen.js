@@ -26,8 +26,8 @@ export default function LoginScreen({ navigation }) {
   const { isDesktop } = useResponsive();
   const toast = useToast();
 
-  const [docketNumber, setDocketNumber] = useState('');
-  const [password, setPassword] = useState('');
+  const [docketNumber, setDocketNumber] = useState('1');
+  const [password, setPassword] = useState('Mansakha@2026');
   const [showPassword, setShowPassword] = useState(false);
 
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);

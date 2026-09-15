@@ -220,9 +220,6 @@ export default function SettingsScreen({ navigation }) {
                 </View>
               </View>
 
-              <View style={styles.badgeCheckCircle}>
-                <Feather color={colors.white} name="chevron-down" size={16} />
-              </View>
             </View>
 
             {/* DOCKET SELECTION UI */}
@@ -243,7 +240,8 @@ export default function SettingsScreen({ navigation }) {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.docketsList}>
                     {casesList.map((item, idx) => {
                       const isSelected = (item.userId && item.userId === selectedCase?.userId) || (!item.userId && idx === 0 && !selectedCase?.userId);
-                      const docketId = item.docketNumber || item.docketId || item.docketNo || item.caseNumber || `${idx + 1}`;
+                      const rawDocketId = item.docketNumber || item.docketId || item.docketNo || item.caseNumber || `${idx + 1}`;
+                      const docketNum = String(rawDocketId).replace(/^Docket\s*/i, '');
 
                       return (
                         <Pressable
@@ -252,7 +250,7 @@ export default function SettingsScreen({ navigation }) {
                           style={[styles.docketPill, isSelected ? styles.docketPillActive : styles.docketPillInactive]}
                         >
                           <Text style={[styles.docketPillTitle, isSelected && styles.textWhite]}>
-                            Docket {docketId}
+                            {docketNum}
                           </Text>
                         </Pressable>
                       );
@@ -378,7 +376,8 @@ export default function SettingsScreen({ navigation }) {
               <Switch
                 disabled={updateCounsellorPreference.isPending}
                 onValueChange={handleToggleCounsellorPreference}
-                thumbColor={colors.white}
+                thumbColor="#F4F3F4"
+                activeThumbColor="#F4F3F4"
                 trackColor={{ false: colors.border, true: colors.primary }}
                 value={localOptedForCounsellor}
               />

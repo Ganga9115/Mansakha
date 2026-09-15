@@ -33,10 +33,10 @@ export default function CaseNotes() {
           <ArrowLeft size={14} /> Back to Case File
         </button>
 
-        <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
+        <div className="bg-white p-4 sm:p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-gray-800">Case Notes</h3>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <input
               type="text"
               value={noteText}
@@ -48,7 +48,7 @@ export default function CaseNotes() {
             <button
               onClick={handleAddNote}
               disabled={addNote.loading}
-              className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium disabled:opacity-60"
+              className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium disabled:opacity-60 shrink-0"
             >
               Add
             </button>
@@ -65,14 +65,14 @@ export default function CaseNotes() {
             <div className="space-y-3 text-xs pt-2 border-t border-gray-100">
               {notesQuery.data.notes.map((n) => (
                 <div key={n.noteId} className="border-b border-gray-50 pb-2">
-                  <div className="flex items-center gap-2 text-gray-400 mb-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-400 mb-1">
                     <span className="font-semibold text-gray-600">{n.authorName}</span>
                     {n.authoredBy === 'ai' && (
                       <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#3D5A80] text-[9px] font-bold uppercase">AI-drafted</span>
                     )}
-                    <span>{new Date(n.createdAt).toLocaleString()}</span>
+                    <span className="text-[11px]">{new Date(n.createdAt).toLocaleString()}</span>
                   </div>
-                  <p className="text-gray-700">{n.noteText}</p>
+                  <p className="text-gray-700 whitespace-pre-wrap">{n.noteText}</p>
                 </div>
               ))}
             </div>

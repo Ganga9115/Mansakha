@@ -1,0 +1,9 @@
+torch>=2.0.0
+transformers>=4.40.0
+accelerate>=0.28.0
+soundfile>=0.12.1
+sounddevice>=0.4.6
+imageio-ffmpeg>=0.5.1
+gradio>=4.0.0
+librosa>=0.10.0
+scipy>=1.10.0
