@@ -165,6 +165,7 @@ router.get('/dashboard', async (req, res) => {
     openAlertsResult,
     lastInteractionResult,
     caseFamilyResult,
+    rehabilitationStatusResult,
   ] = await Promise.all([
     pool.query(
       `select status, preferred_language, opted_for_manual_counsellor, sms_checkin_enabled, assigned_counsellor_id
@@ -214,6 +215,20 @@ router.get('/dashboard', async (req, res) => {
        where u.user_id = $1 or u.linked_to_user_id = $1`,
       [anchorUserId]
     ),
+    // Inlined rather than the getRehabilitationStatus(anchorUserId) helper -
+    // that helper re-resolves the anchor id via its own extra round trip
+    // (resolveAnchorId), which is redundant here: req.auth.userId already
+    // IS the anchor (every login token carries it, never a dependent's own
+    // id - see auth.user.routes.js). Folding this into the same Promise.all
+    // as everything else removes a full sequential round trip from a route
+    // that's on the critical path of every screen's initial load.
+    pool.query(
+      `select rs.opted_in_at, rs.declined_at, rs.closed_at, rp.name as provider_name
+       from rehabilitation_status rs
+       left join rehabilitation_providers rp on rp.provider_id = rs.provider_id
+       where rs.anchor_user_id = $1`,
+      [anchorUserId]
+    ),
   ]);
 
   const user = userResult.rows[0];
@@ -225,10 +240,18 @@ router.get('/dashboard', async (req, res) => {
   const lastInteraction = lastInteractionResult.rows[0];
   const caseFamily = caseFamilyResult.rows;
 
-  // migration_045 - one rehabilitation answer for the whole family
-  // (rehabilitationStatus.js), not per-docket - so every case in
-  // linkedCases reports the SAME opted-in/declined facts.
-  const rehabStatus = await getRehabilitationStatus(anchorUserId);
+  // migration_045 - one rehabilitation answer for the whole family, not
+  // per-docket - so every case in linkedCases reports the SAME opted-in/
+  // declined facts. rehabilitationStatusResult may have no row at all (a
+  // person who's never been asked yet) - default every field to falsy/null
+  // exactly like getRehabilitationStatus's own "never asked" shape.
+  const rehabRow = rehabilitationStatusResult.rows[0];
+  const rehabStatus = {
+    optedInAt: rehabRow?.opted_in_at || null,
+    declinedAt: rehabRow?.declined_at || null,
+    closedAt: rehabRow?.closed_at || null,
+    providerName: rehabRow?.provider_name || null,
+  };
 
   const linkedCases = (caseFamily || []).map((c) => ({
     userId: c.user_id,
@@ -260,7 +283,13 @@ router.get('/dashboard', async (req, res) => {
     ? new Date(new Date(lastInteraction.occurred_at).getTime() + NEXT_CHECKIN_CADENCE_DAYS * 86400000)
     : new Date();
 
-  await writeAuditLog({ userId: anchorUserId, action: 'read', entityType: 'user_dashboard', entityId: activeUserId });
+  // Not awaited - this is the single most-loaded route in the app (every
+  // screen's initial data), and writeAuditLog already swallows its own
+  // errors internally (never throws), so there's nothing for the response
+  // to legitimately wait on here. Confirmed live this call alone was
+  // costing ~500-650ms of Supabase REST round-trip on the critical path of
+  // every dashboard load, on top of the Promise.all above.
+  writeAuditLog({ userId: anchorUserId, action: 'read', entityType: 'user_dashboard', entityId: activeUserId });
 
   return ok(res, {
     fullName: identity?.full_name || null,

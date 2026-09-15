@@ -1,25 +1,23 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
 import { useNavigation, useNavigationState } from '@react-navigation/native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { shadow } from '../theme/shadow';
-import { useResponsive } from '../hooks/useResponsive';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BOTTOM_NAV_BAR_HEIGHT } from './BottomNavBar';
+import { useResponsive } from '../hooks/useResponsive';
 
-// Extra breathing room above the bottom nav bar so the FAB never touches
-// (let alone overlaps) it - roughly the 20-30px buffer requested on top of
-// the nav bar's own height and safe-area inset.
-const FAB_GAP_ABOVE_NAV_BAR = 28;
+// The floating button sits this far above the bottom nav bar (if present)
+const FAB_GAP_ABOVE_NAV_BAR = 16;
 
 export default function AiChatButton() {
   const navigation = useNavigation();
-  const { isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-
+  const { isDesktop } = useResponsive();
+  
   // Mirrors BottomNavBar's own `bottom: Math.max(insets.bottom, 12)` so this
   // stays clear of it on every device - phones with a large safe-area inset
   // (e.g. the home-indicator gesture area) push the nav bar further up than
@@ -27,7 +25,16 @@ export default function AiChatButton() {
   // collide before.
   const mobileBottom = Math.max(insets.bottom, 12) + BOTTOM_NAV_BAR_HEIGHT + FAB_GAP_ABOVE_NAV_BAR;
 
-  const currentRouteName = useNavigationState(state => {
+  // useNavigationState is a live subscription to the nav tree - it re-renders
+  // this component the instant ANY navigator's state changes, anywhere in
+  // the app, on every platform including web. That already made the
+  // now-removed web-only workaround (a custom window event fired from only
+  // ONE of the two navigators - DesktopNavigator, never TabNavigator, the
+  // one phone/tablet/mobile-web actually uses - plus a sessionStorage read
+  // that only ran once on mount) both unnecessary and the actual source of
+  // the bug: on mobile-web, no event ever fired, so the FAB's hidden state
+  // only ever updated on a full page reload, one navigation behind.
+  const currentRouteName = useNavigationState((state) => {
     if (!state) return null;
     let r = state.routes[state.index];
     while (r && r.state && r.state.routes && r.state.index !== undefined) {
@@ -36,8 +43,9 @@ export default function AiChatButton() {
     return r ? r.name : null;
   });
 
-  // Only remove from the AI Chatbot screen, visible everywhere else
-  if (currentRouteName === 'Chatbot') {
+  const isHidden = currentRouteName === 'Chatbot' || currentRouteName === 'mycounsellor' || currentRouteName === 'CounsellorChat';
+
+  if (isHidden) {
     return null;
   }
 
@@ -81,7 +89,7 @@ const styles = StyleSheet.create({
     ...shadow.pop,
     // Above BottomNavBar's navCard (elevation: 6) so the FAB always draws on
     // top of it on Android, in addition to sitting clear of it vertically.
-    elevation: 10,
-    zIndex: 20,
+    elevation: 99,
+    zIndex: 9999,
   },
 });

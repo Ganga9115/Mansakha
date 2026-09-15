@@ -12,8 +12,9 @@ import Svg, { Path } from 'react-native-svg';
 import TopRightActions from '../../shared/components/TopRightActions';
 import { useCheckin, useLogChatTurn } from '../../shared/services/hooks';
 import MansakhaCallModal from '../components/MansakhaCallModal';
+import { useSpeechToText } from '../../shared/hooks/useSpeechToText';
 
-const OLLAMA = "http://127.0.0.1:11434";
+const OLLAMA = process.env.EXPO_PUBLIC_OLLAMA_BASE_URL || "http://127.0.0.1:11434";
 const CHAT = OLLAMA + "/api/chat";
 const TAGS = OLLAMA + "/api/tags";
 
@@ -90,6 +91,13 @@ export default function ChatScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const submitMutation = useCheckin();
   const logChatTurn = useLogChatTurn();
+  // useSpeechToText takes onResult as a plain function argument (see
+  // JournalScreen.js's own call, or the hook's own signature) - this used
+  // to pass an { onResult } object instead, so the hook's internal
+  // `onResult(transcript)` call was invoking that object as a function and
+  // throwing, silently swallowed, which is why speech never reached the
+  // textbox no matter what the mic actually recorded.
+  const speech = useSpeechToText((text) => setDraft(prev => (prev ? prev + ' ' : '') + text));
   const [model, setModel] = useState('gemma3:4b');
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -449,6 +457,15 @@ export default function ChatScreen({ navigation }) {
                 multiline
               />
 
+              {/* Mic Button */}
+              <Pressable 
+                style={[styles.micBtn, speech.listening && styles.micBtnActive]} 
+                onPress={speech.listening ? speech.stop : speech.start}
+                hitSlop={6}
+              >
+                <Feather name={speech.listening ? "mic-off" : "mic"} size={18} color={speech.listening ? colors.white : colors.primary} />
+              </Pressable>
+
               {/* Universal Send Button */}
               <Pressable
                 style={[styles.sendBtn, !isSendActive && styles.sendBtnDisabled]}
@@ -606,4 +623,11 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginLeft: 4,
   },
   sendBtnDisabled: { opacity: 0.5 },
+  micBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: colors.surface,
+    alignItems: 'center', justifyContent: 'center', marginLeft: 4,
+  },
+  micBtnActive: {
+    backgroundColor: colors.primary,
+  },
 });

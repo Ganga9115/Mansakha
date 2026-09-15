@@ -177,18 +177,25 @@ export function useSpeechToText(onResult, options = {}) {
         try {
           const recognition = new SpeechRecognitionCtor();
           recognition.continuous = true;
-          recognition.interimResults = false;
+          // Set to true to get real-time typing effect
+          recognition.interimResults = true;
           recognition.lang = language === 'hindi' ? 'hi-IN' : language === 'tamil' ? 'ta-IN' : 'en-IN';
 
           recognition.onresult = (event) => {
-            let text = '';
+            let interimText = '';
+            let finalText = '';
             for (let i = event.resultIndex; i < event.results.length; i++) {
               if (event.results[i].isFinal) {
-                text += event.results[i][0].transcript + ' ';
+                finalText += event.results[i][0].transcript + ' ';
+              } else {
+                interimText += event.results[i][0].transcript;
               }
             }
-            if (text.trim()) {
-              browserTranscriptRef.current = (browserTranscriptRef.current + ' ' + text).trim();
+            
+            // Immediately dispatch final recognized sentences so they appear in real-time
+            if (finalText.trim()) {
+              onResult(finalText.trim());
+              browserTranscriptRef.current = (browserTranscriptRef.current + ' ' + finalText).trim();
             }
           };
 

@@ -84,8 +84,20 @@ function TabNavigator() {
   const counsellor = useAssignedCounsellor();
   const showMyCounsellor = !!(dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned);
 
+  // Fallback only for a fresh navigation state with no restored tab index of
+  // its own - RootNavigator.js's own onStateChange already writes
+  // mansakha_active_page for the whole tree (every navigator, tabs
+  // included) and is what NavigationContainer's initialState actually
+  // restores from on reload; a second write from here raced with it and
+  // was never read back by anything (AiChatButton now reads live
+  // navigation state directly instead - see its own comment).
+  const savedRoute = (typeof window !== 'undefined' && window.sessionStorage)
+    ? window.sessionStorage.getItem('mansakha_active_page')
+    : null;
+
   return (
     <Tab.Navigator
+      initialRouteName={savedRoute || 'home'}
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -169,8 +181,16 @@ function DesktopNavigator() {
   const counsellor = useAssignedCounsellor();
   const showMyCounsellor = !!(dashboard.data?.optedForManualCounsellor && counsellor.data?.assigned);
 
+  // Fallback only for a fresh navigation state with no restored tab index of
+  // its own - see TabNavigator's own comment on why this no longer also
+  // writes/dispatches on every navigation.
+  const savedRoute = (typeof window !== 'undefined' && window.sessionStorage)
+    ? window.sessionStorage.getItem('mansakha_active_page')
+    : null;
+
   return (
     <Drawer.Navigator
+      initialRouteName={savedRoute || 'home'}
       useLegacyImplementation={false}
       screenOptions={{
         headerShown: false,
