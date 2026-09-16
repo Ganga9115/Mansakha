@@ -1,6 +1,6 @@
 import 'react-native-reanimated';
-import React, { useState } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, ActivityIndicator, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -30,7 +30,33 @@ const queryClient = new QueryClient({
   }
 });
 
+// This is a classic (non-Router) Expo app - `main` is expo/AppEntry.js, no
+// app/ directory - so neither of Expo's two documented ways to customize
+// the served HTML (web/index.html for the legacy Webpack bundler, or
+// app/+html.tsx for Expo Router) actually applies here; confirmed live that
+// dropping a web/index.html in and restarting the dev server had zero
+// effect, it kept serving Metro's own hardcoded default. That default's
+// viewport meta tag has no `interactive-widget` directive, so on many
+// mobile browsers the *layout* viewport (what html/body/#root's `height:
+// 100%` is measured against - see Metro's own injected #expo-reset style)
+// never actually shrinks when the on-screen keyboard opens - only the
+// *visual* viewport does - so anything anchored to the bottom of that
+// still-full-height flex tree (every screen's own message/text composer)
+// can end up sitting behind the keyboard instead of rising above it the
+// way WhatsApp's does. Patching the tag directly at runtime instead, since
+// no build-time template point exists to change it at the source.
+function useWebViewportKeyboardFix() {
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (meta && !meta.content.includes('interactive-widget')) {
+      meta.content = `${meta.content}, interactive-widget=resizes-content`;
+    }
+  }, []);
+}
+
 export default function App() {
+  useWebViewportKeyboardFix();
   const [splashFinished, setSplashFinished] = useState(false);
   const [fontsLoaded] = useFonts({
     PublicSans_400Regular,

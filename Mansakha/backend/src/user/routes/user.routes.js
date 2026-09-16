@@ -351,10 +351,16 @@ router.post('/checkin', async (req, res) => {
     // engagement-delta baseline (see ai.js's computeEngagementDelta) -
     // recordInteraction() above already wrote it, so without this the
     // baseline always included the very response being measured.
-    if (audioBase64) {
+    if (aiAnalysis && typeof aiAnalysis.sentiment === 'number') {
+      // audioBase64 alongside client-Ollama analysis: keep the richer
+      // whole-conversation sentiment/emotion/reason from Ollama (it read
+      // all 15 Q&As, not just one clip's transcript) and layer in a real
+      // voice-stress reading from the recorded audio on top of it - see
+      // analyzeInteractionFromClientAi's own comment on why this isn't
+      // just "pass audioBase64 to analyzeInteraction instead".
+      analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis, interactionId, audioBase64);
+    } else if (audioBase64) {
       analysis = await analyzeInteraction(userId, text, { audioBase64, interactionId });
-    } else if (aiAnalysis && typeof aiAnalysis.sentiment === 'number') {
-      analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis, interactionId);
     } else {
       analysis = await analyzeInteraction(userId, text, { interactionId });
     }

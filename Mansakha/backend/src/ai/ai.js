@@ -7,6 +7,8 @@ const {
   analyzeMultimodalViaDjango,
   chatViaDjango,
 } = require('./djangoAiClient');
+// (analyzeVoiceViaDjango was already imported here but unused until now -
+// see analyzeInteractionFromClientAi's own use of it below.)
 
 // Orchestrator called in-process by user/routes/user.routes.js's checkin flow.
 // Multi-modal AI: Supports Voice Stress Analytics (Phase 2), fine-tuned NLP, and Ollama.
@@ -135,16 +137,32 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-async function analyzeInteractionFromClientAi(userId, text, clientAnalysis, interactionId = null) {
+// `audioBase64` (optional): a voice recording captured alongside the
+// check-in - deliberately NOT run through analyzeMultimodalViaDjango (which
+// would also re-derive its own sentiment/emotion/reason from just the
+// audio+text and override the far richer values above, computed by Ollama
+// over the whole 15-question conversation). analyzeVoiceViaDjango instead
+// returns only a voice-stress reading, so the audio contributes exactly the
+// one signal (real pitch/jitter/shimmer analysis) client-side Ollama has no
+// way to produce, without discarding everything else it already got right.
+async function analyzeInteractionFromClientAi(userId, text, clientAnalysis, interactionId = null, audioBase64 = null) {
   const sentimentRaw = clamp(clientAnalysis.sentiment, -1, 1);
   const emotion = clamp(clientAnalysis.emotion, 0, 1);
   const reason = typeof clientAnalysis.reason === 'string' ? clientAnalysis.reason : null;
 
+  let voiceStressScore = 0;
+  if (audioBase64) {
+    const voiceResult = await analyzeVoiceViaDjango(audioBase64);
+    if (voiceResult && voiceResult.success) {
+      voiceStressScore = voiceResult.voiceStressScore;
+    }
+  }
+
   const engagementDelta = await computeEngagementDelta(userId, text.length, interactionId);
-  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, 0, emotion, engagementDelta);
+  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, voiceStressScore, emotion, engagementDelta);
   const suggestedInterventionTypeId = await resolveInterventionTypeId(clientAnalysis.suggestedIntervention);
 
-  return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId };
+  return { scoreValue, riskLevel, sentimentRaw, emotion, voiceStressScore, engagementDelta, reason, suggestedInterventionTypeId };
 }
 
 const HIGH_RISK_HELP_POINTER = "\n\nIf things feel unsafe or overwhelming right now, please reach out to real support: call the NHAA Helpline at 14566 (24/7) or talk to your Counsellor through the Support section of this app.";

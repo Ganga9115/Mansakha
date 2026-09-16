@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
-import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, ChevronRight, ChevronDown, Repeat } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, ChevronRight, ChevronDown, Repeat, Phone } from 'lucide-react';
 import {
   useCaseDetail,
   useScheduleSession,
@@ -193,6 +193,26 @@ export default function CaseDetail() {
     </div>
   );
 
+  // Moved here from the Chat page's own header - same tel: action and same
+  // "no phone on file" fallback, just placed next to this case's primary
+  // action instead of only being reachable after already opening the thread.
+  const callUserButton = (
+    <button
+      onClick={() => {
+        if (data.phone) {
+          window.location.href = `tel:${data.phone}`;
+        } else {
+          toast.error('No phone number on file for this user');
+        }
+      }}
+      type="button"
+      title={data.phone ? `Call ${data.userName || 'User'}` : 'No phone number on file'}
+      className="px-4 py-2.5 border-2 border-[#7C5CBF] bg-[#F7F4FD] hover:bg-[#EDE8F7] active:bg-[#DDD0F5] text-[#7C5CBF] rounded-lg text-xs font-semibold transition flex items-center gap-2 shrink-0"
+    >
+      <Phone size={14} /> Call User
+    </button>
+  );
+
   return (
     <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
       <div className="space-y-6">
@@ -205,7 +225,8 @@ export default function CaseDetail() {
                 <SwitchCaseDropdown cases={otherLinkedCases} onSelect={(id) => navigate(`/counsellor/case-detail/${id}`)} />
               )}
             </div>
-            <div className="self-end sm:self-auto">
+            <div className="self-end sm:self-auto flex items-center gap-2">
+              {callUserButton}
               {chatWithUserButton}
             </div>
           </div>

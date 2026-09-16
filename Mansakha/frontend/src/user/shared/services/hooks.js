@@ -505,7 +505,7 @@ export function useCheckin() {
   const token = useToken();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ channel, responses, aiAnalysis }) => apiClient.post('/api/user/checkin', { channel, responses, aiAnalysis }, token),
+    mutationFn: ({ channel, responses, aiAnalysis, audioBase64 }) => apiClient.post('/api/user/checkin', { channel, responses, aiAnalysis, audioBase64 }, token),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user', 'dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['user', 'distress-history'] });
