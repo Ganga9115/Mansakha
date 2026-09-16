@@ -55,9 +55,30 @@ function useWebViewportKeyboardFix() {
   }, []);
 }
 
+// Web only: the branded 3s splash previously ran on every single page load,
+// including a plain browser reload/refresh - not just a genuine first
+// launch. Confirmed live this was the single biggest contributor to
+// "loading feels slow" complaints (a fixed 3000ms wait before the app even
+// starts fetching data, on top of normal dev-server overhead) - a real user
+// reloading mid-session to check something back-to-back would sit through
+// the full splash every time. sessionStorage (not localStorage - same
+// per-tab-only reasoning as RootNavigator.js's own nav-state persistence)
+// remembers it's already been shown once in this tab, so only a genuinely
+// fresh tab/session sees it again. Native is untouched - a killed-and-
+// relaunched native app is expected to show its splash every time, same
+// reasoning RootNavigator.js's own nav-state restore already documents.
+const SPLASH_SHOWN_KEY = 'mansakha_splash_shown';
+function useShouldShowSplash() {
+  const alreadyShown = Platform.OS === 'web' && typeof window !== 'undefined' && window.sessionStorage
+    ? window.sessionStorage.getItem(SPLASH_SHOWN_KEY)
+    : null;
+  return !alreadyShown;
+}
+
 export default function App() {
   useWebViewportKeyboardFix();
   const [splashFinished, setSplashFinished] = useState(false);
+  const shouldShowSplash = useShouldShowSplash();
   const [fontsLoaded] = useFonts({
     PublicSans_400Regular,
     PublicSans_500Medium,
@@ -74,9 +95,19 @@ export default function App() {
     );
   }
 
-  // Show splash screen for 3 seconds once fonts are ready
-  if (!splashFinished) {
-    return <SplashScreen onFinish={() => setSplashFinished(true)} />;
+  // Show splash screen for 3 seconds once fonts are ready - only on this
+  // tab's genuinely first load; see useShouldShowSplash's own comment.
+  if (shouldShowSplash && !splashFinished) {
+    return (
+      <SplashScreen
+        onFinish={() => {
+          if (Platform.OS === 'web' && typeof window !== 'undefined' && window.sessionStorage) {
+            window.sessionStorage.setItem(SPLASH_SHOWN_KEY, '1');
+          }
+          setSplashFinished(true);
+        }}
+      />
+    );
   }
 
   return (

@@ -1,18 +1,28 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
 import { radius } from '../theme/radius';
 import { typography } from '../theme/typography';
-import { SkeletonRows } from './Skeleton';
 import Button from './Button';
 
 // Shared loading/error/empty rendering so every screen doesn't reimplement the same
 // three states - and so no screen silently shows a blank/broken view on failure.
 
-export function LoadingState({ rows = 4 }) {
-  return <SkeletonRows rows={rows} />;
+// Was a stack of gray skeleton bars (see Skeleton.js's SkeletonRows) -
+// explicitly asked to remove that look ("even blank screen is fine, not
+// those boxes"). A small centered spinner is the minimal middle ground: no
+// boxes, but still some sign the page is doing something rather than
+// looking frozen/broken. `rows` is no longer used (this used to size the
+// skeleton stack) - kept as an accepted-but-ignored prop so no call site
+// needs touching.
+export function LoadingState({ rows } = {}) {
+  return (
+    <View style={styles.center}>
+      <ActivityIndicator size="large" color={colors.primary} />
+    </View>
+  );
 }
 
 export function ErrorState({ message, onRetry }) {

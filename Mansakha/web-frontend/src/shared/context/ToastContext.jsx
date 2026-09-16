@@ -30,16 +30,30 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
+      {/* Dropped `richColors` - its solid flat-fill background (e.g. plain
+          red for an error) is the flat, unpolished look this was asked to
+          fix. White card + colored left accent + colored icon reads as far
+          more considered, matching the floating-card treatment already
+          built for the mobile app's own toast (Toast.js). */}
       <Toaster
         position="top-right"
-        richColors
         closeButton
         icons={{
-          success: <CheckCircle size={18} />,
-          error: <AlertCircle size={18} />,
-          info: <Info size={18} />,
+          success: <CheckCircle size={18} className="text-emerald-600" />,
+          error: <AlertCircle size={18} className="text-rose-600" />,
+          info: <Info size={18} className="text-[#3D5A80]" />,
         }}
-        toastOptions={{ classNames: { toast: 'rounded-lg shadow-md text-sm' } }}
+        toastOptions={{
+          classNames: {
+            toast: 'rounded-xl shadow-lg border border-gray-100 bg-white px-4 py-3.5',
+            title: 'text-sm font-semibold text-gray-800',
+            description: 'text-xs text-gray-500',
+            closeButton: 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600',
+            success: '!border-l-4 !border-l-emerald-500',
+            error: '!border-l-4 !border-l-rose-500',
+            info: '!border-l-4 !border-l-[#519BCE]',
+          },
+        }}
       />
     </ToastContext.Provider>
   );
