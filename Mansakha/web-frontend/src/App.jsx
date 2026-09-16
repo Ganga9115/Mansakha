@@ -21,7 +21,7 @@ import DistrictAnalysis from './district_admin/pages/Analysis';
 import DistrictCoordinationRolePerformance from './district_admin/pages/CoordinationRolePerformance';
 import DistrictCaseDetail from './district_admin/pages/CaseDetail';
 import DistrictAdminAlerts from './district_admin/pages/AdminAlerts';
-import UserRegistration from './district_admin/pages/UserRegistration';
+import EditUserRecord from './district_admin/pages/EditUserRecord';
 import DistrictReports from './district_admin/pages/Reports';
 import DistrictInterventionRequests from './district_admin/pages/InterventionRequests';
 import DistrictAgencyCoordination from './district_admin/pages/AgencyCoordination';
@@ -157,7 +157,7 @@ export default function App() {
         <Route path="/districtadmin/alerts" element={<RequireAuth><DistrictAdminAlerts /></RequireAuth>} />
         <Route path="/districtadmin/intervention-requests" element={<RequireAuth><DistrictInterventionRequests /></RequireAuth>} />
         <Route path="/districtadmin/agency-coordination" element={<RequireAuth><DistrictAgencyCoordination /></RequireAuth>} />
-        <Route path="/districtadmin/registration" element={<RequireAuth><UserRegistration /></RequireAuth>} />
+        <Route path="/districtadmin/edit-user" element={<RequireAuth><EditUserRecord /></RequireAuth>} />
         <Route path="/districtadmin/reports" element={<RequireAuth><DistrictReports /></RequireAuth>} />
         <Route path="/districtadmin/mail" element={<RequireAuth><DistrictMailInbox /></RequireAuth>} />
         <Route path="/districtadmin/mail/sent" element={<RequireAuth><DistrictMailSent /></RequireAuth>} />

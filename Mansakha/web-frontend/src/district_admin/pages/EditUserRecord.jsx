@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
 import { Search } from 'lucide-react';
-import UserRegistrationForm from '../components/UserRegistrationForm';
-import { useMyJurisdiction, useCreateUser, useSearchUserByDocket, useUpdateUser } from '../services/hooks';
+import { useSearchUserByDocket, useUpdateUser } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
 // migration_034: Case Stage is no longer editable by District Admin (or any
 // staff role) - it's read-only here, shown exactly as eCourt (simulated,
-// core/services/ecourtStageSync.js) reports it. This panel now edits the
-// two fields District Admin's own PATCH /users/:userId still accepts -
-// contact number and address.
+// core/services/ecourtStageSync.js) reports it. This panel edits the two
+// fields District Admin's own PATCH /users/:userId still accepts - contact
+// number and address.
 const CASE_STAGE_TONE = {
   Investigation: 'bg-amber-50 text-amber-700',
   Trial: 'bg-blue-50 text-blue-700',
@@ -18,14 +17,13 @@ const CASE_STAGE_TONE = {
   'Case Closed': 'bg-gray-100 text-gray-600',
 };
 
-// District Admin only - Feature Catalog's User Credential Management.
-// State/National Administration don't get this page (no nav item for
-// them); a District Admin's own State/District are locked to their own
-// jurisdiction, not chosen, since this is *their* district's intake.
-export default function UserRegistration() {
+// District Admin only - Feature Catalog Section 3.5 "Edit user record".
+// User CREATION was removed from this role entirely (Data Operator is the
+// sole intake/registration authority - dataoperator/pages's own "Register
+// User") to match the PS's own division of labor: District Administration
+// oversees and corrects records, it doesn't do front-desk registration.
+export default function EditUserRecord() {
   const toast = useToast();
-  const { jurisdictionId } = useMyJurisdiction();
-  const createUser = useCreateUser();
   const searchUser = useSearchUserByDocket();
   const updateUser = useUpdateUser();
 
@@ -67,16 +65,8 @@ export default function UserRegistration() {
   };
 
   return (
-    <StaffLayout title="User Registration">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        <UserRegistrationForm
-          lockedJurisdictionId={jurisdictionId}
-          lockedJurisdictionLabel="Your district"
-          onCreate={createUser.mutate}
-          creating={createUser.loading}
-        />
-
-        {/* EDIT */}
+    <StaffLayout title="Edit User Record">
+      <div className="max-w-lg">
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-gray-800">Edit User Record</h3>
 
