@@ -114,7 +114,16 @@ export default function SettingsScreen({ navigation }) {
   const [passwordLoading, setPasswordLoading] = useState(false);
   const confirmPasswordInputRef = useRef(null);
 
-  const currentDisplayLanguageId = displayLanguageId ?? dashboardQuery.data?.preferredLanguageId ?? 'en';
+  // GET /api/user/language expects the real languages.language_id (a uuid) -
+  // this dropdown used to render INDIAN_LANGUAGES's own short codes ('en',
+  // 'hi', ...) as both its options AND its default value, so picking
+  // anything (or even just the unset default) sent a plain string where a
+  // uuid was required and the update always failed ("invalid input syntax
+  // for type uuid: 'en'"). languageOptions below is the real, backend-
+  // provided list; defaulting to null (not 'en') so the dropdown shows its
+  // placeholder instead of a fake selection when nothing is set yet.
+  const languageOptions = (languagesQuery.data?.languages || []).map((l) => ({ value: l.language_id, label: l.name }));
+  const currentDisplayLanguageId = displayLanguageId ?? dashboardQuery.data?.preferredLanguageId ?? null;
   const currentSpeakingLanguageId = speakingLanguageId ?? 'en';
 
   const userName = dashboardQuery.data?.fullName || session?.user?.name || 'Ganga';
@@ -326,10 +335,10 @@ export default function SettingsScreen({ navigation }) {
                       toast.error(err.message || 'Could not update language');
                     }
                   }}
-                  options={INDIAN_LANGUAGES}
+                  options={languageOptions}
                   value={currentDisplayLanguageId}
                   placeholder="Select interface language"
-                  disabled={updateLanguage.isPending}
+                  disabled={updateLanguage.isPending || languagesQuery.isLoading}
                 />
               </View>
             </View>
