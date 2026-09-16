@@ -347,12 +347,16 @@ router.post('/checkin', async (req, res) => {
 
   let analysis;
   try {
+    // interactionId excludes this check-in's own just-inserted row from its
+    // engagement-delta baseline (see ai.js's computeEngagementDelta) -
+    // recordInteraction() above already wrote it, so without this the
+    // baseline always included the very response being measured.
     if (audioBase64) {
-      analysis = await analyzeInteraction(userId, text, { audioBase64 });
+      analysis = await analyzeInteraction(userId, text, { audioBase64, interactionId });
     } else if (aiAnalysis && typeof aiAnalysis.sentiment === 'number') {
-      analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis);
+      analysis = await analyzeInteractionFromClientAi(userId, text, aiAnalysis, interactionId);
     } else {
-      analysis = await analyzeInteraction(userId, text);
+      analysis = await analyzeInteraction(userId, text, { interactionId });
     }
   } catch (err) {
     return fail(res, `Check-in recorded, but analysis failed: ${err.message}`, 502);
@@ -440,7 +444,9 @@ router.post('/chat', userChatLimiter, async (req, res) => {
 
   let analysis;
   try {
-    analysis = await analyzeChatMessage(userId, message);
+    // interactionId excludes this message's own just-inserted row from its
+    // engagement-delta baseline - see the matching comment on /checkin above.
+    analysis = await analyzeChatMessage(userId, message, interactionId);
   } catch (err) {
     return fail(res, `Message recorded, but reply generation failed: ${err.message}`, 502);
   }
