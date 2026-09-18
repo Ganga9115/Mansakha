@@ -6,7 +6,7 @@ import Toast from '../components/Toast';
 const ToastContext = createContext(null);
 
 let nextId = 1;
-const AUTO_DISMISS_MS = 5000;
+const AUTO_DISMISS_MS = 3000;
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);

@@ -13,7 +13,7 @@ function show(message, type = 'info') {
   // Passing the message text as sonner's `id` makes a repeated identical
   // message update the existing toast in place instead of stacking a
   // duplicate - matches the old ToastContext's dedup behavior exactly.
-  const options = { id: message, duration: 5000 };
+  const options = { id: message, duration: 3000 };
   if (type === 'success') return sonnerToast.success(message, options);
   if (type === 'error') return sonnerToast.error(message, options);
   return sonnerToast.info(message, options);
