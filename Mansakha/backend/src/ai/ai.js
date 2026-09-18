@@ -7,19 +7,33 @@ const {
   analyzeMultimodalViaDjango,
   chatViaDjango,
 } = require('./djangoAiClient');
+// (analyzeVoiceViaDjango was already imported here but unused until now -
+// see analyzeInteractionFromClientAi's own use of it below.)
 
 // Orchestrator called in-process by user/routes/user.routes.js's checkin flow.
 // Multi-modal AI: Supports Voice Stress Analytics (Phase 2), fine-tuned NLP, and Ollama.
 
 const BASELINE_WINDOW = 5; // how many prior interactions define "normal" for this user
 
-async function computeEngagementDelta(userId, currentResponseLength) {
-  const { data: priorInteractions } = await supabase
+// `excludeInteractionId`: the /checkin and /chat routes both call
+// recordInteraction() (which inserts THIS interaction's own row into
+// `interactions`) before running analysis - without excluding that row
+// here, "prior interactions" always included the very response being
+// measured against its own baseline, since it's the most recent row for
+// this user by construction. That silently pulled the baseline average
+// toward the current value on every single call: a real drop in engagement
+// reads smaller than it should (the current, lower value drags the average
+// down with it), understating exactly the signal this is meant to catch.
+async function computeEngagementDelta(userId, currentResponseLength, excludeInteractionId = null) {
+  let query = supabase
     .from('interactions')
     .select('transcript_length')
-    .eq('user_id', userId)
-    .order('occurred_at', { ascending: false })
-    .limit(BASELINE_WINDOW);
+    .eq('user_id', userId);
+  if (excludeInteractionId) query = query.neq('interaction_id', excludeInteractionId);
+  // .neq() above is a WHERE-clause filter, applied before .limit() regardless
+  // of chaining order - so this always returns BASELINE_WINDOW *prior* rows,
+  // never the current one.
+  const { data: priorInteractions } = await query.order('occurred_at', { ascending: false }).limit(BASELINE_WINDOW);
 
   if (!priorInteractions || priorInteractions.length === 0) {
     return 0; // no baseline yet - first check-in, nothing to compare against
@@ -92,7 +106,7 @@ async function analyzeInteraction(userId, text, options = {}) {
     suggestedInterventionName = ollamaAssessment.suggestedInterventionName;
   }
 
-  const engagementDelta = await computeEngagementDelta(userId, effectiveText.length);
+  const engagementDelta = await computeEngagementDelta(userId, effectiveText.length, options.interactionId);
   // Real voiceStressScore activates PHASE_2_WEIGHTS (0.4 sentiment, 0.3 voice stress, 0.2 emotion, 0.1 engagement)
   const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, voiceStressScore, emotion, engagementDelta);
   const suggestedInterventionTypeId = await resolveInterventionTypeId(suggestedInterventionName);
@@ -123,16 +137,32 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-async function analyzeInteractionFromClientAi(userId, text, clientAnalysis) {
+// `audioBase64` (optional): a voice recording captured alongside the
+// check-in - deliberately NOT run through analyzeMultimodalViaDjango (which
+// would also re-derive its own sentiment/emotion/reason from just the
+// audio+text and override the far richer values above, computed by Ollama
+// over the whole 15-question conversation). analyzeVoiceViaDjango instead
+// returns only a voice-stress reading, so the audio contributes exactly the
+// one signal (real pitch/jitter/shimmer analysis) client-side Ollama has no
+// way to produce, without discarding everything else it already got right.
+async function analyzeInteractionFromClientAi(userId, text, clientAnalysis, interactionId = null, audioBase64 = null) {
   const sentimentRaw = clamp(clientAnalysis.sentiment, -1, 1);
   const emotion = clamp(clientAnalysis.emotion, 0, 1);
   const reason = typeof clientAnalysis.reason === 'string' ? clientAnalysis.reason : null;
 
-  const engagementDelta = await computeEngagementDelta(userId, text.length);
-  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, 0, emotion, engagementDelta);
+  let voiceStressScore = 0;
+  if (audioBase64) {
+    const voiceResult = await analyzeVoiceViaDjango(audioBase64);
+    if (voiceResult && voiceResult.success) {
+      voiceStressScore = voiceResult.voiceStressScore;
+    }
+  }
+
+  const engagementDelta = await computeEngagementDelta(userId, text.length, interactionId);
+  const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, voiceStressScore, emotion, engagementDelta);
   const suggestedInterventionTypeId = await resolveInterventionTypeId(clientAnalysis.suggestedIntervention);
 
-  return { scoreValue, riskLevel, sentimentRaw, emotion, engagementDelta, reason, suggestedInterventionTypeId };
+  return { scoreValue, riskLevel, sentimentRaw, emotion, voiceStressScore, engagementDelta, reason, suggestedInterventionTypeId };
 }
 
 const HIGH_RISK_HELP_POINTER = "\n\nIf things feel unsafe or overwhelming right now, please reach out to real support: call the NHAA Helpline at 14566 (24/7) or talk to your Counsellor through the Support section of this app.";
@@ -141,7 +171,7 @@ const HIGH_RISK_HELP_POINTER = "\n\nIf things feel unsafe or overwhelming right 
 // shape (same computeEngagementDelta + computeDistressScore calls, both
 // unchanged), sourced from callGeminiChat instead of callGemini, and
 // returns the extra `reply` field user/routes/user.routes.js's /chat sends back.
-async function analyzeChatMessage(userId, text) {
+async function analyzeChatMessage(userId, text, interactionId = null) {
   let sentimentRaw = 0;
   let emotion = 0.2;
   let reason = 'Conversational screening performed.';
@@ -167,7 +197,7 @@ async function analyzeChatMessage(userId, text) {
     reply = ollamaChat.reply;
   }
 
-  const engagementDelta = await computeEngagementDelta(userId, text.length);
+  const engagementDelta = await computeEngagementDelta(userId, text.length, interactionId);
   const { scoreValue, riskLevel } = computeDistressScore(sentimentRaw, 0, emotion, engagementDelta);
   const suggestedInterventionTypeId = await resolveInterventionTypeId(suggestedInterventionName);
 

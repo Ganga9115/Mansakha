@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from "react-router-dom";
 import StaffLayout from '../layouts/StaffLayout';
-import { 
-  ArrowLeft, 
-  Phone, 
-  Mic, 
+import {
+  ArrowLeft,
+  Mic,
   Send, 
   Play, 
   Pause, 
@@ -292,8 +291,8 @@ export default function CaseChat() {
   const messageGroups = groupMessagesByDate(data?.messages || []);
 
   return (
-    <StaffLayout title={`Chat: ${userId ? userId.slice(0, 8) : ''}`}>
-      <div className="h-[calc(100vh-5.5rem)] sm:h-[calc(100vh-7.5rem)] flex flex-col bg-white rounded-xl sm:rounded-2xl border border-gray-200/80 shadow-sm overflow-hidden">
+    <StaffLayout title={`Chat: ${userId ? userId.slice(0, 8) : ''}`} fullBleedContent>
+      <div className="flex-1 flex flex-col bg-white overflow-hidden min-h-0">
         
         {/* ── Header — white background, matches victim app ── */}
         <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-100 bg-white shrink-0 shadow-sm">
@@ -315,23 +314,6 @@ export default function CaseChat() {
               <p className="text-[10px] sm:text-xs text-[#64748B] truncate">Private, opted-in support</p>
             </div>
           </div>
-
-          {/* ── Call button — always visible ── */}
-          <button
-            onClick={() => {
-              if (data?.phone) {
-                window.location.href = `tel:${data.phone}`;
-              } else {
-                toast.error('No phone number on file for this user');
-              }
-            }}
-            type="button"
-            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-[#7C5CBF] bg-[#F7F4FD] flex items-center justify-center text-[#7C5CBF] hover:bg-[#EDE8F7] active:bg-[#DDD0F5] transition shrink-0 shadow-sm"
-            title={data?.phone ? `Call ${data.userName || 'User'}` : 'No phone number on file'}
-            aria-label="Call User"
-          >
-            <Phone size={15} className="sm:w-[18px] sm:h-[18px]" />
-          </button>
         </div>
 
         {/* ── Scrollable message thread ── */}

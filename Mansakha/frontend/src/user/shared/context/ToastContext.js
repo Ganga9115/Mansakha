@@ -12,10 +12,18 @@ export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const timers = useRef({});
 
-  const dismiss = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+  // Two-step removal so Toast.js can play a fade/slide-out first: this only
+  // flags the toast as `exiting` (still rendered, animation-in-progress);
+  // `remove` below is what Toast.js calls once that animation actually
+  // finishes, which is what really drops it from state.
+  const requestDismiss = useCallback((id) => {
     clearTimeout(timers.current[id]);
     delete timers.current[id];
+    setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
+  }, []);
+
+  const remove = useCallback((id) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
   // Same message showing again (e.g. a slow endpoint the user keeps
@@ -24,13 +32,16 @@ export function ToastProvider({ children }) {
   const show = useCallback((message, type = 'info') => {
     const id = nextId++;
     setToasts((prev) => {
-      const dup = prev.find((t) => t.message === message);
-      if (dup) clearTimeout(timers.current[dup.id]);
-      return [...prev.filter((t) => t.message !== message), { id, message, type }];
+      const dup = prev.find((t) => t.message === message && !t.exiting);
+      if (dup) {
+        clearTimeout(timers.current[dup.id]);
+        delete timers.current[dup.id];
+      }
+      return [...prev.filter((t) => t.message !== message || t.exiting), { id, message, type }];
     });
-    timers.current[id] = setTimeout(() => dismiss(id), AUTO_DISMISS_MS);
+    timers.current[id] = setTimeout(() => requestDismiss(id), AUTO_DISMISS_MS);
     return id;
-  }, [dismiss]);
+  }, [requestDismiss]);
 
   const toast = {
     show,
@@ -42,7 +53,7 @@ export function ToastProvider({ children }) {
   return (
     <ToastContext.Provider value={toast}>
       {children}
-      <Toast toasts={toasts} onDismiss={dismiss} />
+      <Toast toasts={toasts} onRequestDismiss={requestDismiss} onExited={remove} />
     </ToastContext.Provider>
   );
 }

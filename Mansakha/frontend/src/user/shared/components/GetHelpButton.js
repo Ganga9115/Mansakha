@@ -66,7 +66,13 @@ export default function GetHelpButton({ asHeaderIcon = false }) {
       });
     } catch (err) {
       // Do NOT open the dialer or imply help was requested if the API call
-      // itself failed.
+      // itself failed - but DO close the modal: React Native Web's Modal
+      // renders in its own top-level portal, above everything else in the
+      // app including the Toast (which only has a plain in-tree zIndex) -
+      // leaving the modal open after a failure hid the error toast behind
+      // it completely, so a failed alert looked like it silently did
+      // nothing at all instead of visibly failing.
+      setConfirmOpen(false);
       toast.error(err.message || 'Could not send the alert. Please try again.');
     }
   };

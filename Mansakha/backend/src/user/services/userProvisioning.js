@@ -1,7 +1,6 @@
 const bcrypt = require('bcrypt');
 const { supabase } = require('../../core/db/supabaseClient');
 const { withTransaction } = require('../../core/db/pgPool');
-const { STAGE_INTERVAL_MS } = require('../../core/services/ecourtStageSync');
 
 // migration_034: case_stage is now EXCLUSIVELY eCourt-authoritative (see
 // core/services/ecourtStageSync.js, the only other code path allowed to
@@ -96,7 +95,6 @@ async function createUser({ docketNumber, fullName, contactNumber, jurisdictionI
   // say in the initial stage any more - every case starts at 'Investigation'
   // and only the eCourt sync worker ever advances it from there.
   const resolvedCaseStage = VALID_CASE_STAGES[0];
-  const nextEcourtStageAt = new Date(Date.now() + STAGE_INTERVAL_MS).toISOString();
 
   const { data: existing } = await supabase.from('users').select('user_id').eq('docket_number', docketNumber.trim()).maybeSingle();
   if (existing) throw new ProvisioningError('A user with this docket number already exists', 409);
@@ -116,10 +114,10 @@ async function createUser({ docketNumber, fullName, contactNumber, jurisdictionI
       // stays valid unchanged; a case created without one simply has no IO
       // assigned yet.
       const { rows } = await client.query(
-        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, station_id, next_ecourt_stage_at)
-         values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9)
+        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, station_id)
+         values ($1, $2, $3, $4, $5, $6, $7, true, $8)
          returning user_id`,
-        [docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash, stationId, nextEcourtStageAt]
+        [docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash, stationId]
       );
       const id = rows[0].user_id;
       await client.query(
@@ -322,7 +320,6 @@ async function createLinkedCase({ docketNumber, caseTypeId, jurisdictionId, case
   // migration_034: same as createUser - always 'Investigation', no caller
   // input accepted.
   const resolvedCaseStage = VALID_CASE_STAGES[0];
-  const nextEcourtStageAt = new Date(Date.now() + STAGE_INTERVAL_MS).toISOString();
 
   const { data: existing } = await supabase.from('users').select('user_id').eq('docket_number', docketNumber.trim()).maybeSingle();
   if (existing) throw new ProvisioningError('A user with this docket number already exists', 409);
@@ -351,12 +348,12 @@ async function createLinkedCase({ docketNumber, caseTypeId, jurisdictionId, case
   try {
     userId = await withTransaction(async (client) => {
       const { rows } = await client.query(
-        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, linked_to_user_id, assigned_counsellor_id, opted_for_manual_counsellor, next_ecourt_stage_at)
-         values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10, $11)
+        `insert into users (docket_number, case_type_id, jurisdiction_id, case_stage, auth_method, case_background, password_hash, must_change_password, linked_to_user_id, assigned_counsellor_id, opted_for_manual_counsellor)
+         values ($1, $2, $3, $4, $5, $6, $7, true, $8, $9, $10)
          returning user_id`,
         [
           docketNumber.trim(), caseTypeId, jurisdictionId, resolvedCaseStage, provisionedVia, caseBackground || null, passwordHash,
-          anchorUserId, anchorAssignment?.assigned_counsellor_id || null, anchorAssignment?.opted_for_manual_counsellor || false, nextEcourtStageAt,
+          anchorUserId, anchorAssignment?.assigned_counsellor_id || null, anchorAssignment?.opted_for_manual_counsellor || false,
         ]
       );
       return rows[0].user_id;

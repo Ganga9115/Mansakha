@@ -8,7 +8,7 @@ const { requireRole } = require('../../core/middleware/requireRole');
 const { requireJurisdiction } = require('../../core/middleware/requireJurisdiction');
 const { generalApiLimiter } = require('../../core/middleware/rateLimiter');
 const { ok, fail } = require('../../core/services/responseEnvelope');
-const { createUser, updateUser, ProvisioningError } = require('../../user/services/userProvisioning');
+const { updateUser, ProvisioningError } = require('../../user/services/userProvisioning');
 const rehabilitationStatus = require('../../core/services/rehabilitationStatus');
 const { generateJurisdictionAnalytics } = require('../../ai/ollama');
 const { predictEscalationRiskBatch } = require('../../ai/scoring');
@@ -813,39 +813,14 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
   });
 });
 
-// Feature Catalog Section 3.5 - the write-side counterpart to auth.user.js's
-// docket-based login (Section 1.1). requireJurisdiction on the BODY's
-// jurisdictionId (the district the new user belongs to, not an existing
-// resource) is what actually enforces "a District Admin can only create
-// users inside their own district."
-router.post(
-  '/users',
-  verifyToken,
-  requireRole(['Administration', 'Ministry']),
-  generalApiLimiter,
-  requireJurisdiction((req) => req.body.jurisdictionId),
-  async (req, res) => {
-    // migration_034: caseStage not accepted - every case starts at
-    // 'Investigation', only the (simulated) eCourt sync worker advances it.
-    const { docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, address, caseBackground, password, aadhaarNumber } = req.body;
-    try {
-      const { userId, temporaryPassword } = await createUser({
-        docketNumber, fullName, contactNumber, jurisdictionId, caseTypeId, address, caseBackground, password, aadhaarNumber,
-        provisionedVia: 'district_admin',
-      });
-      await writeAuditLog({ officialId: req.auth.officialId, userId, action: 'create', entityType: 'user', entityId: userId });
-      // docketNumber and temporaryPassword returned explicitly (not just
-      // userId) - this is what the user needs to log in, and the admin
-      // has to hand it to them out-of-band, same reasoning as Ministry's
-      // temp-password return on staff creation (routes/ministry.js).
-      return ok(res, { userId, docketNumber, temporaryPassword }, 'User record created', 201);
-    } catch (err) {
-      if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
-      throw err;
-    }
-  }
-);
-
+// User CREATION was removed from here - Data Operator is the sole intake/
+// registration authority (Feature Catalog Section 7, dataoperator/routes/
+// dataoperator.routes.js's own '/register-user'), matching the PS's own
+// division of labor (District Administration oversees queues/approves
+// placements; it doesn't do front-desk registration). District Admin keeps
+// GET /users (search-by-docket, above) and PATCH /users/:userId (below) -
+// "Edit user record" is a distinct, legitimate oversight feature, not
+// intake.
 router.patch(
   '/users/:userId',
   verifyToken,

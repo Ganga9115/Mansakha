@@ -2,6 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  RecordingPresets,
+  setAudioModeAsync,
+  requestRecordingPermissionsAsync,
+  getRecordingPermissionsAsync,
+} from 'expo-audio';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
@@ -41,11 +49,77 @@ export default function CheckinScreen({ navigation }) {
   const [isFinished, setIsFinished] = useState(false);
   const [pastContext, setPastContext] = useState('');
 
+  // One optional voice note for the whole check-in (not per-question - the
+  // backend only accepts a single audioBase64 per submission, same as
+  // ChatScreen.js's own voice-note handling). Recording anywhere in the
+  // flow replaces any earlier clip, since only the most recent one is ever
+  // sent. This is what feeds the Voice Stress signal a real value instead
+  // of the permanent 0 a text/option-only check-in produces - see
+  // analyzeInteractionFromClientAi's own comment on the backend.
+  const [voiceAudioBase64, setVoiceAudioBase64] = useState(null);
+  const [isTranscribingVoice, setIsTranscribingVoice] = useState(false);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(recorder, 200);
+
   useEffect(() => {
     if (historyQuery.data?.history) {
       setPastContext(historyQuery.data.history);
     }
   }, [historyQuery.data]);
+
+  const startVoiceNote = async () => {
+    try {
+      let permission = await getRecordingPermissionsAsync();
+      if (!permission.granted) {
+        permission = await requestRecordingPermissionsAsync();
+      }
+      if (!permission.granted) {
+        toast.error('Microphone permission is required to add a voice note.');
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
+    } catch (err) {
+      toast.error(err.message || 'Could not start recording.');
+    }
+  };
+
+  const stopVoiceNote = async () => {
+    try {
+      await recorder.stop();
+    } catch (err) {
+      toast.error(err.message || 'Could not stop recording.');
+      return;
+    }
+    const uri = recorder.uri;
+    if (!uri) {
+      toast.error('Recording failed - no audio was captured.');
+      return;
+    }
+    setIsTranscribingVoice(true);
+    try {
+      // Web-only base64 conversion, matching ChatScreen.js's own voice-note
+      // handling - `uri` is a blob: URL on web, so it needs re-fetching
+      // into a Blob before FileReader can read it as a data URL.
+      const blob = await fetch(uri).then((r) => r.blob());
+      const dataUrl = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const base64Data = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+      setVoiceAudioBase64(base64Data);
+      toast.success('Voice note attached to this check-in.');
+    } catch (err) {
+      toast.error('Could not process the recording.');
+    } finally {
+      setIsTranscribingVoice(false);
+    }
+  };
+
+  const discardVoiceNote = () => setVoiceAudioBase64(null);
 
   // Only ever used from question 3 onward (questions 1-2 are fixed and
   // identical for every user - see OPENING_GREETING/SECOND_QUESTION) and
@@ -220,10 +294,11 @@ export default function CheckinScreen({ navigation }) {
       const aiAnalysis = await analyzeConversation(conversation);
       const formattedResponses = finalResponses.map(r => `Mansakha: ${r.q}\nPerson: ${r.a}`);
       
-      const result = await submitMutation.mutateAsync({ 
-        channel: 'Mobile App', 
-        responses: formattedResponses, 
-        aiAnalysis 
+      const result = await submitMutation.mutateAsync({
+        channel: 'Mobile App',
+        responses: formattedResponses,
+        aiAnalysis,
+        audioBase64: voiceAudioBase64 || undefined,
       });
       
       navigation.navigate('CheckinConfirmation', {
@@ -387,6 +462,37 @@ export default function CheckinScreen({ navigation }) {
                       autoFocus
                     />
                   )}
+
+                  {/* Optional voice note - the only way this check-in's
+                      Voice Stress signal ever gets a real value instead of
+                      0; entirely optional, available on any question, and
+                      only the most recently recorded clip is kept. */}
+                  <View style={styles.voiceNoteRow}>
+                    {recorderState.isRecording ? (
+                      <Pressable style={styles.voiceNoteRecording} onPress={stopVoiceNote}>
+                        <View style={styles.recordingDot} />
+                        <Text style={styles.voiceNoteRecordingText}>Recording... tap to stop</Text>
+                      </Pressable>
+                    ) : isTranscribingVoice ? (
+                      <View style={styles.voiceNoteRecording}>
+                        <ActivityIndicator size="small" color={colors.primary} />
+                        <Text style={styles.voiceNoteRecordingText}>Processing voice note...</Text>
+                      </View>
+                    ) : voiceAudioBase64 ? (
+                      <View style={styles.voiceNoteAttached}>
+                        <Feather name="check-circle" size={16} color={colors.success} />
+                        <Text style={styles.voiceNoteAttachedText}>Voice note attached to this check-in</Text>
+                        <Pressable onPress={discardVoiceNote} hitSlop={8}>
+                          <Feather name="x" size={16} color={colors.textSecondary} />
+                        </Pressable>
+                      </View>
+                    ) : (
+                      <Pressable style={styles.voiceNoteBtn} onPress={startVoiceNote}>
+                        <Feather name="mic" size={16} color={colors.primary} />
+                        <Text style={styles.voiceNoteBtnText}>Add an optional voice note</Text>
+                      </Pressable>
+                    )}
+                  </View>
 
                   <View style={styles.divider} />
 
@@ -646,6 +752,62 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: colors.border,
     marginVertical: spacing.sm,
+  },
+  voiceNoteRow: {
+    marginBottom: spacing.sm,
+  },
+  voiceNoteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+  },
+  voiceNoteBtnText: {
+    ...typography.bodySmall,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  voiceNoteRecording: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.dangerLight,
+  },
+  voiceNoteRecordingText: {
+    ...typography.bodySmall,
+    color: colors.danger,
+    fontWeight: '600',
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+  },
+  voiceNoteAttached: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.successLight,
+  },
+  voiceNoteAttachedText: {
+    ...typography.bodySmall,
+    color: colors.success,
+    fontWeight: '600',
   },
   actionRow: {
     flexDirection: 'row',

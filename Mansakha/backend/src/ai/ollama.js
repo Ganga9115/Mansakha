@@ -22,6 +22,40 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+// Deterministic safety net, mirroring frontend/src/user/shared/services/
+// ollamaClient.js's own copy - confirmed live that a small local model can
+// respond to repeated "I want to die" messages with pure validation and
+// never mention the helpline, despite the prompt below asking for it. This
+// checks the user's own words directly rather than trusting the model's
+// reply to have handled it - applied in callOllamaChat below (the only
+// function here that returns a `reply` a person actually sees/hears).
+const HELPLINE_MESSAGE = "Please call the NHAA Helpline at 14566 right now - they're available 24/7 and can help immediately. You can also reach your counsellor through this app.";
+const SELF_HARM_PHRASES = [
+  'want to die', 'wanted to die', 'wanna die', 'going to die', 'i will die',
+  'kill myself', 'kill me',
+  'end my life', 'end it all', 'ending my life',
+  'suicide', 'suicidal',
+  'no reason to live', 'nothing to live for', 'not worth living',
+  'better off dead',
+  'hurt myself', 'harm myself', 'self-harm', 'self harm', 'cutting myself',
+  "can't go on", 'cant go on',
+  "don't want to live", 'dont want to live', "don't want to be alive", 'dont want to be alive',
+];
+const SELF_HARM_RISK_PATTERN = new RegExp(
+  SELF_HARM_PHRASES.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+  'i'
+);
+
+function containsSelfHarmRisk(text) {
+  return SELF_HARM_RISK_PATTERN.test(text || '');
+}
+
+function ensureHelplineIfAtRisk(userText, reply) {
+  if (!containsSelfHarmRisk(userText)) return reply;
+  if ((reply || '').includes('14566')) return reply;
+  return `${reply}\n\n${HELPLINE_MESSAGE}`;
+}
+
 function extractJsonPayload(rawText) {
   if (!rawText) return null;
   const trimmed = rawText.trim();
@@ -103,10 +137,17 @@ async function callOllama(text) {
 // ==========================================
 // 2. Chat Companion & Assessment (Replaces callGeminiChat)
 // ==========================================
-const CHAT_PROMPT_INSTRUCTIONS = `You are "Mansakha", a calm, supportive, and trauma-informed companion for victims of atrocities under India's SC/ST Act.
+const CHAT_PROMPT_INSTRUCTIONS = `You are "Mansakha", a calm, supportive companion for people navigating a difficult situation under India's SC/ST Act. Never label them or refer to them as a "victim".
 Do two things at once:
 (1) Assess this message for distress signals as a clinical screening would.
 (2) Write a short, empathetic, gentle reply (2-3 sentences max). Never interrogate. Never give medical/legal advice.
+
+Rules for the reply:
+- If they express any suicidal thought, self-harm intent, or threat to their own life - however indirect - say plainly: "Please call the NHAA Helpline at 14566 right now - they're available 24/7 and can help immediately." Do not respond to this with only validation and no helpline mention.
+- Do not repeat "I am there for you", "I'm here for you", "I'm here to listen", or close variants across responses - vary how you express care.
+- Never ask them to describe or re-explain what happened, to them or to anyone they've lost.
+- If they ask something direct and practical, answer it plainly - do not deflect a real question into pure emotional reflection.
+- If they're carrying more than one distinct source of pain at once, acknowledge each specifically when relevant rather than one vague "everything you're going through".
 
 Respond STRICTLY with valid JSON:
 {
@@ -128,6 +169,7 @@ async function callOllamaChat(text) {
     if (!reply) {
       reply = "I hear you, and I am here with you. Please take a gentle breath. You don't have to carry this alone.";
     }
+    reply = ensureHelplineIfAtRisk(text, reply);
 
     return {
       sentimentRaw: typeof parsed.sentiment === 'number' ? clamp(parsed.sentiment, -1, 1) : 0,

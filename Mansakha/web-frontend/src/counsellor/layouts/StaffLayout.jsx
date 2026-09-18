@@ -22,7 +22,14 @@ const NAV_ITEMS = [
 // to sit alone in its own row inside the page content with a lot of empty
 // space next to it - the header is where a page's primary action belongs,
 // same place profile/notifications/logout already live).
-export default function StaffLayout({ children, title = 'Dashboard', headerAction = null, titleAction = null }) {
+// `fullBleedContent` - opts a page out of <main>'s own padding (and lets its
+// content stretch the full flex height) instead of sitting as a card inside
+// it. Chat is the first user of this: it already draws its own full white
+// panel (see CaseChat.jsx), so the default padding + this page's own
+// rounded/bordered card together read as a box floating inside a box,
+// instead of the thread filling the whole content area the way a real chat
+// UI (WhatsApp Web, Slack) does.
+export default function StaffLayout({ children, title = 'Dashboard', headerAction = null, titleAction = null, fullBleedContent = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -108,7 +115,14 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
       {/* MAIN VIEW AREA */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        {/* PERSISTENT HEADER */}
+        {/* PERSISTENT HEADER - omitted entirely on full-bleed pages (chat):
+            CaseChat.jsx already renders its own header (back button, name,
+            call/chat context), so this generic one directly above it just
+            duplicated a second header bar with nothing left to add - by
+            explicit request, removed rather than merely re-styled. Losing
+            the mobile hamburger here is fine since that page's own back
+            button already leads to a page that has this header. */}
+        {!fullBleedContent && (
         <header className="h-16 bg-[#EBF4FA] border-b border-[#D6E8F5] px-3 sm:px-6 lg:px-8 flex items-center justify-between shrink-0 gap-2 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
@@ -158,9 +172,10 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
             </button>
           </div>
         </header>
+        )}
 
         {/* DYNAMIC PAGE CONTENT */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8">
+        <main className={fullBleedContent ? 'flex-1 flex flex-col overflow-hidden min-h-0' : 'flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8'}>
           {children}
         </main>
       </div>

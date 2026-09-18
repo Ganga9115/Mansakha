@@ -27,6 +27,14 @@ async function findOfficialForLogin(identifier, allowedRoleNames) {
       .select('official_id, email, password_hash, must_change_password, official_identifier, staff_id, phone')
       .ilike('email', normalised)
       .maybeSingle();
+    // Was never assigned back to `official` here (only the two alias
+    // branches below did that) - every login by email instead of
+    // official_identifier silently fell through to "Invalid credentials"
+    // regardless of how correct the email/password were, since `official`
+    // stayed null the whole time. Confirmed live: superadmin's real
+    // password matched its stored hash and its Ministry role was intact,
+    // but login still failed every time until this line existed.
+    official = byEmail;
     // Backward-compatible fallback for generic legacy emails
     if (!official && normalised === 'counsellor@mansakha.gov.in') {
       const { data: byAlias } = await supabase
