@@ -12,15 +12,16 @@ import NotificationBell from '../components/NotificationBell';
 // State/National's Analysis (built around comparing sub-jurisdictions,
 // which District has none of), District's Analysis is time-series analytics
 // over its own single jurisdiction, so it earns the same nav item for a
-// different reason. "Register User" was previously unreachable (page
-// existed, no nav link and no route) - added here since user-credential
-// creation is core to this role's job, matching Data Operator's own
-// equivalent nav item. Mail sits directly above Profile per explicit
-// product placement.
+// different reason. "Edit User Record" (formerly "Register User") no longer
+// creates users - user creation was Data Operator's job all along (the PS's
+// own front-desk intake role) and District Admin's duplicate create-user
+// feature was removed; this nav item now only reaches the search/edit
+// (contact number, address) panel that's a distinct, legitimate oversight
+// feature. Mail sits directly above Profile per explicit product placement.
 const NAV_ITEMS = [
   { name: 'Dashboard', icon: LayoutDashboard, path: '/districtadmin' },
   { name: 'Analysis', icon: BarChart, path: '/districtadmin/analysis' },
-  { name: 'Register User', icon: UserPlus, path: '/districtadmin/registration' },
+  { name: 'Edit User Record', icon: UserPlus, path: '/districtadmin/edit-user' },
   { name: 'Alerts', icon: Bell, path: '/districtadmin/alerts' },
   { name: 'Intervention Requests', icon: HeartHandshake, path: '/districtadmin/intervention-requests' },
   { name: 'Agency Coordination', icon: Network, path: '/districtadmin/agency-coordination' },

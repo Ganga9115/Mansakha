@@ -2,7 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- interactive-widget=resizes-content: without it, many mobile browsers
+         only shrink the *visual* viewport (not the *layout* viewport) when
+         the on-screen keyboard opens, so height-based layouts (CaseChat.jsx's
+         composer included) never actually make room for it - the input can
+         end up sitting behind the keyboard instead of rising above it, the
+         way it does in WhatsApp. This makes the layout viewport itself
+         resize, so the existing flex layouts respond correctly on their own. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Mansakha - Administration, Counsellor, Data Operator, and Ministry console." />
     <title>Mansakha</title>

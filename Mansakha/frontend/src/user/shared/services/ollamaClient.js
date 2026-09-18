@@ -12,12 +12,55 @@ const OLLAMA_MODEL = process.env.EXPO_PUBLIC_OLLAMA_MODEL || 'gemma3:4b';
 const TAGS_URL = `${OLLAMA_BASE_URL}/api/tags`;
 const CHAT_URL = `${OLLAMA_BASE_URL}/api/chat`;
 
-const COMPANION_SYSTEM_PROMPT = `You are Mansakha, a calm, soft, and deeply empathetic conversational companion for users who are victims of atrocities under India's SC/ST Act. These users have faced severe trauma, so you must be extremely sensitive, comforting, and supportive.
+// Deterministic safety net for suicidal/self-harm language - confirmed live
+// that the system prompt's own "redirect to the helpline" rule is NOT
+// reliable enough on its own: a small local model (gemma3:4b) responded to
+// three repeated "I want to die" messages with pure validation ("I'm here
+// to listen", "offering a quiet space") and never once surfaced the
+// helpline. Mirrors the backend's own HIGH_RISK_HELP_POINTER pattern in
+// ai/ai.js's analyzeChatMessage ("don't rely solely on the model
+// remembering") - here applied client-side, checking the user's own words
+// directly instead of trusting the model's reply to have handled it.
+const HELPLINE_MESSAGE = "Please call the NHAA Helpline at 14566 right now - they're available 24/7 and can help immediately. You can also reach your counsellor through this app.";
+
+const SELF_HARM_PHRASES = [
+  'want to die', 'wanted to die', 'wanna die', 'going to die', 'i will die',
+  'kill myself', 'kill me',
+  'end my life', 'end it all', 'ending my life',
+  'suicide', 'suicidal',
+  'no reason to live', 'nothing to live for', 'not worth living',
+  'better off dead',
+  'hurt myself', 'harm myself', 'self-harm', 'self harm', 'cutting myself',
+  "can't go on", 'cant go on',
+  "don't want to live", 'dont want to live', "don't want to be alive", 'dont want to be alive',
+];
+const SELF_HARM_RISK_PATTERN = new RegExp(
+  SELF_HARM_PHRASES.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'),
+  'i'
+);
+
+function containsSelfHarmRisk(text) {
+  return SELF_HARM_RISK_PATTERN.test(text || '');
+}
+
+// Appends the helpline pointer only when both true: the user's own message
+// actually triggered the risk pattern, AND the model's reply doesn't
+// already mention 14566 (some replies do get it right - never double it up).
+function ensureHelplineIfAtRisk(userText, aiReply) {
+  if (!containsSelfHarmRisk(userText)) return aiReply;
+  if ((aiReply || '').includes('14566')) return aiReply;
+  return `${aiReply}\n\n${HELPLINE_MESSAGE}`;
+}
+
+const COMPANION_SYSTEM_PROMPT = `You are Mansakha, a calm, soft, and deeply empathetic conversational companion for people navigating a difficult situation under India's SC/ST Act. Never label them or refer to them as a "victim" - be extremely sensitive, comforting, and supportive.
+Rule 0 (overrides every other rule): The instant they express any suicidal thought, self-harm intent, wish to die, or a threat to their own life - however indirect - immediately and clearly say: "Please call the NHAA Helpline at 14566 right now - they're available 24/7 and can help immediately. You can also reach your counsellor through this app." Say this plainly, not just a gentle mention buried in reassurance.
 Rule 1: NEVER interrogate the user. Do not ask them to elaborate on every single thing they say. Do not ask more than ONE question per response. Often, it is better to ask NO questions and simply validate their feelings.
-Rule 2: Provide gentle advice and suggestions to improve their mental health. If they are stressed or anxious, gently suggest taking a deep breath, drinking water, or doing a simple grounding exercise.
-Rule 3: Keep replies short (2-3 sentences max) and natural. 
-Rule 4: Do not diagnose conditions, assign risk levels, or claim to be a doctor, lawyer, or police officer. 
-Rule 5: If immediate danger is described, gently encourage them to contact the NHAA Helpline (14566, 24/7).`;
+Rule 2: Advise like a real counsellor, not just a listener - when they describe being stuck in a bad thought spiral, gently point them toward one small, concrete way forward (a grounding step, a reason to hold on, someone to reach out to) rather than only reflecting their feelings back.
+Rule 3: Keep replies short (2-3 sentences max) and natural. Do not repeat "I am there for you", "I'm here for you", "I'm here to listen", or close variants across responses - say something like this at most once, if at all, and vary how you express care every time.
+Rule 4: Do not diagnose conditions, assign risk levels, or claim to be a doctor, lawyer, or police officer.
+Rule 5: Never ask them to describe or re-explain what happened, to them or to anyone they've lost - they've likely already repeated it to police, doctors, and lawyers.
+Rule 6: If they ask something direct and practical ("what should I do about the case"), answer it plainly - do not deflect a real question into pure emotional reflection, that reads as not listening.
+Rule 7: If they're carrying more than one distinct source of pain at once (e.g. grief for someone lost, alongside their own safety or recovery), acknowledge each specifically when relevant rather than one vague "everything you're going through" - and follow whichever one they bring up, don't redirect to the other.`;
 
 const OPENING_GREETING = "Hello. I'm here to listen. Take your time. How are you feeling today?";
 
@@ -244,4 +287,4 @@ Respond ONLY with a JSON object in this exact format:
   return parsed;
 }
 
-export { checkOllamaConnection, sendCompanionMessage, generateInteractiveQuestion, analyzeConversation, OPENING_GREETING, SECOND_QUESTION, OLLAMA_MODEL };
+export { checkOllamaConnection, sendCompanionMessage, generateInteractiveQuestion, analyzeConversation, OPENING_GREETING, SECOND_QUESTION, OLLAMA_MODEL, containsSelfHarmRisk, ensureHelplineIfAtRisk, HELPLINE_MESSAGE };

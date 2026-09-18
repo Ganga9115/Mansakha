@@ -230,20 +230,6 @@ export function useDownloadReportPdf() {
   return { mutate, loading };
 }
 
-export function useCreateUser() {
-  const token = getToken();
-  const [loading, setLoading] = useState(false);
-  const mutate = async (payload) => {
-    setLoading(true);
-    try {
-      return await apiClient.post('/api/admin/district/users', payload, token);
-    } finally {
-      setLoading(false);
-    }
-  };
-  return { mutate, loading };
-}
-
 export function useSearchUserByDocket() {
   const token = getToken();
   const [loading, setLoading] = useState(false);

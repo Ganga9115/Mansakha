@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, Linking, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import EmojiPicker from 'rn-emoji-keyboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   useAudioRecorder,
@@ -84,6 +83,25 @@ function groupMessagesByDate(messages) {
 }
 
 const WAVEFORM_BAR_HEIGHTS = [6, 12, 8, 16, 10, 14, 7, 11];
+
+// rn-emoji-keyboard (used here previously) has no web target at all - its
+// own package.json lists only ["react-native", "ios", "android"] as
+// keywords and no react-native-web anywhere in its dependencies - which is
+// exactly why its popup rendered as a blank white box on Expo web instead
+// of any emoji grid. Same plain, dependency-free quick-emoji strip already
+// shipped and working on the counsellor web portal's own chat
+// (web-frontend/src/counsellor/pages/CaseChat.jsx's QUICK_EMOJIS), so both
+// sides of this same conversation offer the same picker.
+const QUICK_EMOJIS = [
+  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
+  '🙂', '🙃', '😉', '😌', '😍', '🥰', '😘', '😗', '😙', '😚',
+  '😋', '😛', '😝', '😜', '🤪', '🤨', '🧐', '🤓', '😎', '🤩',
+  '🥳', '😏', '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+  '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠', '😡', '🤬',
+  '🤯', '😳', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗',
+  '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯',
+  '👍', '👎', '👏', '🙌', '🙏', '❤️', '💖', '✨', '🔥', '🎉',
+];
 
 function TypingBubble() {
   const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
@@ -237,8 +255,8 @@ export default function CounsellorChatScreen({ navigation }) {
     }
   };
 
-  const handleSelectEmoji = (emojiObject) => {
-    handleDraftChange(draft + emojiObject.emoji);
+  const handleSelectEmoji = (emoji) => {
+    handleDraftChange(draft + emoji);
   };
 
   const handleComposerKeyPress = (e) => {
@@ -463,7 +481,7 @@ export default function CounsellorChatScreen({ navigation }) {
                 accessibilityRole="button"
                 accessibilityLabel="Scroll to bottom"
               >
-                <Feather name="chevron-down" size={22} color={colors.primary} />
+                <Feather name="chevron-down" size={16} color={colors.primary} />
                 {unreadCount > 0 && (
                   <View style={styles.unreadBadge}>
                     <Text style={styles.unreadBadgeText}>{unreadCount}</Text>
@@ -475,31 +493,13 @@ export default function CounsellorChatScreen({ navigation }) {
             {/* Small inline emoji picker positioned just above the input */}
             {showEmojiPicker && (
               <View style={styles.emojiPickerPopup}>
-                <EmojiPicker
-                  onEmojiSelected={handleSelectEmoji}
-                  open={showEmojiPicker}
-                  onClose={() => setShowEmojiPicker(false)}
-                  enableModal={false}
-                  enableSearchBar
-                  theme={{
-                    backdrop: 'transparent',
-                    container: '#FFFFFF',
-                    header: '#4A5568',
-                    skinTonesContainer: '#EDF2F5',
-                    category: {
-                      icon: '#718096',
-                      iconActive: colors.primary,
-                      container: '#F7FAFC',
-                      containerActive: '#E2E8F0',
-                    },
-                    search: {
-                      background: '#F7FAFC',
-                      text: '#1A202C',
-                      placeholder: '#A0AEC0',
-                      icon: '#718096',
-                    },
-                  }}
-                />
+                <ScrollView contentContainerStyle={styles.emojiGrid} showsVerticalScrollIndicator={false}>
+                  {QUICK_EMOJIS.map((e, i) => (
+                    <Pressable key={i} style={styles.emojiCell} onPress={() => handleSelectEmoji(e)} hitSlop={2}>
+                      <Text style={styles.emojiCellText}>{e}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
               </View>
             )}
 
@@ -701,11 +701,11 @@ const styles = StyleSheet.create({
   },
   scrollToBottomBtn: {
     position: 'absolute',
-    bottom: 70,
+    bottom: 90,
     right: spacing.lg,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -723,6 +723,21 @@ const styles = StyleSheet.create({
     ...shadow.card,
     zIndex: 10,
     overflow: 'hidden',
+  },
+  emojiGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: spacing.sm,
+  },
+  emojiCell: {
+    width: '10%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.sm,
+  },
+  emojiCellText: {
+    fontSize: 20,
   },
   unreadBadgeText: {
     color: colors.white,
