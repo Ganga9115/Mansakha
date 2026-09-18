@@ -12,10 +12,10 @@ import { topBarHeight } from '../theme/layout';
 // nav padding, space-y-2 item gap, px-4 py-3 item padding, 18px icons)
 // so the two read as the exact same sidebar on both web experiences.
 const SIDEBAR = {
-  bg: colors.sidebarBg,       // #3D5A80
-  active: colors.sidebarAccent, // #519BCE
-  textInactive: '#C7D9F0',    // Tailwind blue-100 equivalent
-  tagline: '#BFDBFE',         // Tailwind blue-200 equivalent
+  bg: colors.sidebarBg,       // #4A3070
+  active: colors.sidebarAccent, // #7C5CBF
+  textInactive: '#C4B5E8',    // Muted lavender for inactive sidebar items
+  tagline: '#C4B5E8',         // Muted lavender for sidebar tagline
   textActive: colors.sidebarTextActive, // #FFFFFF
   divider: 'rgba(255,255,255,0.15)',
   pressedOverlay: 'rgba(255,255,255,0.1)',

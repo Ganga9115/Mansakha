@@ -1028,7 +1028,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   genderToggleTabActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#7C5CBF',
     boxShadow: '0 2px 8px rgba(37, 99, 235, 0.45)',
   },
   genderToggleText: {
@@ -1231,7 +1231,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   controlCircleBtnActive: {
-    backgroundColor: '#2563EB',
+    backgroundColor: '#7C5CBF',
   },
   controlCircleBtnMuted: {
     backgroundColor: '#EF4444',
