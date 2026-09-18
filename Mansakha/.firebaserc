@@ -1,0 +1,18 @@
+{
+  "projects": {
+    "default": "mansakha-sih-2026"
+  },
+  "targets": {
+    "mansakha-sih-2026": {
+      "hosting": {
+        "portal": [
+          "mansakha-portal"
+        ],
+        "app": [
+          "mansakha-app"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
