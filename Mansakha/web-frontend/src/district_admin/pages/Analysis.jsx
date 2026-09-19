@@ -210,7 +210,7 @@ export default function Analysis() {
         <div className="pt-2 border-t border-gray-100">
           <h2 className="text-lg font-bold text-gray-800 mt-4">Coordination & Case Handling</h2>
           <p className="text-xs text-gray-400 mb-4">
-            How Protection Officer, District Welfare Officer, DLSA, Investigating Officer, District Collector and
+            How Protection Officer, District Welfare Officer, DLSA, Investigating Officer and
             Rehabilitation Officer are handling referred cases in this same period - separate from victim wellness data above.
           </p>
 

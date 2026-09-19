@@ -78,8 +78,8 @@ export default function CoordinationRolePerformance() {
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm">
           <h3 className="font-bold text-sm text-gray-800">Coordination Roster</h3>
           <p className="text-[11px] text-gray-400 mt-1">
-            Which officials hold each of the 6 coordination roles nationwide - Protection Officer, District Welfare
-            Officer, DLSA Coordinator, District Collector, Investigating Officer and Rehabilitation Officer - and how
+            Which officials hold each of the 5 coordination roles nationwide - Protection Officer, District Welfare
+            Officer, DLSA Coordinator, Investigating Officer and Rehabilitation Officer - and how
             their own referral queue is actually moving. Click a row to see the actual open cases behind its count.
           </p>
         </div>
