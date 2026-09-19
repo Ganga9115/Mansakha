@@ -13,12 +13,12 @@ import { useSearchUserByDocket, useCaseAgencyReferrals, useCreateAgencyReferral 
 
 // Investigating Officer and Special Public Prosecutor were retired as
 // separate logins - trimmed here too so this picker can't target a queue
-// nobody can see.
+// nobody can see. District Collector removed the same way - no official
+// holds that role any more.
 const REFERRAL_ROLES = [
   'District Welfare Officer',
   'Protection Officer',
   'DLSA Coordinator',
-  'District Collector',
   'Rehabilitation Officer',
 ];
 
@@ -69,7 +69,7 @@ export default function AgencyCoordination() {
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
             <h3 className="font-bold text-sm text-gray-800">Look Up a Case</h3>
-            <p className="text-[11px] text-gray-400">Find a case by docket number, then optionally loop in one of the coordination roles - Welfare, Investigation, Protection, Legal Aid, Prosecution, District Collector, or Rehabilitation.</p>
+            <p className="text-[11px] text-gray-400">Find a case by docket number, then optionally loop in one of the coordination roles - Welfare, Protection, Legal Aid, or Rehabilitation.</p>
           </div>
 
           <form onSubmit={handleSearch} className="flex items-center gap-2">

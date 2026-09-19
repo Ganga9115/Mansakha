@@ -29,9 +29,9 @@ router.use(verifyToken, requireRole(['Ministry']), generalApiLimiter);
 // Public Prosecutor (migration_040) - the DLSA-assigned advocate role for
 // the dedicated Legal Aid pipeline, jurisdiction-scoped like Protection
 // Officer (see the jurisdictionId checks below).
-const CREATABLE_ROLES = ['Administration', 'Counsellor', 'Data Operator',
+const CREATABLE_ROLES = ['Administration', 'Counsellor',
   'Investigating Officer', 'District Welfare Officer', 'Protection Officer',
-  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer', 'Public Prosecutor'];
+  'DLSA Coordinator', 'Rehabilitation Officer', 'Public Prosecutor'];
 const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Section 6.2: "Limit: 1 per District/State"
 
 // migration_035 - designation lists live in one shared place so Ministry's
@@ -42,7 +42,7 @@ const JURISDICTION_LIMITED_LEVELS = ['district', 'state']; // Feature Catalog Se
 // Section 6.2's new validation - an Administration account at district or
 // state level can't be created (or granted) where an active one already
 // exists for that exact jurisdiction. National Administration and Counsellor
-// have no stated limit; Data Operator isn't jurisdiction-scoped at all.
+// have no stated limit.
 async function checkJurisdictionLimit(roleName, jurisdictionId) {
   if (roleName !== 'Administration' || !jurisdictionId) return null;
 
@@ -73,7 +73,7 @@ async function checkJurisdictionLimit(roleName, jurisdictionId) {
 // it can show anything to create/revoke - the create/revoke routes alone don't
 // support that.
 // role/level filter accepted so the Staff Management UI can show one category
-// at a time (National/State/District Admin, Counsellor, Data Operator)
+// at a time (National/State/District Admin, Counsellor)
 // instead of one flat 770+-row list - level only means something for
 // role=Administration (National/State/District Admin are all that one role,
 // distinguished only by their jurisdiction's level). Written as raw SQL
@@ -151,8 +151,8 @@ router.get('/staff', async (req, res) => {
       roleName: o.role_name,
       // Whichever scope this role actually uses - jurisdiction (Administration,
       // Protection Officer), provider (Rehabilitation Officer), or station
-      // (Investigating Officer) - null for roles with none (DWO, DLSA,
-      // District Collector aren't scoped at all today). IDs (not just names)
+      // (Investigating Officer) - null for roles with none (DWO, DLSA
+      // aren't scoped at all today). IDs (not just names)
       // so the edit panel's picker can pre-select the current value; the
       // station's own district/state are surfaced too so that picker's
       // State -> District -> Station cascade can be pre-populated correctly.
@@ -179,10 +179,8 @@ router.get('/staff', async (req, res) => {
 
 // Ministry-wide user list for Super Admin visibility (Feature Catalog
 // Section 3/8's oversight remit) - every user regardless of who
-// provisioned them (District Admin or Data Operator), unlike Data Operator's
-// own /api/dataoperator/users which only shows its own auth_method. Read-only
-// here; editing/deleting a user record stays on the Data Operator screen
-// that already owns that flow.
+// provisioned them (District Admin or self-registration). Read-only here;
+// editing a user record stays on District Admin's Edit User Record screen.
 router.get('/users', async (req, res) => {
   const page = Math.max(1, Number(req.query.page) || 1);
   const pageSize = 30;
@@ -218,7 +216,7 @@ router.get('/users', async (req, res) => {
     jurisdictionName: u.jurisdiction_name || null,
     caseStage: u.case_stage,
     status: u.status,
-    provisionedVia: u.auth_method === 'district_admin' ? 'District Admin' : 'Data Operator',
+    provisionedVia: u.auth_method === 'district_admin' ? 'District Admin' : 'Self-Registered',
     enrolledAt: u.enrolled_at,
   }));
 
@@ -233,7 +231,7 @@ router.post('/staff', async (req, res) => {
   if (!fullName || !email || !roleName || !password) return fail(res, 'fullName, email, roleName, and password are required', 400);
 
   // Server-side allowlist, not trusting client input: this endpoint can ONLY create
-  // Administration/Counsellor/Data Operator accounts. A Ministry account is
+  // Administration/Counsellor accounts (plus the coordination roles). A Ministry account is
   // seeded/manually provisioned (Section 3) and must never be creatable through
   // an API call, even if a client sent roleName: "Ministry".
   if (!CREATABLE_ROLES.includes(roleName)) {
@@ -986,8 +984,8 @@ router.delete('/police-stations/:stationId', async (req, res) => {
 // belongs: Ministry already manages providers via Staff Management, and is
 // unrestricted by jurisdiction (Section 3) - no requireJurisdiction, no
 // jurisdictionId param, real nationwide numbers.
-const ALL_COORDINATION_ROLES = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer'];
-const COORDINATION_ROLES_JURISDICTION_SCOPED_MINISTRY = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector'];
+const ALL_COORDINATION_ROLES = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'Investigating Officer'];
+const COORDINATION_ROLES_JURISDICTION_SCOPED_MINISTRY = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator'];
 
 router.get('/coordination-roles/performance', async (req, res) => {
   // Jurisdiction/station-scoped roles (5) - same coalesce-onto-station's-own-

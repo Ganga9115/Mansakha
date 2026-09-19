@@ -1,6 +1,7 @@
 const { supabase } = require('../db/supabaseClient');
 const { pool } = require('../db/pgPool');
 const { generateProactiveContactMessage } = require('../../ai/ollama');
+const { sendSms } = require('./smsService');
 
 // Closes both "no proactive scheduling" and "no real alert-dispatch worker"
 // (Section 4.2 / Section 0b) with one mechanism: a durable dispatch_queue,
@@ -206,22 +207,12 @@ async function placeIvrsCall(user) {
 // Twilio's Messages API (a different capability than the now-removed
 // Verify-based OTP flow) - same account credentials, but needs a purchased
 // Twilio phone number (TWILIO_PHONE_NUMBER) to send FROM, which isn't
-// provisioned. Real send only if fully configured.
+// provisioned. Real send only if fully configured (see smsService.js's own
+// "never fabricate success" rule).
 async function sendSmsCheckinPrompt(user) {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
-    throw new Error('SMS provider not configured (TWILIO_PHONE_NUMBER missing)');
-  }
   const { data: identity } = await supabase.from('user_identity').select('contact_number').eq('user_id', user.user_id).maybeSingle();
   if (!identity?.contact_number) throw new Error('No phone number on file for this user');
-
-  // eslint-disable-next-line global-require
-  const twilio = require('twilio');
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    to: identity.contact_number,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    body: 'Mansakha check-in: How are you feeling today? Reply or open the app to share.',
-  });
+  await sendSms(identity.contact_number, 'Mansakha check-in: How are you feeling today? Reply or open the app to share.');
 }
 
 // Ministry Analytics & Workflow spec Task 2C "Emergency Broadcast" SMS
@@ -233,20 +224,9 @@ async function sendSmsCheckinPrompt(user) {
 // file's one-function-per-kind style. Real send only if fully configured,
 // same "never fabricate success" rule as every other kind here.
 async function sendAdminBroadcastSms(user, messageText) {
-  if (!process.env.TWILIO_ACCOUNT_SID || !process.env.TWILIO_AUTH_TOKEN || !process.env.TWILIO_PHONE_NUMBER) {
-    throw new Error('SMS provider not configured (TWILIO_PHONE_NUMBER missing)');
-  }
   const { data: identity } = await supabase.from('user_identity').select('contact_number').eq('user_id', user.user_id).maybeSingle();
   if (!identity?.contact_number) throw new Error('No phone number on file for this user');
-
-  // eslint-disable-next-line global-require
-  const twilio = require('twilio');
-  const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  await client.messages.create({
-    to: identity.contact_number,
-    from: process.env.TWILIO_PHONE_NUMBER,
-    body: messageText,
-  });
+  await sendSms(identity.contact_number, messageText);
 }
 
 // Feature Catalog Section 1.5 "Moderate" tier - a simple, non-over-engineered

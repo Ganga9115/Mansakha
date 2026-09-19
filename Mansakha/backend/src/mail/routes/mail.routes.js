@@ -10,7 +10,7 @@ const { ok, fail } = require('../../core/services/responseEnvelope');
 const { writeAuditLog } = require('../../core/services/auditLog');
 
 // Mansakha Mail - internal, Gmail-like staff communication (Counsellor,
-// District/State/National Admin, Data Operator, Ministry). Entirely internal
+// District/State/National Admin, Ministry). Entirely internal
 // to this database - no real SMTP/internet email, no external delivery.
 // Every action rides the same audit-log/RBAC machinery that already
 // protects case data, instead of routing staff correspondence through
@@ -24,7 +24,7 @@ const router = express.Router();
 // jurisdiction-scoped in this system; staff directory/communication already
 // isn't (e.g. Ministry's own staff-list route returns every official
 // regardless of jurisdiction).
-router.use(verifyToken, requireRole(['Ministry', 'Administration', 'Counsellor', 'Data Operator']), generalApiLimiter);
+router.use(verifyToken, requireRole(['Ministry', 'Administration', 'Counsellor']), generalApiLimiter);
 
 const PAGE_SIZE = 20;
 const ATTACHMENT_URL_TTL_SECONDS = 3600;

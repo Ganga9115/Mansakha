@@ -17,9 +17,9 @@ const THEME = {
   cardBg: '#FFFFFF',
   textMain: '#0F172A',
   textMuted: '#64748B',
-  accentBlue: '#E0F2FE',
-  accentIcon: '#0284C7',
-  primaryDark: '#0F172A',
+  accentBlue: '#F0EAFB',
+  accentIcon: '#7C5CBF',
+  primaryDark: '#4A3070',
   border: '#E2E8F0',
 };
 

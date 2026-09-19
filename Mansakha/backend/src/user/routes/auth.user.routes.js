@@ -5,21 +5,24 @@ const { pool } = require('../../core/db/pgPool');
 const { signToken } = require('../../core/utils/jwt');
 const { ok, fail } = require('../../core/services/responseEnvelope');
 const { verifyToken } = require('../../core/middleware/verifyToken');
-const { userLoginLimiter, gpsLookupLimiter } = require('../../core/middleware/rateLimiter');
+const { userLoginLimiter, selfRegisterLimiter, gpsLookupLimiter } = require('../../core/middleware/rateLimiter');
 const { getRehabilitationStatus } = require('../../core/services/rehabilitationStatus');
+const { autoRegisterVictim, suggestCaseType } = require('../services/selfRegistration');
+const { ProvisioningError } = require('../services/userProvisioning');
 
 const router = express.Router();
 
-// User Login surface - Feature Catalog Section 1.1, extended per explicit
-// request. Replaces the old OTP (mobile/email) + Google Sign-In +
-// self-registration model entirely: a user record is now created BY staff
-// (District Admin - district_admin/routes/districtAdmin.routes.js, or Data Operator -
-// dataoperator/routes/dataoperator.routes.js), and a user logs in with FOUR fields staff entered
-// for them - docket number, full name, mobile number, and a password
-// (fixed to 'User123' at creation, forced to change on first login via
-// must_change_password, same pattern as officials). otpService.js,
-// twilioVerify.js, mailer.js, and the Google OAuth client stay removed -
-// nothing here revives them.
+// User Login surface - Feature Catalog Section 1.1. A user record can come
+// from either District Admin's staff-provisioned intake
+// (district_admin/routes/districtAdmin.routes.js) or - now that Data
+// Operator no longer exists as a role - self-registration below, mirroring
+// the real NHAA/SAMBAL portal's own self-service model. Either way, login
+// still takes docket number + password, password forced to change on first
+// login via must_change_password, same pattern as officials.
+// otpService.js, twilioVerify.js (the old inbound OTP-verification flow),
+// and the Google OAuth client stay removed - nothing here revives them.
+// smsService.js's outbound send IS used below, for self-registration's
+// credential delivery - a different capability (send, not verify).
 
 // Escapes LIKE/ILIKE special characters so an exact case-insensitive match
 // can't be turned into a wildcard pattern by a crafted docketNumber (e.g. a
@@ -228,6 +231,37 @@ router.post('/gps-lookup', gpsLookupLimiter, async (req, res) => {
   }
 
   return ok(res, { stateName: matchedState.name, jurisdictionId: matchedJurisdictionId });
+});
+
+// Self-registration - unauthenticated by definition (the caller has no
+// account yet). Creates the case record and delivers docket+password by
+// SMS; the response itself never echoes the password back to the browser,
+// unlike staff-provisioned creation's response (which hands it to a staff
+// member to relay in person) - here nothing stands between this endpoint
+// and the open internet, so the credential's only path out is the SMS
+// channel the victim's own phone number receives it on.
+router.post('/self-register', selfRegisterLimiter, async (req, res) => {
+  const { fullName, contactNumber, aadhaarNumber, jurisdictionId, caseTypeId, address, description, stationId } = req.body;
+  try {
+    const { docketNumber, smsSent } = await autoRegisterVictim({
+      fullName, contactNumber, aadhaarNumber, jurisdictionId, caseTypeId, address, description, stationId,
+    });
+    return ok(res, { docketNumber, smsSent }, smsSent
+      ? 'Registered. Your docket ID and password have been sent by SMS.'
+      : 'Registered, but SMS delivery failed - contact your assigned counsellor for your login details.', 201);
+  } catch (err) {
+    if (err instanceof ProvisioningError) return fail(res, err.message, err.status);
+    throw err;
+  }
+});
+
+// Best-effort classification hint for the registration form's description
+// field - see selfRegistration.js's own comment. Same rate limit as
+// registration itself since it's the same unauthenticated surface.
+router.post('/suggest-case-type', selfRegisterLimiter, async (req, res) => {
+  const { description } = req.body;
+  const suggestion = await suggestCaseType(description);
+  return ok(res, { suggestion });
 });
 
 module.exports = router;

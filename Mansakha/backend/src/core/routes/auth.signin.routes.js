@@ -38,7 +38,6 @@ const SIGNIN_ROLES = [
   'District Welfare Officer',
   'Protection Officer',
   'DLSA Coordinator',
-  'District Collector',
   'Rehabilitation Officer',
   'Public Prosecutor',
 ];

@@ -9,9 +9,9 @@ const bcrypt = require('bcrypt');
 
 const router = express.Router();
 
-// Staff Login surface - Administration (District/State/National) + Counsellor +
-// Data Operator. Build Prompt Section 3: accounts are provisioned BY the Ministry,
-// not self-signup. Lives under core/ (not any one role's folder) since it's the
+// Staff Login surface - Administration (District/State/National) + Counsellor.
+// Build Prompt Section 3: accounts are provisioned BY the Ministry, not
+// self-signup. Lives under core/ (not any one role's folder) since it's the
 // one shared pre-role entry point - see this file's header note in
 // core/services/staffLogin.js.
 //
@@ -21,7 +21,7 @@ const router = express.Router();
 // one is meant, the same reason a shared login surface needs a role toggle at all.
 // Picking the role you don't actually hold fails here, not silently falls back to
 // whichever role happened to be first.
-const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor', 'Data Operator'];
+const STAFF_LOGIN_ROLES = ['Administration', 'Counsellor'];
 
 router.post('/login', staffLoginLimiter, async (req, res) => {
   // migration_046: accept 'identifier' (email or official_identifier like SA-001)

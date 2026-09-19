@@ -12,8 +12,7 @@ import { useMailUnreadCount } from '../services/hooks';
 // its account-level nav (left) inside the browser/app chrome (further left).
 // Ministry's own copy of Counsellor's MailShell - wraps MinistryLayout
 // instead of StaffLayout, since Ministry's shell has its own name/console
-// framing rather than the Administration/Counsellor/Data Operator shared
-// StaffLayout shape.
+// framing rather than the Administration/Counsellor shared StaffLayout shape.
 const FOLDERS = [
   { key: 'inbox', label: 'Inbox', icon: InboxIcon, suffix: '' },
   { key: 'sent', label: 'Sent', icon: SendIcon, suffix: '/sent' },

@@ -34,9 +34,9 @@ import { useToast } from '../../shared/context/ToastContext';
 // server-side. Public Prosecutor (migration_040) - the DLSA-assigned
 // advocate role for the dedicated Legal Aid pipeline - joins the same way.
 const ROLE_OPTIONS = [
-  'Counsellor', 'Administration', 'Data Operator',
+  'Counsellor', 'Administration',
   'Investigating Officer', 'District Welfare Officer', 'Protection Officer',
-  'DLSA Coordinator', 'District Collector', 'Rehabilitation Officer',
+  'DLSA Coordinator', 'Rehabilitation Officer',
   'Public Prosecutor',
 ];
 const JURISDICTION_LEVELS = ['district', 'state', 'national'];

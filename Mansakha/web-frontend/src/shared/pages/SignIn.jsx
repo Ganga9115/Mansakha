@@ -6,23 +6,23 @@ import { User, Lock, HeartHandshake, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 
 // The second deliberate "shared page" exception (see Login.jsx's own header
-// comment for the first) - a pre-role entry point for the 6 new coordination
+// comment for the first) - a pre-role entry point for the coordination
 // roles (District Welfare Officer, Investigating Officer, Protection
-// Officer, DLSA Coordinator, Special Public Prosecutor, District Collector),
+// Officer, DLSA Coordinator, Rehabilitation Officer, Public Prosecutor),
 // kept as its own page rather than extending Login.jsx's segmented control,
 // same reasoning the backend's auth.signin.routes.js uses for being its own
 // file rather than widening auth.staff.routes.js. Posts to
 // /api/auth/signin/login; structurally mirrors Login.jsx otherwise.
-// Special Public Prosecutor stays retired (absorbed into DLSA Coordinator).
-// Investigating Officer is REINSTATED (migration_033, see backend/server.js's
-// own comment on the same change) with real substance - station-scoped, its
-// own investigation_records.
+// Special Public Prosecutor stays retired (absorbed into DLSA Coordinator);
+// District Collector is retired too (SLA-escalation destination dropped
+// entirely, not redirected). Investigating Officer is REINSTATED
+// (migration_033, see backend/server.js's own comment on the same change)
+// with real substance - station-scoped, its own investigation_records.
 const SIGNIN_ROLES = [
   'Investigating Officer',
   'District Welfare Officer',
   'Protection Officer',
   'DLSA Coordinator',
-  'District Collector',
   'Rehabilitation Officer',
   'Public Prosecutor',
 ];
@@ -32,7 +32,6 @@ const ROLE_HOME_PATH = {
   'District Welfare Officer': '/dwo',
   'Protection Officer': '/protectionofficer',
   'DLSA Coordinator': '/dlsa',
-  'District Collector': '/districtcollector',
   'Rehabilitation Officer': '/rehabilitationofficer',
   'Public Prosecutor': '/legalrepresentative',
 };

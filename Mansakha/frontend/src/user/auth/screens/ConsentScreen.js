@@ -10,8 +10,8 @@ const THEME = {
   bg: '#FFFFFF',
   textMain: '#0F172A',
   textMuted: '#64748B',
-  accentBlue: '#E0F2FE',
-  accentIcon: '#0284C7',
+  accentBlue: '#F0EAFB',
+  accentIcon: '#7C5CBF',
   primaryDark: '#0F172A',
   border: '#E2E8F0',
 };
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   itemDesc: { fontSize: 12, color: THEME.textMuted, lineHeight: 18 },
   agreeBanner: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: THEME.accentBlue,
-    borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#BAE6FD',
+    borderRadius: 14, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#DDD0F5',
   },
   agreeBannerText: { fontSize: 14, fontWeight: '600', color: THEME.textMain },
   primaryBtn: { backgroundColor: THEME.primaryDark, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },

@@ -346,6 +346,7 @@ async function analyzeCallTranscript(transcriptText) {
 }
 
 module.exports = {
+  requestOllama,
   callOllama,
   callOllamaChat,
   generateProactiveContactMessage,

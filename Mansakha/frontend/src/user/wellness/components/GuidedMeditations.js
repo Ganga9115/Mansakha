@@ -651,7 +651,7 @@ function ContainerExercise({ running, onComplete }) {
             },
           ]}
         >
-          <LinearGradient colors={['#9AC7E8', colors.primary]} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['#C4AEE8', colors.primary]} style={StyleSheet.absoluteFill} />
         </Animated.View>
         {showLock && (
           <View style={styles.containerLock}>

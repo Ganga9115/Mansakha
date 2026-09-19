@@ -22,6 +22,17 @@ const userLoginLimiter = rateLimit({
   handler,
 });
 
+// Self-registration creates a real case record and sends a real SMS per
+// success - a much lower cap than login, since a legitimate victim
+// registers once, not repeatedly, and each hit costs more than a failed
+// password check.
+const selfRegisterLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  limit: 5,
+  keyGenerator: (req) => req.ip,
+  handler,
+});
+
 // GPS lookup is unauthenticated and makes a third-party (Nominatim) request
 // on the caller's behalf - a generous but real cap, not a guessable-secret
 // concern like the two limiters above.
@@ -50,4 +61,4 @@ const generalApiLimiter = rateLimit({
   handler,
 });
 
-module.exports = { staffLoginLimiter, userLoginLimiter, gpsLookupLimiter, userChatLimiter, generalApiLimiter };
+module.exports = { staffLoginLimiter, userLoginLimiter, selfRegisterLimiter, gpsLookupLimiter, userChatLimiter, generalApiLimiter };

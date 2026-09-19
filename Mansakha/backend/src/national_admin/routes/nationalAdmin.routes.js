@@ -817,10 +817,11 @@ router.get('/users', verifyToken, requireRole(['Administration', 'Ministry']), g
   });
 });
 
-// User CREATION was removed from here - Data Operator is the sole intake/
-// registration authority (Feature Catalog Section 7, dataoperator/routes/
-// dataoperator.routes.js's own '/register-user'), matching the PS's own
-// division of labor. This route had no frontend UI wired to it at all - a
+// User CREATION was removed from here - and from Data Operator too, which
+// no longer exists as a role. Victims now self-register (see
+// user/routes/auth.user.routes.js's own '/self-register'), matching the
+// real NHAA/SAMBAL portal's own self-service intake model. This route had
+// no frontend UI wired to it at all - a
 // dead copy-paste from when the admin hierarchy was scaffolded. National
 // Admin keeps GET /users (search-by-docket, above) and PATCH /users/:userId
 // (below) - "Edit user record" is a distinct, legitimate oversight feature.
@@ -1174,7 +1175,7 @@ router.get(
 // whichever official holds that scope is accurate - and correct even in
 // the rare case they DO share a scope, since they genuinely share the same
 // queue.
-const COORDINATION_ROLES_JURISDICTION_SCOPED = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector'];
+const COORDINATION_ROLES_JURISDICTION_SCOPED = ['Protection Officer', 'District Welfare Officer', 'DLSA Coordinator'];
 
 router.get(
   '/coordination-roles/performance/:jurisdictionId',
@@ -1200,7 +1201,7 @@ router.get(
        left join police_stations ps on ps.station_id = orr.station_id
        left join jurisdictions j on j.jurisdiction_id = coalesce(orr.jurisdiction_id, ps.jurisdiction_id)
        where orr.revoked_at is null
-         and r.role_name in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
+         and r.role_name in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'Investigating Officer')
          and coalesce(orr.jurisdiction_id, ps.jurisdiction_id) = any($1::uuid[])`,
       [jurisdictionIds]
     );
@@ -1223,7 +1224,7 @@ router.get(
                 avg(extract(epoch from (ar.resolved_at - ar.created_at)) / 86400) filter (where ar.resolved_at is not null) as avg_resolve_days
          from agency_referrals ar
          join users u on u.user_id = ar.user_id
-         where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
+         where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'Investigating Officer')
            and u.jurisdiction_id = any($1::uuid[])
          group by ar.referred_to_role, u.jurisdiction_id`,
         [jurisdictionIds]
@@ -1240,7 +1241,7 @@ router.get(
            order by computed_at desc limit 1
          ) ds on true
          left join risk_levels rl on rl.risk_level_id = ds.risk_level_id
-         where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'District Collector', 'Investigating Officer')
+         where ar.referred_to_role in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'Investigating Officer')
            and u.jurisdiction_id = any($1::uuid[]) and ar.status = 'Open'
          order by ar.created_at asc`,
         [jurisdictionIds]

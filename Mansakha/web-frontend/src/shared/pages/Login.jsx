@@ -6,17 +6,17 @@ import { User, Lock, MessageSquare, BarChart3, ShieldCheck, Eye, EyeOff } from '
 import { useToast } from '../context/ToastContext';
 
 // The one deliberate exception to "every role gets its own copy, no shared
-// imports" - this is a pre-role entry point (Counsellor / Administration /
-// Data Operator all sign in here before the app knows which role folder to
-// route into), and the user explicitly asked for it to keep working exactly
-// as it does today. Left byte-for-byte identical to the original
-// pages/staff/Login.jsx, only its file location changed.
+// imports" - this is a pre-role entry point (Counsellor / Administration
+// sign in here before the app knows which role folder to route into), and
+// the user explicitly asked for it to keep working exactly as it does
+// today. Left byte-for-byte identical to the original pages/staff/Login.jsx,
+// only its file location changed.
 export default function StaffLogin() {
   const navigate = useNavigate();
   const toast = useToast();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  // uiRole can be 'Counsellor', 'Admins', 'Data Operator'
+  // uiRole can be 'Counsellor', 'Admins'
   const [uiRole, setUiRole] = useState('Counsellor');
   // adminLevel can be '', 'National Admin', 'State Admin', 'District Admin'
   const [adminLevel, setAdminLevel] = useState('');
@@ -60,7 +60,7 @@ export default function StaffLogin() {
     setLoading(true);
 
     // Map UI role back to backend expected role - only 'Admins' needs
-    // translating now that the Data Operator role is named that everywhere.
+    // translating.
     let roleName = uiRole;
     if (uiRole === 'Admins') roleName = 'Administration';
 
@@ -89,11 +89,6 @@ export default function StaffLogin() {
 
       if (uiRole === 'Counsellor') {
         navigate('/counsellor');
-        return;
-      }
-
-      if (uiRole === 'Data Operator') {
-        navigate('/dataoperator');
         return;
       }
 
@@ -199,7 +194,7 @@ export default function StaffLogin() {
 
                 {/* Segmented Control for Roles */}
                 <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
-                  {['Counsellor', 'Admins', 'Data Operator'].map((role) => (
+                  {['Counsellor', 'Admins'].map((role) => (
                     <button
                       key={role}
                       type="button"

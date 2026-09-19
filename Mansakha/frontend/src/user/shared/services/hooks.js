@@ -32,6 +32,22 @@ export function useLanguageOptions() {
   return useQuery({ queryKey: ['lookups', 'languages'], queryFn: () => apiClient.get('/api/lookups/languages') });
 }
 
+export function useCaseTypeOptions() {
+  return useQuery({ queryKey: ['lookups', 'case-types'], queryFn: () => apiClient.get('/api/lookups/case-types') });
+}
+
+// jurisdictionId here is the OFFENSE's district (may differ from the
+// victim's own residential district) - the nearest station is who actually
+// gets assigned the FIR/investigation, see selfRegistration.js's own
+// comment on why these two addresses stay separate fields.
+export function useStationOptions(jurisdictionId) {
+  return useQuery({
+    queryKey: ['lookups', 'police-stations', jurisdictionId],
+    queryFn: () => apiClient.get(`/api/lookups/police-stations?jurisdictionId=${jurisdictionId}`),
+    enabled: !!jurisdictionId,
+  });
+}
+
 // --- User ---
 
 // Docket-based login (Feature Catalog: Docket ID + Full Name + Contact
@@ -59,6 +75,24 @@ export function useChangeUserPassword() {
 // Unauthenticated (called before a session exists).
 export function useGpsLookup() {
   return useMutation({ mutationFn: ({ lat, lng }) => apiClient.post('/api/auth/user/gps-lookup', { lat, lng }) });
+}
+
+// Self-registration - replaces Data Operator's manual intake entirely, per
+// explicit decision. Unauthenticated (no account exists yet); the response
+// never carries the password - it's delivered by SMS to contactNumber only.
+export function useSelfRegister() {
+  return useMutation({
+    mutationFn: (payload) => apiClient.post('/api/auth/user/self-register', payload),
+  });
+}
+
+// Best-effort AI hint for the registration form's case-type dropdown - see
+// selfRegistration.js's own comment. Returns { suggestion: null } if
+// Ollama is unreachable or unsure, never an error the form needs to handle.
+export function useSuggestCaseType() {
+  return useMutation({
+    mutationFn: (description) => apiClient.post('/api/auth/user/suggest-case-type', { description }),
+  });
 }
 
 // migration_034: caseUserId (optional) scopes the docket-specific fields

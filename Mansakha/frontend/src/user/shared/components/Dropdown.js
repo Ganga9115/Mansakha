@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   option: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16 },
   optionDivider: { borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)' },
-  optionActive: { backgroundColor: 'rgba(81, 155, 206, 0.1)' },
+  optionActive: { backgroundColor: 'rgba(124, 92, 191, 0.1)' },
   optionText: { flex: 1, color: colors.textPrimary, fontSize: 15 },
   optionTextActive: { color: colors.primary, fontWeight: '700' },
 });

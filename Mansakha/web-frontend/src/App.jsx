@@ -72,16 +72,6 @@ import MinistryMailSent from './ministry/pages/MailSent';
 import MinistryMailArchived from './ministry/pages/MailArchived';
 import MinistryMailThread from './ministry/pages/MailThread';
 
-import DataOperatorDashboard from './dataoperator/pages/Dashboard';
-import DataOperatorFetchCase from './dataoperator/pages/FetchCase';
-import DataOperatorUsers from './dataoperator/pages/Users';
-import DataOperatorLinkCases from './dataoperator/pages/LinkCases';
-import DataOperatorSettings from './dataoperator/pages/Settings';
-import DataOperatorMailInbox from './dataoperator/pages/MailInbox';
-import DataOperatorMailSent from './dataoperator/pages/MailSent';
-import DataOperatorMailArchived from './dataoperator/pages/MailArchived';
-import DataOperatorMailThread from './dataoperator/pages/MailThread';
-
 // New coordination roles (Sign In portal) - see shared/pages/SignIn.jsx and
 // backend/src/core/routes/auth.signin.routes.js for the shared login this
 // group of 7 signs in through.
@@ -114,10 +104,6 @@ import LegalRepresentativeMyCases from './legal_representative/pages/MyCases';
 import LegalRepresentativeCaseDetail from './legal_representative/pages/CaseDetail';
 import LegalRepresentativeHearings from './legal_representative/pages/Hearings';
 import LegalRepresentativeProfile from './legal_representative/pages/Profile';
-import DistrictCollectorCommitteeReview from './district_collector/pages/CommitteeReview';
-import DistrictCollectorReviewDetail from './district_collector/pages/ReviewDetail';
-import DistrictCollectorMyTasks from './district_collector/pages/MyTasks';
-import DistrictCollectorProfile from './district_collector/pages/Profile';
 import RehabilitationOfficerPlans from './rehabilitation_officer/pages/RehabilitationPlans';
 import RehabilitationOfficerReferralDetail from './rehabilitation_officer/pages/ReferralDetail';
 
@@ -213,19 +199,6 @@ export default function App() {
         <Route path="/ministry/mail/thread/:threadId" element={<RequireAuth loginPath="/ministry/login"><MinistryMailThread /></RequireAuth>} />
         <Route path="/ministry/profile" element={<RequireAuth loginPath="/ministry/login"><MinistrySettings /></RequireAuth>} />
 
-        {/* Data Operator - signs in via the shared Staff Login (/login)
-            alongside Counsellor/Administration, not a separate login page
-            (that treatment is Ministry/Super Admin's alone). */}
-        <Route path="/dataoperator" element={<RequireAuth><DataOperatorDashboard /></RequireAuth>} />
-        <Route path="/dataoperator/fetch-case" element={<RequireAuth><DataOperatorFetchCase /></RequireAuth>} />
-        <Route path="/dataoperator/users" element={<RequireAuth><DataOperatorUsers /></RequireAuth>} />
-        <Route path="/dataoperator/link-cases" element={<RequireAuth><DataOperatorLinkCases /></RequireAuth>} />
-        <Route path="/dataoperator/mail" element={<RequireAuth><DataOperatorMailInbox /></RequireAuth>} />
-        <Route path="/dataoperator/mail/sent" element={<RequireAuth><DataOperatorMailSent /></RequireAuth>} />
-        <Route path="/dataoperator/mail/archived" element={<RequireAuth><DataOperatorMailArchived /></RequireAuth>} />
-        <Route path="/dataoperator/mail/thread/:threadId" element={<RequireAuth><DataOperatorMailThread /></RequireAuth>} />
-        <Route path="/dataoperator/profile" element={<RequireAuth><DataOperatorSettings /></RequireAuth>} />
-
         {/* Signin - the second shared pre-role login (see SignIn.jsx's own
             header comment), for the 7 new coordination roles. Each portal
             below wraps in RequireAuth loginPath="/signin" - same pattern as
@@ -265,10 +238,6 @@ export default function App() {
         <Route path="/legalrepresentative/cases/:requestId" element={<RequireAuth loginPath="/signin"><LegalRepresentativeCaseDetail /></RequireAuth>} />
         <Route path="/legalrepresentative/hearings" element={<RequireAuth loginPath="/signin"><LegalRepresentativeHearings /></RequireAuth>} />
         <Route path="/legalrepresentative/profile" element={<RequireAuth loginPath="/signin"><LegalRepresentativeProfile /></RequireAuth>} />
-        <Route path="/districtcollector" element={<RequireAuth loginPath="/signin"><DistrictCollectorCommitteeReview /></RequireAuth>} />
-        <Route path="/districtcollector/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DistrictCollectorReviewDetail /></RequireAuth>} />
-        <Route path="/districtcollector/tasks" element={<RequireAuth loginPath="/signin"><DistrictCollectorMyTasks /></RequireAuth>} />
-        <Route path="/districtcollector/profile" element={<RequireAuth loginPath="/signin"><DistrictCollectorProfile /></RequireAuth>} />
         <Route path="/rehabilitationofficer" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerPlans /></RequireAuth>} />
         <Route path="/rehabilitationofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerReferralDetail /></RequireAuth>} />
 

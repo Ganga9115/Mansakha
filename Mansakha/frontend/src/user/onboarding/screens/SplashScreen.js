@@ -98,18 +98,18 @@ export default function SplashScreen({ onFinish }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F9FF', // Soft Sky Blue
+    backgroundColor: colors.primaryLight, // Soft lavender background
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   bgBlob1: {
     position: 'absolute', top: -150, right: -100, width: 450, height: 450,
-    borderRadius: 225, backgroundColor: '#BAE6FD', opacity: 0.6,
+    borderRadius: 225, backgroundColor: '#DDD0F5', opacity: 0.6,
   },
   bgBlob2: {
     position: 'absolute', bottom: -100, left: -150, width: 350, height: 350,
-    borderRadius: 175, backgroundColor: '#7DD3FC', opacity: 0.4,
+    borderRadius: 175, backgroundColor: '#C4AEE8', opacity: 0.45,
   },
   logoContainer: {
     justifyContent: 'center',
@@ -129,9 +129,9 @@ const styles = StyleSheet.create({
     width: 104,
     height: 104,
     borderRadius: radius.xl,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: '#BBE1FA',
+    borderColor: '#DDD0F5',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: spacing.xxl,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: radius.lg,
-    backgroundColor: '#D0E9FD',
+    backgroundColor: '#EAE0FA',
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   progressBarTrack: {
     width: 140,
     height: 4,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: '#DDD0F5',
     borderRadius: radius.pill,
     overflow: 'hidden',
   },

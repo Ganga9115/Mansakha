@@ -62,7 +62,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   headerBackground: {
-    backgroundColor: '#BAE6FD',
+    backgroundColor: '#DDD0F5',
     paddingTop: 64,
     paddingBottom: 70,
     alignItems: 'center',
@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   },
   description: {
     fontSize: 15,
-    color: '#1E1B4B',
+    color: '#4A3070',
     textAlign: 'center',
     lineHeight: 24,
     fontWeight: '500',
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   },
   activeDot: {
     width: 24,
-    backgroundColor: '#7DD3FC',
+    backgroundColor: '#C4AEE8',
   },
   actionWrapper: {
     width: '100%',
@@ -112,18 +112,18 @@ const styles = StyleSheet.create({
   },
   getStartedBtn: {
     width: '100%',
-    backgroundColor: '#BAE6FD', // Updated to match header curve color
+    backgroundColor: '#DDD0F5', // Updated to match header curve color
     borderRadius: 16,
     paddingVertical: 16,
     alignItems: 'center',
-    shadowColor: '#BAE6FD', // Updated shadow color
+    shadowColor: '#DDD0F5', // Updated shadow color
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 10,
     elevation: 3,
   },
   getStartedBtnText: {
-    color: '#1E1B4B',
+    color: '#4A3070',
     fontSize: 18,
     fontWeight: '700',
   },

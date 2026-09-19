@@ -3,7 +3,6 @@ const express = require('express');
 const cors = require('cors');
 const { ok } = require('./src/core/services/responseEnvelope');
 const { startDispatchWorker } = require('./src/core/services/dispatchWorker');
-const { startAgencyEscalationChecker } = require('./src/core/services/agencyEscalationChecker');
 const { startECourtSyncWorker } = require('./src/core/services/ecourtStageSync');
 
 // Defense-in-depth, not a substitute for fixing individual routes: Express 4
@@ -64,9 +63,6 @@ app.use('/api/admin/national', require('./src/national_admin/routes/nationalAdmi
 app.use('/api/auth/ministry', require('./src/ministry/routes/auth.ministry.routes'));
 app.use('/api/ministry', require('./src/ministry/routes/ministry.routes'));
 
-// Data Operator
-app.use('/api/dataoperator', require('./src/dataoperator/routes/dataoperator.routes'));
-
 // Mansakha Mail - internal staff communication, spans every role above
 // rather than belonging to one, so it mounts flat like lookups/me.
 app.use('/api/mail', require('./src/mail/routes/mail.routes'));
@@ -92,7 +88,10 @@ app.use('/api/io', require('./src/io/routes/io.routes'));
 app.use('/api/dwo', require('./src/dwo/routes/dwo.routes'));
 app.use('/api/protectionofficer', require('./src/protection_officer/routes/protectionOfficer.routes'));
 app.use('/api/dlsa', require('./src/dlsa/routes/dlsa.routes'));
-app.use('/api/districtcollector', require('./src/district_collector/routes/districtCollector.routes'));
+// District Collector removed (explicit decision - its SLA-escalation-
+// destination job is dropped, not redirected) - same "unmounted, not
+// deleted" treatment as Special Public Prosecutor above: routes/frontend
+// stay on disk, but no account can reach them any more.
 app.use('/api/rehabilitationofficer', require('./src/rehabilitation_officer/routes/rehabilitationOfficer.routes'));
 // Public Prosecutor (migration_040) - the DLSA-assigned advocate role for
 // the dedicated Legal Aid pipeline (see dlsa.routes.js's own Legal Aid
@@ -113,6 +112,13 @@ const PORT = process.env.PORT || 4000;
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Mansakha backend listening on port ${PORT}`);
   startDispatchWorker();
-  startAgencyEscalationChecker();
+  // District Collector removed entirely - agencyEscalationChecker.js's real
+  // escalate*() functions all target that role, and per explicit decision
+  // escalation is dropped rather than redirected. The worker no longer
+  // starts, so no new agency_tasks rows get created; the file stays on disk
+  // (same "unmounted, not deleted" treatment as Special Public Prosecutor's
+  // own routes) since districtAdmin/state/national admin's Coordination
+  // Roster still reuses its STALE_REFERRAL_DAYS constant for a read-only
+  // "already overdue" flag.
   startECourtSyncWorker();
 });

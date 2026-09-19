@@ -7,16 +7,17 @@ import { useUserLogin } from '../../shared/services/hooks';
 import { apiClient } from '../../shared/services/apiClient';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import IconInput from '../../shared/components/IconInput';
+import SelfRegisterScreen from './SelfRegisterScreen';
 import { typography } from '../../shared/theme/typography';
 
 const THEME = {
-  bg: '#F0F9FF', // Soft sky blue background
+  bg: '#F0EAFB', // Soft lavender background
   cardBg: 'rgba(255, 255, 255, 0.95)',
-  primaryDark: '#1E1B4B', // Deep dark purple/blue for button
-  textMain: '#1E1B4B',
+  primaryDark: '#4A3070', // Deep purple for button
+  textMain: '#4A3070',
   textMuted: '#64748B',
   inputBg: '#F8FAFC', // Very light filled background for inputs
-  accentIcon: '#0284C7',
+  accentIcon: '#7C5CBF',
   danger: '#EF4444',
   border: 'rgba(255, 255, 255, 1)',
 };
@@ -26,7 +27,13 @@ export default function LoginScreen({ navigation }) {
   const { isDesktop } = useResponsive();
   const toast = useToast();
 
-  const [docketNumber, setDocketNumber] = useState('1');
+  // 'login' | 'register' - Data Operator no longer exists as a role, so
+  // self-registration (mirroring the real NHAA/SAMBAL portal's own
+  // self-service intake) replaces the old "Call 14566 to register" notice
+  // below with a real in-app flow.
+  const [mode, setMode] = useState('login');
+
+  const [docketNumber, setDocketNumber] = useState('NHAA-2026-0000001');
   const [password, setPassword] = useState('Mansakha@2026');
   const [showPassword, setShowPassword] = useState(false);
 
@@ -108,6 +115,10 @@ export default function LoginScreen({ navigation }) {
 
           {/* Right Pane: Form */}
           <View style={[styles.formPane, isDesktop ? styles.formPaneDesktop : styles.formPaneMobile]}>
+            {mode === 'register' ? (
+              <SelfRegisterScreen onBackToLogin={() => setMode('login')} />
+            ) : (
+            <>
             <View style={styles.headerBox}>
               <Text style={styles.screenTitle}>Let's sign you in.</Text>
               <Text style={styles.screenSubtitle}>
@@ -163,13 +174,8 @@ export default function LoginScreen({ navigation }) {
 
                 <Text style={styles.notice}>
                   Don't have an account?{' '}
-                  <Text
-                    style={styles.linkText}
-                    onPress={() => {
-                      if (Platform.OS !== 'web') Linking.openURL('tel:14566');
-                    }}
-                  >
-                    Call 14566 to register
+                  <Text style={styles.linkText} onPress={() => setMode('register')}>
+                    Register here
                   </Text>
                 </Text>
               </>
@@ -197,6 +203,8 @@ export default function LoginScreen({ navigation }) {
                 </Pressable>
               </>
             )}
+            </>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -208,11 +216,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: THEME.bg, overflow: 'hidden' },
   bgBlob1: {
     position: 'absolute', top: -150, right: -100, width: 450, height: 450,
-    borderRadius: 225, backgroundColor: '#BAE6FD', opacity: 0.6,
+    borderRadius: 225, backgroundColor: '#DDD0F5', opacity: 0.6,
   },
   bgBlob2: {
     position: 'absolute', bottom: -100, left: -150, width: 350, height: 350,
-    borderRadius: 175, backgroundColor: '#7DD3FC', opacity: 0.4,
+    borderRadius: 175, backgroundColor: '#C4AEE8', opacity: 0.45,
   },
   scrollContent: { 
     flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24, paddingVertical: 40 
@@ -229,7 +237,7 @@ const styles = StyleSheet.create({
   cardDesktop: { flexDirection: 'row', width: '100%', maxWidth: 1000 },
   cardMobile: { flexDirection: 'column', width: '100%', maxWidth: 420 },
   
-  imagePane: { flex: 1, backgroundColor: '#E0F2FE' },
+  imagePane: { flex: 1, backgroundColor: '#F0EAFB' },
   illustration: { width: '100%', height: '100%' },
   
   formPane: { flex: 1, justifyContent: 'center' },
