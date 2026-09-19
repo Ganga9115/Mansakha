@@ -36,14 +36,31 @@ async function getJurisdictionIdsForCaseFamily(anchorUserId) {
 //   3. Still tied after that: first by official_id, for a deterministic pick
 //      rather than depending on query row order.
 //
+// Priority order, most important first - explicit request:
+//   1. Raw least active-case-count wins, full stop, regardless of district -
+//      someone genuinely less loaded elsewhere always beats a same-district
+//      counsellor who has more on their plate. This is what actually
+//      prevents overloading a district's own staff, rather than a fixed
+//      cap: any lighter load anywhere wins outright.
+//   2. Only among counsellors TIED on that minimum count, prefer the
+//      victim's own district - locality is a tie-breaker, not a
+//      first-class filter.
+//   3. Only among counsellors STILL tied after that (same count, same
+//      district-membership-among-the-tied-set), fall back to the original
+//      stage-weight tie-break (higher sum of Investigation=1/Trial=2/
+//      Rehabilitation=3/Compensation=4 wins).
+//   4. Still tied: first by official_id, deterministic rather than
+//      depending on query row order.
+//
 // Returns null if there is no Counsellor anywhere in the system.
-// eslint-disable-next-line no-unused-vars
 async function selectLeastLoadedCounsellor(jurisdictionId) {
   const { data: globalRoles } = await supabase
     .from('official_roles')
-    .select('official_id, roles(role_name)')
+    .select('official_id, jurisdiction_id, roles(role_name)')
     .is('revoked_at', null);
-  const counsellorIds = (globalRoles || []).filter((r) => r.roles?.role_name === 'Counsellor').map((r) => r.official_id);
+  const counsellorRoles = (globalRoles || []).filter((r) => r.roles?.role_name === 'Counsellor');
+  const counsellorIds = counsellorRoles.map((r) => r.official_id);
+  const districtIdByOfficial = new Map(counsellorRoles.map((r) => [r.official_id, r.jurisdiction_id]));
 
   if (counsellorIds.length === 0) return null;
   if (counsellorIds.length === 1) return counsellorIds[0];
@@ -66,12 +83,25 @@ async function selectLeastLoadedCounsellor(jurisdictionId) {
     }
   }
 
+  // 1. Least loaded wins outright.
   const minActiveCount = Math.min(...counsellorIds.map((id) => activeCountByOfficial.get(id)));
   let candidates = counsellorIds.filter((id) => activeCountByOfficial.get(id) === minActiveCount);
+
+  // 2. Among those tied, same-district beats elsewhere - but only narrow
+  // the field if at least one tied candidate is actually in-district;
+  // otherwise there's nothing local to prefer and the tie stands as-is.
+  if (candidates.length > 1 && jurisdictionId) {
+    const sameDistrict = candidates.filter((id) => districtIdByOfficial.get(id) === jurisdictionId);
+    if (sameDistrict.length > 0) candidates = sameDistrict;
+  }
+
+  // 3. Still tied - higher stage-weight sum wins.
   if (candidates.length > 1) {
     const maxScore = Math.max(...candidates.map((id) => stageScoreSumByOfficial.get(id)));
     candidates = candidates.filter((id) => stageScoreSumByOfficial.get(id) === maxScore);
   }
+
+  // 4. Still tied - deterministic arbitrary pick.
   return candidates.sort()[0];
 }
 
