@@ -624,6 +624,75 @@ router.post('/chat/log', async (req, res) => {
   return ok(res, { scored: true, wordCount: 0, scoreValue: scoreResult.score, riskLevel, alertTriggered: alertId !== null });
 });
 
+// Immediate safety escalation for the AI companion chat/call - deliberately
+// separate from the word-count-gated /chat/log scoring above. A self-harm
+// phrase match (see frontend's ollamaClient.js's containsSelfHarmRisk) used
+// to only ever show the person a helpline message; the actual conversation
+// still just sat in the normal 5000-word queue, so a counsellor might not be
+// alerted for a long time, or at all in a short conversation. This route
+// writes a fixed Critical-tier score straight away and runs it through the
+// same applyStressResponse tiered-alert routing /checkin and /chat/log
+// already use, so the real, already-built alert/counsellor-notification
+// logic fires immediately instead of waiting on a threshold that was never
+// meant to gate a safety escalation. SELF_HARM_ALERT_COOLDOWN_MINUTES stops
+// one conversation repeating similar language from paging a counsellor once
+// per message - one alert per episode, not one per phrase match.
+const SELF_HARM_ALERT_SCORE_VALUE = 95; // >=80 classifies as Critical (ai/scoring.js's classifyRiskLevel)
+const SELF_HARM_ALERT_MODEL_VERSION = 'self-harm-keyword-immediate-v1';
+const SELF_HARM_ALERT_COOLDOWN_MINUTES = 30;
+const SELF_HARM_ALERT_CHANNELS = { text: 'Chatbot', voice_call: 'IVRS', video_call: 'Chatbot' };
+
+router.post('/self-harm-alert', async (req, res) => {
+  const userId = req.auth.userId;
+  const { message, channel = 'text' } = req.body;
+  if (typeof message !== 'string' || !message.trim()) return fail(res, 'message is required', 400);
+  if (!SELF_HARM_ALERT_CHANNELS[channel]) return fail(res, `channel must be one of: ${Object.keys(SELF_HARM_ALERT_CHANNELS).join(', ')}`, 400);
+
+  const { rows: recentRows } = await pool.query(
+    `select 1 from distress_scores
+     where user_id = $1 and model_version = $2 and computed_at > now() - interval '${SELF_HARM_ALERT_COOLDOWN_MINUTES} minutes'
+     limit 1`,
+    [userId, SELF_HARM_ALERT_MODEL_VERSION]
+  );
+  if (recentRows.length > 0) {
+    return ok(res, { alertTriggered: false, deduped: true });
+  }
+
+  let interactionId;
+  try {
+    ({ interactionId } = await recordInteraction({
+      userId,
+      channelName: SELF_HARM_ALERT_CHANNELS[channel],
+      transcriptText: message.trim(),
+    }));
+  } catch (err) {
+    return fail(res, err instanceof PipelineError ? err.message : 'Could not record interaction', err instanceof PipelineError ? err.status : 500);
+  }
+
+  const { scoreId, riskLevel } = await recordOllamaDistressScore(
+    userId,
+    interactionId,
+    { score: SELF_HARM_ALERT_SCORE_VALUE, summary: `Automated safety alert - self-harm language detected: "${message.trim()}"` },
+    SELF_HARM_ALERT_MODEL_VERSION
+  );
+  const { alertId } = await applyStressResponse(userId, scoreId, riskLevel);
+
+  try {
+    await supabase.from('case_notes').insert({
+      user_id: userId,
+      official_id: null,
+      note_text: `Automated safety alert: self-harm language was detected in a conversation - "${message.trim()}"`,
+      authored_by: 'ai',
+    });
+  } catch (err) {
+    console.warn('self-harm-alert: saving case note failed (non-fatal):', err.message);
+  }
+
+  await writeAuditLog({ userId, action: 'create', entityType: 'interaction', entityId: interactionId });
+
+  return ok(res, { alertTriggered: alertId !== null, riskLevel }, null, 201);
+});
+
 // "Get Help Now" - one tap, no AI call (must be fast, must not depend on an
 // external API that could be slow/down/rate-limited). Deliberately bypasses
 // interactions/distress_scores/alerts entirely - see sos_events in

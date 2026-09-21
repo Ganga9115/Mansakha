@@ -571,6 +571,17 @@ export function useLogChatTurn() {
   });
 }
 
+// Fires immediately when a self-harm phrase is detected (see ollamaClient.js's
+// containsSelfHarmRisk), separate from and not gated by useLogChatTurn's
+// 5000-word scoring threshold - see the backend route's own comment on why
+// this needed its own path rather than waiting on that queue.
+export function useReportSelfHarmRisk() {
+  const token = useToken();
+  return useMutation({
+    mutationFn: ({ message, channel = 'text' }) => apiClient.post('/api/user/self-harm-alert', { message, channel }, token),
+  });
+}
+
 export function useQuestionnaireNext() {
   const token = useToken();
   return useMutation({

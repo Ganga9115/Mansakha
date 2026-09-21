@@ -4,7 +4,8 @@ import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { radius } from '../../shared/theme/radius';
 import { Avatar3DController } from './Avatar3DController';
-import { ensureHelplineIfAtRisk } from '../../shared/services/ollamaClient';
+import { ensureHelplineIfAtRisk, containsSelfHarmRisk } from '../../shared/services/ollamaClient';
+import { useReportSelfHarmRisk } from '../../shared/services/hooks';
 
 const maleCounsellorAsset = require('../../../../assets/avatar_male_counsellor.png');
 
@@ -81,6 +82,8 @@ export default function MansakhaCallModal({
   const [facingMode, setFacingMode] = useState('user');
   const [counsellorGender, setCounsellorGender] = useState('male'); // 'male' | 'female'
   const [hasCameraFeed, setHasCameraFeed] = useState(false);
+
+  const reportSelfHarmRisk = useReportSelfHarmRisk();
 
   const canvasRef = useRef(null);
   const avatar3dContainerRef = useRef(null);
@@ -326,6 +329,11 @@ export default function MansakhaCallModal({
       // with this local model. Applied before both the spoken reply and the
       // transcript below, so a live call gets the same guarantee as text chat.
       aiReply = ensureHelplineIfAtRisk(userText, aiReply);
+      // Fire-and-forget, immediate, not gated by the normal chat word-count
+      // scoring threshold - see the backend route's own comment.
+      if (containsSelfHarmRisk(userText)) {
+        reportSelfHarmRisk.mutate({ message: userText, channel: isVideoMode ? 'video_call' : 'voice_call' });
+      }
 
       if (onNewMessage) {
         onNewMessage({ role: 'assistant', content: aiReply, channel: isVideoMode ? 'video_call' : 'voice_call' });
@@ -346,6 +354,9 @@ export default function MansakhaCallModal({
       });
     } catch (err) {
       const fallback = ensureHelplineIfAtRisk(userText, "I hear you. You are safe here, please take your time.");
+      if (containsSelfHarmRisk(userText)) {
+        reportSelfHarmRisk.mutate({ message: userText, channel: isVideoMode ? 'video_call' : 'voice_call' });
+      }
       if (avatarControllerRef.current) {
         avatarControllerRef.current.setEmotion('reassuring');
       }
