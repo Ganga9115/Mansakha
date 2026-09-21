@@ -64,7 +64,7 @@ export default function AssignedCases() {
                     <td className="px-6 py-3.5 text-right">
                       <button
                         onClick={() => navigate(`/dlsa/legal-aid-requests/${r.requestId}`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-semibold transition"
                       >
                         View <ArrowRight size={13} />
                       </button>

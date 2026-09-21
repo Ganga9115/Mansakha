@@ -39,7 +39,7 @@ export default function MyCases() {
               key={t.key}
               onClick={() => setTab(t.key)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                tab === t.key ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                tab === t.key ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
               }`}
             >
               {t.label}
@@ -83,7 +83,7 @@ export default function MyCases() {
                     <td className="px-6 py-3.5 text-right">
                       <button
                         onClick={() => navigate(`/legalrepresentative/cases/${c.requestId}`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-semibold transition"
                       >
                         View <ArrowRight size={13} />
                       </button>

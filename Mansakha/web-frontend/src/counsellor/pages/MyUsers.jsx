@@ -37,13 +37,13 @@ export default function MyUsers() {
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search by name, docket number, or case ID..."
-              className="w-full pl-9 pr-3 py-2 bg-[#F8F9FA] rounded-lg text-gray-700 font-medium border-none focus:outline-none focus:ring-1 focus:ring-[#519BCE]"
+              className="w-full pl-9 pr-3 py-2 bg-brand-50 rounded-lg text-gray-700 font-medium border-none focus:outline-none focus:ring-1 focus:ring-brand-600"
             />
           </div>
           <select
             value={riskLevel}
             onChange={(e) => { setRiskLevel(e.target.value); setPage(1); }}
-            className="w-full sm:w-auto px-3 py-2 bg-[#F8F9FA] rounded-lg text-gray-700 font-medium border-none focus:outline-none focus:ring-1 focus:ring-[#519BCE]"
+            className="w-full sm:w-auto px-3 py-2 bg-brand-50 rounded-lg text-gray-700 font-medium border-none focus:outline-none focus:ring-1 focus:ring-brand-600"
           >
             <option value="">Risk Level: All</option>
             <option value="Critical">Critical</option>
@@ -109,7 +109,7 @@ export default function MyUsers() {
                   <div className="relative inline-block w-full sm:w-auto">
                     <button
                       onClick={() => navigate(`/counsellor/case-detail/${item.userId}`)}
-                      className="w-full sm:w-auto px-4 py-2 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-lg text-xs font-semibold transition text-center"
+                      className="w-full sm:w-auto px-4 py-2 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-lg text-xs font-semibold transition text-center"
                     >
                       View Case File
                     </button>
@@ -128,7 +128,7 @@ export default function MyUsers() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse min-w-[640px]">
               <thead>
-                <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                <tr className="bg-brand-50/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                   <th className="py-3.5 px-6">Name / Docket</th>
                   <th className="py-3.5 px-4">Case Stage</th>
                   <th className="py-3.5 px-4">Distress Score</th>
@@ -177,7 +177,7 @@ export default function MyUsers() {
                       <div className="relative inline-block">
                         <button
                           onClick={() => navigate(`/counsellor/case-detail/${item.userId}`)}
-                          className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-medium transition"
+                          className="px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-medium transition"
                         >
                           View Case
                         </button>

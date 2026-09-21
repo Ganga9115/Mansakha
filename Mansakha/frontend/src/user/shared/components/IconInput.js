@@ -55,6 +55,10 @@ const styles = StyleSheet.create({
   wrapper: {
     flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: colors.border,
     borderRadius: radius.md, backgroundColor: colors.white, paddingHorizontal: spacing.md,
+    // Guarantees the trailing icon (password eye toggle, etc.) can never
+    // visually cross this rounded border - padding exactly equals the
+    // radius here, leaving zero margin for any rendering edge case.
+    overflow: 'hidden',
   },
   // A deliberate, visible focus ring (not just a border-color change) -
   // the raw <input>'s own default browser outline is suppressed below on

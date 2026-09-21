@@ -141,7 +141,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleAddNote}
                     disabled={!noteText.trim() || addNote.loading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     <Send size={13} />
                     {addNote.loading ? 'Posting...' : 'Post Update'}

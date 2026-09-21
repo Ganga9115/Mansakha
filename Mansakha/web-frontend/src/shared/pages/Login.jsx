@@ -141,7 +141,7 @@ export default function StaffLogin() {
   return (
     <div className="flex h-screen w-full font-sans overflow-hidden">
       {/* Left Pane - Branding & Features */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 xl:px-24 bg-gradient-to-br from-[#3D5A80] to-[#519BCE] text-white h-full relative">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 xl:px-24 bg-gradient-to-br from-brand-900 to-brand-800 text-white h-full relative">
         <div className="mb-12">
           <img src="/logo-3.png" alt="Mansakha" className="h-auto w-64" />
         </div>
@@ -150,33 +150,33 @@ export default function StaffLogin() {
           {/* Feature 1 */}
           <div className="flex items-center gap-4 p-3.5 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="p-2.5 bg-white/10 rounded-lg shrink-0">
-              <MessageSquare className="w-5 h-5 text-blue-50" />
+              <MessageSquare className="w-5 h-5 text-brand-50" />
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm mb-0.5">Confidential Counseling</h3>
-              <p className="text-xs text-blue-100/80 leading-snug">Secure and private communications with individuals seeking help.</p>
+              <p className="text-xs text-brand-100/80 leading-snug">Secure and private communications with individuals seeking help.</p>
             </div>
           </div>
 
           {/* Feature 2 */}
           <div className="flex items-center gap-4 p-3.5 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="p-2.5 bg-white/10 rounded-lg shrink-0">
-              <BarChart3 className="w-5 h-5 text-blue-50" />
+              <BarChart3 className="w-5 h-5 text-brand-50" />
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm mb-0.5">Insightful Analytics</h3>
-              <p className="text-xs text-blue-100/80 leading-snug">Review comprehensive caseload metrics and intake histories.</p>
+              <p className="text-xs text-brand-100/80 leading-snug">Review comprehensive caseload metrics and intake histories.</p>
             </div>
           </div>
 
           {/* Feature 3 */}
           <div className="flex items-center gap-4 p-3.5 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="p-2.5 bg-white/10 rounded-lg shrink-0">
-              <ShieldCheck className="w-5 h-5 text-blue-50" />
+              <ShieldCheck className="w-5 h-5 text-brand-50" />
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm mb-0.5">Data Security</h3>
-              <p className="text-xs text-blue-100/80 leading-snug">Strict access controls ensuring data integrity across jurisdictions.</p>
+              <p className="text-xs text-brand-100/80 leading-snug">Strict access controls ensuring data integrity across jurisdictions.</p>
             </div>
           </div>
         </div>
@@ -201,7 +201,7 @@ export default function StaffLogin() {
                       onClick={() => setUiRole(role)}
                       className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${
                         uiRole === role
-                          ? 'bg-white text-[#519BCE] shadow-sm'
+                          ? 'bg-white text-brand-900 shadow-sm'
                           : 'text-gray-500 hover:text-gray-700'
                       }`}
                     >
@@ -220,7 +220,7 @@ export default function StaffLogin() {
                         onChange={(e) => setAdminLevel(e.target.value)}
                         onKeyDown={focusOnEnter(emailRef)}
                         required
-                        className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 bg-white transition-colors focus:outline-none"
+                        className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 bg-white transition-colors focus:outline-none"
                       >
                         <option value="" disabled>Select Admin Level</option>
                         <option value="National Admin">National Admin</option>
@@ -244,7 +244,7 @@ export default function StaffLogin() {
                         onKeyDown={focusOnEnter(passwordRef)}
                         required
                         autoComplete="username"
-                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
                     </div>
                   </div>
@@ -262,7 +262,7 @@ export default function StaffLogin() {
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={submitOnEnter}
                         required
-                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
                       <button
                         type="button"
@@ -280,7 +280,7 @@ export default function StaffLogin() {
                     ref={submitButtonRef}
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-[#519BCE] hover:bg-[#4686b3] text-white py-3 rounded-lg text-sm font-semibold shadow-sm shadow-[#519BCE]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 mt-2"
+                    className="w-full bg-brand-900 hover:bg-brand-800 text-white py-3 rounded-lg text-sm font-semibold shadow-sm shadow-brand-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 mt-2"
                   >
                     {loading ? 'Signing In...' : 'Sign In'}
                   </button>
@@ -306,7 +306,7 @@ export default function StaffLogin() {
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
                         minLength={8}
-                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
                       <button
                         type="button"

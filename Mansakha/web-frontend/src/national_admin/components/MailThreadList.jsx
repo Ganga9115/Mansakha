@@ -47,7 +47,7 @@ export default function MailThreadList({ threads, loading, q, onSearchChange, ba
             value={q}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Search mail..."
-            className="w-full pl-9 pr-3 py-2 bg-[#F8F9FA] rounded-full text-gray-700 text-xs font-medium border-none focus:outline-none focus:ring-1 focus:ring-[#519BCE]"
+            className="w-full pl-9 pr-3 py-2 bg-brand-50 rounded-full text-gray-700 text-xs font-medium border-none focus:outline-none focus:ring-1 focus:ring-brand-600"
           />
         </div>
       </div>
@@ -61,9 +61,9 @@ export default function MailThreadList({ threads, loading, q, onSearchChange, ba
           <div
             key={t.threadId}
             onClick={() => navigate(`${basePath}/thread/${t.threadId}`)}
-            className={`group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50/80 hover:shadow-sm transition ${t.unread ? 'bg-[#EBF4FA]/40' : ''}`}
+            className={`group flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50/80 hover:shadow-sm transition ${t.unread ? 'bg-brand-50/40' : ''}`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.unread ? 'bg-[#519BCE]' : 'bg-transparent'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.unread ? 'bg-brand-700' : 'bg-transparent'}`} />
 
             <span className={`w-36 shrink-0 truncate text-sm ${t.unread ? 'font-bold text-gray-900' : 'font-medium text-gray-600'}`}>
               {t.latestSenderName}
@@ -82,7 +82,7 @@ export default function MailThreadList({ threads, loading, q, onSearchChange, ba
                 {folder !== 'sent' && (
                   <button
                     onClick={(e) => handleAction(e, folder === 'archived' ? actions.unarchiveThread : actions.archiveThread, t.threadId)}
-                    className="p-1.5 rounded-full text-gray-400 hover:bg-gray-200 hover:text-[#3D5A80] transition"
+                    className="p-1.5 rounded-full text-gray-400 hover:bg-gray-200 hover:text-brand-900 transition"
                     title={folder === 'archived' ? 'Move to Inbox' : 'Archive'}
                     aria-label={folder === 'archived' ? 'Move to Inbox' : 'Archive'}
                   >

@@ -86,14 +86,14 @@ export default function CaseDetail() {
                 </div>
               )}
               {data.explanation && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg text-xs text-gray-700 leading-relaxed">
-                  <span className="font-bold text-[#3D5A80] block mb-1">AI explanation</span>
+                <div className="mt-4 p-3 bg-brand-50 rounded-lg text-xs text-gray-700 leading-relaxed">
+                  <span className="font-bold text-brand-900 block mb-1">AI explanation</span>
                   {data.explanation}
                 </div>
               )}
               {data.suggestedInterventionType && (
-                <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-gray-700">
-                  <span className="font-bold text-[#3D5A80]">AI-suggested intervention:</span> {data.suggestedInterventionType.name} - review before acting.
+                <div className="mt-3 p-3 bg-brand-50 rounded-lg text-xs text-gray-700">
+                  <span className="font-bold text-brand-900">AI-suggested intervention:</span> {data.suggestedInterventionType.name} - review before acting.
                 </div>
               )}
             </div>
@@ -111,7 +111,7 @@ export default function CaseDetail() {
                       <div className="flex items-center gap-2 text-gray-400 mb-1">
                         <span className="font-semibold text-gray-600">{n.authorName}</span>
                         {n.authoredBy === 'ai' && (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#3D5A80] text-[9px] font-bold uppercase">AI-drafted</span>
+                          <span className="px-1.5 py-0.5 rounded bg-brand-50 text-brand-900 text-[9px] font-bold uppercase">AI-drafted</span>
                         )}
                         <span>{new Date(n.createdAt).toLocaleString()}</span>
                       </div>

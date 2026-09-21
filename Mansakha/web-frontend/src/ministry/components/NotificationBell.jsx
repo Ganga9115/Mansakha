@@ -72,7 +72,7 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={containerRef}>
-      <button onClick={toggleOpen} className="relative p-1 text-[#3D5A80] hover:opacity-70">
+      <button onClick={toggleOpen} className="relative p-1 text-brand-900 hover:opacity-70">
         <Bell size={20} />
         {unreadCount > 0 && (
           <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>

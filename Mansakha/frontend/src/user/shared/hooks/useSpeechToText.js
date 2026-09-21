@@ -20,7 +20,7 @@ const LOCAL_DJANGO_AI_TRANSCRIBE_URL = 'http://127.0.0.1:8000/api/ai/transcribe/
  * POST -F 'file=@audio.wav' -F 'language=english' -F 'vtt=false' https://asr.iitm.ac.in/asr/v2/decode
  * With seamless fallback to local IndicWhisper engine via Django AI backend.
  */
-async function transcribeAudioBlob(blob, language = 'english') {
+export async function transcribeAudioBlob(blob, language = 'english') {
   const langLower = (language || 'english').toLowerCase();
 
   // 1. Direct IIT Madras Speech Lab ASR API

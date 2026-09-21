@@ -80,7 +80,7 @@ export default function CounsellorDashboard() {
             </div>
             <button 
               onClick={() => navigate('/counsellor/alerts')} 
-              className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer shrink-0"
+              className="px-3.5 py-1.5 text-xs font-semibold text-brand-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer shrink-0"
             >
               View All Alerts
             </button>
@@ -128,8 +128,8 @@ export default function CounsellorDashboard() {
             <p className="text-xs text-gray-400 py-4">Loading...</p>
           ) : (scheduledData?.sessions || []).length === 0 ? (
             <div className="flex items-center gap-4 py-2">
-              <div className="p-3 bg-blue-50/70 rounded-2xl flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-blue-500" />
+              <div className="p-3 bg-brand-50/70 rounded-2xl flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-brand-500" />
               </div>
               <p className="text-xs text-gray-400 font-medium">No upcoming sessions.</p>
             </div>

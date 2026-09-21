@@ -65,7 +65,7 @@ export default function CounsellorPerformance() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                <tr className="bg-brand-50/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                   <th className="py-3.5 px-6">Counsellor</th>
                   <th className="py-3.5 px-4">Active Cases</th>
                   <th className="py-3.5 px-6">Efficacy (avg. distress-point drop)</th>

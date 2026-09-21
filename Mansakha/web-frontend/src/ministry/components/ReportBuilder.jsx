@@ -40,7 +40,7 @@ function AnalyticsSnapshotPanel({ jurisdictionId, insight, setInsight }) {
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5"><Sparkles size={13} className="text-[#519BCE]" /> AI Snapshot</p>
+          <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5"><Sparkles size={13} className="text-brand-800" /> AI Snapshot</p>
           <p className="text-[11px] text-gray-400 mt-0.5">Optional - attaches an AI analytics read of this jurisdiction to the report.</p>
         </div>
         <button
@@ -185,7 +185,7 @@ export default function ReportBuilder({ onClose, onSubmitted, defaultJurisdictio
             </div>
           </div>
 
-          <div className="bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg px-4 py-2.5 text-[11px] text-[#3D5A80]">
+          <div className="bg-brand-50/60 border border-brand-100 rounded-lg px-4 py-2.5 text-[11px] text-brand-900">
             <span className="font-bold">Sends to:</span> {jurisdictionId ? targetLabel : 'Select a jurisdiction first'}
           </div>
 
@@ -223,7 +223,7 @@ export default function ReportBuilder({ onClose, onSubmitted, defaultJurisdictio
             <button
               type="submit"
               disabled={submitting || !jurisdictionId}
-              className="px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
+              className="px-4 py-2.5 bg-brand-900 hover:bg-brand-900 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
             >
               {submitting ? 'Submitting...' : targetJurisdictionId ? `Submit to ${targetLabel}` : 'Save as Draft'}
             </button>

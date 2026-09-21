@@ -27,7 +27,7 @@ function ContactDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <User size={15} className="text-[#3D5A80]" />
+        <User size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Contact Details</h3>
       </div>
       <p className="text-[11px] text-gray-400">
@@ -42,7 +42,7 @@ function ContactDetailsCard({ r }) {
       {r.victimContactNumber && (
         <div>
           <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
-          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
             <Phone size={12} /> {r.victimContactNumber}
           </a>
         </div>
@@ -63,7 +63,7 @@ function ProofDocumentsCard({ documents }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <FileText size={15} className="text-[#3D5A80]" />
+        <FileText size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Proof Documents</h3>
       </div>
       {documents?.length > 0 ? (

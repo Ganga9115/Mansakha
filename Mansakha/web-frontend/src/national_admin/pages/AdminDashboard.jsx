@@ -87,7 +87,7 @@ export default function AdminDashboard() {
             <button
               onClick={handleGenerateReport}
               disabled={exportReport.loading || !jurisdictionId}
-              className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 shrink-0"
+              className="flex items-center gap-2 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60 shrink-0"
             >
               <FileDown size={14} />
               {exportReport.loading ? 'Downloading...' : 'Download CSV Report'}
@@ -106,7 +106,7 @@ export default function AdminDashboard() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                  <tr className="bg-brand-50/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                     <th className="py-3 px-6">User ID</th>
                     <th className="py-3 px-4">Case Stage</th>
                     <th className="py-3 px-4">Score</th>
@@ -136,7 +136,7 @@ export default function AdminDashboard() {
                       <td className="py-3.5 px-6 text-right">
                         <button
                           onClick={() => navigate(`/nationaladmin/case-detail/${item.userId}`)}
-                          className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-medium transition"
+                          className="px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-medium transition"
                         >
                           View
                         </button>
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
                     <div key={t.period} className="flex items-center gap-3 text-xs">
                       <span className="w-16 text-gray-500 shrink-0">{t.period}</span>
                       <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#519BCE] rounded-full" style={{ width: `${Math.min(100, t.avgScore)}%` }} />
+                        <div className="h-full bg-brand-700 rounded-full" style={{ width: `${Math.min(100, t.avgScore)}%` }} />
                       </div>
                       <span className="font-bold text-gray-700 w-8 text-right">{t.avgScore}</span>
                     </div>

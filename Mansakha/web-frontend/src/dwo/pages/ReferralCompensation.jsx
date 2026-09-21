@@ -44,7 +44,7 @@ function CompensationCard({ r, referralId, onChanged }) {
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4 max-w-2xl">
       <div className="flex items-center gap-1.5">
-        <Landmark size={15} className="text-[#3D5A80]" />
+        <Landmark size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Compensation Module</h3>
       </div>
       <p className="text-[11px] text-gray-400 -mt-2">
@@ -64,7 +64,7 @@ function CompensationCard({ r, referralId, onChanged }) {
           <button
             onClick={handleVerify}
             disabled={verify.loading || !verifiedAmount}
-            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+            className="px-4 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
           >
             {verify.loading ? 'Verifying...' : 'Verify & Track Compensation'}
           </button>
@@ -89,7 +89,7 @@ function CompensationCard({ r, referralId, onChanged }) {
                   <button
                     onClick={() => handleMarkPaid(idx)}
                     disabled={markPaid.loading}
-                    className="px-3 py-1.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-[11px] font-semibold transition disabled:opacity-60 shrink-0"
+                    className="px-3 py-1.5 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-[11px] font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     Mark as Paid
                   </button>
@@ -132,7 +132,7 @@ function BankDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <Landmark size={15} className="text-[#3D5A80]" />
+        <Landmark size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Disbursement Account</h3>
       </div>
       <p className="text-[11px] text-gray-400">
@@ -163,7 +163,7 @@ function BankDetailsCard({ r }) {
           href={b.proofUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#EBF4FA] rounded-md text-[11px] font-semibold transition"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-50 rounded-md text-[11px] font-semibold transition"
         >
           <FileText size={12} /> View passbook / cheque proof
         </a>

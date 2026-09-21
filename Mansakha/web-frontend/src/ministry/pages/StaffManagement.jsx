@@ -340,15 +340,15 @@ export default function StaffManagement() {
     <MinistryLayout title="Staff Management">
       <div className="space-y-5">
         {/* Top Hero Card */}
-        <div className="bg-gradient-to-r from-[#EFF6FB] via-[#F4F8FC] to-[#E9F3F9] border border-[#DCE8F2] rounded-2xl p-6 sm:p-7 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div className="bg-gradient-to-r from-brand-50 via-brand-50 to-brand-100 border border-brand-200 rounded-2xl p-6 sm:p-7 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
           <div className="max-w-xl z-10">
-            <span className="text-[11px] font-bold tracking-wider text-[#6B859E] uppercase block mb-1">
+            <span className="text-[11px] font-bold tracking-wider text-brand-500 uppercase block mb-1">
               MANAGE YOUR TEAM
             </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1E293B] tracking-tight mb-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-900 tracking-tight mb-2">
               Staff Management
             </h1>
-            <p className="text-xs sm:text-sm text-[#64748B] font-normal leading-relaxed">
+            <p className="text-xs sm:text-sm text-brand-600 font-normal leading-relaxed">
               Create and manage accounts for officials across different roles and administrative levels.
             </p>
           </div>
@@ -356,7 +356,7 @@ export default function StaffManagement() {
           {/* Right side illustration matching screenshot */}
           <div className="relative hidden md:flex items-center shrink-0 pr-2 select-none">
             {/* Dotted grid pattern */}
-            <svg className="w-16 h-12 text-[#BFD7EA] mr-4 opacity-75" viewBox="0 0 60 40" fill="currentColor">
+            <svg className="w-16 h-12 text-brand-300 mr-4 opacity-75" viewBox="0 0 60 40" fill="currentColor">
               <circle cx="5" cy="5" r="1.5" /><circle cx="20" cy="5" r="1.5" /><circle cx="35" cy="5" r="1.5" /><circle cx="50" cy="5" r="1.5" />
               <circle cx="5" cy="18" r="1.5" /><circle cx="20" cy="18" r="1.5" /><circle cx="35" cy="18" r="1.5" /><circle cx="50" cy="18" r="1.5" />
               <circle cx="5" cy="31" r="1.5" /><circle cx="20" cy="31" r="1.5" /><circle cx="35" cy="31" r="1.5" /><circle cx="50" cy="31" r="1.5" />
@@ -366,24 +366,24 @@ export default function StaffManagement() {
             <div className="relative flex items-center justify-center">
               <svg width="155" height="92" viewBox="0 0 155 92" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {/* Background glow pill */}
-                <ellipse cx="90" cy="46" rx="46" ry="38" fill="#E2EDF6" />
+                <ellipse cx="90" cy="46" rx="46" ry="38" fill="#e2e3f4" />
                 {/* Left Avatar */}
                 <g opacity="0.88">
-                  <circle cx="50" cy="40" r="15" fill="#75A8CF" />
-                  <path d="M38 60C38 52.5 43.5 50 50 50C56.5 50 62 52.5 62 60" fill="#75A8CF" />
+                  <circle cx="50" cy="40" r="15" fill="#5b62c2" />
+                  <path d="M38 60C38 52.5 43.5 50 50 50C56.5 50 62 52.5 62 60" fill="#5b62c2" />
                 </g>
                 {/* Right Avatar */}
                 <g opacity="0.88">
-                  <circle cx="112" cy="40" r="15" fill="#75A8CF" />
-                  <path d="M100 60C100 52.5 105.5 50 112 50C118.5 50 124 52.5 124 60" fill="#75A8CF" />
+                  <circle cx="112" cy="40" r="15" fill="#5b62c2" />
+                  <path d="M100 60C100 52.5 105.5 50 112 50C118.5 50 124 52.5 124 60" fill="#5b62c2" />
                 </g>
                 {/* Center Avatar (Prominent) */}
                 <g>
-                  <circle cx="81" cy="33" r="19" fill="#4B8EBE" />
-                  <path d="M66 65C66 54 73 51 81 51C89 51 96 54 96 65" fill="#4B8EBE" />
+                  <circle cx="81" cy="33" r="19" fill="#2d337b" />
+                  <path d="M66 65C66 54 73 51 81 51C89 51 96 54 96 65" fill="#2d337b" />
                 </g>
                 {/* Overlapping Plus Badge */}
-                <circle cx="120" cy="56" r="13" fill="#1E3A5F" />
+                <circle cx="120" cy="56" r="13" fill="#242861" />
                 <path d="M120 50V62M114 56H126" stroke="white" strokeWidth="2.4" strokeLinecap="round" />
               </svg>
             </div>
@@ -478,7 +478,7 @@ export default function StaffManagement() {
           {!isUsersView && (
             <button
               onClick={() => setShowForm((v) => !v)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition ml-auto shrink-0"
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold shadow-sm transition ml-auto shrink-0"
             >
               {showForm ? <X size={14} /> : <UserPlus size={14} />}
               <span>{showForm ? 'Cancel' : 'Create Account'}</span>
@@ -505,11 +505,11 @@ export default function StaffManagement() {
 
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Full Name</label>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none" />
+              <input value={fullName} onChange={(e) => setFullName(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none" />
             </div>
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none" />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none" />
             </div>
 
             {roleName === 'Counsellor' && (
@@ -522,14 +522,14 @@ export default function StaffManagement() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
                 />
               </div>
             )}
 
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Role</label>
-              <select value={roleName} onChange={(e) => { setRoleName(e.target.value); if (e.target.value !== 'Counsellor') setPhone(''); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
+              <select value={roleName} onChange={(e) => { setRoleName(e.target.value); if (e.target.value !== 'Counsellor') setPhone(''); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
                 {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
             </div>
@@ -543,7 +543,7 @@ export default function StaffManagement() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="Required"
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -564,14 +564,14 @@ export default function StaffManagement() {
                   <select
                     value={jurisdictionLevel}
                     onChange={(e) => { setJurisdictionLevel(e.target.value); setJurisdictionId(''); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
                   >
                     {JURISDICTION_LEVELS.map((l) => <option key={l} value={l} className="capitalize">{l}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction</label>
-                  <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
+                  <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
                     <option value="">Select...</option>
                     {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
                   </select>
@@ -582,7 +582,7 @@ export default function StaffManagement() {
             {['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'].includes(roleName) && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
+                <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
                   <option value="">Select...</option>
                   {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
                 </select>
@@ -592,7 +592,7 @@ export default function StaffManagement() {
             {DESIGNATIONS_BY_ROLE[roleName] && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
-                <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
+                <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
                   <option value="">Not specified</option>
                   {DESIGNATIONS_BY_ROLE[roleName].map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
@@ -607,7 +607,7 @@ export default function StaffManagement() {
             {roleName === 'Rehabilitation Officer' && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Rehabilitation Centre</label>
-                <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
+                <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
                   <option value="">Select...</option>
                   {providerOptions.map((p) => <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>)}
                 </select>
@@ -621,7 +621,7 @@ export default function StaffManagement() {
                   <select
                     value={stationStateId}
                     onChange={(e) => { setStationStateId(e.target.value); setStationDistrictId(''); setStationId(''); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
                   >
                     <option value="">Select...</option>
                     {[...stationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
@@ -635,7 +635,7 @@ export default function StaffManagement() {
                     value={stationDistrictId}
                     onChange={(e) => { setStationDistrictId(e.target.value); setStationId(''); }}
                     disabled={!stationStateId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-[#519BCE] focus:outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-brand-800 focus:outline-none"
                   >
                     <option value="">{stationStateId ? 'Select...' : 'Select a state first'}</option>
                     {[...stationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
@@ -649,7 +649,7 @@ export default function StaffManagement() {
                     value={stationId}
                     onChange={(e) => setStationId(e.target.value)}
                     disabled={!stationDistrictId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-[#519BCE] focus:outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-brand-800 focus:outline-none"
                   >
                     <option value="">{stationDistrictId ? (stationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}</option>
                     {stationOptions.map((s) => <option key={s.stationId} value={s.stationId}>{s.name}</option>)}
@@ -662,7 +662,7 @@ export default function StaffManagement() {
               <button
                 type="submit"
                 disabled={createStaff.loading}
-                className="px-5 py-2.5 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
+                className="px-5 py-2.5 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
               >
                 {createStaff.loading ? 'Creating...' : 'Create Account'}
               </button>
@@ -683,7 +683,7 @@ export default function StaffManagement() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#F0F6FA] text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                  <tr className="bg-brand-50 text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                     <th className="py-3.5 px-6">Name</th>
                     <th className="py-3.5 px-4">Role</th>
                     <th className="py-3.5 px-4">Scope</th>
@@ -694,7 +694,7 @@ export default function StaffManagement() {
                   {loading ? (
                     <tr>
                       <td colSpan={4} className="py-14 text-center text-gray-400">
-                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-[#519BCE] mr-2 align-middle" />
+                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-brand-600 mr-2 align-middle" />
                         Loading staff accounts...
                       </td>
                     </tr>
@@ -707,15 +707,15 @@ export default function StaffManagement() {
                         <div className="flex flex-col items-center justify-center text-center">
                           <div className="relative mb-3 flex items-center justify-center">
                             {/* Soft circular background */}
-                            <div className="w-24 h-24 rounded-full bg-[#EDF5FB] flex items-center justify-center">
+                            <div className="w-24 h-24 rounded-full bg-brand-50 flex items-center justify-center">
                               {/* Document with magnifying glass */}
                               <svg width="62" height="62" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#90B7D6" strokeWidth="2.2" fill="#FFFFFF" />
-                                <line x1="24" y1="20" x2="34" y2="20" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="26" x2="40" y2="26" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="32" x2="36" y2="32" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <circle cx="39" cy="39" r="8" stroke="#7BA8CE" strokeWidth="2.5" fill="#EDF5FB" />
-                                <line x1="45" y1="45" x2="52" y2="52" stroke="#7BA8CE" strokeWidth="2.5" strokeLinecap="round" />
+                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#9398d7" strokeWidth="2.2" fill="#FFFFFF" />
+                                <line x1="24" y1="20" x2="34" y2="20" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="26" x2="40" y2="26" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="32" x2="36" y2="32" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <circle cx="39" cy="39" r="8" stroke="#5b62c2" strokeWidth="2.5" fill="#f2f3fa" />
+                                <line x1="45" y1="45" x2="52" y2="52" stroke="#5b62c2" strokeWidth="2.5" strokeLinecap="round" />
                               </svg>
                             </div>
                           </div>
@@ -725,7 +725,7 @@ export default function StaffManagement() {
                           </p>
                           <button
                             onClick={() => setShowForm(true)}
-                            className="flex items-center gap-1.5 px-4 py-2 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition"
+                            className="flex items-center gap-1.5 px-4 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold shadow-sm transition"
                           >
                             <UserPlus size={13} />
                             <span>Create Account</span>
@@ -882,7 +882,7 @@ export default function StaffManagement() {
                                 <button
                                   onClick={() => handleSaveEdit(s.officialId)}
                                   disabled={updateStaff.loading}
-                                  className="px-4 py-2 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                                  className="px-4 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
                                 >
                                   {updateStaff.loading ? 'Saving...' : 'Save Changes'}
                                 </button>
@@ -917,7 +917,7 @@ export default function StaffManagement() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#F0F6FA] text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                  <tr className="bg-brand-50 text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                     <th className="py-3.5 px-6">Name</th>
                     <th className="py-3.5 px-4">Docket</th>
                     <th className="py-3.5 px-4">Case Type</th>
@@ -931,7 +931,7 @@ export default function StaffManagement() {
                   {usersQuery.loading ? (
                     <tr>
                       <td colSpan={7} className="py-14 text-center text-gray-400">
-                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-[#519BCE] mr-2 align-middle" />
+                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-brand-600 mr-2 align-middle" />
                         Loading user records...
                       </td>
                     </tr>
@@ -942,14 +942,14 @@ export default function StaffManagement() {
                       <td colSpan={7} className="py-12 px-4">
                         <div className="flex flex-col items-center justify-center text-center">
                           <div className="relative mb-3 flex items-center justify-center">
-                            <div className="w-24 h-24 rounded-full bg-[#EDF5FB] flex items-center justify-center">
+                            <div className="w-24 h-24 rounded-full bg-brand-50 flex items-center justify-center">
                               <svg width="62" height="62" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#90B7D6" strokeWidth="2.2" fill="#FFFFFF" />
-                                <line x1="24" y1="20" x2="34" y2="20" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="26" x2="40" y2="26" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="32" x2="36" y2="32" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <circle cx="39" cy="39" r="8" stroke="#7BA8CE" strokeWidth="2.5" fill="#EDF5FB" />
-                                <line x1="45" y1="45" x2="52" y2="52" stroke="#7BA8CE" strokeWidth="2.5" strokeLinecap="round" />
+                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#9398d7" strokeWidth="2.2" fill="#FFFFFF" />
+                                <line x1="24" y1="20" x2="34" y2="20" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="26" x2="40" y2="26" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="32" x2="36" y2="32" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <circle cx="39" cy="39" r="8" stroke="#5b62c2" strokeWidth="2.5" fill="#f2f3fa" />
+                                <line x1="45" y1="45" x2="52" y2="52" stroke="#5b62c2" strokeWidth="2.5" strokeLinecap="round" />
                               </svg>
                             </div>
                           </div>

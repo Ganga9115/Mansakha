@@ -11,7 +11,8 @@ import { BOTTOM_NAV_BAR_HEIGHT } from './BottomNavBar';
 import { useResponsive } from '../hooks/useResponsive';
 
 // The floating button sits this far above the bottom nav bar (if present)
-const FAB_GAP_ABOVE_NAV_BAR = 16;
+export const FAB_GAP_ABOVE_NAV_BAR = 16;
+export const FAB_SIZE = 56;
 
 export default function AiChatButton() {
   const navigation = useNavigation();
@@ -80,8 +81,8 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing.xl,
-    width: 56,
-    height: 56,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
     borderRadius: radius.pill,
     backgroundColor: colors.primary,
     alignItems: 'center',

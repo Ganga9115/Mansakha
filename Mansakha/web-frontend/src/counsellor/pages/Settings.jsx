@@ -84,8 +84,8 @@ export default function Settings() {
                 className="w-16 h-16 rounded-full object-cover shrink-0"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
-                <User size={28} className="text-[#3D5A80]" />
+              <div className="w-16 h-16 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center shrink-0">
+                <User size={28} className="text-brand-900" />
               </div>
             )}
             <div className="min-w-0">
@@ -101,7 +101,7 @@ export default function Settings() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={photoUploading}
-                className="text-xs text-[#519BCE] font-semibold mt-1 hover:underline disabled:opacity-60 block"
+                className="text-xs text-brand-600 font-semibold mt-1 hover:underline disabled:opacity-60 block"
               >
                 {photoUploading ? 'Uploading...' : 'Change Profile Photo'}
               </button>
@@ -118,7 +118,7 @@ export default function Settings() {
               type="email"
               value={me?.email || ''}
               readOnly
-              className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
+              className="w-full px-3.5 py-2 bg-brand-50 border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
             />
           </div>
         </div>
@@ -144,7 +144,7 @@ export default function Settings() {
             </button>
 
             {showPasswordForm && (
-              <div className="p-3 sm:p-4 bg-[#F8F9FA] rounded-lg space-y-3">
+              <div className="p-3 sm:p-4 bg-brand-50 rounded-lg space-y-3">
                 <div className="relative">
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -186,7 +186,7 @@ export default function Settings() {
                 <button
                   onClick={handleChangePassword}
                   disabled={passwordLoading}
-                  className="w-full py-2.5 bg-[#519BCE] text-white rounded-lg text-xs font-semibold disabled:opacity-60"
+                  className="w-full py-2.5 bg-brand-700 text-white rounded-lg text-xs font-semibold disabled:opacity-60"
                 >
                   {passwordLoading ? 'Updating...' : 'Confirm New Password'}
                 </button>

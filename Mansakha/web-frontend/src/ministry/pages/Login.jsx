@@ -51,7 +51,7 @@ export default function MinistryLogin() {
   return (
     <div className="flex min-h-screen w-full font-sans">
       {/* Left Pane - Branding & Features */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 xl:px-24 bg-gradient-to-br from-[#3D5A80] to-[#519BCE] text-white">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 xl:px-24 bg-gradient-to-br from-brand-900 to-brand-800 text-white">
         <div className="mb-12">
           <img src="/logo-3.png" alt="Mansakha" className="h-auto w-64" />
         </div>
@@ -60,33 +60,33 @@ export default function MinistryLogin() {
           {/* Feature 1 */}
           <div className="flex items-center gap-4 p-3.5 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="p-2.5 bg-white/10 rounded-lg shrink-0">
-              <Users className="w-5 h-5 text-blue-50" />
+              <Users className="w-5 h-5 text-brand-50" />
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm mb-0.5">Staff Management</h3>
-              <p className="text-xs text-blue-100/80 leading-snug">Provision and manage official accounts across all jurisdictions.</p>
+              <p className="text-xs text-brand-100/80 leading-snug">Provision and manage official accounts across all jurisdictions.</p>
             </div>
           </div>
 
           {/* Feature 2 */}
           <div className="flex items-center gap-4 p-3.5 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="p-2.5 bg-white/10 rounded-lg shrink-0">
-              <Settings className="w-5 h-5 text-blue-50" />
+              <Settings className="w-5 h-5 text-brand-50" />
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm mb-0.5">System Configuration</h3>
-              <p className="text-xs text-blue-100/80 leading-snug">Configure languages, case types, and interaction channels globally.</p>
+              <p className="text-xs text-brand-100/80 leading-snug">Configure languages, case types, and interaction channels globally.</p>
             </div>
           </div>
 
           {/* Feature 3 */}
           <div className="flex items-center gap-4 p-3.5 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="p-2.5 bg-white/10 rounded-lg shrink-0">
-              <Map className="w-5 h-5 text-blue-50" />
+              <Map className="w-5 h-5 text-brand-50" />
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm mb-0.5">National Analytics & Audits</h3>
-              <p className="text-xs text-blue-100/80 leading-snug">Track platform usage geographically and review immutable audit logs.</p>
+              <p className="text-xs text-brand-100/80 leading-snug">Track platform usage geographically and review immutable audit logs.</p>
             </div>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function MinistryLogin() {
                     onChange={(e) => setIdentifier(e.target.value)}
                     onKeyDown={handleIdentifierKeyDown}
                     required
-                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 transition-colors focus:outline-none"
+                    className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 transition-colors focus:outline-none"
                   />
                 </div>
               </div>
@@ -131,7 +131,7 @@ export default function MinistryLogin() {
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={handlePasswordKeyDown}
                     required
-                    className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 transition-colors focus:outline-none"
+                    className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 transition-colors focus:outline-none"
                   />
                   <button
                     type="button"
@@ -149,7 +149,7 @@ export default function MinistryLogin() {
                 ref={submitButtonRef}
                 type="submit"
                 disabled={loading}
-                className="w-full bg-[#519BCE] hover:bg-[#4686b3] text-white py-3 rounded-lg text-sm font-semibold shadow-sm shadow-[#519BCE]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 mt-2"
+                className="w-full bg-brand-900 hover:bg-brand-800 text-white py-3 rounded-lg text-sm font-semibold shadow-sm shadow-brand-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 mt-2"
               >
                 {loading ? 'Signing In...' : 'Sign In'}
               </button>

@@ -28,7 +28,7 @@ export default function ReferralSubNav({ base }) {
           end={t.suffix === ''}
           className={({ isActive }) =>
             `px-4 py-2.5 text-xs font-semibold border-b-2 -mb-px transition ${
-              isActive ? 'border-[#519BCE] text-[#3D5A80]' : 'border-transparent text-gray-500 hover:text-gray-700'
+              isActive ? 'border-brand-600 text-brand-900' : 'border-transparent text-gray-500 hover:text-gray-700'
             }`
           }
         >

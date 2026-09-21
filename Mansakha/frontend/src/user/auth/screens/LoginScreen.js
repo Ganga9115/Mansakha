@@ -105,10 +105,10 @@ export default function LoginScreen({ navigation }) {
           {/* Left Pane: Illustration (Desktop Only) */}
           {isDesktop && (
             <View style={styles.imagePane}>
-              <Image 
-                source={require('../../../../assets/login_illustration.jpg')}
-                style={styles.illustration} 
-                resizeMode="cover" 
+              <Image
+                source={require('../../../../assets/login-lotus-hands.png')}
+                style={styles.illustration}
+                resizeMode="cover"
               />
             </View>
           )}

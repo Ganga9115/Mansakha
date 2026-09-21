@@ -88,7 +88,7 @@ function TypingBubble() {
   return (
     <div className="flex items-end gap-2 justify-start my-1">
       <div className="w-8 h-8 rounded-full bg-[#EBF3FA] flex items-center justify-center shrink-0">
-        <User size={16} className="text-[#3D5A80]" />
+        <User size={16} className="text-brand-900" />
       </div>
       <div className="bg-white border border-gray-100 shadow-sm rounded-2xl rounded-tl-xs px-4 py-3 flex items-center gap-1.5">
         <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce [animation-delay:-0.3s]" />
@@ -305,7 +305,7 @@ export default function CaseChat() {
               <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
             </button>
             <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-[#EBF3FA] border border-[#CBD5E1] flex items-center justify-center shrink-0">
-              <User size={18} className="text-[#3D5A80] sm:w-5 sm:h-5" />
+              <User size={18} className="text-brand-900 sm:w-5 sm:h-5" />
             </div>
             <div className="flex flex-col min-w-0">
               <h1 className="text-xs sm:text-sm font-bold text-[#0F172A] leading-tight truncate">
@@ -342,10 +342,10 @@ export default function CaseChat() {
                       key={m.messageId}
                       className={`flex items-end gap-2 sm:gap-3 ${isUser ? 'justify-start' : 'justify-end'}`}
                     >
-                      {/* Victim avatar — left, light blue */}
+                      {/* Victim avatar — left, light navy */}
                       {isUser && (
                         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#F0F4F8] flex items-center justify-center shrink-0 mb-5">
-                          <User size={14} className="text-[#3D5A80] sm:w-4 sm:h-4" />
+                          <User size={14} className="text-brand-900 sm:w-4 sm:h-4" />
                         </div>
                       )}
 
@@ -360,12 +360,12 @@ export default function CaseChat() {
                                 : 'bg-[#F0F4F8] text-[#1E293B]'
                             }`}
                           >
-                            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-[#3D5A80]' : 'bg-[#1E293B]'}`}>
+                            <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 text-white ${isUser ? 'bg-brand-800' : 'bg-[#1E293B]'}`}>
                               {isThisPlaying ? <Pause size={13} /> : <Play size={13} className="ml-0.5" />}
                             </div>
                             <div className="flex-1 flex items-center gap-0.5 h-4">
                               {WAVEFORM_BAR_HEIGHTS.map((h, idx) => (
-                                <span key={idx} className={`w-0.5 rounded-full ${isUser ? 'bg-gray-300' : 'bg-[#3D5A80]/40'}`} style={{ height: `${h}px` }} />
+                                <span key={idx} className={`w-0.5 rounded-full ${isUser ? 'bg-gray-300' : 'bg-brand-800/40'}`} style={{ height: `${h}px` }} />
                               ))}
                             </div>
                             <span className={`text-[11px] sm:text-xs font-medium tabular-nums ${isUser ? 'text-[#0F172A]' : 'text-[#1E293B]'}`}>
@@ -388,7 +388,7 @@ export default function CaseChat() {
                         </div>
                       </div>
 
-                      {/* Counsellor avatar — right, dark blue filled */}
+                      {/* Counsellor avatar — right, dark navy filled */}
                       {!isUser && (
                         <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#7CA8D8] flex items-center justify-center shrink-0 text-white mb-5">
                           <User size={14} className="sm:w-4 sm:h-4" />
@@ -450,7 +450,7 @@ export default function CaseChat() {
                 <button
                   type="button"
                   onClick={togglePauseRecording}
-                  className="text-[#93C5FD] p-1.5 hover:bg-blue-50 rounded-full transition"
+                  className="text-[#93C5FD] p-1.5 hover:bg-brand-50 rounded-full transition"
                   title={isPaused ? 'Resume recording' : 'Pause recording'}
                   aria-label={isPaused ? 'Resume recording' : 'Pause recording'}
                 >
@@ -484,7 +484,7 @@ export default function CaseChat() {
                 <button
                   type="button"
                   onClick={startRecording}
-                  className="p-2.5 text-gray-400 hover:text-[#93C5FD] hover:bg-blue-50 rounded-full transition"
+                  className="p-2.5 text-gray-400 hover:text-[#93C5FD] hover:bg-brand-50 rounded-full transition"
                   aria-label="Record voice message"
                 >
                   <Mic size={22} />

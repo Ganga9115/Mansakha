@@ -11,7 +11,7 @@ import { useToast } from '../../shared/context/ToastContext';
 // number and address.
 const CASE_STAGE_TONE = {
   Investigation: 'bg-amber-50 text-amber-700',
-  Trial: 'bg-blue-50 text-blue-700',
+  Trial: 'bg-brand-50 text-brand-700',
   Rehabilitation: 'bg-violet-50 text-violet-700',
   Compensation: 'bg-teal-50 text-teal-700',
   'Case Closed': 'bg-gray-100 text-gray-600',
@@ -122,7 +122,7 @@ export default function EditUserRecord() {
               <button
                 onClick={handleSaveEdit}
                 disabled={updateUser.loading}
-                className="w-full px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
+                className="w-full px-4 py-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
               >
                 {updateUser.loading ? 'Saving...' : 'Save Changes'}
               </button>

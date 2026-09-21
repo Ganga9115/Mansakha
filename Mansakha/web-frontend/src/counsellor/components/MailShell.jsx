@@ -26,7 +26,7 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
         <aside className="w-full md:w-52 shrink-0 flex flex-row md:flex-col items-center md:items-start justify-between md:justify-start gap-3 md:gap-5 pb-2 md:pb-0 border-b md:border-b-0 border-gray-100">
           <button
             onClick={() => setComposing(true)}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full bg-[#519BCE] text-white text-xs sm:text-sm font-semibold shadow-sm hover:shadow-md hover:bg-[#3d83b3] transition shrink-0"
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-3 rounded-full bg-brand-700 text-white text-xs sm:text-sm font-semibold shadow-sm hover:shadow-md hover:bg-brand-700 transition shrink-0"
           >
             <PenSquare size={15} /> Compose
           </button>
@@ -41,14 +41,14 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
                   end
                   className={({ isActive }) =>
                     `flex items-center gap-2 sm:gap-3 px-3 py-1.5 sm:py-2 rounded-full md:rounded-l-none md:rounded-r-full text-xs sm:text-sm transition shrink-0 md:shrink ${
-                      isActive ? 'bg-[#D6E8F5] text-[#3D5A80] font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'
+                      isActive ? 'bg-brand-100 text-brand-900 font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'
                     }`
                   }
                 >
                   <Icon size={15} />
                   <span className="flex-1">{f.label}</span>
                   {f.key === 'inbox' && unread?.count > 0 && (
-                    <span className="text-xs font-bold text-[#3D5A80] ml-1">{unread.count}</span>
+                    <span className="text-xs font-bold text-brand-900 ml-1">{unread.count}</span>
                   )}
                 </NavLink>
               );

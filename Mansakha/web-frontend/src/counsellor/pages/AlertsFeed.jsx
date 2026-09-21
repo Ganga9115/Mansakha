@@ -77,7 +77,7 @@ export default function AlertsFeed() {
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition shrink-0 ${filter === f ? 'bg-[#519BCE] text-white' : 'text-gray-600 hover:text-gray-900'}`}
+              className={`px-3 py-1.5 rounded-lg font-medium transition shrink-0 ${filter === f ? 'bg-brand-700 text-white' : 'text-gray-600 hover:text-gray-900'}`}
             >
               {f} <span className="ml-1 text-[10px] opacity-75">{counts[f]}</span>
             </button>
@@ -97,11 +97,11 @@ export default function AlertsFeed() {
               key={item.alertId}
               className={`bg-white p-4 rounded-xl border transition flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 ${
                 item.source === 'sos' || item.priority === 'urgent' ? 'border-l-4 border-l-rose-600 border-y border-r border-gray-200/80 shadow-sm'
-                  : item.status === 'Open' ? 'border-[#519BCE]/60 shadow-sm' : 'border-gray-200/80'
+                  : item.status === 'Open' ? 'border-brand-600/60 shadow-sm' : 'border-gray-200/80'
               }`}
             >
               <div className="flex items-center gap-3 sm:gap-4">
-                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.status === 'Open' ? 'bg-[#519BCE]' : 'bg-transparent'}`}></span>
+                <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.status === 'Open' ? 'bg-brand-700' : 'bg-transparent'}`}></span>
                 <div>
                   <h4 className="font-bold text-sm text-gray-800 flex items-center gap-2 flex-wrap">
                     Case {item.userId.slice(0, 8)}
@@ -137,7 +137,7 @@ export default function AlertsFeed() {
                 )}
                 <button
                   onClick={() => navigate(`/counsellor/case-detail/${item.userId}`)}
-                  className="px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE]/10 rounded-lg text-xs font-medium transition"
+                  className="px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700/10 rounded-lg text-xs font-medium transition"
                 >
                   Review details
                 </button>

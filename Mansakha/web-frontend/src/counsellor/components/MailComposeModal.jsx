@@ -152,9 +152,9 @@ export default function MailComposeModal({ onClose, onSent }) {
         <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3">
           {/* Recipient picker */}
           <div className="relative" ref={pickerRef}>
-            <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg focus-within:ring-1 focus-within:ring-[#519BCE]">
+            <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg focus-within:ring-1 focus-within:ring-brand-600">
               {recipients.map((r) => (
-                <span key={r.officialId} className="flex items-center gap-1 bg-[#EBF4FA] text-[#3D5A80] text-xs font-medium px-2 py-1 rounded-full">
+                <span key={r.officialId} className="flex items-center gap-1 bg-brand-50 text-brand-900 text-xs font-medium px-2 py-1 rounded-full">
                   {r.fullName} — {r.roleName}{r.jurisdictionName ? `, ${r.jurisdictionName}` : ''}
                   <button onClick={() => removeRecipient(r.officialId)} className="hover:text-rose-600" aria-label={`Remove ${r.fullName}`}>
                     <X size={12} />
@@ -195,7 +195,7 @@ export default function MailComposeModal({ onClose, onSent }) {
             value={subject}
             onChange={(e) => setSubject(e.target.value)}
             placeholder="Subject"
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium outline-none focus:ring-1 focus:ring-[#519BCE]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-medium outline-none focus:ring-1 focus:ring-brand-600"
           />
 
           <textarea
@@ -203,7 +203,7 @@ export default function MailComposeModal({ onClose, onSent }) {
             onChange={(e) => setBody(e.target.value)}
             placeholder="Write your message..."
             rows={8}
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none resize-none focus:ring-1 focus:ring-[#519BCE]"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm outline-none resize-none focus:ring-1 focus:ring-brand-600"
           />
 
           {attachments.length > 0 && (
@@ -235,7 +235,7 @@ export default function MailComposeModal({ onClose, onSent }) {
           <button
             onClick={handleSend}
             disabled={sending}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white bg-[#519BCE] hover:bg-[#3d83b3] disabled:opacity-50 transition"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white bg-brand-700 hover:bg-brand-800 disabled:opacity-50 transition"
           >
             {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
             Send

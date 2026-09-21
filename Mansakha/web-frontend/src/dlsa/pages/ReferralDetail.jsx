@@ -169,7 +169,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleAddNote}
                     disabled={!noteText.trim() || addNote.loading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     <Send size={13} />
                     {addNote.loading ? 'Sending...' : 'Add'}
@@ -217,7 +217,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleMarkTrialReady}
                     disabled={markTrialReady.loading}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
                   >
                     <Gavel size={14} />
                     {markTrialReady.loading ? 'Handing off...' : 'Mark Trial-Ready (hand off to Prosecutor)'}

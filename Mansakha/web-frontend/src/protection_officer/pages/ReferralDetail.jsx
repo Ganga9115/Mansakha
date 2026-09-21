@@ -21,7 +21,7 @@ const THREAT_TIERS = ['Routine', 'Guarded', 'Elevated', 'Severe'];
 const ORIGIN_META = {
   sos_emergency: { label: 'Emergency SOS', className: 'bg-rose-100 text-rose-700' },
   io_threat_alert: { label: 'IO Threat Alert', className: 'bg-orange-100 text-orange-700' },
-  intervention_accepted: { label: 'Witness Protection/Relocation', className: 'bg-blue-100 text-blue-700' },
+  intervention_accepted: { label: 'Witness Protection/Relocation', className: 'bg-brand-100 text-brand-700' },
   self_reported_threat: { label: 'Self-Reported Threat', className: 'bg-amber-100 text-amber-700' },
 };
 
@@ -47,7 +47,7 @@ function ThreatAssessmentCard({ r, onChanged }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <ShieldAlert size={15} className="text-[#3D5A80]" />
+        <ShieldAlert size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Threat Assessment</h3>
       </div>
 
@@ -76,7 +76,7 @@ function ThreatAssessmentCard({ r, onChanged }) {
           <button
             onClick={handleSave}
             disabled={setTier.loading || manualTier === (r.manualThreatTier || '')}
-            className="px-3 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 shrink-0"
+            className="px-3 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 shrink-0"
           >
             {setTier.loading ? 'Saving...' : 'Save'}
           </button>
@@ -102,7 +102,7 @@ function DispatchDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <User size={15} className="text-[#3D5A80]" />
+        <User size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Dispatch Details</h3>
       </div>
       <p className="text-[11px] text-gray-400">
@@ -117,7 +117,7 @@ function DispatchDetailsCard({ r }) {
       {r.victimContactNumber && (
         <div>
           <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
-          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
             <Phone size={12} /> {r.victimContactNumber}
           </a>
         </div>
@@ -353,7 +353,7 @@ export default function ReferralDetail() {
             href={`https://www.google.com/maps?q=${r.location.lat},${r.location.lng}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-[#519BCE] bg-[#EBF4FA] border border-[#D6E8F5] rounded-lg px-3 py-2 w-fit text-xs font-semibold hover:bg-[#D6E8F5] transition"
+            className="inline-flex items-center gap-1.5 text-brand-600 bg-brand-50 border border-brand-100 rounded-lg px-3 py-2 w-fit text-xs font-semibold hover:bg-brand-100 transition"
           >
             <MapPin size={14} /> View live location on map
           </a>
@@ -414,7 +414,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleVerify}
                     disabled={addNote.loading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     <Send size={13} />
                     {addNote.loading ? 'Logging...' : 'Log Verification'}

@@ -106,7 +106,7 @@ export default function Analysis() {
                 subtitle="Highest first - where caseload is concentrated."
                 items={rows.map((r) => ({ jurisdictionId: r.jurisdictionId, name: r.name, value: r.total }))}
                 valueLabel="cases"
-                barColor="bg-[#519BCE]"
+                barColor="bg-brand-700"
               />
               <BarChart
                 title="Critical Cases by District"
@@ -145,7 +145,7 @@ export default function Analysis() {
                   onClick={() => setTimeRange(r)}
                   className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
                     timeRange === r
-                      ? 'bg-[#519BCE]/15 text-[#519BCE]'
+                      ? 'bg-brand-700/15 text-brand-600'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                   }`}
                 >
@@ -185,7 +185,7 @@ export default function Analysis() {
             <button
               onClick={handleExportCsv}
               disabled={exportReport.loading}
-              className="ml-auto flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
+              className="ml-auto flex items-center gap-2 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
             >
               <Download size={14} />
               {exportReport.loading ? 'Exporting CSV...' : 'Export Audit CSV'}
@@ -283,7 +283,7 @@ export default function Analysis() {
                   {investigationProgress.casesWithRecord === 0 ? (
                     <p className="text-xs text-gray-400">{investigationProgress.message || 'No investigation records yet.'}</p>
                   ) : (
-                    <DistributionBars items={investigationProgress.accusedStatusDistribution.map((a) => ({ label: a.status, count: a.count }))} colorClass="bg-[#519BCE]" />
+                    <DistributionBars items={investigationProgress.accusedStatusDistribution.map((a) => ({ label: a.status, count: a.count }))} colorClass="bg-brand-700" />
                   )}
                 </div>
                 <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
@@ -505,7 +505,7 @@ function InterventionDonut({ interventionPhases }) {
           <path
             d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
             fill="none"
-            stroke="#3B82F6"
+            stroke="#5b62c2"
             strokeWidth="4"
             strokeDasharray={`${inProgressPct}, 100`}
             strokeDashoffset={`${-completedPct}`}
@@ -533,7 +533,7 @@ function InterventionDonut({ interventionPhases }) {
           <span>Completed Actions <span className="text-gray-400 ml-2">{Math.round(completedPct)}%</span></span>
         </div>
         <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-100"></div>
+          <div className="w-3 h-3 rounded-full bg-brand-500 shadow-sm ring-2 ring-brand-100"></div>
           <span>In Progress Queue <span className="text-gray-400 ml-2">{Math.round(inProgressPct)}%</span></span>
         </div>
         <div className="flex items-center gap-3">
@@ -550,7 +550,7 @@ function InterventionDonut({ interventionPhases }) {
 // by the Coordination & Case Handling section for accused status/threat
 // tier/referral-role breakdowns, which don't fit the fixed 4-severity-tier
 // shape SeverityStackedChart is built around.
-function DistributionBars({ items, colorClass = 'bg-[#519BCE]' }) {
+function DistributionBars({ items, colorClass = 'bg-brand-700' }) {
   if (!items || items.length === 0) return <p className="text-xs text-gray-400">No data yet.</p>;
   const max = Math.max(1, ...items.map((i) => i.count));
   return (
@@ -570,7 +570,7 @@ function DistributionBars({ items, colorClass = 'bg-[#519BCE]' }) {
 
 function StatCard({ title, value, subtitle, accent = 'gray' }) {
   const accents = {
-    blue: 'border-blue-200 bg-blue-50/50 text-blue-600',
+    blue: 'border-brand-200 bg-brand-50/50 text-brand-600',
     emerald: 'border-emerald-200 bg-emerald-50/50 text-emerald-600',
     purple: 'border-purple-200 bg-purple-50/50 text-purple-600',
     rose: 'border-rose-200 bg-rose-50/50 text-rose-600',

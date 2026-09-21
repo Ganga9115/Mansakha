@@ -19,7 +19,7 @@ export default function AuditLog() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                <tr className="bg-brand-50/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                   <th className="py-3.5 px-6">Timestamp</th>
                   <th className="py-3.5 px-4">Official</th>
                   <th className="py-3.5 px-4">Action</th>

@@ -141,11 +141,11 @@ function TrendChart({ jurisdictionId }) {
             </div>
             <div className="flex-1 min-w-0 h-32 relative">
               <svg className="w-full h-full overflow-visible" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none">
-                <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="#E5E7EB" strokeDasharray="4 4" />
-                <path d={pathD} fill="none" stroke="#519BCE" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
+                <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="#c0c2e8" strokeDasharray="4 4" />
+                <path d={pathD} fill="none" stroke="#5b62c2" strokeWidth="2.5" vectorEffect="non-scaling-stroke" />
                 {points.map((p, i) =>
                   p.averageScore == null ? null : (
-                    <circle key={p.month} cx={xForIndex(i)} cy={yForScore(p.averageScore)} r="2.5" fill="#3D5A80" />
+                    <circle key={p.month} cx={xForIndex(i)} cy={yForScore(p.averageScore)} r="2.5" fill="#1e224f" />
                   )
                 )}
               </svg>
@@ -200,7 +200,7 @@ export default function MinistryDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-[#EBF4FA]/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                <tr className="bg-brand-50/60 text-gray-600 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                   <th className="py-3 px-6">State / UT</th>
                   <th className="py-3 px-4">Total Cases</th>
                   <th className="py-3 px-4">High-Risk</th>

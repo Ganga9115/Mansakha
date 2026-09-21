@@ -30,19 +30,19 @@ export default function StaffLayout({ children, title = 'Protection Registry' })
   const TitleIcon = activeNavItem?.icon;
 
   return (
-    <div className="flex h-screen w-full bg-[#F8F9FA] text-gray-800 font-sans overflow-hidden">
+    <div className="flex h-screen w-full bg-brand-50 text-gray-800 font-sans overflow-hidden">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black/40 z-30 lg:hidden" onClick={() => setSidebarOpen(false)} aria-hidden="true" />
       )}
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 max-w-[80vw] bg-[#3D5A80] text-white flex flex-col shrink-0 overflow-y-auto no-scrollbar transform transition-transform duration-200 ease-out ${
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 max-w-[80vw] bg-brand-900 text-white flex flex-col shrink-0 overflow-y-auto no-scrollbar transform transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
         <div className="h-16 flex items-center justify-between px-6 border-b border-white/10 shrink-0">
           <img src="/logo-3.png" alt="Mansakha" className="h-auto w-[185px]" />
-          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-blue-100 hover:text-white" aria-label="Close menu">
+          <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-brand-100 hover:text-white" aria-label="Close menu">
             <X size={20} />
           </button>
         </div>
@@ -58,7 +58,7 @@ export default function StaffLayout({ children, title = 'Protection Registry' })
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) =>
                   `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                    isActive ? 'bg-[#519BCE] text-white shadow-sm' : 'text-blue-100 hover:bg-white/10'
+                    isActive ? 'bg-white text-brand-900 shadow-sm' : 'text-brand-100 hover:bg-white/10'
                   }`
                 }
               >
@@ -71,19 +71,19 @@ export default function StaffLayout({ children, title = 'Protection Registry' })
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <header className="h-16 bg-[#EBF4FA] border-b border-[#D6E8F5] px-4 sm:px-8 flex items-center justify-between shrink-0 gap-3">
+        <header className="h-16 bg-brand-50 border-b border-brand-100 px-4 sm:px-8 flex items-center justify-between shrink-0 gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-[#3D5A80] shrink-0" aria-label="Open menu">
+            <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-brand-900 shrink-0" aria-label="Open menu">
               <Menu size={22} />
             </button>
-            {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80] shrink-0 hidden sm:block" />}
-            <h2 className="text-lg sm:text-xl font-bold text-[#3D5A80] truncate">{title}</h2>
+            {TitleIcon && <TitleIcon size={20} className="text-brand-900 shrink-0 hidden sm:block" />}
+            <h2 className="text-lg sm:text-xl font-bold text-brand-900 truncate">{title}</h2>
           </div>
 
           <div className="flex items-center gap-2 sm:gap-5 shrink-0">
             <div className="text-xs hidden sm:block text-right">
-              <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
-              <p className="text-[#3D5A80]/70">Protection Officer</p>
+              <p className="font-bold text-brand-900">{me?.fullName || 'Loading...'}</p>
+              <p className="text-brand-900/70">Protection Officer</p>
             </div>
 
             <button

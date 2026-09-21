@@ -65,7 +65,7 @@ export default function AdminDashboard() {
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-[22px] font-extrabold text-[#1a2b4b]">Good morning, {me?.fullName || 'District Admin'}</h1>
+            <h1 className="text-[22px] font-extrabold text-[#1a1d45]">Good morning, {me?.fullName || 'District Admin'}</h1>
             <p className="text-[13px] text-gray-500 mt-1">Here's an overview of cases and activities across your district.</p>
           </div>
         </div>
@@ -75,7 +75,7 @@ export default function AdminDashboard() {
           <StatCard
             title="Total Cases"
             value={data?.totalCases ?? '-'}
-            colorClass={{ text: 'text-[#1d4ed8]', hoverBorder: 'hover:border-[#1d4ed8]' }}
+            colorClass={{ text: 'text-[#242861]', hoverBorder: 'hover:border-[#242861]' }}
           />
           <StatCard
             title="Vulnerable (Moderate)"
@@ -117,11 +117,11 @@ export default function AdminDashboard() {
         {/* Main Cases Table Area */}
         <div className="bg-white rounded-lg border border-gray-200 shadow-sm flex flex-col w-full mt-4">
           <div className="flex items-center justify-between px-6 py-4">
-            <h3 className="font-extrabold text-[16px] text-[#1a2b4b]">Cases</h3>
+            <h3 className="font-extrabold text-[16px] text-[#1a1d45]">Cases</h3>
             <button
               onClick={handleGenerateReport}
               disabled={exportReport.loading || !jurisdictionId}
-              className="px-4 py-2 bg-[#2a77c8] hover:bg-[#2363a8] text-white rounded-md text-[13px] font-semibold shadow-sm transition disabled:opacity-60 flex items-center gap-2"
+              className="px-4 py-2 bg-[#1e224f] hover:bg-[#1a1d45] text-white rounded-md text-[13px] font-semibold shadow-sm transition disabled:opacity-60 flex items-center gap-2"
             >
               <FileDown size={16} />
               {exportReport.loading ? 'Downloading...' : 'Download CSV Report'}
@@ -167,7 +167,7 @@ export default function AdminDashboard() {
                     <td className="py-4 px-6 text-right">
                       <button
                         onClick={() => navigate(`/districtadmin/case-detail/${item.userId}`)}
-                        className="px-4 py-1.5 border border-[#2a77c8] text-[#2a77c8] hover:bg-blue-50 rounded text-xs font-semibold transition-colors"
+                        className="px-4 py-1.5 border border-[#1e224f] text-[#1e224f] hover:bg-brand-50 rounded text-xs font-semibold transition-colors"
                       >
                         View
                       </button>
@@ -183,7 +183,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
           <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-extrabold text-[15px] text-[#1a2b4b]">Alerts</h3>
+              <h3 className="font-extrabold text-[15px] text-[#1a1d45]">Alerts</h3>
             </div>
             {openAlerts.length === 0 ? (
               <p className="text-[13px] text-gray-400 text-center py-6">No open alerts.</p>
@@ -203,7 +203,7 @@ export default function AdminDashboard() {
 
           <div className="bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-extrabold text-[15px] text-[#1a2b4b]">Distress Trend</h3>
+              <h3 className="font-extrabold text-[15px] text-[#1a1d45]">Distress Trend</h3>
             </div>
             {trend.length === 0 ? (
               <p className="text-[13px] text-gray-400 text-center py-4">Not enough data yet.</p>
@@ -213,7 +213,7 @@ export default function AdminDashboard() {
                   <div key={t.period} className="flex items-center gap-4">
                     <span className="w-16 text-[12px] text-gray-600 font-medium shrink-0 truncate">{t.period.split(' - ')[0]} -</span>
                     <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                      <div className="h-full bg-[#2a77c8] rounded-full" style={{ width: `${Math.min(100, t.avgScore)}%` }} />
+                      <div className="h-full bg-[#1e224f] rounded-full" style={{ width: `${Math.min(100, t.avgScore)}%` }} />
                     </div>
                     <span className="font-bold text-gray-800 text-[13px] w-8 text-right shrink-0">{t.avgScore}</span>
                   </div>

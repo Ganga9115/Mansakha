@@ -38,7 +38,7 @@ function HandOffRehabCard({ referralId, onHandedOff }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <HeartHandshake size={15} className="text-[#3D5A80]" />
+        <HeartHandshake size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Forward to Rehabilitation Officer</h3>
       </div>
       <p className="text-[11px] text-gray-400">Select the government or NGO centre this case is being handed to.</p>
@@ -56,7 +56,7 @@ function HandOffRehabCard({ referralId, onHandedOff }) {
       <button
         onClick={handleSubmit}
         disabled={!providerId || handOffRehab.loading}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
       >
         <HeartHandshake size={14} />
         {handOffRehab.loading ? 'Forwarding...' : 'Forward to Rehabilitation Officer'}

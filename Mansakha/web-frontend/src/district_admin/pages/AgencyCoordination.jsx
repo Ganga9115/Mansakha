@@ -81,7 +81,7 @@ export default function AgencyCoordination() {
               required
               className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
             />
-            <button type="submit" disabled={search.loading} className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
+            <button type="submit" disabled={search.loading} className="flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
               <Search size={15} />
               {search.loading ? 'Searching...' : 'Search'}
             </button>
@@ -128,7 +128,7 @@ export default function AgencyCoordination() {
                     type="button"
                     onClick={() => setReferredToRole(role)}
                     className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition border ${
-                      referredToRole === role ? 'bg-[#3D5A80] text-white border-[#3D5A80]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                      referredToRole === role ? 'bg-brand-800 text-white border-brand-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
                     }`}
                   >
                     {role}
@@ -147,7 +147,7 @@ export default function AgencyCoordination() {
               {createError && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-xs px-3 py-2 rounded-lg">{createError}</div>}
               {createSuccess && <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs px-3 py-2 rounded-lg">{createSuccess}</div>}
 
-              <button type="submit" disabled={create.loading} className="flex items-center gap-1.5 px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
+              <button type="submit" disabled={create.loading} className="flex items-center gap-1.5 px-4 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60">
                 <Send size={15} />
                 {create.loading ? 'Creating...' : 'Create Referral'}
               </button>

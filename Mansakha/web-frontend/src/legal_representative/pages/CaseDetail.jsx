@@ -110,7 +110,7 @@ function DocumentsCard({ documents }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <FileText size={15} className="text-[#3D5A80]" />
+        <FileText size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Case Documents</h3>
       </div>
       {documents?.length > 0 ? (
@@ -155,7 +155,7 @@ function HearingNoteForm({ requestId, hearingDate, onAdded }) {
 
   if (!open) {
     return (
-      <button onClick={() => setOpen(true)} className="flex items-center gap-1 text-[11px] font-semibold text-[#519BCE] hover:underline">
+      <button onClick={() => setOpen(true)} className="flex items-center gap-1 text-[11px] font-semibold text-brand-600 hover:underline">
         <PlusCircle size={12} /> Add Notes
       </button>
     );
@@ -170,7 +170,7 @@ function HearingNoteForm({ requestId, hearingDate, onAdded }) {
       />
       {error && <p className="text-xs text-rose-600">{error}</p>}
       <div className="flex gap-2">
-        <button onClick={handleSubmit} disabled={!noteText.trim() || addNote.loading} className="px-3 py-1.5 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
+        <button onClick={handleSubmit} disabled={!noteText.trim() || addNote.loading} className="px-3 py-1.5 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
           {addNote.loading ? 'Saving...' : 'Save Note'}
         </button>
         <button onClick={() => { setOpen(false); setNoteText(''); }} className="px-3 py-1.5 text-gray-500 text-xs">Cancel</button>
@@ -187,7 +187,7 @@ function HearingTimeline({ requestId, hearingTimeline, onChanged, canAddNotes })
     return (
       <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm">
         <div className="flex items-center gap-1.5 mb-2">
-          <Gavel size={15} className="text-[#3D5A80]" />
+          <Gavel size={15} className="text-brand-900" />
           <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
         </div>
         <p className="text-xs text-gray-400">{hearingTimeline?.reason || 'Not available yet.'}</p>
@@ -199,7 +199,7 @@ function HearingTimeline({ requestId, hearingTimeline, onChanged, canAddNotes })
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <Gavel size={15} className="text-[#3D5A80]" />
+        <Gavel size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
       </div>
       <p className="text-[11px] text-gray-400">Sourced from the eCourt record - not editable here.</p>

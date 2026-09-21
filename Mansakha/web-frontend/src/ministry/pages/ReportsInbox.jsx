@@ -40,7 +40,7 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload,
           <p className="text-xs text-gray-500">
             Submitted by {r.generatedByName || 'Unknown'} - {new Date(r.generatedAt).toLocaleString()}
             {r.isForwarded && r.forwardedByName && (
-              <span className="ml-1.5 text-[#3D5A80] font-semibold">- Forwarded by {r.forwardedByName}{r.forwardedAt ? ` on ${new Date(r.forwardedAt).toLocaleDateString()}` : ''}</span>
+              <span className="ml-1.5 text-brand-900 font-semibold">- Forwarded by {r.forwardedByName}{r.forwardedAt ? ` on ${new Date(r.forwardedAt).toLocaleDateString()}` : ''}</span>
             )}
           </p>
         </div>
@@ -73,8 +73,8 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload,
       {expanded && (
         <div className="px-6 pb-4 text-xs text-gray-600 space-y-3">
           {r.commentary && (
-            <div className="bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg p-3">
-              <p className="font-bold text-[#3D5A80] text-[11px] uppercase mb-1">Commentary</p>
+            <div className="bg-brand-50/60 border border-brand-100 rounded-lg p-3">
+              <p className="font-bold text-brand-900 text-[11px] uppercase mb-1">Commentary</p>
               <p className="whitespace-pre-wrap">{r.commentary}</p>
             </div>
           )}
@@ -172,7 +172,7 @@ export default function ReportsInbox() {
             <button
               onClick={() => setTab('inbox')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                tab === 'inbox' ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                tab === 'inbox' ? 'bg-brand-900 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
               }`}
             >
               Inbox {inboxReports.length > 0 ? `(${inboxReports.length})` : ''}
@@ -180,7 +180,7 @@ export default function ReportsInbox() {
             <button
               onClick={() => setTab('outbox')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                tab === 'outbox' ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                tab === 'outbox' ? 'bg-brand-900 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
               }`}
             >
               Outbox {outboxReports.length > 0 ? `(${outboxReports.length})` : ''}
@@ -189,7 +189,7 @@ export default function ReportsInbox() {
 
           <button
             onClick={() => setShowBuilder(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-900 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold shadow-sm transition"
           >
             <FilePlus size={14} />
             New Report

@@ -104,7 +104,7 @@ export default function GenerateReportModal({ jurisdictionId, onClose, onGenerat
                   onClick={() => setPeriodType(p.value)}
                   className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
                     periodType === p.value
-                      ? 'bg-[#519BCE]/15 text-[#519BCE]'
+                      ? 'bg-brand-700/15 text-brand-600'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50 border border-gray-200'
                   }`}
                 >
@@ -173,10 +173,10 @@ export default function GenerateReportModal({ jurisdictionId, onClose, onGenerat
             <label className="text-[11px] font-bold text-gray-500 uppercase block mb-2">Share With</label>
             <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5">
               <div className="flex items-center gap-2">
-                <input type="checkbox" checked disabled className="w-4 h-4 accent-[#519BCE] opacity-70" />
+                <input type="checkbox" checked disabled className="w-4 h-4 accent-brand-400 opacity-70" />
                 <span className="text-xs font-semibold text-gray-600">Ministry (Primary Recipient)</span>
               </div>
-              <span className="text-[10px] font-bold text-[#3D5A80] bg-[#EBF4FA] border border-[#D6E8F5] px-2 py-0.5 rounded-full shrink-0">Required</span>
+              <span className="text-[10px] font-bold text-brand-900 bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-full shrink-0">Required</span>
             </div>
           </div>
 
@@ -210,7 +210,7 @@ export default function GenerateReportModal({ jurisdictionId, onClose, onGenerat
               type="button"
               disabled={isBusy}
               onClick={() => handleSubmit(false)}
-              className="px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
+              className="px-4 py-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
             >
               {submitting === 'submit' ? 'Submitting...' : 'Submit'}
             </button>

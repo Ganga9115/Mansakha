@@ -41,7 +41,7 @@ export function ToastProvider({ children }) {
         icons={{
           success: <CheckCircle size={18} className="text-emerald-600" />,
           error: <AlertCircle size={18} className="text-rose-600" />,
-          info: <Info size={18} className="text-[#3D5A80]" />,
+          info: <Info size={18} className="text-brand-900" />,
         }}
         toastOptions={{
           classNames: {
@@ -51,7 +51,7 @@ export function ToastProvider({ children }) {
             closeButton: 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600',
             success: '!border-l-4 !border-l-emerald-500',
             error: '!border-l-4 !border-l-rose-500',
-            info: '!border-l-4 !border-l-[#519BCE]',
+            info: '!border-l-4 !border-l-[#5b62c2]',
           },
         }}
       />

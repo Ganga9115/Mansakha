@@ -92,7 +92,7 @@ function ConfigPanel({ resource, listKey, nameKey = 'name', writeKey = 'name' })
         <button
           type="submit"
           disabled={create.loading}
-          className="flex items-center gap-1.5 px-3 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+          className="flex items-center gap-1.5 px-3 py-2 bg-brand-900 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
         >
           <Plus size={14} /> Add
         </button>
@@ -124,7 +124,7 @@ function ConfigPanel({ resource, listKey, nameKey = 'name', writeKey = 'name' })
               )}
               <div className="flex items-center gap-2">
                 {isEditing ? (
-                  <button onClick={() => handleSaveEdit(id)} className="text-xs font-semibold text-[#519BCE] hover:underline">Save</button>
+                  <button onClick={() => handleSaveEdit(id)} className="text-xs font-semibold text-brand-800 hover:underline">Save</button>
                 ) : (
                   <button onClick={() => startEdit(item)} className="p-1.5 text-gray-400 hover:text-gray-700">
                     <Pencil size={14} />
@@ -263,7 +263,7 @@ function PoliceStationsPanel() {
                 type="button"
                 onClick={handleFetch}
                 disabled={!stationCode.trim() || fetchStation.loading}
-                className="px-3 py-2 border border-[#519BCE] text-[#519BCE] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                className="px-3 py-2 border border-brand-800 text-brand-800 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
               >
                 {fetchStation.loading ? 'Fetching...' : 'Fetch Station'}
               </button>
@@ -281,7 +281,7 @@ function PoliceStationsPanel() {
               <button
                 type="submit"
                 disabled={!name.trim() || createStation.loading}
-                className="flex items-center gap-1.5 px-3 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                className="flex items-center gap-1.5 px-3 py-2 bg-brand-900 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
               >
                 <Plus size={14} /> Add
               </button>
@@ -312,7 +312,7 @@ function PoliceStationsPanel() {
                   )}
                   <div className="flex items-center gap-2">
                     {isEditing ? (
-                      <button onClick={() => handleSaveEdit(s.stationId)} className="text-xs font-semibold text-[#519BCE] hover:underline">Save</button>
+                      <button onClick={() => handleSaveEdit(s.stationId)} className="text-xs font-semibold text-brand-800 hover:underline">Save</button>
                     ) : (
                       <button onClick={() => startEdit(s)} className="p-1.5 text-gray-400 hover:text-gray-700">
                         <Pencil size={14} />
@@ -345,7 +345,7 @@ export default function SystemConfig() {
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`px-4 py-2 rounded-lg text-xs font-semibold transition ${
-                activeTab === tab.key ? 'bg-[#519BCE]/15 text-[#519BCE]' : 'text-gray-600 hover:bg-gray-50'
+                activeTab === tab.key ? 'bg-brand-900/15 text-brand-800' : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
               {tab.label}

@@ -12,7 +12,8 @@ import { useResponsive } from '../../shared/hooks/useResponsive';
 import RiskBadge from '../../shared/components/RiskBadge';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
-import BottomNavBar from '../../shared/components/BottomNavBar';
+import BottomNavBar, { BOTTOM_NAV_BAR_HEIGHT } from '../../shared/components/BottomNavBar';
+import { FAB_GAP_ABOVE_NAV_BAR, FAB_SIZE } from '../../shared/components/AiChatButton';
 import { QueryBoundary } from '../../shared/components/QueryStates';
 import { useUserDashboard, useUpcomingSessions, useAssignedCounsellor, useRehabilitationProgress } from '../../shared/services/hooks';
 import { useActiveCase } from '../../shared/context/ActiveCaseContext';
@@ -114,7 +115,15 @@ export default function HomeScreen({ navigation }) {
 
               <ScrollView
                 style={styles.container}
-                contentContainerStyle={!isDesktop ? styles.scrollContentMobile : null}
+                contentContainerStyle={!isDesktop ? [
+                  styles.scrollContentMobile,
+                  // Must clear the floating AI Chat button's full footprint
+                  // (which sits above the nav bar, not the nav bar itself),
+                  // or its last few pixels of vertical travel permanently sit
+                  // on top of whatever content is last in this scroll view -
+                  // exactly what let it overlap Recent Activity's last row.
+                  { paddingBottom: Math.max(insets.bottom, 12) + BOTTOM_NAV_BAR_HEIGHT + FAB_GAP_ABOVE_NAV_BAR + FAB_SIZE + spacing.md },
+                ] : null}
                 bounces={false}
                 showsVerticalScrollIndicator={false}
               >
@@ -408,9 +417,7 @@ export default function HomeScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.primaryLight },
   container: { flex: 1, backgroundColor: colors.background },
-  scrollContentMobile: {
-    paddingBottom: 100, // Clearance for floating bottom navbar
-  },
+  scrollContentMobile: {},
   topHeader: {
     backgroundColor: colors.primaryLight,
     paddingTop: spacing.xxxl,
@@ -600,7 +607,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: spacing.lg,
+    padding: spacing.xl,
+    // Extra breathing room below the last item specifically - the uniform
+    // padding above technically applied evenly, but the last session card's
+    // own bottom edge still read as flush against this card's edge.
+    paddingBottom: spacing.xl + spacing.md,
+    // The real, permanent fix for "child pokes past a rounded corner" is
+    // overflow: hidden, not padding arithmetic - the shared Card component
+    // (shared/components/Card.js) already does this, which is why cards
+    // built from it never had this bug. This standalone card didn't, so
+    // nothing clipped its children to the curve. Padding above still helps
+    // (keeps content from touching the shadow-visible edge), but this is
+    // what actually guarantees nothing crosses the boundary.
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: spacing.lg,
@@ -621,7 +640,11 @@ const styles = StyleSheet.create({
   sessionItemBox: {
     backgroundColor: colors.primaryLight + '50',
     borderRadius: radius.lg,
-    padding: spacing.md,
+    padding: spacing.lg,
+    // Guarantees the dateBlock (or anything else) can never visually cross
+    // this card's rounded edge, regardless of padding math - see
+    // sectionContainerCard's own comment on why this is the real fix.
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.border,
   },

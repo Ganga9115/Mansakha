@@ -98,7 +98,7 @@ function ImmediateReliefCard({ r, referralId, onChanged }) {
           <button
             onClick={handleApprove}
             disabled={approve.loading || assistanceTypes.length === 0 || (assistanceTypes.includes('Financial') && !financialAmount) || (assistanceTypes.includes('Essential Support') && !essentialSupportNotes.trim())}
-            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+            className="px-4 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
           >
             {approve.loading ? 'Approving...' : 'Approve Relief'}
           </button>
@@ -120,7 +120,7 @@ function ImmediateReliefCard({ r, referralId, onChanged }) {
             <button
               onClick={handleMarkProvided}
               disabled={markProvided.loading}
-              className="px-4 py-2 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+              className="px-4 py-2 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
             >
               {markProvided.loading ? 'Updating...' : 'Mark as Provided'}
             </button>

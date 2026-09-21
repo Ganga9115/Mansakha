@@ -50,7 +50,7 @@ function ContactDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <User size={15} className="text-[#3D5A80]" />
+        <User size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Victim Contact Details</h3>
       </div>
       <p className="text-[11px] text-gray-400">Every view of these details is recorded in the audit log.</p>
@@ -63,7 +63,7 @@ function ContactDetailsCard({ r }) {
       {r.victimContactNumber && (
         <div>
           <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
-          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
             <Phone size={12} /> {r.victimContactNumber}
           </a>
         </div>
@@ -84,7 +84,7 @@ function DocumentsCard({ documents }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <FileText size={15} className="text-[#3D5A80]" />
+        <FileText size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Documents</h3>
       </div>
       {documents?.length > 0 ? (
@@ -116,7 +116,7 @@ function HearingTimelineCard({ hearingTimeline }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <Gavel size={15} className="text-[#3D5A80]" />
+        <Gavel size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
       </div>
       {!hearingTimeline?.available ? (
@@ -281,13 +281,13 @@ export default function LegalAidRequestDetail() {
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {r.status === 'Submitted' && (
-              <button onClick={() => runAction(startReview.mutate, r.requestId)} disabled={startReview.loading} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
+              <button onClick={() => runAction(startReview.mutate, r.requestId)} disabled={startReview.loading} className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
                 {startReview.loading ? 'Working...' : 'Start Review'}
               </button>
             )}
             {r.status === 'Under Review' && !pendingAssignment && !showRejectReason && !showAssign && (
               <>
-                <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition">
+                <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition">
                   Assign Public Prosecutor
                 </button>
                 <button onClick={() => setShowRejectReason(true)} className="px-4 py-2 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold transition">
@@ -352,7 +352,7 @@ export default function LegalAidRequestDetail() {
               <button
                 onClick={() => runAction(assign.mutate, r.requestId, { representativeOfficialId: repId }).then(() => setShowAssign(false))}
                 disabled={!repId || assign.loading}
-                className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
               >
                 {assign.loading ? 'Working...' : 'Confirm Assignment'}
               </button>
