@@ -1194,12 +1194,13 @@ router.get(
     const { rows: officialRows } = await pool.query(
       `select o.official_id, o.full_name, r.role_name, orr.designation, orr.station_id, ps.name as station_name,
               coalesce(orr.jurisdiction_id, ps.jurisdiction_id) as effective_jurisdiction_id,
-              j.name as jurisdiction_name
+              j.name as jurisdiction_name, sj.name as state_name
        from official_roles orr
        join officials o on o.official_id = orr.official_id
        join roles r on r.role_id = orr.role_id
        left join police_stations ps on ps.station_id = orr.station_id
        left join jurisdictions j on j.jurisdiction_id = coalesce(orr.jurisdiction_id, ps.jurisdiction_id)
+       left join jurisdictions sj on sj.jurisdiction_id = j.parent_id
        where orr.revoked_at is null
          and r.role_name in ('Protection Officer', 'District Welfare Officer', 'DLSA Coordinator', 'Investigating Officer')
          and coalesce(orr.jurisdiction_id, ps.jurisdiction_id) = any($1::uuid[])`,
@@ -1285,6 +1286,7 @@ router.get(
         designation: o.designation,
         jurisdictionId: o.effective_jurisdiction_id,
         jurisdictionName: o.jurisdiction_name,
+        stateName: o.state_name,
         stationName: o.station_name,
         openReferralCount: q ? Number(q.open_count) : 0,
         resolvedReferralCount: q ? Number(q.resolved_count) : 0,
