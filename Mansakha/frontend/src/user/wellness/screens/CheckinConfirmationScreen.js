@@ -23,7 +23,7 @@ import BottomNavBar from '../../shared/components/BottomNavBar';
 export default function CheckinConfirmationScreen({ route, navigation }) {
   const { tier, isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
-  const { riskLevel, summary, alertTriggered } = route?.params || {};
+  const { scored, riskLevel, summary, alertTriggered, questionsAnswered, questionsUntilFirstScore } = route?.params || {};
 
   return (
     <View style={styles.container}>
@@ -61,6 +61,19 @@ export default function CheckinConfirmationScreen({ route, navigation }) {
 
         {/* Simplified Assessment Text */}
         <Text style={styles.body}>Thank you for taking a moment for yourself. You're doing great!</Text>
+
+        {/* Below the first-scoring threshold, there's no distress level yet -
+            explain why instead of just silently omitting the badge, so it
+            doesn't read as a missing/broken feature. */}
+        {scored === false && typeof questionsAnswered === 'number' && (
+          <View style={styles.progressCard}>
+            <Feather name="trending-up" size={16} color={colors.primary} style={{ marginBottom: spacing.xs }} />
+            <Text style={styles.progressCardTitle}>Building your profile</Text>
+            <Text style={styles.progressCardText}>
+              {questionsAnswered}/105 questions answered - {questionsUntilFirstScore} more until your first personalized insight.
+            </Text>
+          </View>
+        )}
 
         {/* AI-derived distress level + summary from this check-in's conversation */}
         {(riskLevel || summary) && (
@@ -149,6 +162,23 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     marginBottom: spacing.xl,
     paddingHorizontal: spacing.sm,
+  },
+  progressCard: {
+    width: '100%',
+    backgroundColor: colors.primaryLight + '80',
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  progressCardTitle: {
+    ...typography.bodyStrong,
+    color: colors.primaryDark,
+    marginBottom: spacing.xs,
+  },
+  progressCardText: {
+    ...typography.bodySmall,
+    color: colors.primary,
+    lineHeight: 19,
   },
   summaryCard: {
     width: '100%',

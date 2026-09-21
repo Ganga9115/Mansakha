@@ -326,6 +326,19 @@ router.get('/dashboard', async (req, res) => {
 // Ollama-derived distress analysis, and this route scores it through the same
 // computeDistressScore/alerts/case-note pipeline analyzeInteraction() used to
 // feed (see ai/ai.js's analyzeInteractionFromClientAi).
+//
+// New users get no distress prediction at all until they've answered a
+// cumulative CHECKIN_SCORE_QUESTION_THRESHOLD questions across their
+// check-ins - same running-counter pattern as CHAT_SCORE_WORD_THRESHOLD
+// further down this file (users.checkin_question_count, migration_049),
+// except this counter never resets once threshold is crossed - there's only
+// ever one "first score" gate, not a repeating one. Below threshold,
+// scoring/alerts/tiered-response are skipped entirely (no exceptions - even
+// a Critical-sounding answer produces no alert until enough signal has
+// accumulated), but the interaction and its AI case-note summary are still
+// recorded, same as always.
+const CHECKIN_SCORE_QUESTION_THRESHOLD = 105;
+
 router.post('/checkin', async (req, res) => {
   const userId = req.auth.userId;
   const { channel, responses, aiAnalysis, audioBase64 } = req.body;
@@ -343,6 +356,32 @@ router.post('/checkin', async (req, res) => {
   } catch (err) {
     if (err instanceof PipelineError) return fail(res, err.message, err.status);
     throw err;
+  }
+
+  const questionsThisCheckin = Array.isArray(responses) ? responses.length : 0;
+  const { rows: questionCountRows } = await pool.query(
+    `update users set checkin_question_count = checkin_question_count + $2 where user_id = $1 returning checkin_question_count`,
+    [userId, questionsThisCheckin]
+  );
+  const cumulativeQuestions = questionCountRows[0]?.checkin_question_count ?? questionsThisCheckin;
+
+  if (cumulativeQuestions < CHECKIN_SCORE_QUESTION_THRESHOLD) {
+    const preThresholdSummary = aiAnalysis?.summary?.trim() || null;
+    if (preThresholdSummary) {
+      try {
+        await supabase.from('case_notes').insert({ user_id: userId, official_id: null, note_text: preThresholdSummary, authored_by: 'ai' });
+      } catch (err) {
+        console.warn('checkin: saving AI case-note summary failed (non-fatal):', err.message);
+      }
+    }
+    await writeAuditLog({ userId, action: 'create', entityType: 'interaction', entityId: interactionId });
+    return ok(res, {
+      interactionId,
+      scored: false,
+      questionsAnswered: cumulativeQuestions,
+      questionsUntilFirstScore: CHECKIN_SCORE_QUESTION_THRESHOLD - cumulativeQuestions,
+      summary: preThresholdSummary,
+    }, null, 201);
   }
 
   let analysis;
@@ -400,6 +439,7 @@ router.post('/checkin', async (req, res) => {
 
   return ok(res, {
     interactionId,
+    scored: true,
     scoreValue: analysis.scoreValue,
     riskLevel: analysis.riskLevel,
     alertTriggered: alertId !== null,

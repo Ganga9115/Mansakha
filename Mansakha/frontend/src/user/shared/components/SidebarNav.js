@@ -60,7 +60,20 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
             return (
               <Pressable
                 key={route.key}
-                onPress={() => navigation.navigate(route.name)}
+                onPress={() => {
+                  // 'checkin' nests its own stack (CheckinMain ->
+                  // CheckinConfirmation once a check-in finishes - see
+                  // UserShell.js's CheckinTab) - navigating to just the
+                  // route name leaves whatever screen was last on top of
+                  // that stack in place, so this sidebar link would keep
+                  // showing a finished check-in's confirmation screen
+                  // instead of letting the user start a new one.
+                  if (route.name === 'checkin') {
+                    navigation.navigate('checkin', { screen: 'CheckinMain' });
+                  } else {
+                    navigation.navigate(route.name);
+                  }
+                }}
                 style={({ pressed }) => [
                   styles.item,
                   isActive && styles.itemActive,

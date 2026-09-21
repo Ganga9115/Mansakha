@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, Text, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, ScrollView, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -41,6 +42,14 @@ const EMOJI = {
   handshake: require('../../../../assets/emoji-handshake.png'),
   speechBalloon: require('../../../../assets/emoji-speech_balloon.png'),
   thinking: require('../../../../assets/emoji-thinking.png'),
+  sleeping: require('../../../../assets/emoji-sleeping.png'),
+  relieved: require('../../../../assets/emoji-relieved.png'),
+  crying: require('../../../../assets/emoji-crying.png'),
+  angry: require('../../../../assets/emoji-angry.png'),
+  fearful: require('../../../../assets/emoji-fearful.png'),
+  pray: require('../../../../assets/emoji-pray.png'),
+  disappointed: require('../../../../assets/emoji-disappointed.png'),
+  strong: require('../../../../assets/emoji-strong.png'),
 };
 
 export default function CheckinScreen({ navigation }) {
@@ -82,6 +91,35 @@ export default function CheckinScreen({ navigation }) {
   const [isTranscribingVoice, setIsTranscribingVoice] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 200);
+
+  // The Check-in tab stays mounted under React Navigation's bottom-tab
+  // navigator, so without this, finishing a check-in left isFinished stuck
+  // at true forever - the very next visit to this tab showed the
+  // "Analyzing your responses..." spinner permanently (and hid the quote
+  // box, gated on the same condition) instead of a fresh question 1,
+  // because nothing ever set isFinished back to false. Resetting on focus,
+  // but only when isFinished is already true, means an accidental tab
+  // switch mid check-in doesn't wipe in-progress answers - only returning
+  // after an actual completed submission starts over.
+  useFocusEffect(
+    useCallback(() => {
+      if (isFinished) {
+        setResponses([]);
+        setCurrentQuestion({
+          text: OPENING_GREETING,
+          type: 'single',
+          options: ['I am doing okay', 'I am feeling anxious', 'I need some help', 'Other...']
+        });
+        setSelectedOptions([]);
+        setDraft('');
+        setVoiceAudioBase64(null);
+        setVoiceTranscript('');
+        setSubmitting(false);
+        setIsFinished(false);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isFinished])
+  );
 
   useEffect(() => {
     if (historyQuery.data?.history) {
@@ -350,9 +388,12 @@ export default function CheckinScreen({ navigation }) {
       });
       
       navigation.navigate('CheckinConfirmation', {
+        scored: result.scored,
         riskLevel: result.riskLevel,
         summary: result.summary,
         alertTriggered: result.alertTriggered,
+        questionsAnswered: result.questionsAnswered,
+        questionsUntilFirstScore: result.questionsUntilFirstScore,
       });
     } catch (err) {
       toast.error(err.message || 'Could not submit your check-in.');
@@ -361,45 +402,84 @@ export default function CheckinScreen({ navigation }) {
     }
   };
 
-  const progressPercentage = Math.min((responses.length / TOTAL_QUESTIONS) * 100, 100);
+  // Matches the "current question number" shown in the fraction label
+  // (Math.min(responses.length + 1, TOTAL_QUESTIONS)) rather than
+  // "questions completed so far" - so question 1 of 15 shows a small
+  // visible sliver of fill instead of a fully empty bar, matching the
+  // reference design.
+  const progressPercentage = Math.min(((responses.length + 1) / TOTAL_QUESTIONS) * 100, 100);
 
   // Emoji + a sentiment-tinted circle instead of a flat line icon, matching
-  // the reference design's mood-grid look (cool blue-gray for low/negative,
-  // Exact 4-tone palette from the reference mood grid: mint for
-  // positive/calm, rose-pink for anxious/distressed, peach for help-seeking,
-  // lavender for other/neutral. Help/support is checked first so options
-  // like "I need some help" land on peach instead of being swallowed by a
-  // "some"/neutral match - see the fixed first question's 4 options, which
-  // this heuristic must reproduce exactly: doing okay -> mint,
-  // feeling anxious -> pink, need some help -> peach, Other... -> lavender.
+  // the reference design's mood-grid look. The fixed first question's 4
+  // options must reproduce the reference exactly: doing okay -> mint,
+  // feeling anxious -> pink, need some help -> peach, Other... -> lavender
+  // (the first three checks below, in that priority order). Below that,
+  // more specific topical buckets (sleep, fear, anger, grief, relief,
+  // gratitude, pride) run before the generic sentiment fallbacks, so
+  // Ollama's free-text options - which range far wider than "positive vs
+  // negative" - get a face that actually matches what they say instead of
+  // always collapsing to the same handful of generic ones.
   const getOptionIcon = (opt) => {
     const lower = opt.toLowerCase();
-    // Help / support-seeking
+    // Help / support-seeking - same worried face as anxious, on peach
+    // instead of pink, matching the reference's "I need some help" card.
     if (/(help|support|someone|guidance|assist)/.test(lower)) {
-      return { image: EMOJI.handshake, bg: '#F7ECDD' };
+      return { image: EMOJI.confused, bg: '#FBF5EC' };
     }
-    // Strongly negative / distressed
+    // Strongly negative / distressed (incl. anxious - reference's pink card)
     if (/(very low|quite isolated|mostly difficult|not safe|not very|struggl|hard|worried|unsafe|quite a lot|quite a bit|significantly disrupted|no\b|nothing|anxious)/.test(lower)) {
-      return { image: EMOJI.pensive, bg: '#FBE4E7' };
+      return { image: EMOJI.confused, bg: '#FDF1F3' };
+    }
+    // Sleep / rest / tiredness
+    if (/(sleep|tired|rest|insomnia|exhausted|fatigue|yawn|nap)/.test(lower)) {
+      return { image: EMOJI.sleeping, bg: '#EEF1FA' };
+    }
+    // Fear / feeling unsafe or threatened
+    if (/(afraid|scared|fear|frighten|threat|danger|terrified)/.test(lower)) {
+      return { image: EMOJI.fearful, bg: '#F1ECFB' };
+    }
+    // Anger / frustration
+    if (/(angry|anger|frustrat|annoyed|irritat|furious|mad\b)/.test(lower)) {
+      return { image: EMOJI.angry, bg: '#FBEAE6' };
+    }
+    // Crying / grief / heartbreak
+    if (/(cry|crying|tearful|heartbroken|grief|grieving|devastat)/.test(lower)) {
+      return { image: EMOJI.crying, bg: '#EBF0FA' };
+    }
+    // Relief / calm / at ease
+    if (/(reliev|calmer|at ease|peaceful|settl|soothed)/.test(lower)) {
+      return { image: EMOJI.relieved, bg: '#EAF5F1' };
+    }
+    // Gratitude
+    if (/(grateful|thankful|blessed|appreciat)/.test(lower)) {
+      return { image: EMOJI.pray, bg: '#FBF3E3' };
+    }
+    // Disappointment / discouragement
+    if (/(disappoint|let down|discourag|disheartened)/.test(lower)) {
+      return { image: EMOJI.disappointed, bg: '#EEF0F5' };
+    }
+    // Pride / accomplishment / feeling capable
+    if (/(proud|accomplish|capable|achieved|overcome|resilient)/.test(lower)) {
+      return { image: EMOJI.strong, bg: '#EAF3E9' };
     }
     // Mildly negative / uncertain
     if (/(low|sad|uncertain|distant|a bit|somewhat unsure|restless|difficult|isolated|disrupted)/.test(lower)) {
-      return { image: EMOJI.confused, bg: '#FDECEE' };
+      return { image: EMOJI.pensive, bg: '#FEF5F6' };
     }
     // Positive / calm / okay
     if (/(okay|good|connected|supported|stable|hopeful|safe\b|fine|well|better|steady|normal|calm|confident|yes\b|helped|managing|fairly steady|sometimes)/.test(lower)) {
-      return { image: EMOJI.slightlySmiling, bg: '#DFF3E6' };
+      return { image: EMOJI.slightlySmiling, bg: '#EEF8F1' };
     }
     // Strongly positive
     if (/(great|really|very connected|very safe|excellent|definitely)/.test(lower)) {
-      return { image: EMOJI.grinning, bg: '#CDEBD9' };
+      return { image: EMOJI.grinning, bg: '#E3F2E8' };
     }
     if (lower.includes('other') || lower.includes('rather')) {
-      return { image: EMOJI.speechBalloon, bg: colors.primaryLight };
+      return { image: EMOJI.speechBalloon, bg: colors.primaryLight + 'A0' };
     }
     // Neutral / mixed / "it varies"
     if (/(somewhat|mixed|varies|some|a little)/.test(lower)) {
-      return { image: EMOJI.neutral, bg: '#EDEAF7' };
+      return { image: EMOJI.neutral, bg: '#F4F2FA' };
     }
     return { image: EMOJI.thinking, bg: colors.primaryLight };
   };
@@ -458,7 +538,7 @@ export default function CheckinScreen({ navigation }) {
             ) : (
               <View style={{ alignItems: 'flex-end' }}>
                 <TopRightActions />
-                <Text style={styles.youMatterText}>You Matter ♡</Text>
+                <Text style={styles.youMatterText}>{'You\nMatter ♡'}</Text>
               </View>
             )}
           </View>
@@ -479,7 +559,16 @@ export default function CheckinScreen({ navigation }) {
                 desktop reference's top-right placement next to the
                 progress bar. */}
             {isDesktop && (
-              <Text style={styles.youMatterTextDesktop}>You Matter ♡</Text>
+              <View style={styles.youMatterCloudWrap}>
+                <MaterialCommunityIcons
+                  name="cloud"
+                  size={130}
+                  color={colors.primary}
+                  style={styles.youMatterCloudIcon}
+                  pointerEvents="none"
+                />
+                <Text style={styles.youMatterTextDesktop}>{'You\nMatter ♡'}</Text>
+              </View>
             )}
             <View
               style={[
@@ -743,6 +832,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     position: 'relative',
     overflow: 'hidden',
+    // The screen background is the same lavender as the header (unlike
+    // other screens, whose body is off-white), so without an explicit edge
+    // here the header visually merges into the page - this border is what
+    // keeps it reading as its own top bar.
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary + '20',
   },
   headerLeafDecoration: {
     position: 'absolute',
@@ -757,11 +852,12 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   youMatterText: {
-    ...typography.bodySmall,
+    fontFamily: 'Caveat_700Bold',
+    fontSize: 26,
+    lineHeight: 26,
     color: colors.primary,
-    fontStyle: 'italic',
-    fontWeight: '600',
     marginTop: spacing.sm,
+    textAlign: 'right',
   },
   topHeaderDesktop: {
     height: 64,
@@ -789,15 +885,33 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
   },
-  youMatterTextDesktop: {
-    ...typography.bodySmall,
-    color: colors.primary,
-    fontStyle: 'italic',
-    fontWeight: '600',
+  // Fixed-size box so the icon and the text share the exact same center
+  // point, instead of the icon floating off to one side of wherever the
+  // text's own auto-sized bounds happened to land.
+  youMatterCloudWrap: {
     position: 'absolute',
-    top: spacing.xl,
-    right: 36,
-    textAlign: 'right',
+    top: spacing.lg,
+    right: 20,
+    width: 150,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // A real cloud glyph, not a hand-assembled shape - guarantees it actually
+  // reads as a cloud instead of an ambiguous blob/pill.
+  youMatterCloudIcon: {
+    position: 'absolute',
+    top: 0,
+    left: 15,
+    opacity: 0.16,
+  },
+  youMatterTextDesktop: {
+    fontFamily: 'Caveat_700Bold',
+    fontSize: 22,
+    lineHeight: 24,
+    color: colors.primary,
+    textAlign: 'center',
+    marginTop: 14,
   },
   contentBody: {
     flex: 1,
@@ -998,11 +1112,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.primaryLight + '80',
+    // A solid, more saturated lavender than the page background (which is
+    // now the same base primaryLight tone) - the old alpha-blended version
+    // barely showed up against a page that's the same color underneath it.
+    backgroundColor: '#E4D9F7',
     borderRadius: radius.lg,
     padding: spacing.lg,
     marginTop: spacing.lg,
     overflow: 'hidden',
+    ...shadow.sm,
   },
   quoteLeafIcon: {
     opacity: 0.85,

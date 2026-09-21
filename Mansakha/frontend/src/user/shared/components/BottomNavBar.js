@@ -91,7 +91,18 @@ export default function BottomNavBar({ currentTab = 'Home', navigation }) {
 
   const handleNavigation = (targetRoute) => {
     if (!navigation) return;
-    navigation.navigate('MainTabs', { screen: targetRoute });
+    if (targetRoute === 'checkin') {
+      // 'checkin' is the only tab backed by its own nested stack
+      // (CheckinMain -> CheckinConfirmation once a check-in finishes - see
+      // UserShell.js's CheckinTab). Navigating to just the tab name leaves
+      // whatever screen was last on top of that stack in place, so after
+      // finishing a check-in, tapping "Check-in" here kept showing the
+      // confirmation screen forever instead of a fresh question 1 - explicitly
+      // targeting CheckinMain pops the stack back to it every time.
+      navigation.navigate('MainTabs', { screen: 'checkin', params: { screen: 'CheckinMain' } });
+    } else {
+      navigation.navigate('MainTabs', { screen: targetRoute });
+    }
   };
 
   return (
