@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image } from 'react-native';
+import { View, Text, StyleSheet, Image, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
 import { radius } from '../../shared/theme/radius';
@@ -29,7 +30,23 @@ export default function CheckinConfirmationScreen({ route, navigation }) {
       <View style={[styles.helpButtonWrapper, { top: insets.top + spacing.md }]}>
         <GetHelpButton asHeaderIcon />
       </View>
-      <View style={{ maxWidth: formContentWidth[tier], width: '100%', alignItems: 'center', paddingBottom: !isDesktop ? 100 : 0 }}>
+      {/* Now scrollable, not just centered - the two new buttons and the
+          quote card pushed total content height past what a fixed,
+          non-scrolling View could safely guarantee fitting on a small
+          phone screen. */}
+      <ScrollView
+        style={{ width: '100%' }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          paddingTop: insets.top + spacing.xxl,
+          paddingHorizontal: spacing.xl,
+          paddingBottom: !isDesktop ? 100 : spacing.xl,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+      <View style={{ maxWidth: formContentWidth[tier], width: '100%', alignItems: 'center' }}>
         {/* Illustration Asset */}
         <View style={styles.illustrationWrapper}>
           <Image
@@ -40,10 +57,10 @@ export default function CheckinConfirmationScreen({ route, navigation }) {
         </View>
 
         {/* Main Success Title */}
-        <Text style={styles.title}>SUCCESS!!</Text>
+        <Text style={styles.title}>Check-In Completed!</Text>
 
         {/* Simplified Assessment Text */}
-        <Text style={styles.body}>Successfully completed the assessment</Text>
+        <Text style={styles.body}>Thank you for taking a moment for yourself. You're doing great!</Text>
 
         {/* AI-derived distress level + summary from this check-in's conversation */}
         {(riskLevel || summary) && (
@@ -67,7 +84,28 @@ export default function CheckinConfirmationScreen({ route, navigation }) {
             )}
           </View>
         )}
+
+        <View style={styles.quoteCard}>
+          <Feather name="feather" size={16} color={colors.primary} style={styles.quoteIcon} />
+          <Text style={styles.quoteText}>Every small step counts towards a healthier, happier you.</Text>
+        </View>
+
+        <Pressable
+          style={styles.primaryBtn}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'home' })}
+        >
+          <Feather name="home" size={18} color={colors.onPrimary} style={{ marginRight: spacing.sm }} />
+          <Text style={styles.primaryBtnText}>Back to Home</Text>
+        </Pressable>
+        <Pressable
+          style={styles.secondaryBtn}
+          onPress={() => navigation.navigate('MainTabs', { screen: 'history' })}
+        >
+          <Feather name="bar-chart-2" size={18} color={colors.primary} style={{ marginRight: spacing.sm }} />
+          <Text style={styles.secondaryBtnText}>View My Check-Ins</Text>
+        </Pressable>
       </View>
+      </ScrollView>
       {!isDesktop && <BottomNavBar currentTab="CheckIn" navigation={navigation} />}
     </View>
   );
@@ -77,9 +115,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
   },
   helpButtonWrapper: {
     position: 'absolute',
@@ -138,5 +173,57 @@ const styles = StyleSheet.create({
     color: colors.danger,
     marginTop: spacing.md,
     lineHeight: 16,
+  },
+  quoteCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.white,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  quoteIcon: {
+    marginTop: 2,
+  },
+  quoteText: {
+    ...typography.bodySmall,
+    color: colors.primaryDark,
+    fontStyle: 'italic',
+    flex: 1,
+    lineHeight: 19,
+  },
+  primaryBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadow.sm,
+  },
+  primaryBtnText: {
+    ...typography.bodyStrong,
+    color: colors.onPrimary,
+    fontSize: 15,
+  },
+  secondaryBtn: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: spacing.md,
+  },
+  secondaryBtnText: {
+    ...typography.bodyStrong,
+    color: colors.primary,
+    fontSize: 15,
   },
 });

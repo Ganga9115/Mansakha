@@ -26,6 +26,20 @@ import BottomNavBar from '../../shared/components/BottomNavBar';
 
 const TOTAL_QUESTIONS = 15;
 
+// A small, rotating set of supportive lines shown below the question - purely
+// decorative warmth (matches the "leaf + italic quote" card pattern from the
+// reference design), never referencing the case, the question, or the
+// person's actual answers, so it can't accidentally say something tone-deaf.
+const SUPPORTIVE_LINES = [
+  "It's okay to have tough days. You're still doing your best.",
+  'Progress, not perfection.',
+  'Every small step counts towards a healthier, happier you.',
+  "There's no right or wrong answer here - just be honest with yourself.",
+  'Taking a moment for yourself today already matters.',
+  'Small steps lead to big changes.',
+  "A problem shared is a step towards a solution.",
+];
+
 export default function CheckinScreen({ navigation }) {
   const toast = useToast();
   const dashboardQuery = useUserDashboard();
@@ -228,7 +242,9 @@ export default function CheckinScreen({ navigation }) {
       setSelectedOptions([]);
       setDraft('');
     } catch (err) {
-      toast.error('Ollama is offline or slow. Using a fallback question so you can continue.');
+      // Silent fallback by design - a victim mid-check-in should never see a
+      // technical error about the AI backend, the check-in should just keep
+      // moving using a pre-written, case-appropriate question instead.
       // -2: the first two fixed questions never draw from this pool, so the
       // pool starts at question 3 (history.length === 2 at that point).
       const fallbackIndex = Math.max(0, history.length - 2) % fallbackQuestions.length;
@@ -434,12 +450,19 @@ export default function CheckinScreen({ navigation }) {
                           ]}
                           onPress={() => toggleOption(opt)}
                         >
-                          <View style={[styles.iconCircle, { backgroundColor: iconInfo.bg }]}>
-                            <Feather name={iconInfo.name} size={18} color={iconInfo.color} />
+                          <View style={styles.iconCircleWrap}>
+                            <View style={[styles.iconCircle, { backgroundColor: iconInfo.bg }]}>
+                              <Feather name={iconInfo.name} size={20} color={iconInfo.color} />
+                            </View>
+                            {isSelected && (
+                              <View style={styles.selectedBadge}>
+                                <Feather name="check" size={11} color={colors.onPrimary} />
+                              </View>
+                            )}
                           </View>
-                          <Text 
+                          <Text
                             style={[
-                              styles.optionCardText, 
+                              styles.optionCardText,
                               isSelected && styles.optionCardTextSelected
                             ]}
                           >
@@ -448,6 +471,16 @@ export default function CheckinScreen({ navigation }) {
                         </Pressable>
                       );
                     })}
+                  </View>
+
+                  {/* Supportive line - warmth between the question and the
+                      actions, same purpose as the reference design's leaf-icon
+                      quote card. Rotates by question index, purely decorative. */}
+                  <View style={styles.quoteCard}>
+                    <Feather name="feather" size={16} color={colors.primary} style={styles.quoteIcon} />
+                    <Text style={styles.quoteText}>
+                      {SUPPORTIVE_LINES[responses.length % SUPPORTIVE_LINES.length]}
+                    </Text>
                   </View>
 
                   {selectedOptions.includes('Other...') && (
@@ -499,6 +532,7 @@ export default function CheckinScreen({ navigation }) {
                   {/* Card Actions */}
                   <View style={styles.actionRow}>
                     <Pressable style={styles.skipBtn} onPress={() => handleNext(true)}>
+                      <Feather name="arrow-left" size={16} color={colors.textSecondary} style={{ marginRight: spacing.xs }} />
                       <Text style={styles.skipBtnText}>
                         {responses.length === TOTAL_QUESTIONS - 1 ? 'Skip & Submit' : 'Skip Question'}
                       </Text>
@@ -718,14 +752,33 @@ const styles = StyleSheet.create({
   optionCardSelected: {
     borderColor: colors.primary,
     backgroundColor: colors.primaryLight,
+    ...shadow.sm,
+  },
+  iconCircleWrap: {
+    marginBottom: spacing.xs,
   },
   iconCircle: {
-    width: 34,
-    height: 34,
+    width: 44,
+    height: 44,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xs,
+  },
+  // Small checkmark badge overlaid on the icon circle's corner when an
+  // option is selected - same "mood emoji + checkmark badge" affordance
+  // as the reference design's mood-selection screen.
+  selectedBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 18,
+    height: 18,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   optionCardText: {
     ...typography.bodyStrong,
@@ -747,6 +800,27 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
     marginBottom: spacing.md,
+  },
+  // Supportive-line card - light lavender fill, a feather/leaf icon on the
+  // left, italic reassurance text on the right.
+  quoteCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.primaryLight + '80',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  quoteIcon: {
+    marginTop: 2,
+  },
+  quoteText: {
+    ...typography.bodySmall,
+    color: colors.primaryDark,
+    fontStyle: 'italic',
+    flex: 1,
+    lineHeight: 19,
   },
   divider: {
     height: 1,
@@ -815,13 +889,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: spacing.xs,
   },
-  skipBtn: { 
+  skipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  skipBtnText: { 
-    ...typography.bodySmall, 
-    color: colors.textSecondary, 
-    textDecorationLine: 'underline',
+  skipBtnText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '600',
   },
   nextBtn: {
     flexDirection: 'row',
