@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, Image, Pressable, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { spacing } from '../../shared/theme/spacing';
@@ -24,6 +25,25 @@ export default function CheckinConfirmationScreen({ route, navigation }) {
   const { tier, isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
   const { scored, riskLevel, summary, alertTriggered, questionsAnswered, questionsUntilFirstScore } = route?.params || {};
+
+  // Reaching into this screen's own nested stack (CheckinMain ->
+  // CheckinConfirmation) from 3 navigators away - the bottom nav bar or
+  // sidebar, through MainTabs' plain wrapper component - silently failed to
+  // route at all, not just failed to reset. Doing it locally instead:
+  // `navigation` here is this stack's OWN navigation prop (this screen IS a
+  // CheckinStack.Screen - see UserShell.js), so popToTop() is a direct,
+  // always-reliable call with no cross-navigator ambiguity. It fires the
+  // moment this screen blurs - whichever way the user leaves it (Back to
+  // Home, View My Check-Ins, a different tab, browser back) - so by the
+  // time they return to the Check-in tab through any path, the stack is
+  // already sitting back on CheckinMain.
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        navigation.popToTop();
+      };
+    }, [navigation])
+  );
 
   return (
     <View style={styles.container}>

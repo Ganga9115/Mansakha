@@ -91,18 +91,14 @@ export default function BottomNavBar({ currentTab = 'Home', navigation }) {
 
   const handleNavigation = (targetRoute) => {
     if (!navigation) return;
-    if (targetRoute === 'checkin') {
-      // 'checkin' is the only tab backed by its own nested stack
-      // (CheckinMain -> CheckinConfirmation once a check-in finishes - see
-      // UserShell.js's CheckinTab). Navigating to just the tab name leaves
-      // whatever screen was last on top of that stack in place, so after
-      // finishing a check-in, tapping "Check-in" here kept showing the
-      // confirmation screen forever instead of a fresh question 1 - explicitly
-      // targeting CheckinMain pops the stack back to it every time.
-      navigation.navigate('MainTabs', { screen: 'checkin', params: { screen: 'CheckinMain' } });
-    } else {
-      navigation.navigate('MainTabs', { screen: targetRoute });
-    }
+    // Reaching 3 navigators deep (MainTabs -> checkin tab -> CheckinMain)
+    // through a chained {screen, params} object silently failed to route at
+    // all here (MainTabs' component is TabNavigatorWithFAB, a plain wrapper,
+    // not the Tab.Navigator itself) - the check-in stack's own reset now
+    // lives locally in CheckinConfirmationScreen instead (see its own
+    // popToTop-on-blur comment), so this just needs the plain, always-
+    // reliable one-level navigate every other tab already uses.
+    navigation.navigate('MainTabs', { screen: targetRoute });
   };
 
   return (
