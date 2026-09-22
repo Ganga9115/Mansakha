@@ -3,6 +3,7 @@ import { X, Sparkles } from 'lucide-react';
 import { useJurisdictionOptions, useGenerateAnalytics } from '../services/hooks';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Ministry Analytics & Workflow Task 2E - upward-routing report builder,
 // used as a MODAL from ReportsInbox.jsx (Ministry's console), not a route.
@@ -162,26 +163,24 @@ export default function ReportBuilder({ onClose, onSubmitted, defaultJurisdictio
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction Level</label>
-              <select
+              <GlideSelect
+                options={LEVELS.map((l) => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))}
                 value={level}
-                onChange={(e) => handleLevelChange(e.target.value)}
+                onChange={(val) => handleLevelChange(val)}
                 disabled={!!defaultJurisdictionId}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100"
-              >
-                {LEVELS.map((l) => <option key={l} value={l} className="capitalize">{l}</option>)}
-              </select>
+                ariaLabel="Jurisdiction Level"
+              />
             </div>
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction</label>
-              <select
+              <GlideSelect
+                options={currentOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
                 value={jurisdictionId}
-                onChange={(e) => { setJurisdictionId(e.target.value); setInsight(undefined); }}
+                onChange={(val) => { setJurisdictionId(val); setInsight(undefined); }}
                 disabled={!!defaultJurisdictionId}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100"
-              >
-                <option value="">Select...</option>
-                {currentOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-              </select>
+                placeholder="Select..."
+                ariaLabel="Jurisdiction"
+              />
             </div>
           </div>
 

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, BarChart, FileText, Bell, User, LogOut, Menu, X, Mail, Users2 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
+import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
 
 // State Admin's own dedicated shell - own copy of what used to be the
 // shared StaffLayout, trimmed to just State Admin's nav (includes Analysis,
@@ -32,6 +33,7 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
     .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
   const TitleIcon = activeNavItem?.icon;
+  const navItemsWithBadge = NAV_ITEMS.map((item) => (item.name === 'Mail' ? { ...item, badge: mailUnread?.count } : item));
 
   return (
     <div className="flex h-screen w-full bg-brand-50 text-gray-800 font-sans overflow-hidden">
@@ -60,34 +62,9 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
           </button>
         </div>
 
-        <nav className="space-y-2 p-6">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.name}
-                to={item.path}
-                end={item.name !== 'Mail'}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                    isActive
-                      ? 'bg-white text-brand-900 shadow-sm'
-                      : 'text-brand-100 hover:bg-white/10'
-                  }`
-                }
-              >
-                <Icon size={18} />
-                <span className="text-sm flex-1">{item.name}</span>
-                {item.name === 'Mail' && mailUnread?.count > 0 && (
-                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {mailUnread.count > 99 ? '99+' : mailUnread.count}
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
-        </nav>
+        <div className="p-6">
+          <SidebarGlideNav items={navItemsWithBadge} activeName={activeNavItem?.name} onItemClick={() => setSidebarOpen(false)} />
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">

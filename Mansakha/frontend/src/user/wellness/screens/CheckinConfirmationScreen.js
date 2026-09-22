@@ -147,7 +147,7 @@ export default function CheckinConfirmationScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.background,
   },
   helpButtonWrapper: {
     position: 'absolute',

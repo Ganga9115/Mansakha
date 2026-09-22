@@ -5,6 +5,7 @@ import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { HeartHandshake } from 'lucide-react';
 import { useReferralDetail, useResolveReferral, useHandOffRehabilitation, useRehabilitationProviders } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // District Welfare Officer's Referral Overview - just the case context and
 // the Forward-to-Rehabilitation action. Immediate Relief and Compensation
@@ -42,17 +43,15 @@ function HandOffRehabCard({ referralId, onHandedOff }) {
         <h3 className="font-bold text-sm text-gray-800">Forward to Rehabilitation Officer</h3>
       </div>
       <p className="text-[11px] text-gray-400">Select the government or NGO centre this case is being handed to.</p>
-      <select
+      <GlideSelect
+        options={providers.map((p) => ({ value: p.providerId, label: `${p.name} (${p.providerType})` }))}
         value={providerId}
-        onChange={(e) => setProviderId(e.target.value)}
+        onChange={(val) => setProviderId(val)}
+        placeholder={providersQuery.loading ? 'Loading centres...' : 'Select a centre...'}
         disabled={providersQuery.loading}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      >
-        <option value="" disabled>{providersQuery.loading ? 'Loading centres...' : 'Select a centre...'}</option>
-        {providers.map((p) => (
-          <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>
-        ))}
-      </select>
+        ariaLabel="Rehabilitation Centre"
+        menuWidth={260}
+      />
       <button
         onClick={handleSubmit}
         disabled={!providerId || handOffRehab.loading}

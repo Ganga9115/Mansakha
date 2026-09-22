@@ -4,6 +4,7 @@ import { apiClient } from '../services/apiClient';
 import { setToken } from '../services/auth';
 import { User, Lock, HeartHandshake, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import GlideSelect from '../components/GlideSelect';
 
 // The second deliberate "shared page" exception (see Login.jsx's own header
 // comment for the first) - a pre-role entry point for the coordination
@@ -146,17 +147,13 @@ export default function SignIn() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select
+                    <GlideSelect
+                      options={SIGNIN_ROLES}
                       value={roleName}
-                      onChange={(e) => setRoleName(e.target.value)}
-                      onKeyDown={focusOnEnter(emailRef)}
-                      required
-                      className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 bg-white transition-colors focus:outline-none"
-                    >
-                      {SIGNIN_ROLES.map((role) => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setRoleName(val)}
+                      ariaLabel="Role"
+                      menuWidth={280}
+                    />
                   </div>
 
                   <div>

@@ -4,6 +4,7 @@ import StaffLayout from '../layouts/StaffLayout';
 import CaseHeader from '../components/CaseHeader';
 import CaseSubNav from '../components/CaseSubNav';
 import { ShieldAlert, FileText, Send, AlertTriangle, Upload, Download, ShieldOff } from 'lucide-react';
+import GlideSelect from '../../shared/components/GlideSelect';
 import {
   useCaseDetail, useSetAccusedStatus, useSetInvestigationProgress,
   useFileChargesheet, useMarkInvestigationComplete, useAlertProtectionOfficer,
@@ -45,10 +46,13 @@ function AccusedStatusCard({ c, userId, onChanged }) {
       </div>
       <p className="text-[11px] text-gray-400">The real signal Threat Tier is computed from - kindly keep this current as custody/bail status changes.</p>
       <div className="flex flex-wrap items-center gap-3">
-        <select value={accusedStatus} onChange={(e) => setAccusedStatus(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-xs">
-          <option value="" disabled>Select status...</option>
-          {ACCUSED_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <GlideSelect
+          options={ACCUSED_STATUSES}
+          value={accusedStatus}
+          onChange={(val) => setAccusedStatus(val)}
+          placeholder="Select status..."
+          ariaLabel="Accused Status"
+        />
         <button
           onClick={handleSave}
           disabled={!accusedStatus || accusedStatus === c.accusedStatus || setStatus.loading}

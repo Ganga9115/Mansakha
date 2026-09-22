@@ -764,16 +764,6 @@ export default function CheckinScreen({ navigation }) {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-      {/* Soft overlapping-hill "cloud" silhouette fixed to the bottom of the
-          screen, behind the floating nav bar - matches the reference
-          design's decorative horizon effect. */}
-      {!isDesktop && (
-        <View style={styles.cloudDecoration} pointerEvents="none">
-          <View style={styles.cloudBump1} />
-          <View style={styles.cloudBump2} />
-          <View style={styles.cloudBump3} />
-        </View>
-      )}
       {!isDesktop && <BottomNavBar currentTab="CheckIn" navigation={navigation} />}
     </View>
   );
@@ -786,41 +776,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-  },
-  cloudDecoration: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 140,
-    overflow: 'hidden',
-  },
-  cloudBump1: {
-    position: 'absolute',
-    bottom: -60,
-    left: -40,
-    width: 260,
-    height: 180,
-    borderRadius: 999,
-    backgroundColor: colors.primary + '14',
-  },
-  cloudBump2: {
-    position: 'absolute',
-    bottom: -90,
-    left: '28%',
-    width: 300,
-    height: 220,
-    borderRadius: 999,
-    backgroundColor: colors.primary + '10',
-  },
-  cloudBump3: {
-    position: 'absolute',
-    bottom: -70,
-    right: -50,
-    width: 240,
-    height: 170,
-    borderRadius: 999,
-    backgroundColor: colors.primary + '14',
+    backgroundColor: colors.background,
   },
   topHeader: {
     backgroundColor: colors.primaryLight,
@@ -832,10 +788,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     position: 'relative',
     overflow: 'hidden',
-    // The screen background is the same lavender as the header (unlike
-    // other screens, whose body is off-white), so without an explicit edge
-    // here the header visually merges into the page - this border is what
-    // keeps it reading as its own top bar.
     borderBottomWidth: 1,
     borderBottomColor: colors.primary + '20',
   },

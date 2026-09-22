@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import MinistryLayout from '../layouts/MinistryLayout';
 import { Plus, Trash2, Pencil } from 'lucide-react';
+import GlideSelect from '../../shared/components/GlideSelect';
 import {
   caseTypesResource,
   interventionTypesResource,
@@ -221,30 +222,24 @@ function PoliceStationsPanel() {
       <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">State</label>
-          <select
+          <GlideSelect
+            options={[...stateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({ value: s.jurisdictionId, label: s.name }))}
             value={stateId}
-            onChange={(e) => { setStateId(e.target.value); setDistrictId(''); }}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-          >
-            <option value="">Select...</option>
-            {[...stateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
-              <option key={s.jurisdictionId} value={s.jurisdictionId}>{s.name}</option>
-            ))}
-          </select>
+            onChange={(val) => { setStateId(val); setDistrictId(''); }}
+            placeholder="Select..."
+            ariaLabel="State"
+          />
         </div>
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-          <select
+          <GlideSelect
+            options={[...districtOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ value: d.jurisdictionId, label: d.name }))}
             value={districtId}
-            onChange={(e) => setDistrictId(e.target.value)}
+            onChange={(val) => setDistrictId(val)}
             disabled={!stateId}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
-          >
-            <option value="">{stateId ? 'Select...' : 'Select a state first'}</option>
-            {[...districtOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-              <option key={d.jurisdictionId} value={d.jurisdictionId}>{d.name}</option>
-            ))}
-          </select>
+            placeholder={stateId ? 'Select...' : 'Select a state first'}
+            ariaLabel="District"
+          />
         </div>
       </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import StaffLayout from '../layouts/StaffLayout';
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useMyJurisdiction, useCoordinationRolePerformance, useCoordinationStaffingGaps } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Section B (workforce data) - the roster/queue-health counterpart to
 // Section A's case-level data already on Analysis.jsx. Auto-scoped to this
@@ -148,13 +149,12 @@ export default function CoordinationRolePerformance() {
             placeholder="Search by name, designation, or station..."
             className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-600"
           />
-          <select
+          <GlideSelect
+            options={roleOptions}
             value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-700 bg-white focus:outline-none focus:ring-1 focus:ring-brand-600"
-          >
-            {roleOptions.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
+            onChange={(val) => setRoleFilter(val)}
+            ariaLabel="Role filter"
+          />
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">

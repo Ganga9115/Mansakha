@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { LayoutDashboard, Users, Bell, BarChart, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
+import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
 
 // Counsellor's own dedicated shell - own copy of what used to be the shared
 // StaffLayout, trimmed to just Counsellor's nav (no other role's items, no
@@ -89,27 +90,9 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
           </button>
         </div>
 
-        <nav className="space-y-2 p-6">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeNavItem?.name === item.name;
-            return (
-              <Link
-                key={item.name}
-                to={item.path}
-                onClick={() => setSidebarOpen(false)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                  isActive
-                    ? 'bg-white text-brand-900 shadow-sm'
-                    : 'text-brand-100 hover:bg-white/10'
-                }`}
-              >
-                <Icon size={18} />
-                <span className="text-sm flex-1">{item.name}</span>
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="p-6">
+          <SidebarGlideNav items={NAV_ITEMS} activeName={activeNavItem?.name} onItemClick={() => setSidebarOpen(false)} />
+        </div>
       </aside>
 
       {/* MAIN VIEW AREA */}

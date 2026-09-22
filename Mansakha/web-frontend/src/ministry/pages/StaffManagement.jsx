@@ -8,10 +8,6 @@ import {
   Eye,
   EyeOff,
   Search,
-  Users,
-  Layers,
-  MapPin,
-  ChevronDown,
 } from 'lucide-react';
 import {
   useStaffList,
@@ -26,6 +22,7 @@ import {
   useDesignationOptions,
 } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Special Public Prosecutor stays retired (absorbed into DLSA Coordinator) -
 // the other 6 coordination roles built this session were, until now, only
@@ -331,11 +328,6 @@ export default function StaffManagement() {
     }
   };
 
-  // Human-readable labels for dropdown buttons
-  const selectedRoleLabel = roleFilter === 'users' ? 'Users' : roleFilter || 'All Roles';
-  const selectedLevelLabel = levelFilter ? levelFilter.charAt(0).toUpperCase() + levelFilter.slice(1) : 'All Levels';
-  const selectedDistrictLabel = districtFilter || 'All Districts';
-
   return (
     <MinistryLayout title="Staff Management">
       <div className="space-y-5">
@@ -405,73 +397,50 @@ export default function StaffManagement() {
           </div>
 
           {/* ROLE Filter */}
-          <div className="relative flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 pointer-events-none">
+          <div className="flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
               ROLE
             </span>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 pointer-events-none">
-              <Users size={13} className="text-gray-400 shrink-0" />
-              <span className="truncate">{selectedRoleLabel}</span>
-              <ChevronDown size={13} className="text-gray-400 ml-auto shrink-0" />
-            </div>
-            <select
+            <GlideSelect
+              options={[{ value: '', label: 'All Roles' }, ...ROLE_OPTIONS.map((r) => ({ value: r, label: r })), { value: 'users', label: 'Users (Beneficiaries)' }]}
               value={roleFilter}
-              onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              aria-label="Filter by role"
-            >
-              <option value="">All Roles</option>
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-              <option value="users">Users (Beneficiaries)</option>
-            </select>
+              onChange={(val) => { setRoleFilter(val); setPage(1); }}
+              ariaLabel="Filter by role"
+              menuWidth={220}
+            />
           </div>
 
           {/* ADMINISTRATIVE LEVEL Filter */}
-          <div className="relative flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[155px]">
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 pointer-events-none">
+          <div className="flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[155px]">
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
               ADMINISTRATIVE LEVEL
             </span>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 pointer-events-none">
-              <Layers size={13} className="text-gray-400 shrink-0" />
-              <span className="truncate">{selectedLevelLabel}</span>
-              <ChevronDown size={13} className="text-gray-400 ml-auto shrink-0" />
-            </div>
-            <select
+            <GlideSelect
+              options={[
+                { value: '', label: 'All Levels' },
+                { value: 'national', label: 'National' },
+                { value: 'state', label: 'State' },
+                { value: 'district', label: 'District' },
+              ]}
               value={levelFilter}
-              onChange={(e) => { setLevelFilter(e.target.value); setPage(1); }}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              aria-label="Filter by administrative level"
-            >
-              <option value="">All Levels</option>
-              <option value="national">National</option>
-              <option value="state">State</option>
-              <option value="district">District</option>
-            </select>
+              onChange={(val) => { setLevelFilter(val); setPage(1); }}
+              ariaLabel="Filter by administrative level"
+              menuWidth={180}
+            />
           </div>
 
           {/* DISTRICT Filter */}
-          <div className="relative flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 pointer-events-none">
+          <div className="flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
               DISTRICT
             </span>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 pointer-events-none">
-              <MapPin size={13} className="text-gray-400 shrink-0" />
-              <span className="truncate">{selectedDistrictLabel}</span>
-              <ChevronDown size={13} className="text-gray-400 ml-auto shrink-0" />
-            </div>
-            <select
+            <GlideSelect
+              options={[{ value: '', label: 'All Districts' }, ...[...allDistricts].sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ value: d.name, label: d.name }))]}
               value={districtFilter}
-              onChange={(e) => { setDistrictFilter(e.target.value); setPage(1); }}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              aria-label="Filter by district"
-            >
-              <option value="">All Districts</option>
-              {[...allDistricts].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                <option key={d.jurisdictionId} value={d.name}>{d.name}</option>
-              ))}
-            </select>
+              onChange={(val) => { setDistrictFilter(val); setPage(1); }}
+              ariaLabel="Filter by district"
+              menuWidth={200}
+            />
           </div>
 
           {/* Create Account Action Button */}
@@ -529,9 +498,13 @@ export default function StaffManagement() {
 
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Role</label>
-              <select value={roleName} onChange={(e) => { setRoleName(e.target.value); if (e.target.value !== 'Counsellor') setPhone(''); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
-                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <GlideSelect
+                options={ROLE_OPTIONS}
+                value={roleName}
+                onChange={(val) => { setRoleName(val); if (val !== 'Counsellor') setPhone(''); }}
+                ariaLabel="New Staff Role"
+                menuWidth={240}
+              />
             </div>
 
             <div>
@@ -561,20 +534,22 @@ export default function StaffManagement() {
               <>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction Level</label>
-                  <select
+                  <GlideSelect
+                    options={JURISDICTION_LEVELS.map((l) => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))}
                     value={jurisdictionLevel}
-                    onChange={(e) => { setJurisdictionLevel(e.target.value); setJurisdictionId(''); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
-                  >
-                    {JURISDICTION_LEVELS.map((l) => <option key={l} value={l} className="capitalize">{l}</option>)}
-                  </select>
+                    onChange={(val) => { setJurisdictionLevel(val); setJurisdictionId(''); }}
+                    ariaLabel="New Staff Jurisdiction Level"
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction</label>
-                  <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
-                    <option value="">Select...</option>
-                    {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                  </select>
+                  <GlideSelect
+                    options={jurisdictionOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
+                    value={jurisdictionId}
+                    onChange={(val) => setJurisdictionId(val)}
+                    placeholder="Select..."
+                    ariaLabel="New Staff Jurisdiction"
+                  />
                 </div>
               </>
             )}
@@ -582,20 +557,26 @@ export default function StaffManagement() {
             {['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'].includes(roleName) && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
-                  <option value="">Select...</option>
-                  {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                </select>
+                <GlideSelect
+                  options={jurisdictionOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
+                  value={jurisdictionId}
+                  onChange={(val) => setJurisdictionId(val)}
+                  placeholder="Select..."
+                  ariaLabel="New Staff District"
+                />
               </div>
             )}
 
             {DESIGNATIONS_BY_ROLE[roleName] && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
-                <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
-                  <option value="">Not specified</option>
-                  {DESIGNATIONS_BY_ROLE[roleName].map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
+                <GlideSelect
+                  options={DESIGNATIONS_BY_ROLE[roleName]}
+                  value={designation}
+                  onChange={(val) => setDesignation(val)}
+                  placeholder="Not specified"
+                  ariaLabel="New Staff Designation"
+                />
                 {roleName === 'Investigating Officer' && (
                   <p className="text-[10px] text-gray-400 mt-1">
                     Rule 7, SC/ST (PoA) Rules 1995: an atrocity case must be investigated by an officer not below the rank of DySP.
@@ -607,10 +588,14 @@ export default function StaffManagement() {
             {roleName === 'Rehabilitation Officer' && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Rehabilitation Centre</label>
-                <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none">
-                  <option value="">Select...</option>
-                  {providerOptions.map((p) => <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>)}
-                </select>
+                <GlideSelect
+                  options={providerOptions.map((p) => ({ value: p.providerId, label: `${p.name} (${p.providerType})` }))}
+                  value={providerId}
+                  onChange={(val) => setProviderId(val)}
+                  placeholder="Select..."
+                  ariaLabel="New Staff Rehabilitation Centre"
+                  menuWidth={260}
+                />
               </div>
             )}
 
@@ -618,42 +603,35 @@ export default function StaffManagement() {
               <>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">State</label>
-                  <select
+                  <GlideSelect
+                    options={[...stationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({ value: s.jurisdictionId, label: s.name }))}
                     value={stationStateId}
-                    onChange={(e) => { setStationStateId(e.target.value); setStationDistrictId(''); setStationId(''); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
-                  >
-                    <option value="">Select...</option>
-                    {[...stationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
-                      <option key={s.jurisdictionId} value={s.jurisdictionId}>{s.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => { setStationStateId(val); setStationDistrictId(''); setStationId(''); }}
+                    placeholder="Select..."
+                    ariaLabel="New Staff Investigating Officer State"
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                  <select
+                  <GlideSelect
+                    options={[...stationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ value: d.jurisdictionId, label: d.name }))}
                     value={stationDistrictId}
-                    onChange={(e) => { setStationDistrictId(e.target.value); setStationId(''); }}
+                    onChange={(val) => { setStationDistrictId(val); setStationId(''); }}
                     disabled={!stationStateId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-brand-800 focus:outline-none"
-                  >
-                    <option value="">{stationStateId ? 'Select...' : 'Select a state first'}</option>
-                    {[...stationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                      <option key={d.jurisdictionId} value={d.jurisdictionId}>{d.name}</option>
-                    ))}
-                  </select>
+                    placeholder={stationStateId ? 'Select...' : 'Select a state first'}
+                    ariaLabel="New Staff Investigating Officer District"
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Police Station</label>
-                  <select
+                  <GlideSelect
+                    options={stationOptions.map((s) => ({ value: s.stationId, label: s.name }))}
                     value={stationId}
-                    onChange={(e) => setStationId(e.target.value)}
+                    onChange={(val) => setStationId(val)}
                     disabled={!stationDistrictId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-brand-800 focus:outline-none"
-                  >
-                    <option value="">{stationDistrictId ? (stationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}</option>
-                    {stationOptions.map((s) => <option key={s.stationId} value={s.stationId}>{s.name}</option>)}
-                  </select>
+                    placeholder={stationDistrictId ? (stationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}
+                    ariaLabel="New Staff Police Station"
+                  />
                 </div>
               </>
             )}
@@ -808,70 +786,73 @@ export default function StaffManagement() {
                                   {JURISDICTION_SCOPED_ROLES_EXCL_ADMIN.includes(s.roleName) && (
                                     <div>
                                       <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                                      <select value={editJurisdictionId} onChange={(e) => setEditJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                        <option value="">{s.jurisdictionName ? `Currently: ${s.jurisdictionName}` : 'Not yet assigned - select...'}</option>
-                                        {editJurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                                      </select>
+                                      <GlideSelect
+                                        options={editJurisdictionOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
+                                        value={editJurisdictionId}
+                                        onChange={(val) => setEditJurisdictionId(val)}
+                                        placeholder={s.jurisdictionName ? `Currently: ${s.jurisdictionName}` : 'Not yet assigned - select...'}
+                                        ariaLabel="Edit Staff District"
+                                      />
                                     </div>
                                   )}
                                   {DESIGNATIONS_BY_ROLE[s.roleName] && (
                                     <div>
                                       <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
-                                      <select value={editDesignation} onChange={(e) => setEditDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                        <option value="">{s.designation ? `Currently: ${s.designation}` : 'Not specified'}</option>
-                                        {DESIGNATIONS_BY_ROLE[s.roleName].map((d) => <option key={d} value={d}>{d}</option>)}
-                                      </select>
+                                      <GlideSelect
+                                        options={DESIGNATIONS_BY_ROLE[s.roleName]}
+                                        value={editDesignation}
+                                        onChange={(val) => setEditDesignation(val)}
+                                        placeholder={s.designation ? `Currently: ${s.designation}` : 'Not specified'}
+                                        ariaLabel="Edit Staff Designation"
+                                      />
                                     </div>
                                   )}
                                   {s.roleName === 'Rehabilitation Officer' && (
                                     <div>
                                       <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Rehabilitation Centre</label>
-                                      <select value={editProviderId} onChange={(e) => setEditProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                        <option value="">{s.providerName ? `Currently: ${s.providerName}` : 'Not yet assigned - select...'}</option>
-                                        {providerOptions.map((p) => <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>)}
-                                      </select>
+                                      <GlideSelect
+                                        options={providerOptions.map((p) => ({ value: p.providerId, label: `${p.name} (${p.providerType})` }))}
+                                        value={editProviderId}
+                                        onChange={(val) => setEditProviderId(val)}
+                                        placeholder={s.providerName ? `Currently: ${s.providerName}` : 'Not yet assigned - select...'}
+                                        ariaLabel="Edit Staff Rehabilitation Centre"
+                                        menuWidth={260}
+                                      />
                                     </div>
                                   )}
                                   {s.roleName === 'Investigating Officer' && (
                                     <>
                                       <div>
                                         <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">State</label>
-                                        <select
+                                        <GlideSelect
+                                          options={[...editStationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((st) => ({ value: st.jurisdictionId, label: st.name }))}
                                           value={editStationStateId}
-                                          onChange={(e) => { setEditStationStateId(e.target.value); setEditStationDistrictId(''); setEditStationId(''); }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                                        >
-                                          <option value="">Select...</option>
-                                          {[...editStationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((st) => (
-                                            <option key={st.jurisdictionId} value={st.jurisdictionId}>{st.name}</option>
-                                          ))}
-                                        </select>
+                                          onChange={(val) => { setEditStationStateId(val); setEditStationDistrictId(''); setEditStationId(''); }}
+                                          placeholder="Select..."
+                                          ariaLabel="Edit Staff Investigating Officer State"
+                                        />
                                       </div>
                                       <div>
                                         <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                                        <select
+                                        <GlideSelect
+                                          options={[...editStationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ value: d.jurisdictionId, label: d.name }))}
                                           value={editStationDistrictId}
-                                          onChange={(e) => { setEditStationDistrictId(e.target.value); setEditStationId(''); }}
+                                          onChange={(val) => { setEditStationDistrictId(val); setEditStationId(''); }}
                                           disabled={!editStationStateId}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
-                                        >
-                                          <option value="">{editStationStateId ? 'Select...' : 'Select a state first'}</option>
-                                          {[...editStationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                                            <option key={d.jurisdictionId} value={d.jurisdictionId}>{d.name}</option>
-                                          ))}
-                                        </select>
+                                          placeholder={editStationStateId ? 'Select...' : 'Select a state first'}
+                                          ariaLabel="Edit Staff Investigating Officer District"
+                                        />
                                       </div>
                                       <div>
                                         <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Police Station</label>
-                                        <select
+                                        <GlideSelect
+                                          options={editStationOptions.map((st) => ({ value: st.stationId, label: st.name }))}
                                           value={editStationId}
-                                          onChange={(e) => setEditStationId(e.target.value)}
+                                          onChange={(val) => setEditStationId(val)}
                                           disabled={!editStationDistrictId}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
-                                        >
-                                          <option value="">{s.stationName && !editStationDistrictId ? `Currently: ${s.stationName}` : editStationDistrictId ? (editStationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}</option>
-                                          {editStationOptions.map((st) => <option key={st.stationId} value={st.stationId}>{st.name}</option>)}
-                                        </select>
+                                          placeholder={s.stationName && !editStationDistrictId ? `Currently: ${s.stationName}` : editStationDistrictId ? (editStationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}
+                                          ariaLabel="Edit Staff Police Station"
+                                        />
                                       </div>
                                     </>
                                   )}

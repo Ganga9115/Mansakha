@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import { useGenerateReport } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // National Admin's own "Generate Report" modal - a state-wise report (each
 // child state's rollup, side by side, see ReportSnapshotView's `states`
@@ -115,18 +116,24 @@ export default function GenerateReportModal({ jurisdictionId, onClose, onGenerat
 
             {periodType === 'monthly' && (
               <div className="grid grid-cols-2 gap-3">
-                <select value={month} onChange={(e) => setMonth(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                  {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-                </select>
+                <GlideSelect
+                  options={MONTHS.map((m, i) => ({ value: i + 1, label: m }))}
+                  value={month}
+                  onChange={(val) => setMonth(Number(val))}
+                  ariaLabel="Month"
+                />
                 <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Year" />
               </div>
             )}
 
             {periodType === 'quarterly' && (
               <div className="grid grid-cols-2 gap-3">
-                <select value={quarter} onChange={(e) => setQuarter(Number(e.target.value))} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                  {[1, 2, 3, 4].map((q) => <option key={q} value={q}>Q{q}</option>)}
-                </select>
+                <GlideSelect
+                  options={[1, 2, 3, 4].map((q) => ({ value: q, label: `Q${q}` }))}
+                  value={quarter}
+                  onChange={(val) => setQuarter(Number(val))}
+                  ariaLabel="Quarter"
+                />
                 <input type="number" value={year} onChange={(e) => setYear(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm" placeholder="Year" />
               </div>
             )}

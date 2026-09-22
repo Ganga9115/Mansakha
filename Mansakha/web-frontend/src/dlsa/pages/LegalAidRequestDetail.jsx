@@ -7,6 +7,7 @@ import {
   useStartLegalAidReview, useRejectLegalAidRequest,
   useAssignRepresentative, useReassignRepresentative,
 } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // The single action surface for one Legal Aid request - every status
 // transition (Start Review / Reject / Assign Public Prosecutor) lives here,
@@ -182,14 +183,19 @@ function StandaloneReassignPanel({ requestId, currentAssignment, onDone }) {
       {eligible.loading ? (
         <p className="text-xs text-gray-400">Loading eligible Public Prosecutors...</p>
       ) : (
-        <select value={newRepId} onChange={(e) => setNewRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-          <option value="">Select a new Public Prosecutor...</option>
-          {(eligible.data?.representatives || [])
+        <GlideSelect
+          options={(eligible.data?.representatives || [])
             .filter((rep) => rep.officialId !== currentAssignment?.representativeOfficialId)
-            .map((rep) => (
-              <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
-            ))}
-        </select>
+            .map((rep) => ({
+              value: rep.officialId,
+              label: `${rep.fullName} (${rep.designation || 'no designation'}) - ${rep.activeCaseCount} active case(s)`,
+            }))}
+          value={newRepId}
+          onChange={(val) => setNewRepId(val)}
+          placeholder="Select a new Public Prosecutor..."
+          ariaLabel="New Public Prosecutor"
+          menuWidth={320}
+        />
       )}
       <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for reassignment (required)" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" />
       {error && <p className="text-xs text-rose-700">{error}</p>}
@@ -341,12 +347,17 @@ export default function LegalAidRequestDetail() {
             ) : (eligible.data?.representatives || []).length === 0 ? (
               <p className="text-xs text-gray-400">No active Public Prosecutors are assigned to this jurisdiction yet.</p>
             ) : (
-              <select value={repId} onChange={(e) => setRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-                <option value="">Select a Public Prosecutor...</option>
-                {eligible.data.representatives.map((rep) => (
-                  <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
-                ))}
-              </select>
+              <GlideSelect
+                options={eligible.data.representatives.map((rep) => ({
+                  value: rep.officialId,
+                  label: `${rep.fullName} (${rep.designation || 'no designation'}) - ${rep.activeCaseCount} active case(s)`,
+                }))}
+                value={repId}
+                onChange={(val) => setRepId(val)}
+                placeholder="Select a Public Prosecutor..."
+                ariaLabel="Public Prosecutor"
+                menuWidth={320}
+              />
             )}
             <div className="flex gap-2">
               <button

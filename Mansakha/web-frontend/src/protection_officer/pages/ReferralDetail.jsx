@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import StaffLayout from '../layouts/StaffLayout';
 import { ArrowLeft, CheckCircle2, Send, ShieldCheck, ShieldAlert, MapPin, AlertOctagon, User, Phone, Home } from 'lucide-react';
 import { useReferralDetail, useAddReferralNote, useResolveReferral, useSetManualThreatTier, useCompleteDirective } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Deliberately NOT the distress score's Low/Moderate/High/Critical palette -
 // Threat Tier is a different axis (external danger, not psychological
@@ -69,10 +70,13 @@ function ThreatAssessmentCard({ r, onChanged }) {
           Set this only if you know something the system can't see (e.g. a credible verbal threat with no SOS event yet). Never replaces the system assessment above - both are always kept visible.
         </p>
         <div className="flex items-center gap-2">
-          <select value={manualTier} onChange={(e) => setManualTier(e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white">
-            <option value="">No override</option>
-            {THREAT_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <GlideSelect
+            options={[{ value: '', label: 'No override' }, ...THREAT_TIERS.map((t) => ({ value: t, label: t }))]}
+            value={manualTier}
+            onChange={(val) => setManualTier(val)}
+            ariaLabel="Officer-Assessed Threat Tier Override"
+            className="flex-1"
+          />
           <button
             onClick={handleSave}
             disabled={setTier.loading || manualTier === (r.manualThreatTier || '')}
@@ -227,10 +231,14 @@ function ResolveDialog({ referralId, onResolved, onCancel }) {
         </p>
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Outcome</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Select...</option>
-            {OUTCOME_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <GlideSelect
+            options={OUTCOME_CATEGORIES}
+            value={category}
+            onChange={(val) => setCategory(val)}
+            placeholder="Select..."
+            ariaLabel="Outcome"
+            menuWidth={300}
+          />
         </div>
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">

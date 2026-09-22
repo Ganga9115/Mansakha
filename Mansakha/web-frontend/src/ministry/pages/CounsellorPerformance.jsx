@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import MinistryLayout from '../layouts/MinistryLayout';
 import { Trophy } from 'lucide-react';
 import { useJurisdictionOptions, useCounsellorPerformance } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Ministry Analytics & Workflow Task 2D's backend counterpart
 // (.../counsellors/performance/:jurisdictionId) is exact-jurisdiction
@@ -36,24 +37,24 @@ export default function CounsellorPerformance() {
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-wrap items-end gap-4">
           <div>
             <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction Level</label>
-            <select
+            <GlideSelect
+              options={JURISDICTION_LEVELS.map((l) => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))}
               value={perfLevel}
-              onChange={(e) => { setPerfLevel(e.target.value); setPerfJurisdictionId(''); }}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white min-w-[160px]"
-            >
-              {JURISDICTION_LEVELS.map((l) => <option key={l} value={l} className="capitalize">{l}</option>)}
-            </select>
+              onChange={(val) => { setPerfLevel(val); setPerfJurisdictionId(''); }}
+              ariaLabel="Jurisdiction Level"
+              menuWidth={160}
+            />
           </div>
           <div>
             <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction</label>
-            <select
+            <GlideSelect
+              options={perfJurisdictionOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
               value={perfJurisdictionId}
-              onChange={(e) => setPerfJurisdictionId(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white min-w-[220px]"
-            >
-              <option value="">Select a jurisdiction...</option>
-              {perfJurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-            </select>
+              onChange={(val) => setPerfJurisdictionId(val)}
+              placeholder="Select a jurisdiction..."
+              ariaLabel="Jurisdiction"
+              menuWidth={220}
+            />
           </div>
           <div className="flex items-center gap-3 text-[11px] text-gray-500 pb-2">
             <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-rose-400 inline-block" /> Overburdened ({'>'}{OVERBURDENED_ACTIVE_CASES} active cases)</span>

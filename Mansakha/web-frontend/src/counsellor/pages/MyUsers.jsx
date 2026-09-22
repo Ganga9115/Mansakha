@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import StaffLayout from '../layouts/StaffLayout';
 import { useMyUsers } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 const RISK_BADGE = {
   Critical: 'bg-red-100 text-red-800 border border-red-300',
@@ -10,6 +11,14 @@ const RISK_BADGE = {
   Moderate: 'bg-amber-100 text-amber-700',
   Low: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
 };
+
+const RISK_LEVEL_OPTIONS = [
+  { value: '', label: 'Risk Level: All' },
+  { value: 'Critical', label: 'Critical' },
+  { value: 'High', label: 'High' },
+  { value: 'Moderate', label: 'Moderate' },
+  { value: 'Low', label: 'Low' },
+];
 
 const PAGE_SIZE = 20;
 
@@ -40,17 +49,12 @@ export default function MyUsers() {
               className="w-full pl-9 pr-3 py-2 bg-brand-50 rounded-lg text-gray-700 font-medium border-none focus:outline-none focus:ring-1 focus:ring-brand-600"
             />
           </div>
-          <select
+          <GlideSelect
+            options={RISK_LEVEL_OPTIONS}
             value={riskLevel}
-            onChange={(e) => { setRiskLevel(e.target.value); setPage(1); }}
-            className="w-full sm:w-auto px-3 py-2 bg-brand-50 rounded-lg text-gray-700 font-medium border-none focus:outline-none focus:ring-1 focus:ring-brand-600"
-          >
-            <option value="">Risk Level: All</option>
-            <option value="Critical">Critical</option>
-            <option value="High">High</option>
-            <option value="Moderate">Moderate</option>
-            <option value="Low">Low</option>
-          </select>
+            onChange={(val) => { setRiskLevel(val); setPage(1); }}
+            ariaLabel="Risk Level"
+          />
         </div>
 
         {error && <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div>}

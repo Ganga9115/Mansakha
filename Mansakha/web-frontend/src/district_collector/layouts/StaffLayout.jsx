@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Building2, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
+import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
 
 // District Collector's own dedicated shell - copied from
 // dwo/layouts/StaffLayout.jsx (itself copied from district_admin's
@@ -43,27 +44,16 @@ export default function StaffLayout({ children, title = 'Committee Review' }) {
           </button>
         </div>
 
-        <nav className="space-y-2 p-6">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.name}
-                to={item.path}
-                end
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                    isActive ? 'bg-blue-700 text-white shadow-sm' : 'text-blue-100 hover:bg-white/10'
-                  }`
-                }
-              >
-                <Icon size={18} />
-                <span className="text-sm flex-1">{item.name}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
+        <div className="p-6">
+          <SidebarGlideNav
+            items={NAV_ITEMS}
+            activeName={activeNavItem?.name}
+            onItemClick={() => setSidebarOpen(false)}
+            pillColor="#1d4ed8"
+            activeTextColor="#ffffff"
+            inactiveTextColor="#dbeafe"
+          />
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">

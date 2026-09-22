@@ -4,6 +4,7 @@ import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 import { useMe, useDesignationOptions, useUpdateDesignation } from '../services/hooks';
 import { Eye, EyeOff, User } from 'lucide-react';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Public Prosecutor's own copy of the shared Settings/Profile screen -
 // mirrors protection_officer/pages/Profile.jsx (the template):
@@ -151,15 +152,13 @@ export default function Profile() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">Designation</label>
-              <select
+              <GlideSelect
+                options={[{ value: '', label: 'Not specified' }, ...designationOptions.map((d) => ({ value: d, label: d }))]}
                 value={designation}
-                onChange={(e) => handleDesignationChange(e.target.value)}
+                onChange={(val) => handleDesignationChange(val)}
                 disabled={updateDesignation.loading}
-                className="w-full px-3.5 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 disabled:opacity-60"
-              >
-                <option value="">Not specified</option>
-                {designationOptions.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
+                ariaLabel="Designation"
+              />
               {designationSaved && <p className="text-[10px] text-emerald-600 mt-1">Designation saved.</p>}
               {designationError && <p className="text-[10px] text-rose-600 mt-1">{designationError}</p>}
             </div>
