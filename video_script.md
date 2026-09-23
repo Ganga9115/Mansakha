@@ -10,7 +10,7 @@ A survivor reaches out — not just by calling 14566, but through a chatbot, a m
 
 The moment they do — Mansakha is already listening. Not just to their words. To their voice, their pauses, their tone, how long they take to respond. Every conversation feeds one evolving Distress Score. Not a one-time form. A living picture of how they're doing."
 
-[ON SCREEN: The AI Chat screen mid-conversation, then cut to the victim's own Distress History/trend graph screen]
+[ON SCREEN: The AI Chat screen mid-conversation, a quick cut to the Check-in mood-tracker screen, then the victim's own Distress History/trend graph screen]
 
 [VOICEOVER]
 
@@ -47,7 +47,7 @@ If the case needs legal aid — a DLSA Coordinator assigns a real lawyer, a Lega
 
 And when it's time to rebuild a life — a Rehabilitation Officer connects the survivor to a real government or NGO provider in their own district. Not a checkbox. A name. A contact."
 
-[ON SCREEN: Rehabilitation Officer's Referral Detail screen, showing a named provider]
+[ON SCREEN: Victim app's Rehabilitation opt-in toggle, then cut to the Rehabilitation Officer's Referral Detail screen, showing a named provider]
 
 [VOICEOVER — warmer]
 
@@ -93,7 +93,7 @@ And the Ministry — the same ministry that runs NHAA itself — receives real r
 
 "Every report shows a case number. Never a name.
 
-[ON SCREEN: Any analysis table, zoomed in on a row — docket number visible, no name column]
+[ON SCREEN: Zoomed in on a row of the Ministry's Reports Inbox/report table — docket number visible, no name column]
 
 The case is still monitored. But now, so is the person behind it. Mansakha. Mind matters. And now — someone is actually listening."
 
@@ -105,6 +105,8 @@ The case is still monitored. But now, so is the person behind it. Mansakha. Mind
 
 - **Confirm screens render real data before shooting** (going off code verified this session, not a fresh live click-through):
   - Victim's own Distress History / trend graph screen
+  - Victim's Check-in mood-tracker screen
+  - Victim's Rehabilitation opt-in toggle
   - DWO / PO / DLSA / Rehabilitation Officer referral screens
   - Wellness-push / AI-proactive-contact / Critical-alert montage (tied to the tiered response beat)
   - Predicted Escalations stat card (District Admin Dashboard)
