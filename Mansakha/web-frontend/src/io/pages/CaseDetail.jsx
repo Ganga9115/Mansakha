@@ -215,7 +215,7 @@ function CaseDocumentsCard({ c, userId, onChanged }) {
         <h3 className="font-bold text-sm text-gray-800">Case Documents</h3>
       </div>
       <p className="text-[11px] text-gray-400">
-        PDF only. Uploading here immediately gives the victim a Download button on their own Case Details - retrieval always goes through a short-lived signed link, never a permanent public URL.
+        PDF only. Uploading here immediately gives the victim a Download button on their own Case Details.
       </p>
       <CaseDocumentRow label="FIR Copy" documentType="fir" existingUrl={c.firDocumentUrl} userId={userId} onChanged={onChanged} />
       <CaseDocumentRow label="Chargesheet" documentType="chargesheet" existingUrl={c.chargesheetDocumentUrl} userId={userId} onChanged={onChanged} />
