@@ -1,0 +1,19 @@
+name: Keep Mansakha backend warm
+
+# Render's free tier spins the backend down after ~15 minutes of no traffic,
+# so the first request after a lull takes ~13s (confirmed live) instead of
+# under 1s - every data-fetching component on the deployed sites sits in its
+# loading state that whole time. Pinging every 10 minutes (comfortably under
+# the 15-minute idle window) keeps it warm. Any HTTP response counts as
+# "awake" - the root path 404s, which is fine and cheap (no DB hit).
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend
+        run: curl -s -o /dev/null -m 30 https://mansakha.onrender.com/ || true
