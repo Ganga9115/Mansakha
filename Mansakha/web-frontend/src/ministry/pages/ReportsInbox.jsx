@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ChevronDown, ChevronUp, FilePlus, CheckCircle2, Download } from 'lucide-react';
-import { useReportsInbox, useUpdateReportStatus, useJurisdictionOptions, useDownloadReportPdf } from '../services/hooks';
+import { useReportsInbox, useUpdateReportStatus, useDownloadReportPdf } from '../services/hooks';
 import ReportBuilder from '../components/ReportBuilder';
 import ReportSnapshotView from '../components/ReportSnapshotView';
 
@@ -85,50 +85,35 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload,
   );
 }
 
-// Ministry Analytics & Workflow Task 4D - Inbox/Outbox split.
-//
-// GET /api/ministry/reports is now scoped server-side to exactly Ministry's
+// GET /api/ministry/reports is scoped server-side to exactly Ministry's
 // real inbox (a report_recipients row with recipient_type='ministry' and
-// status in Submitted/Reviewed - fixed alongside the multi-recipient/forward
-// feature, which is also why "targetJurisdictionId === my own jurisdiction"
-// is no longer the right client-side filter here: that single-target column
-// is a legacy field from before a report could have several independent
-// recipients, and isn't reliably set for reports routed the new way. Trust
-// the backend's own filtering for Inbox entirely - no client-side re-filter.
+// status in Submitted/Reviewed) - trust the backend's own filtering
+// entirely, no client-side re-filter.
 //
-// Outbox (reports Ministry itself generated via the builder below, for any
-// jurisdiction it chose) is a SEPARATE, still-legacy flow this endpoint
-// doesn't return (Ministry generating a report makes it the SENDER of that
-// report, not a "recipient" of it) - kept as its own best-effort filter
-// against whatever this same list happens to include, but this is a known
-// gap: a report Ministry generates for, say, a district doesn't show up in
-// its own Outbox under the current backend. Flagged for a follow-up, not
-// silently "fixed" here since that needs a new backend query.
+// This used to also have an Outbox tab (reports Ministry itself generated
+// via the builder below) - removed. It was a best-effort, known-broken
+// view: Ministry generating a report makes it the SENDER, not a
+// "recipient", so GET /api/ministry/reports never actually returned those
+// reports, and the Outbox tab silently showed nothing for most of what
+// Ministry sent. "New Report" below still generates a real report for
+// whichever jurisdiction Ministry chooses - only the (broken) view of
+// Ministry's own sent reports was removed, not the ability to send one.
 export default function ReportsInbox() {
   usePageHeader({ title: 'Reports Inbox' });
   const { data, loading, error, refetch } = useReportsInbox();
   const updateStatus = useUpdateReportStatus();
   const downloadPdf = useDownloadReportPdf();
-  const nationalQuery = useJurisdictionOptions('national');
-  const nationalJurisdictionId = nationalQuery.data?.jurisdictions?.[0]?.jurisdictionId;
 
-  const [tab, setTab] = useState('inbox');
   const [showBuilder, setShowBuilder] = useState(false);
   const [markingId, setMarkingId] = useState(null);
   const [downloadingId, setDownloadingId] = useState(null);
   const [actionError, setActionError] = useState(null);
 
-  const reports = data?.reports || [];
-  // Inbox: everything this endpoint returns IS the inbox now (server-side
-  // recipient-based filtering already applied) - no re-filtering here.
-  const inboxReports = reports;
-  // Outbox: best-effort - Ministry's own generated reports that happen to
-  // still appear in this list (see the gap noted above).
-  const outboxReports = reports.filter((r) => r.jurisdictionId && r.jurisdictionId === nationalJurisdictionId);
-  const visibleReports = tab === 'inbox' ? inboxReports : outboxReports;
+  // Everything this endpoint returns IS the inbox (server-side
+  // recipient-based filtering already applied).
+  const inboxReports = data?.reports || [];
 
   const groupedInbox = useMemo(() => {
-    if (tab !== 'inbox') return null;
     const byTier = new Map();
     for (const r of inboxReports) {
       const level = r.jurisdictionLevel || 'national';
@@ -138,7 +123,7 @@ export default function ReportsInbox() {
     return TIER_GROUP_ORDER
       .filter((level) => byTier.has(level))
       .map((level) => ({ level, label: TIER_GROUP_LABELS[level] || level, reports: byTier.get(level) }));
-  }, [tab, inboxReports]);
+  }, [inboxReports]);
 
   const handleMarkReviewed = async (reportId) => {
     setActionError(null);
@@ -169,24 +154,9 @@ export default function ReportsInbox() {
     <>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setTab('inbox')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                tab === 'inbox' ? 'bg-brand-900 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              Inbox {inboxReports.length > 0 ? `(${inboxReports.length})` : ''}
-            </button>
-            <button
-              onClick={() => setTab('outbox')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                tab === 'outbox' ? 'bg-brand-900 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-              }`}
-            >
-              Outbox {outboxReports.length > 0 ? `(${outboxReports.length})` : ''}
-            </button>
-          </div>
+          <h3 className="text-sm font-bold text-gray-800">
+            Inbox {inboxReports.length > 0 ? `(${inboxReports.length})` : ''}
+          </h3>
 
           <button
             onClick={() => setShowBuilder(true)}
@@ -204,11 +174,9 @@ export default function ReportsInbox() {
             <p className="text-sm text-gray-400 p-6">Loading...</p>
           ) : error ? (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 m-6 rounded-lg">{error}</div>
-          ) : visibleReports.length === 0 ? (
-            <p className="text-sm text-gray-400 p-6">
-              {tab === 'inbox' ? 'No reports received yet.' : 'No reports sent yet.'}
-            </p>
-          ) : groupedInbox ? (
+          ) : inboxReports.length === 0 ? (
+            <p className="text-sm text-gray-400 p-6">No reports received yet.</p>
+          ) : (
             <div className="divide-y divide-gray-200">
               {groupedInbox.map((group) => (
                 <div key={group.level}>
@@ -218,7 +186,7 @@ export default function ReportsInbox() {
                       <ReportRow
                         key={r.reportId}
                         r={r}
-                        showReviewAction={tab === 'inbox'}
+                        showReviewAction
                         onMarkReviewed={handleMarkReviewed}
                         markingId={markingId}
                         onDownload={handleDownloadPdf}
@@ -227,20 +195,6 @@ export default function ReportsInbox() {
                     ))}
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {visibleReports.map((r) => (
-                <ReportRow
-                  key={r.reportId}
-                  r={r}
-                  showReviewAction={tab === 'inbox'}
-                  onMarkReviewed={handleMarkReviewed}
-                  markingId={markingId}
-                  onDownload={handleDownloadPdf}
-                  downloadingId={downloadingId}
-                />
               ))}
             </div>
           )}
