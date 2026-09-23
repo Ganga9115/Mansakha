@@ -340,11 +340,11 @@ export default function CaseDetail() {
             <AccusedStatusCard c={c} userId={userId} onChanged={detailQuery.refetch} />
             <InvestigationProgressCard c={c} userId={userId} onChanged={detailQuery.refetch} />
             <ChargesheetCard c={c} userId={userId} onChanged={detailQuery.refetch} />
-            <CaseDocumentsCard c={c} userId={userId} onChanged={detailQuery.refetch} />
           </div>
           <div className="space-y-6">
             <PrivacyShieldNote />
             <AlertProtectionOfficerCard c={c} userId={userId} onChanged={detailQuery.refetch} />
+            <CaseDocumentsCard c={c} userId={userId} onChanged={detailQuery.refetch} />
           </div>
         </div>
       </div>
