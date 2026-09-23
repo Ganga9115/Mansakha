@@ -1,10 +1,22 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { setToken } from '../services/auth';
 import { User, Lock, HeartHandshake, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
 import GlideSelect from '../components/GlideSelect';
+
+// Demo sign-in shortcuts, same idea as the victim app's pre-filled docket -
+// keyed by the role currently selected in the dropdown below, all sharing
+// the one demo password reset across these accounts. Investigating Officer
+// and Public Prosecutor have no demo account yet, so they fall through to
+// blank fields.
+const ROLE_CREDENTIALS = {
+  'Protection Officer': { identifier: 'porbandarsadarpolicestation.po.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'District Welfare Officer': { identifier: 'dwo.porbandar.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'DLSA Coordinator': { identifier: 'dlsa.porbandar.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'Rehabilitation Officer': { identifier: 'porbandar.ro.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+};
 
 // The second deliberate "shared page" exception (see Login.jsx's own header
 // comment for the first) - a pre-role entry point for the coordination
@@ -44,6 +56,15 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [roleName, setRoleName] = useState(SIGNIN_ROLES[0]);
   const [loading, setLoading] = useState(false);
+
+  // Re-fill the demo credentials whenever the selected role changes, so the
+  // Role dropdown always shows a working default for that role instead of
+  // stale creds left over from the previous selection.
+  useEffect(() => {
+    const creds = ROLE_CREDENTIALS[roleName];
+    setIdentifier(creds?.identifier || '');
+    setPassword(creds?.password || '');
+  }, [roleName]);
 
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');

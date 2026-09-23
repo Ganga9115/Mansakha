@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { setToken } from '../services/auth';
@@ -11,16 +11,38 @@ import { useToast } from '../context/ToastContext';
 // the user explicitly asked for it to keep working exactly as it does
 // today. Left byte-for-byte identical to the original pages/staff/Login.jsx,
 // only its file location changed.
+
+// Demo sign-in shortcuts, same idea as the victim app's pre-filled docket -
+// keyed by whichever role this form currently has selected (uiRole, or
+// adminLevel once uiRole is 'Admins'), all sharing the one demo password
+// reset across these accounts.
+const ROLE_CREDENTIALS = {
+  Counsellor: { identifier: 'sunitasharma001@mansakha.gov.in', password: 'Mansakha@2026' },
+  'National Admin': { identifier: 'nationaladmin@mansakha.gov.in', password: 'Mansakha@2026' },
+  'State Admin': { identifier: 'gujarat@mansakha.gov.in', password: 'Mansakha@2026' },
+  'District Admin': { identifier: 'porbandar.gj@mansakha.gov.in', password: 'Mansakha@2026' },
+};
+
 export default function StaffLogin() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  const [identifier, setIdentifier] = useState(ROLE_CREDENTIALS.Counsellor.identifier);
+  const [password, setPassword] = useState(ROLE_CREDENTIALS.Counsellor.password);
   // uiRole can be 'Counsellor', 'Admins'
   const [uiRole, setUiRole] = useState('Counsellor');
   // adminLevel can be '', 'National Admin', 'State Admin', 'District Admin'
   const [adminLevel, setAdminLevel] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Re-fill the demo credentials whenever the selected role changes, so the
+  // Sign In toggle/dropdown always shows a working default for that role
+  // instead of stale creds left over from the previous selection.
+  useEffect(() => {
+    const key = uiRole === 'Counsellor' ? 'Counsellor' : adminLevel;
+    const creds = ROLE_CREDENTIALS[key];
+    setIdentifier(creds?.identifier || '');
+    setPassword(creds?.password || '');
+  }, [uiRole, adminLevel]);
 
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
