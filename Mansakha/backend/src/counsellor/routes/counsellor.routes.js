@@ -363,7 +363,7 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
   // left join against user_identity here would always come back null phone
   // for a dependent case despite the anchor having a real one on file.
   const { rows: userRows } = await pool.query(
-    `select case_stage, case_background, opted_for_manual_counsellor, linked_to_user_id from users where user_id = $1`,
+    `select docket_number, case_stage, case_background, opted_for_manual_counsellor, linked_to_user_id from users where user_id = $1`,
     [userId]
   );
   const userRow = userRows[0];
@@ -442,6 +442,7 @@ router.get('/cases/:userId', requireRole(['Counsellor', 'Administration']), gene
     : 'insufficient_data';
 
   return ok(res, {
+    docketNumber: userRow?.docket_number || null,
     caseStage: userRow?.case_stage || null,
     caseBackground: userRow?.case_background || null,
     phone: identity?.contact_number || null,
@@ -605,14 +606,15 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
   const { rows } = await pool.query(
     `select an.notified_at, an.source, an.priority, an.auto_assigned,
             al.alert_id, al.user_id as alert_user_id, al.triggered_at as alert_triggered_at,
-            ast.name as alert_status_name, u.jurisdiction_id as alert_jurisdiction_id,
+            ast.name as alert_status_name, u.jurisdiction_id as alert_jurisdiction_id, u.docket_number as alert_docket_number,
             se.sos_event_id, se.user_id as sos_user_id, se.triggered_at as sos_triggered_at,
-            se.acknowledged_at as sos_acknowledged_at, se.resolved_at as sos_resolved_at
+            se.acknowledged_at as sos_acknowledged_at, se.resolved_at as sos_resolved_at, su.docket_number as sos_docket_number
      from alert_notifications an
      left join alerts al on al.alert_id = an.alert_id
      left join alert_statuses ast on ast.alert_status_id = al.alert_status_id
      left join users u on u.user_id = al.user_id
      left join sos_events se on se.sos_event_id = an.sos_event_id
+     left join users su on su.user_id = se.user_id
      where an.official_id = $1 and an.source = any($2::text[])
      order by an.notified_at desc
      limit 100`,
@@ -632,6 +634,7 @@ router.get('/alerts', requireRole(['Counsellor']), generalApiLimiter, async (req
       priority: n.priority,
       autoAssigned: n.auto_assigned,
       userId: isUrgentHelp ? n.sos_user_id : n.alert_user_id,
+      docketNumber: isUrgentHelp ? n.sos_docket_number : n.alert_docket_number,
       triggeredAt: isUrgentHelp ? n.sos_triggered_at : n.alert_triggered_at,
       status: isUrgentHelp
         ? (n.sos_resolved_at ? 'Resolved' : n.sos_acknowledged_at ? 'Acknowledged' : 'Open')
@@ -804,13 +807,15 @@ router.patch(
 // Feature Catalog Section 2.2 "Scheduled counsellings".
 router.get('/scheduled', requireRole(['Counsellor']), generalApiLimiter, async (req, res) => {
   const { rows } = await pool.query(
-    `select session_id, user_id, scheduled_at, status from counselling_sessions
-     where counsellor_id = $1 and status = 'upcoming' order by scheduled_at asc`,
+    `select cs.session_id, cs.user_id, cs.scheduled_at, cs.status, u.docket_number
+     from counselling_sessions cs
+     join users u on u.user_id = cs.user_id
+     where cs.counsellor_id = $1 and cs.status = 'upcoming' order by cs.scheduled_at asc`,
     [req.auth.officialId]
   );
 
   return ok(res, {
-    sessions: rows.map((s) => ({ sessionId: s.session_id, userId: s.user_id, scheduledAt: s.scheduled_at, status: s.status })),
+    sessions: rows.map((s) => ({ sessionId: s.session_id, userId: s.user_id, docketNumber: s.docket_number, scheduledAt: s.scheduled_at, status: s.status })),
   });
 });
 

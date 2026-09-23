@@ -13,7 +13,7 @@ import {
   Trash2, 
   X 
 } from 'lucide-react';
-import { useCaseMessages, useSendCaseMessage, useSendCaseVoiceMessage, useSendTypingPing } from '../services/hooks';
+import { useCaseMessages, useSendCaseMessage, useSendCaseVoiceMessage, useSendTypingPing, useCaseDetail } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
 
 const TYPING_PING_INTERVAL_MS = 1500;
@@ -101,7 +101,8 @@ function TypingBubble() {
 
 export default function CaseChat() {
   const { id: userId } = useParams();
-  usePageHeader({ title: `Chat: ${userId ? userId.slice(0, 8) : ''}`, fullBleedContent: true });
+  const caseDetailQuery = useCaseDetail(userId);
+  usePageHeader({ title: `Chat: ${caseDetailQuery.data?.docketNumber || (userId ? userId.slice(0, 8) : '')}`, fullBleedContent: true });
   const navigate = useNavigate();
   const toast = useToast();
   const { data, loading, refetch } = useCaseMessages(userId);

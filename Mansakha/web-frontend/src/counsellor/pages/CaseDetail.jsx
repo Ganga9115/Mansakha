@@ -135,7 +135,7 @@ export default function CaseDetail() {
   const [scheduleDate, setScheduleDate] = useState('');
   const toast = useToast();
 
-  usePageHeader({ title: loading || error ? 'Case File' : `Case File: ${userId.slice(0, 8)}` });
+  usePageHeader({ title: loading || error ? 'Case File' : `Case File: ${data.docketNumber || userId.slice(0, 8)}` });
 
   const handleSchedule = async () => {
     if (!scheduleDate) return;
@@ -237,8 +237,8 @@ export default function CaseDetail() {
         {/* TOP SUMMARY HEADER */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200/80 shadow-sm grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 sm:gap-6">
           <div>
-            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case ID</span>
-            <span className="text-sm sm:text-base font-bold text-gray-800 truncate block">{userId.slice(0, 8)}</span>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Docket Number</span>
+            <span className="text-sm sm:text-base font-bold text-gray-800 truncate block">{data.docketNumber || userId.slice(0, 8)}</span>
           </div>
           <div>
             <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case Stage</span>

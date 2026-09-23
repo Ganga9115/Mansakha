@@ -105,7 +105,7 @@ export default function AlertsFeed() {
                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.status === 'Open' ? 'bg-brand-700' : 'bg-transparent'}`}></span>
                 <div>
                   <h4 className="font-bold text-sm text-gray-800 flex items-center gap-2 flex-wrap">
-                    Case {item.userId.slice(0, 8)}
+                    {item.docketNumber ? `Docket ${item.docketNumber}` : `Case ${item.userId.slice(0, 8)}`}
                     {item.priority === 'urgent' && item.source !== 'sos' && (
                       <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[9px] font-bold uppercase">Urgent</span>
                     )}

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft } from 'lucide-react';
-import { useCaseNotes, useAddCaseNote } from '../services/hooks';
+import { useCaseNotes, useAddCaseNote, useCaseDetail } from '../services/hooks';
 
 // Own page rather than an inline card on CaseDetail.jsx - a case can
 // accumulate many notes (including every AI-drafted one per check-in), and
@@ -11,7 +11,8 @@ import { useCaseNotes, useAddCaseNote } from '../services/hooks';
 // "Case Notes ->" row.
 export default function CaseNotes() {
   const { id: userId } = useParams();
-  usePageHeader({ title: `Case Notes: ${userId.slice(0, 8)}` });
+  const caseDetailQuery = useCaseDetail(userId);
+  usePageHeader({ title: `Case Notes: ${caseDetailQuery.data?.docketNumber || userId.slice(0, 8)}` });
   const navigate = useNavigate();
   const notesQuery = useCaseNotes(userId);
   const addNote = useAddCaseNote(userId);

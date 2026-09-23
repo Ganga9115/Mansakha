@@ -100,7 +100,7 @@ export default function CounsellorDashboard() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-bold text-gray-900 text-sm truncate">
-                      Case {a.userId.slice(0, 8)}
+                      {a.docketNumber ? `Docket ${a.docketNumber}` : `Case ${a.userId.slice(0, 8)}`}
                     </span>
                   </div>
 
@@ -138,7 +138,7 @@ export default function CounsellorDashboard() {
             <div className="divide-y divide-gray-100">
               {scheduledData.sessions.map((s) => (
                 <div key={s.sessionId} className="py-3.5 flex items-center justify-between gap-3 text-xs">
-                  <span className="font-bold text-gray-800 text-sm truncate">Case {s.userId.slice(0, 8)}</span>
+                  <span className="font-bold text-gray-800 text-sm truncate">{s.docketNumber ? `Docket ${s.docketNumber}` : `Case ${s.userId.slice(0, 8)}`}</span>
                   <span className="text-gray-500 font-medium shrink-0">{new Date(s.scheduledAt).toLocaleString()}</span>
                 </div>
               ))}
