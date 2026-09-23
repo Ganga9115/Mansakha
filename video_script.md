@@ -55,19 +55,19 @@ And when it's time to rebuild a life — a Rehabilitation Officer connects the s
 
 A survivor can opt in for a real Counsellor, any time. The moment they do, the system assigns whoever is least overloaded.
 
-[ON SCREEN: Victim app's counsellor opt-in toggle, then cut to Counsellor's dashboard showing the new case land in "My Users"]
+[ON SCREEN: Victim app's counsellor opt-in toggle, cut to Counsellor's dashboard showing the new case land in "My Users", then the victim's own Counsellor Chat screen sending a real message - text or voice - and a matching cut to the Counsellor's own Case Chat showing that same conversation from their side]
 
 And between sessions? A live AI companion — voice, video, or text — is there at 2 a.m., when no human is on shift.
 
 And it's never just company. The instant it hears any sign of self-harm — not after a form, not after a review — it puts a real helpline in front of the survivor immediately, and alerts their counsellor in the same moment. No waiting on a scheduled check-in to notice."
 
-[ON SCREEN: The live AI companion call screen — 3D avatar, live captions, voice/video toggle — then a quick cut to a Critical alert landing in the Counsellor's Alerts Feed, timestamped seconds after the call]
+[ON SCREEN: The live AI companion call screen — 3D avatar, live captions, voice/video toggle — then a quick cut to the AI Chat screen showing the AI's own message pointing the survivor straight to the NHAA Helpline (14566)]
 
 [VOICEOVER]
 
 "Remember Hathras — a family nobody checked on? With Mansakha, silence itself is a signal. If a survivor stops responding, a counsellor is sent to check in personally."
 
-[ON SCREEN: Counsellor's Alerts Feed, showing a disengagement/silence alert]
+[ON SCREEN: Counsellor's Notification Bell dropdown, showing a "Disengagement Alert" notice, then a cut into that case's own Case Detail - the full picture the counsellor reviews before checking in]
 
 [VOICEOVER — shifts to the administrative view]
 
@@ -110,8 +110,10 @@ The case is still monitored. But now, so is the person behind it. Mansakha. Mind
   - DWO / PO / DLSA / Rehabilitation Officer referral screens
   - Wellness-push / AI-proactive-contact / Critical-alert montage (tied to the tiered response beat)
   - Predicted Escalations stat card (District Admin Dashboard)
-  - Self-harm alert landing in the Counsellor's Alerts Feed — **freshly built this session, needs a real click-through test before shooting**
+  - AI Chat screen showing the AI's own helpline redirect message on a self-harm trigger — **freshly built this session, needs a real click-through test before shooting**
   - "Get Help Now" button (victim app) and the emergency referral landing in the Protection Officer's Protection Registry
+  - Victim's own Counsellor Chat screen (text/voice message to their assigned counsellor) and the matching Counsellor's Case Chat, from the same conversation
+  - Counsellor's Case Detail (the disengagement-alert case)
 
 - **Accuracy notes on claims in this script:**
   - eCourts CNR sync is real architecture (CNR number, hearing dates, chargesheet status are tracked and kept current), but the live government eCourts API itself is not connected — no free/official API exists. The script's phrasing ("synced by CNR number against the government's own eCourts system") is worded to stay accurate without overclaiming a live feed.
