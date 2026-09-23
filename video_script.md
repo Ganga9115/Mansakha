@@ -2,13 +2,7 @@
 
 [VOICEOVER — softer, walking the viewer through it]
 
-"Let's follow how it actually works.
-
-A survivor reaches out — not just by calling 14566, but through a chatbot, a mobile app, a web portal, an IVRS call, or SMS. In their own language. Whenever they're ready, however they're comfortable.
-
-[ON SCREEN: Self-registration screen — the form with State/District dropdown, "Same as my address" toggle for offense location, and the AI case-type suggestion chip]
-
-The moment they do — Mansakha is already listening. Not just to their words. To their voice, their pauses, their tone, how long they take to respond. Every conversation feeds one evolving Distress Score. Not a one-time form. A living picture of how they're doing."
+"To see how Mansakha operates in the real world, let's follow a survivor's journey from the moment they enter the system to the moment crisis is prevented."
 
 [ON SCREEN: The AI Chat screen mid-conversation, a quick cut to the Check-in mood-tracker screen, then the victim's own Distress History/trend graph screen]
 
@@ -19,7 +13,7 @@ The moment they do — Mansakha is already listening. Not just to their words. T
 A low score — nothing happens. No unnecessary alarm.
 A moderate dip — a gentle wellness nudge, right inside the app.
 A high score — the AI companion itself reaches out, proactively, before anyone has to ask for help.
-A critical score — a real alert, routed straight to the assigned counsellor and the right jurisdiction. Every time."
+And a critical score — an instant alert. If a counsellor is already assigned, they're notified immediately. If not, Mansakha instantly auto-assigns whoever's least overloaded — nationwide, not just this district, so no case ever waits on one district's own headcount. And either way, District Administration is looped in too. Zero delay."
 
 [ON SCREEN: Quick split-screen montage — a wellness push notification, then the AI companion initiating contact, then a Critical alert landing in the Counsellor's Alerts Feed]
 
@@ -120,3 +114,4 @@ The case is still monitored. But now, so is the person behind it. Mansakha. Mind
   - Sambal/NHAA portal: deliberately not claimed as a data source anywhere in this script. Mansakha reuses the real national helpline number (14566) and was UX-inspired by Sambal's registration flow, but does not fetch or sync data from it. If you want a forward-looking line about pulling in existing Sambal grievances, that would need to be framed explicitly as roadmap/vision, not a built feature.
   - Self-harm detection: now a real immediate escalation (helpline shown to the survivor + counsellor alerted, both immediately, not gated by the normal chat scoring threshold) — built this session, verified against the live database.
   - "Get Help Now" → Protection Officer: real, verified backend route (`POST /urgent-help`). Deliberately bypasses AI analysis for speed - creates an actual `agency_referrals` row (not just a notification) for the Protection Officer assigned to the victim's own district, plus notifies the counsellor. Per the backend's own code comment, this alert deliberately goes to the counsellor and Protection Officer only, not District/State Administration.
+  - Critical-score auto-assignment: verified against `stressResponse.js`. Already-assigned → urgent ping to that counsellor. Not yet assigned → auto-assigned to whoever's least-loaded - genuinely **nationwide**, not scoped to the victim's own district (`selectLeastLoadedCounsellor` takes a jurisdiction parameter but never filters by it - confirmed deliberate elsewhere in this codebase, not a bug). District Administration is notified on every Critical alert either way, not only the auto-assign branch - the script's wording ("either way") reflects that.
