@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 import { useMe } from '../services/hooks';
@@ -9,6 +9,7 @@ import { Eye, EyeOff, User, Camera, Mail, MapPin, Landmark, Shield, Key, Pencil,
 // simplified to just Administration's own role details, at the National
 // jurisdiction level.
 export default function Settings() {
+  usePageHeader({ title: 'Profile' });
   const { data: me, refetch: refetchMe } = useMe();
   const fileInputRef = useRef(null);
   const [photoError, setPhotoError] = useState(null);
@@ -70,7 +71,7 @@ export default function Settings() {
   const jobTitle = 'National Administrator';
 
   return (
-    <StaffLayout title="Profile">
+    <>
       <div className="space-y-6 max-w-5xl">
 
         {/* Hero Card */}
@@ -253,7 +254,7 @@ export default function Settings() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }
 

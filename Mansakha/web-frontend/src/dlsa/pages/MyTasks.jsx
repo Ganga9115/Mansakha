@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { CheckCircle2, AlertTriangle, Bot, ArrowRight } from 'lucide-react';
 import { useTasksList, useCompleteTask } from '../services/taskHooks';
 
@@ -87,12 +87,13 @@ function TaskRow({ t, onChanged }) {
 }
 
 export default function MyTasks() {
+  usePageHeader({ title: 'My Tasks' });
   const [tab, setTab] = useState('Pending');
   const query = useTasksList(tab);
   const tasks = query.data?.tasks || [];
 
   return (
-    <StaffLayout title="My Tasks">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -131,6 +132,6 @@ export default function MyTasks() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

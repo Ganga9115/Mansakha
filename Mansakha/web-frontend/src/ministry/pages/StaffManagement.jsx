@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import {
   UserPlus,
   X,
@@ -92,6 +92,7 @@ function Pagination({ page, pageSize, total, onChange }) {
 }
 
 export default function StaffManagement() {
+  usePageHeader({ title: 'Staff Management' });
   const toast = useToast();
 
   // Filter states
@@ -329,7 +330,7 @@ export default function StaffManagement() {
   };
 
   return (
-    <MinistryLayout title="Staff Management">
+    <>
       <div className="space-y-5">
         {/* Top Hero Card */}
         <div className="bg-gradient-to-r from-brand-50 via-brand-50 to-brand-100 border border-brand-200 rounded-2xl p-6 sm:p-7 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
@@ -963,6 +964,6 @@ export default function StaffManagement() {
           </div>
         )}
       </div>
-    </MinistryLayout>
+    </>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Search } from 'lucide-react';
 import { useSearchUserByDocket, useUpdateUser } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
@@ -23,6 +23,7 @@ const CASE_STAGE_TONE = {
 // User") to match the PS's own division of labor: District Administration
 // oversees and corrects records, it doesn't do front-desk registration.
 export default function EditUserRecord() {
+  usePageHeader({ title: 'Edit User Record' });
   const toast = useToast();
   const searchUser = useSearchUserByDocket();
   const updateUser = useUpdateUser();
@@ -65,7 +66,7 @@ export default function EditUserRecord() {
   };
 
   return (
-    <StaffLayout title="Edit User Record">
+    <>
       <div className="max-w-lg">
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-gray-800">Edit User Record</h3>
@@ -130,6 +131,6 @@ export default function EditUserRecord() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

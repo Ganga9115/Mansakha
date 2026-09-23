@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { PenSquare, Inbox as InboxIcon, Send as SendIcon, Archive as ArchiveIcon } from 'lucide-react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import MailComposeModal from './MailComposeModal';
 import { useMailUnreadCount } from '../services/hooks';
 
@@ -17,11 +17,12 @@ const FOLDERS = [
 ];
 
 export default function MailShell({ basePath, title = 'Mail', headerAction, children, onComposed }) {
+  usePageHeader({ title, headerAction });
   const [composing, setComposing] = useState(false);
   const { data: unread, refetch: refetchUnread } = useMailUnreadCount();
 
   return (
-    <StaffLayout title={title} headerAction={headerAction}>
+    <>
       <div className="flex gap-5 h-[calc(100vh-8rem)]">
         <aside className="w-52 shrink-0 flex flex-col gap-5">
           <button
@@ -65,6 +66,6 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
           onSent={() => { setComposing(false); refetchUnread(); onComposed?.(); }}
         />
       )}
-    </StaffLayout>
+    </>
   );
 }

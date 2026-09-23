@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useToast } from '../../shared/context/ToastContext';
 import { useCounsellorAlerts, useResolveSosEvent, useResolveAlert, useAcknowledgeSosEvent, useAcknowledgeAlert } from '../services/hooks';
 
@@ -21,6 +21,7 @@ function timeAgo(iso) {
 }
 
 export default function AlertsFeed() {
+  usePageHeader({ title: 'Alerts Feed' });
   const [filter, setFilter] = useState('All');
   const { data, loading, error, refetch } = useCounsellorAlerts();
   const navigate = useNavigate();
@@ -68,7 +69,7 @@ export default function AlertsFeed() {
   const alerts = filter === 'All' ? allAlerts : allAlerts.filter((a) => a.status === filter);
 
   return (
-    <StaffLayout title="Alerts Feed">
+<>
       <div className="space-y-6">
 
         {/* FILTER BAR */}
@@ -147,6 +148,6 @@ export default function AlertsFeed() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ChevronDown, ChevronUp, FilePlus, CheckCircle2, Download } from 'lucide-react';
 import { useReportsInbox, useUpdateReportStatus, useJurisdictionOptions, useDownloadReportPdf } from '../services/hooks';
 import ReportBuilder from '../components/ReportBuilder';
@@ -105,6 +105,7 @@ function ReportRow({ r, showReviewAction, onMarkReviewed, markingId, onDownload,
 // its own Outbox under the current backend. Flagged for a follow-up, not
 // silently "fixed" here since that needs a new backend query.
 export default function ReportsInbox() {
+  usePageHeader({ title: 'Reports Inbox' });
   const { data, loading, error, refetch } = useReportsInbox();
   const updateStatus = useUpdateReportStatus();
   const downloadPdf = useDownloadReportPdf();
@@ -165,7 +166,7 @@ export default function ReportsInbox() {
   };
 
   return (
-    <MinistryLayout title="Reports Inbox">
+    <>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
@@ -252,6 +253,6 @@ export default function ReportsInbox() {
           onSubmitted={refetch}
         />
       )}
-    </MinistryLayout>
+    </>
   );
 }

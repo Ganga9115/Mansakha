@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Users, Settings, FileText, Inbox, LogOut, User, Trophy, Menu, X, Mail } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
+import { usePageHeaderValue } from '../../shared/context/PageHeaderContext';
 
 // Mail sits directly above Profile per explicit product placement.
 const NAV_ITEMS = [
@@ -24,7 +25,8 @@ const NAV_ITEMS = [
 // that a shared/parameterized layout with Staff wouldn't pay for itself.
 // Sidebar corner cell/footer pattern matches every other role's layout
 // though, so the sidebar reads as the same product across every role.
-export default function MinistryLayout({ children, title = 'Ministry Console', headerAction = null }) {
+export default function MinistryLayout() {
+  const { title, headerAction } = usePageHeaderValue();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -114,7 +116,7 @@ export default function MinistryLayout({ children, title = 'Ministry Console', h
             </button>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8"><Outlet /></main>
       </div>
 
       {/* Log Out confirm dialog - plain Tailwind overlay, no UI library

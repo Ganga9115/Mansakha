@@ -37,7 +37,9 @@ The address of the offense routes the investigation to the nearest Investigating
 
 If Mansakha detects a threat, intimidation, fear of retaliation — a Protection Officer is looped in automatically. Witness protection. Relocation. Before it escalates, not after.
 
-[ON SCREEN: Protection Officer's Protection Registry / Referral Detail screen]
+And in a real emergency, the survivor doesn't have to wait for Mansakha to notice. One tap on "Get Help Now" reaches their own district's Protection Officer directly — no AI analysis in between, nothing to slow it down. A real, actionable case lands in the Protection Officer's queue immediately, alongside the counsellor.
+
+[ON SCREEN: Victim app's "Get Help Now" button, then cut to the Protection Officer's Protection Registry showing the new emergency referral land, flagged as urgent]
 
 If the case needs legal aid — a DLSA Coordinator assigns a real lawyer, a Legal Representative, who tracks every hearing, right through to the courtroom.
 
@@ -107,8 +109,10 @@ The case is still monitored. But now, so is the person behind it. Mansakha. Mind
   - Wellness-push / AI-proactive-contact / Critical-alert montage (tied to the tiered response beat)
   - Predicted Escalations stat card (District Admin Dashboard)
   - Self-harm alert landing in the Counsellor's Alerts Feed — **freshly built this session, needs a real click-through test before shooting**
+  - "Get Help Now" button (victim app) and the emergency referral landing in the Protection Officer's Protection Registry
 
 - **Accuracy notes on claims in this script:**
   - eCourts CNR sync is real architecture (CNR number, hearing dates, chargesheet status are tracked and kept current), but the live government eCourts API itself is not connected — no free/official API exists. The script's phrasing ("synced by CNR number against the government's own eCourts system") is worded to stay accurate without overclaiming a live feed.
   - Sambal/NHAA portal: deliberately not claimed as a data source anywhere in this script. Mansakha reuses the real national helpline number (14566) and was UX-inspired by Sambal's registration flow, but does not fetch or sync data from it. If you want a forward-looking line about pulling in existing Sambal grievances, that would need to be framed explicitly as roadmap/vision, not a built feature.
   - Self-harm detection: now a real immediate escalation (helpline shown to the survivor + counsellor alerted, both immediately, not gated by the normal chat scoring threshold) — built this session, verified against the live database.
+  - "Get Help Now" → Protection Officer: real, verified backend route (`POST /urgent-help`). Deliberately bypasses AI analysis for speed - creates an actual `agency_referrals` row (not just a notification) for the Protection Officer assigned to the victim's own district, plus notifies the counsellor. Per the backend's own code comment, this alert deliberately goes to the counsellor and Protection Officer only, not District/State Administration.

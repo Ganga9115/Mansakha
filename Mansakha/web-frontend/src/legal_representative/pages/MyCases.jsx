@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight } from 'lucide-react';
 import { useMyCases } from '../services/hooks';
 
@@ -20,13 +20,14 @@ const ASSIGNMENT_STATUS_BADGE = {
 };
 
 export default function MyCases() {
+  usePageHeader({ title: 'My Cases' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('active');
   const query = useMyCases(tab === 'active' ? undefined : tab);
   const cases = query.data?.cases || [];
 
   return (
-    <StaffLayout title="My Cases">
+    <>
       <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
         <div>
           <h3 className="font-bold text-sm text-gray-800">My Cases</h3>
@@ -95,6 +96,6 @@ export default function MyCases() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

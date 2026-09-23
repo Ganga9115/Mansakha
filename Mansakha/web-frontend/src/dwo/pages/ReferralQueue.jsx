@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight } from 'lucide-react';
 import { useReferralsList } from '../services/hooks';
 
@@ -30,13 +30,14 @@ function reliefSummary(r) {
 }
 
 export default function ReferralQueue() {
+  usePageHeader({ title: 'Referral Queue' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('Open');
   const query = useReferralsList(tab);
   const referrals = query.data?.referrals || [];
 
   return (
-    <StaffLayout title="Referral Queue">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -105,6 +106,6 @@ export default function ReferralQueue() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

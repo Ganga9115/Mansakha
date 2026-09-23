@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useCounsellorDashboard, useReportsAnalytics } from '../services/hooks';
 
 // Counsellor's own Analysis page - simplified to just Counsellor's own
@@ -24,6 +24,7 @@ const RANGE_MAP = {
 };
 
 export default function Analysis() {
+  usePageHeader({ title: 'Analysis' });
   const [timeRange, setTimeRange] = useState('Last 30 Days');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -53,7 +54,7 @@ export default function Analysis() {
   const moderate = counsellorData?.moderate || 0;
 
   return (
-    <StaffLayout title="Analysis">
+<>
       <div className="space-y-6">
 
         {/* TOP CONTROLS & DATE FILTER */}
@@ -189,7 +190,7 @@ export default function Analysis() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }
 

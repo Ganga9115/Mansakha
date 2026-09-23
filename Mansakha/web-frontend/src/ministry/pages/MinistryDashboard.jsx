@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useJurisdictionOptions, useAdminDashboard, useHeatmap } from '../services/hooks';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
@@ -167,6 +167,7 @@ function TrendChart({ jurisdictionId }) {
 // fetches the root national jurisdiction and reuses the same tier-
 // differentiated dashboard endpoint National Admin's own dashboard calls.
 export default function MinistryDashboard() {
+  usePageHeader({ title: 'Ministry Dashboard' });
   const nationalJurisdictionQuery = useJurisdictionOptions('national');
   const nationalJurisdictionId = nationalJurisdictionQuery.data?.jurisdictions?.[0]?.jurisdictionId;
   const { data, loading, error } = useAdminDashboard(nationalJurisdictionId);
@@ -174,7 +175,7 @@ export default function MinistryDashboard() {
   const states = data?.trends || [];
 
   return (
-    <MinistryLayout title="Ministry Dashboard">
+    <>
       <div className="space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <StatCard title="Total Cases (Nationwide)" value={data?.total ?? '-'} />
@@ -229,6 +230,6 @@ export default function MinistryDashboard() {
 
         <TrendChart jurisdictionId={nationalJurisdictionId} />
       </div>
-    </MinistryLayout>
+    </>
   );
 }

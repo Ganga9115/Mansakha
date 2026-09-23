@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 import { useMe } from '../services/hooks';
@@ -9,6 +9,7 @@ import { Eye, EyeOff, User } from 'lucide-react';
 // MinistryLayout chrome directly (a Layout prop is no longer needed now
 // that this file only ever serves Ministry).
 export default function Settings() {
+  usePageHeader({ title: 'Profile' });
   const { data: me, refetch: refetchMe } = useMe();
   const fileInputRef = useRef(null);
   const [photoError, setPhotoError] = useState(null);
@@ -70,7 +71,7 @@ export default function Settings() {
   };
 
   return (
-    <MinistryLayout title="Profile">
+    <>
       <div className="space-y-6">
 
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
@@ -193,7 +194,7 @@ export default function Settings() {
         </div>
 
       </div>
-    </MinistryLayout>
+    </>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ChevronDown, ChevronUp, CheckCircle2, XCircle, FileText } from 'lucide-react';
 import { useMyJurisdiction, useInterventionRequestsList, useInterventionRequestDetail, useReviewInterventionRequest } from '../services/hooks';
 
@@ -156,13 +156,14 @@ function RequestRow({ r, onDecided }) {
 }
 
 export default function InterventionRequests() {
+  usePageHeader({ title: 'Intervention Requests' });
   const { jurisdictionId } = useMyJurisdiction();
   const [tab, setTab] = useState('Pending');
   const query = useInterventionRequestsList(jurisdictionId, tab);
   const requests = query.data?.requests || [];
 
   return (
-    <StaffLayout title="Intervention Requests">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -201,6 +202,6 @@ export default function InterventionRequests() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

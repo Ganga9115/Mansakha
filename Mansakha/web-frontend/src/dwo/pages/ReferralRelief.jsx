@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { IndianRupee, ShieldCheck, AlertTriangle, CircleCheck } from 'lucide-react';
@@ -149,18 +149,18 @@ export default function ReferralRelief() {
   const detailQuery = useReferralDetail(referralId);
   const resolve = useResolveReferral();
 
+  usePageHeader({ title: 'Immediate Relief' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Immediate Relief"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Immediate Relief">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -175,7 +175,7 @@ export default function ReferralRelief() {
   };
 
   return (
-    <StaffLayout title="Immediate Relief">
+    <>
       <div className="space-y-4">
         <ReferralHeader r={r} backTo="/dwo" backLabel="Back to Referral Queue" onResolve={handleResolve} resolveLoading={resolve.loading} />
         <ReferralSubNav base={`/dwo/referrals/${referralId}`} />
@@ -186,6 +186,6 @@ export default function ReferralRelief() {
           <ImmediateReliefCard r={r} referralId={referralId} onChanged={detailQuery.refetch} />
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

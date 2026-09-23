@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Search, Send, Users2 } from 'lucide-react';
 import { useSearchUserByDocket, useCaseAgencyReferrals, useCreateAgencyReferral } from '../services/hooks';
 
@@ -25,6 +25,7 @@ const REFERRAL_ROLES = [
 const STATUS_BADGE = { Open: 'bg-amber-100 text-amber-700', Resolved: 'bg-emerald-100 text-emerald-700' };
 
 export default function AgencyCoordination() {
+  usePageHeader({ title: 'Agency Coordination' });
   const [docketNumber, setDocketNumber] = useState('');
   const [foundUser, setFoundUser] = useState(null);
   const [searchError, setSearchError] = useState(null);
@@ -64,7 +65,7 @@ export default function AgencyCoordination() {
   };
 
   return (
-    <StaffLayout title="Agency Coordination">
+    <>
       <div className="space-y-4 max-w-2xl">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -162,6 +163,6 @@ export default function AgencyCoordination() {
           </div>
         )}
       </div>
-    </StaffLayout>
+    </>
   );
 }

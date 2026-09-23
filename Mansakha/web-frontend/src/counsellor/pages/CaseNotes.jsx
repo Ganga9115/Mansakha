@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft } from 'lucide-react';
 import { useCaseNotes, useAddCaseNote } from '../services/hooks';
 
@@ -11,6 +11,7 @@ import { useCaseNotes, useAddCaseNote } from '../services/hooks';
 // "Case Notes ->" row.
 export default function CaseNotes() {
   const { id: userId } = useParams();
+  usePageHeader({ title: `Case Notes: ${userId.slice(0, 8)}` });
   const navigate = useNavigate();
   const notesQuery = useCaseNotes(userId);
   const addNote = useAddCaseNote(userId);
@@ -24,7 +25,7 @@ export default function CaseNotes() {
   };
 
   return (
-    <StaffLayout title={`Case Notes: ${userId.slice(0, 8)}`}>
+    <>
       <div className="space-y-4">
         <button
           onClick={() => navigate(`/counsellor/case-detail/${userId}`)}
@@ -79,6 +80,6 @@ export default function CaseNotes() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

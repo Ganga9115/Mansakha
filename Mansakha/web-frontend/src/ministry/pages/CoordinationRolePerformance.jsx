@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useCoordinationRolePerformanceMinistry, useCoordinationStaffingGapsMinistry } from '../services/hooks';
 import GlideSelect from '../../shared/components/GlideSelect';
@@ -63,6 +63,7 @@ function OpenReferralsDrilldown({ openReferrals }) {
 }
 
 export default function CoordinationRolePerformance() {
+  usePageHeader({ title: 'Coordination Roster' });
   const perfQuery = useCoordinationRolePerformanceMinistry();
   const gapsQuery = useCoordinationStaffingGapsMinistry();
   const officials = perfQuery.data?.officials || [];
@@ -95,7 +96,7 @@ export default function CoordinationRolePerformance() {
   });
 
   return (
-    <MinistryLayout title="Coordination Roster">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
           <div className="flex items-center gap-1.5">
@@ -244,6 +245,6 @@ export default function CoordinationRolePerformance() {
           </div>
         </div>
       </div>
-    </MinistryLayout>
+    </>
   );
 }

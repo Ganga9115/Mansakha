@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { FileDown, FileText, ShieldCheck, AlertCircle, ShieldAlert, TrendingUp, Users, IndianRupee, Calendar, ChevronDown, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMyJurisdiction, useAdminDashboard, useExportReportCsv, useAdminAlerts, useReportsAnalytics, useMe } from '../services/hooks';
 
@@ -36,6 +36,7 @@ function StatCard({ title, value, colorClass }) {
 // read-only), rather than State/National which just see aggregate
 // breakdowns of their children.
 export default function AdminDashboard() {
+  usePageHeader({ title: 'District Dashboard' });
   const navigate = useNavigate();
   const { data: me } = useMe();
   const { jurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
@@ -60,7 +61,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <StaffLayout title="District Dashboard">
+    <>
       <div className="space-y-6 max-w-[1400px]">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
@@ -223,6 +224,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

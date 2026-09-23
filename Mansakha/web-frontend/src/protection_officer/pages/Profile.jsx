@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 import { useMe, useDesignationOptions, useUpdateDesignation } from '../services/hooks';
@@ -12,6 +12,7 @@ import GlideSelect from '../../shared/components/GlideSelect';
 // role-agnostic (see auth.staff.routes.js's own change-password route,
 // which only checks req.auth.type === 'official').
 export default function Profile() {
+  usePageHeader({ title: 'Profile' });
   const { data: me, refetch: refetchMe } = useMe();
   const fileInputRef = useRef(null);
   const [photoError, setPhotoError] = useState(null);
@@ -102,7 +103,7 @@ export default function Profile() {
   };
 
   return (
-    <StaffLayout title="Profile">
+    <>
       <div className="space-y-6">
 
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
@@ -240,6 +241,6 @@ export default function Profile() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

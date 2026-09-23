@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Download } from 'lucide-react';
 import BarChart from '../components/BarChart';
 import { useMyJurisdiction, useAdminDashboard, useExportReportCsv, useReportsAnalytics } from '../services/hooks';
@@ -22,6 +22,7 @@ const RANGE_MAP = {
 };
 
 export default function Analysis() {
+  usePageHeader({ title: 'Analysis' });
   const { jurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
 
@@ -88,7 +89,7 @@ export default function Analysis() {
   const rows = data?.trends || [];
 
   return (
-    <StaffLayout title="Analysis">
+    <>
       <div className="space-y-8">
 
         <section className="space-y-4">
@@ -340,7 +341,7 @@ export default function Analysis() {
         </section>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }
 

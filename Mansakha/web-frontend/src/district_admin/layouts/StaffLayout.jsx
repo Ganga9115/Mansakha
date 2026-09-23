@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Bell, BarChart, FileText, UserPlus, User, LogOut, Menu, X, Mail, HeartHandshake, Network, Users2 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
+import { usePageHeaderValue } from '../../shared/context/PageHeaderContext';
 
 // District Admin's own dedicated shell - own copy of what used to be the
 // shared StaffLayout, trimmed to just District Admin's nav. Analysis was
@@ -32,7 +33,8 @@ const NAV_ITEMS = [
   { name: 'Profile', icon: User, path: '/districtadmin/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Dashboard', headerAction = null }) {
+export default function StaffLayout() {
+  const { title, headerAction } = usePageHeaderValue();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -134,7 +136,7 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
-          {children}
+          <Outlet />
         </main>
       </div>
 

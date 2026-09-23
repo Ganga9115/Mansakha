@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import CaseHeader from '../components/CaseHeader';
 import CaseSubNav from '../components/CaseSubNav';
 import { Bot, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -93,18 +93,18 @@ export default function CaseTasks() {
   const tasksQuery = useCaseTasks(userId);
   const markComplete = useMarkInvestigationComplete();
 
+  usePageHeader({ title: 'Case Tasks' });
+
   const c = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Case Tasks"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !c) {
     return (
-      <StaffLayout title="Case Tasks">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This case could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This case could not be located.'}
+      </div>
     );
   }
 
@@ -119,7 +119,7 @@ export default function CaseTasks() {
   };
 
   return (
-    <StaffLayout title="Case Tasks">
+    <>
       <div className="space-y-4">
         <CaseHeader c={c} backTo="/io" backLabel="Back to Case Queue" onMarkComplete={handleMarkComplete} markCompleteLoading={markComplete.loading} />
         <CaseSubNav base={`/io/cases/${userId}`} />
@@ -140,6 +140,6 @@ export default function CaseTasks() {
 
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { HeartHandshake, ClipboardList, FileCheck2, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
+import { usePageHeaderValue } from '../../shared/context/PageHeaderContext';
 
 // District Welfare Officer's own dedicated shell - copied from
 // district_admin/layouts/StaffLayout.jsx (the structural template) and
@@ -18,7 +19,8 @@ const NAV_ITEMS = [
   { name: 'Profile', icon: User, path: '/dwo/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Referral Queue' }) {
+export default function StaffLayout() {
+  const { title } = usePageHeaderValue();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -79,7 +81,7 @@ export default function StaffLayout({ children, title = 'Referral Queue' }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8"><Outlet /></main>
       </div>
 
       {showLogoutConfirm && (

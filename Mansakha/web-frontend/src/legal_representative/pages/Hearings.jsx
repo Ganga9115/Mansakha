@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { CalendarClock, ArrowRight } from 'lucide-react';
 import { useUpcomingHearings } from '../services/hooks';
 
@@ -12,12 +12,13 @@ import { useUpcomingHearings } from '../services/hooks';
 // held (My Cases -> View -> Record Hearing Outcome), a different thing from
 // "what's coming up on the court's own schedule".
 export default function Hearings() {
+  usePageHeader({ title: 'Hearings' });
   const navigate = useNavigate();
   const query = useUpcomingHearings();
   const hearings = query.data?.upcomingHearings || [];
 
   return (
-    <StaffLayout title="Hearings">
+    <>
       <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
         <div>
           <h3 className="font-bold text-sm text-gray-800">Upcoming Hearings</h3>
@@ -77,6 +78,6 @@ export default function Hearings() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

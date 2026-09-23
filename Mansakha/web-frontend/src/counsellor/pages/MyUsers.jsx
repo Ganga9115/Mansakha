@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useMyUsers } from '../services/hooks';
 import GlideSelect from '../../shared/components/GlideSelect';
 
@@ -23,6 +23,7 @@ const RISK_LEVEL_OPTIONS = [
 const PAGE_SIZE = 20;
 
 export default function MyUsers() {
+  usePageHeader({ title: 'My Users' });
   const [riskLevel, setRiskLevel] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -34,7 +35,7 @@ export default function MyUsers() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <StaffLayout title="My Users">
+    <>
       <div className="space-y-6">
 
         {/* FILTER BAR */}
@@ -219,6 +220,6 @@ export default function MyUsers() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

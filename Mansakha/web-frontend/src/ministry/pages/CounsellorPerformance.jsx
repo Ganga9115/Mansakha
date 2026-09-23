@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Trophy } from 'lucide-react';
 import { useJurisdictionOptions, useCounsellorPerformance } from '../services/hooks';
 import GlideSelect from '../../shared/components/GlideSelect';
@@ -20,6 +20,7 @@ const OVERBURDENED_ACTIVE_CASES = 10;
 const JURISDICTION_LEVELS = ['district', 'state', 'national'];
 
 export default function CounsellorPerformance() {
+  usePageHeader({ title: 'Performance & Efficacy' });
   const [perfLevel, setPerfLevel] = useState('district');
   const [perfJurisdictionId, setPerfJurisdictionId] = useState('');
   const perfJurisdictionQuery = useJurisdictionOptions(perfLevel);
@@ -32,7 +33,7 @@ export default function CounsellorPerformance() {
   const bestDrop = eligibleDrops.length > 0 ? Math.max(...eligibleDrops) : null;
 
   return (
-    <MinistryLayout title="Performance & Efficacy">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm flex flex-wrap items-end gap-4">
           <div>
@@ -126,6 +127,6 @@ export default function CounsellorPerformance() {
           </div>
         </div>
       </div>
-    </MinistryLayout>
+    </>
   );
 }

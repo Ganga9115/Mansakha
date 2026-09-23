@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight, MapPin } from 'lucide-react';
 import { useReferralsList } from '../services/hooks';
 
@@ -38,13 +38,14 @@ const THREAT_TIER_BADGE = {
 };
 
 export default function ProtectionRegistry() {
+  usePageHeader({ title: 'Protection Registry' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('Open');
   const query = useReferralsList(tab);
   const referrals = query.data?.referrals || [];
 
   return (
-    <StaffLayout title="Protection Registry">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -138,6 +139,6 @@ export default function ProtectionRegistry() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

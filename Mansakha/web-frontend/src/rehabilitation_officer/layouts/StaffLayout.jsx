@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { Users, ClipboardList, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
+import { usePageHeaderValue } from '../../shared/context/PageHeaderContext';
 
 // Rehabilitation Officer's own dedicated shell - copied from
 // dwo/layouts/StaffLayout.jsx (itself copied from district_admin's
@@ -14,7 +15,8 @@ const NAV_ITEMS = [
   { name: 'Profile', icon: User, path: '/rehabilitationofficer/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Rehabilitation Plans' }) {
+export default function StaffLayout() {
+  const { title } = usePageHeaderValue();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -75,7 +77,7 @@ export default function StaffLayout({ children, title = 'Rehabilitation Plans' }
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8">{children}</main>
+        <main className="flex-1 overflow-y-auto p-4 sm:p-8"><Outlet /></main>
       </div>
 
       {showLogoutConfirm && (

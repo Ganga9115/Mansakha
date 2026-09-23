@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 import { useMe } from '../services/hooks';
@@ -9,6 +9,7 @@ import { Eye, EyeOff, User } from 'lucide-react';
 // to just Counsellor's own role details (no per-role branching, since this
 // file only ever serves Counsellor now).
 export default function Settings() {
+  usePageHeader({ title: 'Profile' });
   const { data: me, refetch: refetchMe } = useMe();
   const fileInputRef = useRef(null);
   const [photoError, setPhotoError] = useState(null);
@@ -69,7 +70,7 @@ export default function Settings() {
   const role = me?.roles?.[0];
 
   return (
-    <StaffLayout title="Profile">
+<>
       <div className="space-y-6">
 
         {/* COUNSELLOR PROFILE MATRIX */}
@@ -196,7 +197,7 @@ export default function Settings() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }
 

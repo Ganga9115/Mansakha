@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from "react-router-dom";
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import {
   ArrowLeft,
   Mic,
@@ -101,6 +101,7 @@ function TypingBubble() {
 
 export default function CaseChat() {
   const { id: userId } = useParams();
+  usePageHeader({ title: `Chat: ${userId ? userId.slice(0, 8) : ''}`, fullBleedContent: true });
   const navigate = useNavigate();
   const toast = useToast();
   const { data, loading, refetch } = useCaseMessages(userId);
@@ -291,7 +292,7 @@ export default function CaseChat() {
   const messageGroups = groupMessagesByDate(data?.messages || []);
 
   return (
-    <StaffLayout title={`Chat: ${userId ? userId.slice(0, 8) : ''}`} fullBleedContent>
+    <>
       <div className="flex-1 flex flex-col bg-white overflow-hidden min-h-0">
         
         {/* ── Header — white background, matches victim app ── */}
@@ -506,6 +507,6 @@ export default function CaseChat() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

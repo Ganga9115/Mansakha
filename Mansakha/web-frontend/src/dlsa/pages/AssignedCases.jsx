@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight, AlertTriangle } from 'lucide-react';
 import { useLegalAidRequestsList } from '../services/hooks';
 
@@ -16,6 +16,7 @@ const STATUS_BADGE = {
 };
 
 export default function AssignedCases() {
+  usePageHeader({ title: 'Assigned Cases' });
   const navigate = useNavigate();
   const activeQuery = useLegalAidRequestsList('Active');
   const completedQuery = useLegalAidRequestsList('Completed');
@@ -27,7 +28,7 @@ export default function AssignedCases() {
   const cases = [...activeCases, ...completedCases];
 
   return (
-    <StaffLayout title="Assigned Cases">
+    <>
       <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
         <div>
           <h3 className="font-bold text-sm text-gray-800">Assigned Cases</h3>
@@ -80,6 +81,6 @@ export default function AssignedCases() {
           <AlertTriangle size={12} /> Cases needing reassignment review (poor feedback awaiting your decision) are flagged on their own detail page.
         </p>
       </div>
-    </StaffLayout>
+    </>
   );
 }

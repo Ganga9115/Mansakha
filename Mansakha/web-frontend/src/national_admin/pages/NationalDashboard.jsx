@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { FileDown } from 'lucide-react';
 import { useMyJurisdiction, useAdminDashboard, useExportReportCsv } from '../services/hooks';
 
@@ -18,6 +18,7 @@ function StatCard({ title, value, tone }) {
 // the state-drill and district-drill copies live alongside this file in the
 // same role folder.
 export default function NationalDashboard() {
+  usePageHeader({ title: 'National Dashboard' });
   const navigate = useNavigate();
   const { jurisdictionId, loading: jurisdictionLoading } = useMyJurisdiction();
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
@@ -37,7 +38,7 @@ export default function NationalDashboard() {
   };
 
   return (
-    <StaffLayout title="National Dashboard">
+    <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 flex-1 mr-6">
@@ -110,6 +111,6 @@ export default function NationalDashboard() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

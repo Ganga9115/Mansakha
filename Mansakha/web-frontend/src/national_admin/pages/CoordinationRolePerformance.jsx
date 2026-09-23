@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { useMyJurisdiction, useCoordinationRolePerformance, useCoordinationStaffingGaps } from '../services/hooks';
 import GlideSelect from '../../shared/components/GlideSelect';
@@ -65,6 +65,7 @@ function OpenReferralsDrilldown({ openReferrals }) {
 }
 
 export default function CoordinationRolePerformance() {
+  usePageHeader({ title: 'Coordination Roster' });
   const { jurisdictionId } = useMyJurisdiction();
   const perfQuery = useCoordinationRolePerformance(jurisdictionId);
   const gapsQuery = useCoordinationStaffingGaps(jurisdictionId);
@@ -92,7 +93,7 @@ export default function CoordinationRolePerformance() {
   });
 
   return (
-    <StaffLayout title="Coordination Roster">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
           <div className="flex items-center gap-1.5">
@@ -229,6 +230,6 @@ export default function CoordinationRolePerformance() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

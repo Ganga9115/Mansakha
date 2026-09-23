@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft, FileText, User, Phone, Home, Gavel } from 'lucide-react';
 import {
   useLegalAidRequestDetail, useEligibleRepresentatives,
@@ -224,18 +224,18 @@ export default function LegalAidRequestDetail() {
   const [repId, setRepId] = useState('');
   const [actionError, setActionError] = useState(null);
 
+  usePageHeader({ title: 'Legal Aid Request' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Legal Aid Request"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Legal Aid Request">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This request could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This request could not be located.'}
+      </div>
     );
   }
 
@@ -255,7 +255,7 @@ export default function LegalAidRequestDetail() {
   const needsReassignment = latestAssignment?.status === 'Rejected';
 
   return (
-    <StaffLayout title="Legal Aid Request">
+    <>
       <div className="space-y-6">
         <button onClick={() => navigate('/dlsa')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 transition">
           <ArrowLeft size={14} /> Back to Legal Aid Requests
@@ -402,6 +402,6 @@ export default function LegalAidRequestDetail() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

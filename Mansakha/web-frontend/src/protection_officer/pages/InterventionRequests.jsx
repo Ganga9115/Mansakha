@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight } from 'lucide-react';
 import { useInterventionRequestsList } from '../services/hooks';
 
@@ -20,6 +20,7 @@ const STATUS_BADGE = {
 };
 
 export default function InterventionRequests() {
+  usePageHeader({ title: 'Intervention Requests' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('Pending');
   const query = useInterventionRequestsList(tab);
@@ -27,7 +28,7 @@ export default function InterventionRequests() {
   const jurisdictionAssigned = query.data?.jurisdictionAssigned !== false;
 
   return (
-    <StaffLayout title="Intervention Requests">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -102,6 +103,6 @@ export default function InterventionRequests() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

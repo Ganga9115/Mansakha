@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import CaseHeader from '../components/CaseHeader';
 import CaseSubNav from '../components/CaseSubNav';
 import { ShieldAlert, FileText, Send, AlertTriangle, Upload, Download, ShieldOff } from 'lucide-react';
@@ -302,18 +302,18 @@ export default function CaseDetail() {
   const detailQuery = useCaseDetail(userId);
   const markComplete = useMarkInvestigationComplete();
 
+  usePageHeader({ title: 'Case Overview' });
+
   const c = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Case Overview"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !c) {
     return (
-      <StaffLayout title="Case Overview">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This case could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This case could not be located.'}
+      </div>
     );
   }
 
@@ -328,7 +328,7 @@ export default function CaseDetail() {
   };
 
   return (
-    <StaffLayout title="Case Overview">
+    <>
       <div className="space-y-4">
         <CaseHeader c={c} backTo="/io" backLabel="Back to Case Queue" onMarkComplete={handleMarkComplete} markCompleteLoading={markComplete.loading} />
         <CaseSubNav base={`/io/cases/${userId}`} />
@@ -348,6 +348,6 @@ export default function CaseDetail() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

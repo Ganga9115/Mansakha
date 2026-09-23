@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { FileDown } from 'lucide-react';
 import { useAdminDashboard, useExportReportCsv, useAdminAlerts, useReportsAnalytics } from '../services/hooks';
 
@@ -36,6 +36,7 @@ function StatCard({ title, value, tone }) {
 // "my own jurisdiction" (always resolved from the URL param here, never
 // from the caller's own jurisdiction).
 export default function AdminDashboard() {
+  usePageHeader({ title: 'District Dashboard' });
   const navigate = useNavigate();
   const { jurisdictionId } = useParams();
   const { data, loading, error } = useAdminDashboard(jurisdictionId);
@@ -64,7 +65,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <StaffLayout title="District Dashboard">
+    <>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full">
@@ -188,6 +189,6 @@ export default function AdminDashboard() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

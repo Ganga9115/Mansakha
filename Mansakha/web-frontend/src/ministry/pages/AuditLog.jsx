@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useAuditLog } from '../services/hooks';
 
 const PAGE_SIZE = 20;
 
 export default function AuditLog() {
+  usePageHeader({ title: 'Audit Log' });
   const [page, setPage] = useState(1);
   const { data, loading, error } = useAuditLog(page);
 
@@ -13,7 +14,7 @@ export default function AuditLog() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <MinistryLayout title="Audit Log">
+    <>
       <div className="space-y-4">
         <div className="bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
@@ -66,6 +67,6 @@ export default function AuditLog() {
           </div>
         </div>
       </div>
-    </MinistryLayout>
+    </>
   );
 }

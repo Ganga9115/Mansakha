@@ -3,9 +3,11 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 
 import RequireAuth from './shared/components/RequireAuth';
 import { ToastProvider } from './shared/context/ToastContext';
+import { PageHeaderProvider } from './shared/context/PageHeaderContext';
 import StaffLoginPage from './shared/pages/Login';
 import SignInPage from './shared/pages/SignIn';
 
+import CounsellorStaffLayout from './counsellor/layouts/StaffLayout';
 import CounsellorDashboard from './counsellor/pages/CounsellorDashboard';
 import MyUsers from './counsellor/pages/MyUsers';
 import CounsellorCaseDetail from './counsellor/pages/CaseDetail';
@@ -16,6 +18,7 @@ import CounsellorAnalysis from './counsellor/pages/Analysis';
 import CounsellorSettings from './counsellor/pages/Settings';
 
 
+import DistrictAdminStaffLayout from './district_admin/layouts/StaffLayout';
 import DistrictAdminDashboard from './district_admin/pages/AdminDashboard';
 import DistrictAnalysis from './district_admin/pages/Analysis';
 import DistrictCoordinationRolePerformance from './district_admin/pages/CoordinationRolePerformance';
@@ -31,6 +34,7 @@ import DistrictMailSent from './district_admin/pages/MailSent';
 import DistrictMailArchived from './district_admin/pages/MailArchived';
 import DistrictMailThread from './district_admin/pages/MailThread';
 
+import StateAdminStaffLayout from './state_admin/layouts/StaffLayout';
 import StateDashboard from './state_admin/pages/StateDashboard';
 import StateAdminDistrictDashboard from './state_admin/pages/AdminDashboard';
 import StateCaseDetail from './state_admin/pages/CaseDetail';
@@ -44,6 +48,7 @@ import StateMailSent from './state_admin/pages/MailSent';
 import StateMailArchived from './state_admin/pages/MailArchived';
 import StateMailThread from './state_admin/pages/MailThread';
 
+import NationalAdminStaffLayout from './national_admin/layouts/StaffLayout';
 import NationalDashboard from './national_admin/pages/NationalDashboard';
 import NationalStateDashboard from './national_admin/pages/StateDashboard';
 import NationalDistrictDashboard from './national_admin/pages/AdminDashboard';
@@ -59,6 +64,7 @@ import NationalMailArchived from './national_admin/pages/MailArchived';
 import NationalMailThread from './national_admin/pages/MailThread';
 
 import MinistryLoginPage from './ministry/pages/Login';
+import MinistryStaffLayout from './ministry/layouts/MinistryLayout';
 import MinistryDashboard from './ministry/pages/MinistryDashboard';
 import StaffManagement from './ministry/pages/StaffManagement';
 import CounsellorPerformance from './ministry/pages/CounsellorPerformance';
@@ -75,11 +81,13 @@ import MinistryMailThread from './ministry/pages/MailThread';
 // New coordination roles (Sign In portal) - see shared/pages/SignIn.jsx and
 // backend/src/core/routes/auth.signin.routes.js for the shared login this
 // group of 7 signs in through.
+import IoStaffLayout from './io/layouts/StaffLayout';
 import IoCaseQueue from './io/pages/CaseQueue';
 import IoCaseDetail from './io/pages/CaseDetail';
 import IoCaseLog from './io/pages/CaseLog';
 import IoCaseTasks from './io/pages/CaseTasks';
 import IoProfile from './io/pages/Profile';
+import DwoStaffLayout from './dwo/layouts/StaffLayout';
 import DwoReferralQueue from './dwo/pages/ReferralQueue';
 import DwoReferralDetail from './dwo/pages/ReferralDetail';
 import DwoReferralRelief from './dwo/pages/ReferralRelief';
@@ -88,11 +96,13 @@ import DwoReferralLog from './dwo/pages/ReferralLog';
 import DwoReferralTasks from './dwo/pages/ReferralTasks';
 import DwoInterventionRequests from './dwo/pages/InterventionRequests';
 import DwoProfile from './dwo/pages/Profile';
+import ProtectionOfficerStaffLayout from './protection_officer/layouts/StaffLayout';
 import ProtectionOfficerRegistry from './protection_officer/pages/ProtectionRegistry';
 import ProtectionOfficerReferralDetail from './protection_officer/pages/ReferralDetail';
 import ProtectionOfficerInterventionRequests from './protection_officer/pages/InterventionRequests';
 import ProtectionOfficerInterventionRequestDetail from './protection_officer/pages/InterventionRequestDetail';
 import ProtectionOfficerProfile from './protection_officer/pages/Profile';
+import DlsaStaffLayout from './dlsa/layouts/StaffLayout';
 import DlsaLegalAidQueue from './dlsa/pages/LegalAidQueue';
 import DlsaLegalAidRequestDetail from './dlsa/pages/LegalAidRequestDetail';
 import DlsaAssignedCases from './dlsa/pages/AssignedCases';
@@ -100,10 +110,12 @@ import DlsaReferralDetail from './dlsa/pages/ReferralDetail';
 import DlsaMyTasks from './dlsa/pages/MyTasks';
 import DlsaInterventionRequests from './dlsa/pages/InterventionRequests';
 import DlsaProfile from './dlsa/pages/Profile';
+import LegalRepresentativeStaffLayout from './legal_representative/layouts/StaffLayout';
 import LegalRepresentativeMyCases from './legal_representative/pages/MyCases';
 import LegalRepresentativeCaseDetail from './legal_representative/pages/CaseDetail';
 import LegalRepresentativeHearings from './legal_representative/pages/Hearings';
 import LegalRepresentativeProfile from './legal_representative/pages/Profile';
+import RehabilitationOfficerStaffLayout from './rehabilitation_officer/layouts/StaffLayout';
 import RehabilitationOfficerPlans from './rehabilitation_officer/pages/RehabilitationPlans';
 import RehabilitationOfficerReferralDetail from './rehabilitation_officer/pages/ReferralDetail';
 
@@ -113,6 +125,7 @@ export default function App() {
   return (
     <Router>
       <ToastProvider>
+      <PageHeaderProvider>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
 
@@ -123,81 +136,104 @@ export default function App() {
             see shared/pages/Login.jsx's own header comment. */}
         <Route path="/login" element={<StaffLoginPage />} />
 
-        {/* Counsellor */}
-        <Route path="/counsellor" element={<RequireAuth><CounsellorDashboard /></RequireAuth>} />
-        <Route path="/counsellor/my-users" element={<RequireAuth><MyUsers /></RequireAuth>} />
-        <Route path="/counsellor/case-detail/:id" element={<RequireAuth><CounsellorCaseDetail /></RequireAuth>} />
-        <Route path="/counsellor/case-detail/:id/notes" element={<RequireAuth><CounsellorCaseNotes /></RequireAuth>} />
-        <Route path="/counsellor/case-detail/:id/chat" element={<RequireAuth><CounsellorCaseChat /></RequireAuth>} />
-        <Route path="/counsellor/alerts" element={<RequireAuth><AlertsFeed /></RequireAuth>} />
-        <Route path="/counsellor/analysis" element={<RequireAuth><CounsellorAnalysis /></RequireAuth>} />
+        {/* Counsellor - nested under one persistent layout route (renders
+            <Outlet/>) instead of each page wrapping StaffLayout itself, so
+            the sidebar survives navigation between these pages and its
+            gliding active-item pill (SidebarGlideNav) can actually animate
+            between them - see PageHeaderContext.jsx for how each page still
+            gets its own title/header into that persistent layout. */}
+        <Route path="/counsellor" element={<RequireAuth><CounsellorStaffLayout /></RequireAuth>}>
+          <Route index element={<CounsellorDashboard />} />
+          <Route path="my-users" element={<MyUsers />} />
+          <Route path="case-detail/:id" element={<CounsellorCaseDetail />} />
+          <Route path="case-detail/:id/notes" element={<CounsellorCaseNotes />} />
+          <Route path="case-detail/:id/chat" element={<CounsellorCaseChat />} />
+          <Route path="alerts" element={<AlertsFeed />} />
+          <Route path="analysis" element={<CounsellorAnalysis />} />
+          <Route path="profile" element={<CounsellorSettings />} />
+        </Route>
 
-        <Route path="/counsellor/profile" element={<RequireAuth><CounsellorSettings /></RequireAuth>} />
+        {/* District Admin - nested under one persistent layout route (renders
+            <Outlet/>) instead of each page wrapping StaffLayout itself, so
+            the sidebar survives navigation between these pages - same
+            pattern as Counsellor above. Case-level dashboard is the default
+            view; district admin has no sub-jurisdictions to break down. */}
+        <Route path="/districtadmin" element={<RequireAuth><DistrictAdminStaffLayout /></RequireAuth>}>
+          <Route index element={<DistrictAdminDashboard />} />
+          <Route path="analysis" element={<DistrictAnalysis />} />
+          <Route path="coordination-roster" element={<DistrictCoordinationRolePerformance />} />
+          <Route path="case-detail/:id" element={<DistrictCaseDetail />} />
+          <Route path="alerts" element={<DistrictAdminAlerts />} />
+          <Route path="intervention-requests" element={<DistrictInterventionRequests />} />
+          <Route path="agency-coordination" element={<DistrictAgencyCoordination />} />
+          <Route path="edit-user" element={<EditUserRecord />} />
+          <Route path="reports" element={<DistrictReports />} />
+          <Route path="mail" element={<DistrictMailInbox />} />
+          <Route path="mail/sent" element={<DistrictMailSent />} />
+          <Route path="mail/archived" element={<DistrictMailArchived />} />
+          <Route path="mail/thread/:threadId" element={<DistrictMailThread />} />
+          <Route path="profile" element={<DistrictSettings />} />
+        </Route>
 
-        {/* District Admin - case-level dashboard is the default view;
-            district admin has no sub-jurisdictions to break down. */}
-        <Route path="/districtadmin" element={<RequireAuth><DistrictAdminDashboard /></RequireAuth>} />
-        <Route path="/districtadmin/analysis" element={<RequireAuth><DistrictAnalysis /></RequireAuth>} />
-        <Route path="/districtadmin/coordination-roster" element={<RequireAuth><DistrictCoordinationRolePerformance /></RequireAuth>} />
-        <Route path="/districtadmin/case-detail/:id" element={<RequireAuth><DistrictCaseDetail /></RequireAuth>} />
-        <Route path="/districtadmin/alerts" element={<RequireAuth><DistrictAdminAlerts /></RequireAuth>} />
-        <Route path="/districtadmin/intervention-requests" element={<RequireAuth><DistrictInterventionRequests /></RequireAuth>} />
-        <Route path="/districtadmin/agency-coordination" element={<RequireAuth><DistrictAgencyCoordination /></RequireAuth>} />
-        <Route path="/districtadmin/edit-user" element={<RequireAuth><EditUserRecord /></RequireAuth>} />
-        <Route path="/districtadmin/reports" element={<RequireAuth><DistrictReports /></RequireAuth>} />
-        <Route path="/districtadmin/mail" element={<RequireAuth><DistrictMailInbox /></RequireAuth>} />
-        <Route path="/districtadmin/mail/sent" element={<RequireAuth><DistrictMailSent /></RequireAuth>} />
-        <Route path="/districtadmin/mail/archived" element={<RequireAuth><DistrictMailArchived /></RequireAuth>} />
-        <Route path="/districtadmin/mail/thread/:threadId" element={<RequireAuth><DistrictMailThread /></RequireAuth>} />
-        <Route path="/districtadmin/profile" element={<RequireAuth><DistrictSettings /></RequireAuth>} />
+        {/* State/UT Admin - nested under one persistent layout route, same
+            pattern as District Admin above. Aggregate (district-wise
+            breakdown) is the default view; district/:id is the drill-down
+            into a specific district's own case-level dashboard, keeping the
+            state sidebar. */}
+        <Route path="/stateadmin" element={<RequireAuth><StateAdminStaffLayout /></RequireAuth>}>
+          <Route index element={<StateDashboard />} />
+          <Route path="district/:jurisdictionId" element={<StateAdminDistrictDashboard />} />
+          <Route path="case-detail/:id" element={<StateCaseDetail />} />
+          <Route path="analysis" element={<StateAnalysis />} />
+          <Route path="coordination-roster" element={<StateCoordinationRolePerformance />} />
+          <Route path="alerts" element={<StateAdminAlerts />} />
+          <Route path="reports" element={<StateReports />} />
+          <Route path="mail" element={<StateMailInbox />} />
+          <Route path="mail/sent" element={<StateMailSent />} />
+          <Route path="mail/archived" element={<StateMailArchived />} />
+          <Route path="mail/thread/:threadId" element={<StateMailThread />} />
+          <Route path="profile" element={<StateSettings />} />
+        </Route>
 
-        {/* State/UT Admin - aggregate (district-wise breakdown) is the
-            default view; /district/:id is the drill-down into a specific
-            district's own case-level dashboard, keeping the state sidebar. */}
-        <Route path="/stateadmin" element={<RequireAuth><StateDashboard /></RequireAuth>} />
-        <Route path="/stateadmin/district/:jurisdictionId" element={<RequireAuth><StateAdminDistrictDashboard /></RequireAuth>} />
-        <Route path="/stateadmin/case-detail/:id" element={<RequireAuth><StateCaseDetail /></RequireAuth>} />
-        <Route path="/stateadmin/analysis" element={<RequireAuth><StateAnalysis /></RequireAuth>} />
-        <Route path="/stateadmin/coordination-roster" element={<RequireAuth><StateCoordinationRolePerformance /></RequireAuth>} />
-        <Route path="/stateadmin/alerts" element={<RequireAuth><StateAdminAlerts /></RequireAuth>} />
-        <Route path="/stateadmin/reports" element={<RequireAuth><StateReports /></RequireAuth>} />
-        <Route path="/stateadmin/mail" element={<RequireAuth><StateMailInbox /></RequireAuth>} />
-        <Route path="/stateadmin/mail/sent" element={<RequireAuth><StateMailSent /></RequireAuth>} />
-        <Route path="/stateadmin/mail/archived" element={<RequireAuth><StateMailArchived /></RequireAuth>} />
-        <Route path="/stateadmin/mail/thread/:threadId" element={<RequireAuth><StateMailThread /></RequireAuth>} />
-        <Route path="/stateadmin/profile" element={<RequireAuth><StateSettings /></RequireAuth>} />
+        {/* National Admin - nested under one persistent layout route, same
+            pattern as Counsellor above. State-wise breakdown by default;
+            drills into a state, then a district, then a case, each keeping
+            the national sidebar. */}
+        <Route path="/nationaladmin" element={<RequireAuth><NationalAdminStaffLayout /></RequireAuth>}>
+          <Route index element={<NationalDashboard />} />
+          <Route path="analysis" element={<NationalAnalysis />} />
+          <Route path="coordination-roster" element={<NationalCoordinationRolePerformance />} />
+          <Route path="alerts" element={<NationalAdminAlerts />} />
+          <Route path="reports" element={<NationalReports />} />
+          <Route path="state/:jurisdictionId" element={<NationalStateDashboard />} />
+          <Route path="district/:jurisdictionId" element={<NationalDistrictDashboard />} />
+          <Route path="case-detail/:id" element={<NationalCaseDetail />} />
+          <Route path="mail" element={<NationalMailInbox />} />
+          <Route path="mail/sent" element={<NationalMailSent />} />
+          <Route path="mail/archived" element={<NationalMailArchived />} />
+          <Route path="mail/thread/:threadId" element={<NationalMailThread />} />
+          <Route path="profile" element={<NationalSettings />} />
+        </Route>
 
-        {/* National Admin - state-wise breakdown by default; drills into a
-            state, then a district, then a case, each keeping the national
-            sidebar. */}
-        <Route path="/nationaladmin" element={<RequireAuth><NationalDashboard /></RequireAuth>} />
-        <Route path="/nationaladmin/analysis" element={<RequireAuth><NationalAnalysis /></RequireAuth>} />
-        <Route path="/nationaladmin/coordination-roster" element={<RequireAuth><NationalCoordinationRolePerformance /></RequireAuth>} />
-        <Route path="/nationaladmin/alerts" element={<RequireAuth><NationalAdminAlerts /></RequireAuth>} />
-        <Route path="/nationaladmin/reports" element={<RequireAuth><NationalReports /></RequireAuth>} />
-        <Route path="/nationaladmin/state/:jurisdictionId" element={<RequireAuth><NationalStateDashboard /></RequireAuth>} />
-        <Route path="/nationaladmin/district/:jurisdictionId" element={<RequireAuth><NationalDistrictDashboard /></RequireAuth>} />
-        <Route path="/nationaladmin/case-detail/:id" element={<RequireAuth><NationalCaseDetail /></RequireAuth>} />
-        <Route path="/nationaladmin/mail" element={<RequireAuth><NationalMailInbox /></RequireAuth>} />
-        <Route path="/nationaladmin/mail/sent" element={<RequireAuth><NationalMailSent /></RequireAuth>} />
-        <Route path="/nationaladmin/mail/archived" element={<RequireAuth><NationalMailArchived /></RequireAuth>} />
-        <Route path="/nationaladmin/mail/thread/:threadId" element={<RequireAuth><NationalMailThread /></RequireAuth>} />
-        <Route path="/nationaladmin/profile" element={<RequireAuth><NationalSettings /></RequireAuth>} />
-
-        {/* Ministry */}
+        {/* Ministry - login stays a standalone top-level route (its own
+            separate auth flow, not part of this nesting); every other
+            Ministry page nests under one persistent layout route, same
+            pattern as Counsellor/National Admin above. */}
         <Route path="/ministry/login" element={<MinistryLoginPage />} />
-        <Route path="/ministry/dashboard" element={<RequireAuth loginPath="/ministry/login"><MinistryDashboard /></RequireAuth>} />
-        <Route path="/ministry/staff-management" element={<RequireAuth loginPath="/ministry/login"><StaffManagement /></RequireAuth>} />
-        <Route path="/ministry/performance" element={<RequireAuth loginPath="/ministry/login"><CounsellorPerformance /></RequireAuth>} />
-        <Route path="/ministry/coordination-roster" element={<RequireAuth loginPath="/ministry/login"><MinistryCoordinationRolePerformance /></RequireAuth>} />
-        <Route path="/ministry/system-config" element={<RequireAuth loginPath="/ministry/login"><SystemConfig /></RequireAuth>} />
-        <Route path="/ministry/audit-log" element={<RequireAuth loginPath="/ministry/login"><AuditLog /></RequireAuth>} />
-        <Route path="/ministry/reports" element={<RequireAuth loginPath="/ministry/login"><ReportsInbox /></RequireAuth>} />
-        <Route path="/ministry/mail" element={<RequireAuth loginPath="/ministry/login"><MinistryMailInbox /></RequireAuth>} />
-        <Route path="/ministry/mail/sent" element={<RequireAuth loginPath="/ministry/login"><MinistryMailSent /></RequireAuth>} />
-        <Route path="/ministry/mail/archived" element={<RequireAuth loginPath="/ministry/login"><MinistryMailArchived /></RequireAuth>} />
-        <Route path="/ministry/mail/thread/:threadId" element={<RequireAuth loginPath="/ministry/login"><MinistryMailThread /></RequireAuth>} />
-        <Route path="/ministry/profile" element={<RequireAuth loginPath="/ministry/login"><MinistrySettings /></RequireAuth>} />
+        <Route path="/ministry" element={<RequireAuth loginPath="/ministry/login"><MinistryStaffLayout /></RequireAuth>}>
+          <Route path="dashboard" element={<MinistryDashboard />} />
+          <Route path="staff-management" element={<StaffManagement />} />
+          <Route path="performance" element={<CounsellorPerformance />} />
+          <Route path="coordination-roster" element={<MinistryCoordinationRolePerformance />} />
+          <Route path="system-config" element={<SystemConfig />} />
+          <Route path="audit-log" element={<AuditLog />} />
+          <Route path="reports" element={<ReportsInbox />} />
+          <Route path="mail" element={<MinistryMailInbox />} />
+          <Route path="mail/sent" element={<MinistryMailSent />} />
+          <Route path="mail/archived" element={<MinistryMailArchived />} />
+          <Route path="mail/thread/:threadId" element={<MinistryMailThread />} />
+          <Route path="profile" element={<MinistrySettings />} />
+        </Route>
 
         {/* Signin - the second shared pre-role login (see SignIn.jsx's own
             header comment), for the 7 new coordination roles. Each portal
@@ -205,44 +241,73 @@ export default function App() {
             Ministry's own loginPath="/ministry/login". */}
         <Route path="/signin" element={<SignInPage />} />
 
-        <Route path="/io" element={<RequireAuth loginPath="/signin"><IoCaseQueue /></RequireAuth>} />
-        <Route path="/io/cases/:userId" element={<RequireAuth loginPath="/signin"><IoCaseDetail /></RequireAuth>} />
-        <Route path="/io/cases/:userId/log" element={<RequireAuth loginPath="/signin"><IoCaseLog /></RequireAuth>} />
-        <Route path="/io/cases/:userId/tasks" element={<RequireAuth loginPath="/signin"><IoCaseTasks /></RequireAuth>} />
-        <Route path="/io/profile" element={<RequireAuth loginPath="/signin"><IoProfile /></RequireAuth>} />
-        <Route path="/dwo" element={<RequireAuth loginPath="/signin"><DwoReferralQueue /></RequireAuth>} />
-        <Route path="/dwo/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DwoReferralDetail /></RequireAuth>} />
-        <Route path="/dwo/referrals/:referralId/relief" element={<RequireAuth loginPath="/signin"><DwoReferralRelief /></RequireAuth>} />
-        <Route path="/dwo/referrals/:referralId/compensation" element={<RequireAuth loginPath="/signin"><DwoReferralCompensation /></RequireAuth>} />
-        <Route path="/dwo/referrals/:referralId/log" element={<RequireAuth loginPath="/signin"><DwoReferralLog /></RequireAuth>} />
-        <Route path="/dwo/referrals/:referralId/tasks" element={<RequireAuth loginPath="/signin"><DwoReferralTasks /></RequireAuth>} />
-        <Route path="/dwo/intervention-requests" element={<RequireAuth loginPath="/signin"><DwoInterventionRequests /></RequireAuth>} />
-        <Route path="/dwo/profile" element={<RequireAuth loginPath="/signin"><DwoProfile /></RequireAuth>} />
-        <Route path="/protectionofficer" element={<RequireAuth loginPath="/signin"><ProtectionOfficerRegistry /></RequireAuth>} />
-        <Route path="/protectionofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><ProtectionOfficerReferralDetail /></RequireAuth>} />
-        <Route path="/protectionofficer/intervention-requests" element={<RequireAuth loginPath="/signin"><ProtectionOfficerInterventionRequests /></RequireAuth>} />
-        <Route path="/protectionofficer/intervention-requests/:requestId" element={<RequireAuth loginPath="/signin"><ProtectionOfficerInterventionRequestDetail /></RequireAuth>} />
-        <Route path="/protectionofficer/profile" element={<RequireAuth loginPath="/signin"><ProtectionOfficerProfile /></RequireAuth>} />
-        <Route path="/dlsa" element={<RequireAuth loginPath="/signin"><DlsaLegalAidQueue /></RequireAuth>} />
-        <Route path="/dlsa/legal-aid-requests/:requestId" element={<RequireAuth loginPath="/signin"><DlsaLegalAidRequestDetail /></RequireAuth>} />
-        <Route path="/dlsa/assigned-cases" element={<RequireAuth loginPath="/signin"><DlsaAssignedCases /></RequireAuth>} />
-        <Route path="/dlsa/profile" element={<RequireAuth loginPath="/signin"><DlsaProfile /></RequireAuth>} />
-        {/* migration_040: unlinked from the DLSA sidebar (which now shows only
-            Legal Aid Requests / Assigned Cases / Profile), but left mounted
-            and reachable by direct URL - the legacy agency_referrals-backed
-            flow these serve still has to work for any pre-existing case. */}
-        <Route path="/dlsa/referrals/:referralId" element={<RequireAuth loginPath="/signin"><DlsaReferralDetail /></RequireAuth>} />
-        <Route path="/dlsa/tasks" element={<RequireAuth loginPath="/signin"><DlsaMyTasks /></RequireAuth>} />
-        <Route path="/dlsa/intervention-requests" element={<RequireAuth loginPath="/signin"><DlsaInterventionRequests /></RequireAuth>} />
-        <Route path="/legalrepresentative" element={<RequireAuth loginPath="/signin"><LegalRepresentativeMyCases /></RequireAuth>} />
-        <Route path="/legalrepresentative/cases/:requestId" element={<RequireAuth loginPath="/signin"><LegalRepresentativeCaseDetail /></RequireAuth>} />
-        <Route path="/legalrepresentative/hearings" element={<RequireAuth loginPath="/signin"><LegalRepresentativeHearings /></RequireAuth>} />
-        <Route path="/legalrepresentative/profile" element={<RequireAuth loginPath="/signin"><LegalRepresentativeProfile /></RequireAuth>} />
-        <Route path="/rehabilitationofficer" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerPlans /></RequireAuth>} />
-        <Route path="/rehabilitationofficer/referrals/:referralId" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerReferralDetail /></RequireAuth>} />
+        {/* Investigating Officer - nested under one persistent layout route,
+            same pattern as Counsellor/Protection Officer above. */}
+        <Route path="/io" element={<RequireAuth loginPath="/signin"><IoStaffLayout /></RequireAuth>}>
+          <Route index element={<IoCaseQueue />} />
+          <Route path="cases/:userId" element={<IoCaseDetail />} />
+          <Route path="cases/:userId/log" element={<IoCaseLog />} />
+          <Route path="cases/:userId/tasks" element={<IoCaseTasks />} />
+          <Route path="profile" element={<IoProfile />} />
+        </Route>
 
-        <Route path="/rehabilitationofficer/profile" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerProfile /></RequireAuth>} />
+        {/* District Welfare Officer - nested under one persistent layout
+            route, same pattern as Counsellor/Protection Officer above. */}
+        <Route path="/dwo" element={<RequireAuth loginPath="/signin"><DwoStaffLayout /></RequireAuth>}>
+          <Route index element={<DwoReferralQueue />} />
+          <Route path="referrals/:referralId" element={<DwoReferralDetail />} />
+          <Route path="referrals/:referralId/relief" element={<DwoReferralRelief />} />
+          <Route path="referrals/:referralId/compensation" element={<DwoReferralCompensation />} />
+          <Route path="referrals/:referralId/log" element={<DwoReferralLog />} />
+          <Route path="referrals/:referralId/tasks" element={<DwoReferralTasks />} />
+          <Route path="intervention-requests" element={<DwoInterventionRequests />} />
+          <Route path="profile" element={<DwoProfile />} />
+        </Route>
+        {/* Protection Officer - nested under one persistent layout route, same
+            pattern as Counsellor (see App.jsx's own "Counsellor" comment
+            above and PageHeaderContext.jsx for how each page still gets its
+            own title into the persistent layout). */}
+        <Route path="/protectionofficer" element={<RequireAuth loginPath="/signin"><ProtectionOfficerStaffLayout /></RequireAuth>}>
+          <Route index element={<ProtectionOfficerRegistry />} />
+          <Route path="referrals/:referralId" element={<ProtectionOfficerReferralDetail />} />
+          <Route path="intervention-requests" element={<ProtectionOfficerInterventionRequests />} />
+          <Route path="intervention-requests/:requestId" element={<ProtectionOfficerInterventionRequestDetail />} />
+          <Route path="profile" element={<ProtectionOfficerProfile />} />
+        </Route>
+        {/* DLSA Coordinator - nested under one persistent layout route, same
+            pattern as Counsellor/Protection Officer above. */}
+        <Route path="/dlsa" element={<RequireAuth loginPath="/signin"><DlsaStaffLayout /></RequireAuth>}>
+          <Route index element={<DlsaLegalAidQueue />} />
+          <Route path="legal-aid-requests/:requestId" element={<DlsaLegalAidRequestDetail />} />
+          <Route path="assigned-cases" element={<DlsaAssignedCases />} />
+          <Route path="profile" element={<DlsaProfile />} />
+          {/* migration_040: unlinked from the DLSA sidebar (which now shows
+              only Legal Aid Requests / Assigned Cases / Profile), but left
+              mounted and reachable by direct URL - the legacy
+              agency_referrals-backed flow these serve still has to work for
+              any pre-existing case. */}
+          <Route path="referrals/:referralId" element={<DlsaReferralDetail />} />
+          <Route path="tasks" element={<DlsaMyTasks />} />
+          <Route path="intervention-requests" element={<DlsaInterventionRequests />} />
+        </Route>
+        {/* Legal Representative - nested under one persistent layout route,
+            same pattern as Counsellor/Protection Officer above. */}
+        <Route path="/legalrepresentative" element={<RequireAuth loginPath="/signin"><LegalRepresentativeStaffLayout /></RequireAuth>}>
+          <Route index element={<LegalRepresentativeMyCases />} />
+          <Route path="cases/:requestId" element={<LegalRepresentativeCaseDetail />} />
+          <Route path="hearings" element={<LegalRepresentativeHearings />} />
+          <Route path="profile" element={<LegalRepresentativeProfile />} />
+        </Route>
+
+        {/* Rehabilitation Officer - nested under one persistent layout route,
+            same pattern as Counsellor/Protection Officer above. */}
+        <Route path="/rehabilitationofficer" element={<RequireAuth loginPath="/signin"><RehabilitationOfficerStaffLayout /></RequireAuth>}>
+          <Route index element={<RehabilitationOfficerPlans />} />
+          <Route path="referrals/:referralId" element={<RehabilitationOfficerReferralDetail />} />
+          <Route path="profile" element={<RehabilitationOfficerProfile />} />
+        </Route>
       </Routes>
+      </PageHeaderProvider>
       </ToastProvider>
     </Router>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useMyJurisdiction, useAdminAlerts } from '../services/hooks';
 
 const STATUS_STYLE = {
@@ -20,6 +20,7 @@ function timeAgo(iso) {
 }
 
 export default function AdminAlerts() {
+  usePageHeader({ title: 'Alerts Feed' });
   const navigate = useNavigate();
   const [filter, setFilter] = useState('All');
 
@@ -36,7 +37,7 @@ export default function AdminAlerts() {
   const alerts = filter === 'All' ? allAlerts : allAlerts.filter((a) => a.status === filter);
 
   return (
-    <StaffLayout title="Alerts Feed">
+    <>
       <div className="space-y-6">
 
         {/* FILTER BAR */}
@@ -100,6 +101,6 @@ export default function AdminAlerts() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

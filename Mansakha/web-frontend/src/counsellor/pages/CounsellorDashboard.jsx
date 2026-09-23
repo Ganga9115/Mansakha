@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useCounsellorDashboard, useCounsellorAlerts, useScheduledSessions } from '../services/hooks';
 import { Calendar } from 'lucide-react';
 
@@ -21,6 +21,7 @@ function timeAgo(iso) {
 }
 
 export default function CounsellorDashboard() {
+  usePageHeader({ title: 'Counsellor Dashboard' });
   const navigate = useNavigate();
   const { data: counts, loading: countsLoading, error: countsError } = useCounsellorDashboard();
   const { data: alertsData, loading: alertsLoading } = useCounsellorAlerts();
@@ -29,7 +30,7 @@ export default function CounsellorDashboard() {
   const openAlertCount = alertsData?.openCount ?? (alertsData?.alerts || []).filter((a) => a.status === 'Open').length;
 
   return (
-    <StaffLayout title="Counsellor Dashboard">
+    <>
       <div className="space-y-6">
 
         {countsError && (
@@ -146,7 +147,7 @@ export default function CounsellorDashboard() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }
 

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight, AlertTriangle } from 'lucide-react';
 import { useLegalAidRequestsList } from '../services/hooks';
 
@@ -36,6 +36,7 @@ function bucketOf(r) {
 }
 
 export default function LegalAidQueue() {
+  usePageHeader({ title: 'Legal Aid Requests' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('New Legal Aid');
   const query = useLegalAidRequestsList();
@@ -44,7 +45,7 @@ export default function LegalAidQueue() {
   const jurisdictionAssigned = query.data?.jurisdictionAssigned !== false;
 
   return (
-    <StaffLayout title="Legal Aid Requests">
+    <>
       <div className="space-y-4">
         {!query.loading && !jurisdictionAssigned && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-lg">
@@ -124,6 +125,6 @@ export default function LegalAidQueue() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

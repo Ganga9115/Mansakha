@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Users, Bell, BarChart, User, LogOut, Menu, X } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
 import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
+import { usePageHeaderValue } from '../../shared/context/PageHeaderContext';
 
 // Counsellor's own dedicated shell - own copy of what used to be the shared
 // StaffLayout, trimmed to just Counsellor's nav (no other role's items, no
@@ -18,6 +19,14 @@ const NAV_ITEMS = [
   { name: 'Profile', icon: User, path: '/counsellor/profile' },
 ];
 
+// This is now a persistent route-level layout (mounted once per role via
+// App.jsx's nested routes, rendering <Outlet/>) instead of something each
+// page wraps itself in - that's what lets SidebarGlideNav's pill actually
+// glide between pages instead of remounting from scratch on every
+// navigation. `title`/`headerAction`/`fullBleedContent` come from
+// PageHeaderContext (each child page calls usePageHeader({...}) once) since
+// a page can no longer hand them down as props to something that isn't its
+// own direct parent anymore.
 // `headerAction` - an optional element rendered in the header itself, next
 // to the page title (e.g. Case Detail's "Chat with User" button, which used
 // to sit alone in its own row inside the page content with a lot of empty
@@ -30,7 +39,8 @@ const NAV_ITEMS = [
 // rounded/bordered card together read as a box floating inside a box,
 // instead of the thread filling the whole content area the way a real chat
 // UI (WhatsApp Web, Slack) does.
-export default function StaffLayout({ children, title = 'Dashboard', headerAction = null, titleAction = null, fullBleedContent = false }) {
+export default function StaffLayout() {
+  const { title, headerAction, fullBleedContent } = usePageHeaderValue();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -117,7 +127,6 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
             </button>
             {TitleIcon && <TitleIcon size={20} className="text-brand-900 shrink-0 hidden sm:block" />}
             <h2 className="text-base sm:text-lg lg:text-xl font-bold text-brand-900 truncate max-w-[130px] xs:max-w-[200px] sm:max-w-xs md:max-w-md lg:max-w-none">{title}</h2>
-            {titleAction && <div className="ml-1 sm:ml-2 shrink-0">{titleAction}</div>}
             {headerAction && <div className="ml-1 sm:ml-2 shrink-0">{headerAction}</div>}
           </div>
 
@@ -159,7 +168,7 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
 
         {/* DYNAMIC PAGE CONTENT */}
         <main className={fullBleedContent ? 'flex-1 flex flex-col overflow-hidden min-h-0' : 'flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8'}>
-          {children}
+          <Outlet />
         </main>
       </div>
 

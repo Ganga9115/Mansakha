@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Download, FilePlus, ChevronDown, ChevronUp, CheckCircle2, Forward } from 'lucide-react';
 import {
   useMyJurisdiction, useReportsList, useUpdateReportStatus, useDownloadReportPdf, useForwardReport, useJurisdictionOptions,
@@ -132,6 +132,7 @@ function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingI
 }
 
 export default function Reports() {
+  usePageHeader({ title: 'District-Wise Reports' });
   const { jurisdictionId } = useMyJurisdiction();
 
   const [reportsTab, setReportsTab] = useState('inbox');
@@ -199,7 +200,7 @@ export default function Reports() {
   };
 
   return (
-    <StaffLayout title="District-Wise Reports">
+    <>
       <div className="space-y-6">
 
         {/* DISTRICT-WISE REPORTS: Generate + My Reports (Inbox/Outbox) */}
@@ -280,6 +281,6 @@ export default function Reports() {
         )}
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

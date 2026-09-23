@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight } from 'lucide-react';
 import { useCasesList } from '../services/hooks';
 
@@ -29,6 +29,7 @@ const THREAT_TIER_BADGE = {
 };
 
 export default function CaseQueue() {
+  usePageHeader({ title: 'Case Queue' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('Active');
   const query = useCasesList(tab);
@@ -36,7 +37,7 @@ export default function CaseQueue() {
   const stationAssigned = query.data?.stationAssigned !== false;
 
   return (
-    <StaffLayout title="Case Queue">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -117,6 +118,6 @@ export default function CaseQueue() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

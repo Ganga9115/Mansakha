@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { Send } from 'lucide-react';
@@ -19,18 +19,18 @@ export default function ReferralLog() {
   const addNote = useAddReferralNote();
   const resolve = useResolveReferral();
 
+  usePageHeader({ title: 'Activity Log' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Activity Log"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Activity Log">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -57,7 +57,7 @@ export default function ReferralLog() {
   };
 
   return (
-    <StaffLayout title="Activity Log">
+    <>
       <div className="space-y-4">
         <ReferralHeader r={r} backTo="/dwo" backLabel="Back to Referral Queue" onResolve={handleResolve} resolveLoading={resolve.loading} />
         <ReferralSubNav base={`/dwo/referrals/${referralId}`} />
@@ -100,6 +100,6 @@ export default function ReferralLog() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

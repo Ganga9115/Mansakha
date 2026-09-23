@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Plus, Trash2, Pencil } from 'lucide-react';
 import GlideSelect from '../../shared/components/GlideSelect';
 import {
@@ -328,11 +328,12 @@ function PoliceStationsPanel() {
 }
 
 export default function SystemConfig() {
+  usePageHeader({ title: 'System Configuration' });
   const [activeTab, setActiveTab] = useState('caseTypes');
   const activeMeta = TABS.find((t) => t.key === activeTab);
 
   return (
-    <MinistryLayout title="System Configuration">
+    <>
       <div className="space-y-4">
         <div className="flex gap-2">
           {TABS.map((tab) => (
@@ -361,6 +362,6 @@ export default function SystemConfig() {
           />
         )}
       </div>
-    </MinistryLayout>
+    </>
   );
 }

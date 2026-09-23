@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, ChevronRight, ChevronDown, Repeat, Phone } from 'lucide-react';
 import {
   useCaseDetail,
@@ -135,6 +135,8 @@ export default function CaseDetail() {
   const [scheduleDate, setScheduleDate] = useState('');
   const toast = useToast();
 
+  usePageHeader({ title: loading || error ? 'Case File' : `Case File: ${userId.slice(0, 8)}` });
+
   const handleSchedule = async () => {
     if (!scheduleDate) return;
     try {
@@ -147,10 +149,10 @@ export default function CaseDetail() {
   };
 
   if (loading) {
-    return <StaffLayout title="Case File"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (error) {
-    return <StaffLayout title="Case File"><div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div></StaffLayout>;
+    return <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div>;
   }
 
   const trend = TREND_META[data.trend] || TREND_META.insufficient_data;
@@ -214,7 +216,7 @@ export default function CaseDetail() {
   );
 
   return (
-    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
+    <>
       <div className="space-y-6">
 
         {/* CASE ACTION BAR */}
@@ -365,6 +367,6 @@ export default function CaseDetail() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

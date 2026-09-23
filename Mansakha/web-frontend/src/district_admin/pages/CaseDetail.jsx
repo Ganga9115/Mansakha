@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { useCaseDetail, useCaseNotes } from '../services/hooks';
 
@@ -25,18 +25,20 @@ export default function CaseDetail() {
   const { data, loading, error } = useCaseDetail(userId);
   const notesQuery = useCaseNotes(userId);
 
+  usePageHeader({ title: loading || error ? 'Case File' : `Case File: ${userId.slice(0, 8)}` });
+
   if (loading) {
-    return <StaffLayout title="Case File"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (error) {
-    return <StaffLayout title="Case File"><div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div></StaffLayout>;
+    return <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div>;
   }
 
   const trend = TREND_META[data.trend] || TREND_META.insufficient_data;
   const TrendIcon = trend.icon;
 
   return (
-    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
+    <>
       <div className="space-y-6">
 
         <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between flex-wrap gap-4">
@@ -133,6 +135,6 @@ export default function CaseDetail() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

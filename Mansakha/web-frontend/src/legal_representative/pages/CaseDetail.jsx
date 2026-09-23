@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft, FileText, Gavel, CheckCircle, XCircle, PlusCircle } from 'lucide-react';
 import { useMyCaseDetail, useAddHearingNote, useAcceptCase, useRejectCase } from '../services/hooks';
 
@@ -230,16 +230,16 @@ export default function CaseDetail() {
   const detailQuery = useMyCaseDetail(requestId);
   const r = detailQuery.data;
 
+  usePageHeader({ title: 'Case' });
+
   if (detailQuery.loading) {
-    return <StaffLayout title="Case"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Case">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This case could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This case could not be located.'}
+      </div>
     );
   }
 
@@ -247,7 +247,7 @@ export default function CaseDetail() {
   const canRecord = r.myAssignmentStatus === 'Active';
 
   return (
-    <StaffLayout title="Case">
+    <>
       <div className="space-y-6">
         <button onClick={() => navigate('/legalrepresentative')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 transition">
           <ArrowLeft size={14} /> Back to My Cases
@@ -265,6 +265,6 @@ export default function CaseDetail() {
         <DocumentsCard documents={r.documents} />
         <HearingTimeline requestId={requestId} hearingTimeline={r.hearingTimeline} onChanged={detailQuery.refetch} canAddNotes={canRecord} />
       </div>
-    </StaffLayout>
+    </>
   );
 }
