@@ -15,7 +15,7 @@ A moderate dip — a gentle wellness nudge, right inside the app.
 A high score — the AI companion itself reaches out, proactively, before anyone has to ask for help.
 And a critical score — an instant alert. If a counsellor is already assigned, they're notified immediately. If not, Mansakha instantly auto-assigns whoever's least overloaded — nationwide, not just this district, so no case ever waits on one district's own headcount. And either way, District Administration is looped in too. Zero delay."
 
-[ON SCREEN: Quick split-screen montage — a wellness push notification, then the AI companion initiating contact, then a Critical alert landing in the Counsellor's Alerts Feed]
+[ON SCREEN: The victim's Home screen, then a Critical alert landing in the Counsellor's Alerts Feed]
 
 [VOICEOVER]
 
@@ -23,11 +23,11 @@ And a critical score — an instant alert. If a counsellor is already assigned, 
 
 The victim's home address routes their compensation claim straight to their District Welfare Officer — no clerk has to read a file and decide.
 
-[ON SCREEN: DWO's Referral Queue / Compensation screen, showing a new case appearing]
+[ON SCREEN: Victim's own Compensation screen, then cut to DWO's Referral Queue showing that same case appearing]
 
 The address of the offense routes the investigation to the nearest Investigating Officer — the same officer who now owns the FIR, the chargesheet, right through to trial, synced by CNR number against the government's own eCourts system.
 
-[ON SCREEN: IO's Case Queue → Case Detail screen, showing FIR number, CNR number, and chargesheet status]
+[ON SCREEN: Victim's own Case Details screen showing the same CNR number and chargesheet status, then cut to IO's Case Queue → Case Detail screen]
 
 If Mansakha detects a threat, intimidation, fear of retaliation — a Protection Officer is looped in automatically. Witness protection. Relocation. Before it escalates, not after.
 
@@ -37,11 +37,11 @@ And in a real emergency, the survivor doesn't have to wait for Mansakha to notic
 
 If the case needs legal aid — a DLSA Coordinator assigns a real lawyer, a Legal Representative, who tracks every hearing, right through to the courtroom.
 
-[ON SCREEN: DLSA's Legal Aid Queue → Legal Representative's Hearings screen]
+[ON SCREEN: Victim's own Legal Aid screen showing their request status, then cut to DLSA's Legal Aid Queue → Legal Representative's Hearings screen]
 
 And when it's time to rebuild a life — a Rehabilitation Officer connects the survivor to a real government or NGO provider in their own district. Not a checkbox. A name. A contact."
 
-[ON SCREEN: Victim app's Rehabilitation opt-in toggle, then cut to the Rehabilitation Officer's Referral Detail screen, showing a named provider]
+[ON SCREEN: Victim's own Rehabilitation Progress screen, then cut to the Rehabilitation Officer's Referral Detail screen, showing a named provider]
 
 [VOICEOVER — warmer]
 
@@ -49,7 +49,7 @@ And when it's time to rebuild a life — a Rehabilitation Officer connects the s
 
 A survivor can opt in for a real Counsellor, any time. The moment they do, the system assigns whoever is least overloaded.
 
-[ON SCREEN: Victim app's counsellor opt-in toggle, cut to Counsellor's dashboard showing the new case land in "My Users", then the victim's own Counsellor Chat screen sending a real message - text or voice - and a matching cut to the Counsellor's own Case Chat showing that same conversation from their side]
+[ON SCREEN: Counsellor's dashboard showing the new case land in "My Users", then the victim's own Counsellor Chat screen sending a real message - text or voice - and a matching cut to the Counsellor's own Case Chat showing that same conversation from their side]
 
 And between sessions? A live AI companion — voice, video, or text — is there at 2 a.m., when no human is on shift.
 
@@ -97,18 +97,10 @@ The case is still monitored. But now, so is the person behind it. Mansakha. Mind
 
 ## Notes for the editor
 
-- **Confirm screens render real data before shooting** (going off code verified this session, not a fresh live click-through):
-
-  - Victim's own Distress History / trend graph screen
-  - Victim's Check-in mood-tracker screen
-  - Victim's Rehabilitation opt-in toggle
-  - DWO / PO / DLSA / Rehabilitation Officer referral screens
-  - Wellness-push / AI-proactive-contact / Critical-alert montage (tied to the tiered response beat)
-  - Predicted Escalations stat card (District Admin Dashboard)
-  - AI Chat screen showing the AI's own helpline redirect message on a self-harm trigger — **freshly built this session, needs a real click-through test before shooting**
-  - "Get Help Now" button (victim app) and the emergency referral landing in the Protection Officer's Protection Registry
-  - Victim's own Counsellor Chat screen (text/voice message to their assigned counsellor) and the matching Counsellor's Case Chat, from the same conversation
-  - Counsellor's Case Detail (the disengagement-alert case)
+- **All footage/screenshots for every ON SCREEN cue have been captured and are ready to hand to the editor**, except the two noted below. Every victim-facing beat (Compensation, Case Details, Get Help Now, Legal Aid, Rehabilitation Progress, Counsellor Chat) now has a matching victim-side screen shown right before the corresponding official's screen, so the case visibly flows from the survivor's own action to the person who receives it.
+- **Two shots have no footage and were deliberately dropped from the ON SCREEN cues** rather than left as unfillable placeholders:
+  - The wellness push notification and "AI companion initiating contact" beats (tiered-response montage) — no OS-level push notification or dedicated proactive-contact recording exists; that cue now just shows the Home screen into the Critical alert landing in the Counsellor's Alerts Feed.
+  - The counsellor opt-in toggle — the demo account used for filming is already opted in, so there's no way to show the pre-opt-in state without a fresh, never-opted-in test account. If you want this shot, flag it and a new demo account can be seeded specifically for it.
 - **Accuracy notes on claims in this script:**
 
   - eCourts CNR sync is real architecture (CNR number, hearing dates, chargesheet status are tracked and kept current), but the live government eCourts API itself is not connected — no free/official API exists. The script's phrasing ("synced by CNR number against the government's own eCourts system") is worded to stay accurate without overclaiming a live feed.
