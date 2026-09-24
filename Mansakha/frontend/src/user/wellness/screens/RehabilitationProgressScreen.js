@@ -170,9 +170,6 @@ function PhaseCard({ phase }) {
           </View>
           <View>
             <Text style={styles.topCardTitle}>Rehabilitation Timeline</Text>
-            <Text style={styles.topCardSubtext}>
-              Your rehabilitation journey is being managed by the government rehabilitation center and NGO partner.
-            </Text>
           </View>
         </View>
 

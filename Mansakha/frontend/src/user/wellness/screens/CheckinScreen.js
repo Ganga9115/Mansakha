@@ -504,17 +504,6 @@ export default function CheckinScreen({ navigation }) {
             !isDesktop && { paddingTop: insets.top + spacing.xs, paddingBottom: spacing.sm },
           ]}
         >
-          {/* Purely decorative leaf motif behind the header content, echoing
-              the reference design's illustration - low opacity so it never
-              competes with the mic icon, title, or help button in front of it. */}
-          {!isDesktop && (
-            <MaterialCommunityIcons
-              name="leaf"
-              size={90}
-              color={colors.primary}
-              style={styles.headerLeafDecoration}
-            />
-          )}
           <View style={styles.headerLeft}>
             {isDesktop ? (
               <Feather name="mic" size={24} color={colors.primaryDark} style={styles.headerIconDesktop} />
@@ -536,15 +525,16 @@ export default function CheckinScreen({ navigation }) {
                 onBellPress={() => {}}
               />
             ) : (
-              <View style={{ alignItems: 'flex-end' }}>
-                <TopRightActions />
-                <Text style={styles.youMatterText}>{'You\nMatter ♡'}</Text>
-              </View>
+              <TopRightActions />
             )}
           </View>
         </View>
 
-        <ScrollView 
+        {!isDesktop && (
+          <Text style={styles.youMatterTextBelowHeader}>{'You Matter ♡'}</Text>
+        )}
+
+        <ScrollView
           style={{ flex: 1 }} 
           contentContainerStyle={{ 
             flexGrow: 1, 
@@ -791,25 +781,19 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.primary + '20',
   },
-  headerLeafDecoration: {
-    position: 'absolute',
-    top: -10,
-    right: 70,
-    opacity: 0.16,
-    transform: [{ rotate: '18deg' }],
-  },
   pageSubtitle: {
     ...typography.bodySmall,
     color: colors.textSecondary,
     marginTop: 1,
   },
-  youMatterText: {
+  youMatterTextBelowHeader: {
     fontFamily: 'Caveat_700Bold',
     fontSize: 26,
     lineHeight: 26,
     color: colors.primary,
-    marginTop: spacing.sm,
     textAlign: 'right',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
   },
   topHeaderDesktop: {
     height: 64,
