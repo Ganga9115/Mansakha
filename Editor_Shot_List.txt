@@ -24,17 +24,13 @@ STYLE DIRECTION - READ BEFORE CUTTING:
 
 WHERE THE FILES ARE (Drive folder):
 - Audios/        -> 1st.mpeg through 6th.mpeg (the 6 recorded voiceover takes)
-- Screenshots/   -> all files WITHOUT a "v" prefix
-- Victim SS/     -> all files starting v01-v11, plus the 3 .mp4 clips
+- Screenshots/   -> all files WITHOUT a "v" prefix, EXCEPT the 3 below
+- Victim SS/     -> all files starting v01-v11, the 3 .mp4 clips, AND
+  opening_home_mobile_web_split.png, mansakha_splash_logo.png,
+  mansakha_splash_logo_web.png (these 3 ended up here rather than
+  Screenshots/, despite not having a "v" prefix - check here first)
   (District admin dashboard.png was uploaded into Screenshots/ afterward)
 
-HOW TO READ THIS LIST:
-Each block below = one continuous voiceover audio file, playing start to
-finish with no cuts or gaps. Under it, cut the listed images/clips on
-screen in that order, each held for its own time - this timing is a
-starting point, not locked. Nudge each cut earlier/later once you're
-looking at picture + sound together, so each image lands on the words
-it's actually illustrating.
 
 ======================================================================
 BLOCK 1  |  Audio: 1st.mpeg  |  0:00 - 0:09  (9.2s)
@@ -48,8 +44,7 @@ ON SCREEN:
 0:00 - 0:09   opening_home_mobile_web_split.png
               (composited: mobile app on the left, web app on the right,
               same Home screen on both - shows Mansakha is one experience
-              across platforms. NOT YET IN DRIVE - only in Downloads/local
-              right now, needs to be added to Screenshots/.)
+              across platforms. In Victim SS/, not Screenshots/.)
 
 ======================================================================
 BLOCK 2  |  Audio: 2nd.mpeg  |  0:09 - 0:49  (39.4s)
@@ -137,20 +132,19 @@ ON SCREEN:
 3:29 - 3:38   National admin dashboard.png
 3:38 - 3:47   Ministry Dashboard.png
 3:47 - 3:56   Ministry Report.png
-3:56 - 4:00   mansakha_splash_logo.png       (closing shot pt.1 - mobile
-              splash screen. NOT YET IN DRIVE.)
-4:00 - 4:05   mansakha_splash_logo_web.png   (closing shot pt.2 - web
-              splash screen, slow fade out. NOT YET IN DRIVE.)
-              These are the app's actual splash/logo screens (mobile
-              then web), not the Home screen - two separate shots back
-              to back, NOT a composite image.
+3:56 - 4:05   EDITOR'S CHOICE - pick ONE, don't use both:
+              mansakha_splash_logo.png (mobile) OR
+              mansakha_splash_logo_web.png (web, full-bleed on 16:9 -
+              recommended default if unsure). Both are the app's actual
+              splash/logo screen, in Victim SS/, not Screenshots/.
+              Hold whichever one you pick for the full 9.0s.
 
 SPECIAL INSTRUCTION for the closing line ("Every report shows a case
 number. Never a name."): punch in / crop tighter on Ministry Report.png
 during this line, framing just one row of the table so the docket
 number reads clearly and no name column is visible. This is the SAME
 file as the shot above it, not a new screenshot - just zoom in on it for
-this beat, then cut to the two splash-screen shots for the closing.
+this beat, then cut to the chosen splash screen for the closing.
 
 ======================================================================
 KNOWN GAPS - no footage exists for these, don't go looking for them
@@ -163,16 +157,12 @@ KNOWN GAPS - no footage exists for these, don't go looking for them
   skips straight to the Counsellor's dashboard/chat screens instead.
 
 ======================================================================
-FILES STILL NEEDING UPLOAD TO DRIVE (all 4 are in Downloads already)
+DRIVE STATUS: all files confirmed present and current as of this pass.
 ======================================================================
-- opening_home_mobile_web_split.png   -> add to Screenshots/ (new file,
-  a composite - mobile+web side by side in ONE image, opening shot only)
-- mansakha_splash_logo.png            -> add to Screenshots/ (new file,
-  mobile splash screen, separate image - closing shot pt.1)
-- mansakha_splash_logo_web.png        -> add to Screenshots/ (new file,
-  web splash screen, separate image - closing shot pt.2)
-- v07_ai_chat_selfharm_helpline.png   -> REPLACE the existing copy in
-  Victim SS/ - the AI's reply text was reworded (it used to say "I'm
-  having trouble connecting right now," which read like a broken
-  feature; the new version reads as an intentional response). Same
-  filename, new content.
+- opening_home_mobile_web_split.png, mansakha_splash_logo.png, and
+  mansakha_splash_logo_web.png are all uploaded (into Victim SS/, not
+  Screenshots/ - see the file-location note near the top).
+- v07_ai_chat_selfharm_helpline.png in Drive has the reworded AI reply
+  ("I hear you, and I don't want you to wait for a reply from me right
+  now"), confirmed by downloading and checking it directly - not the
+  old "I'm having trouble connecting" version. Nothing left to replace.

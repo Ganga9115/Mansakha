@@ -106,8 +106,8 @@ Same file, cropped/zoomed on the docket-number row: `Ministry Report.png` (no se
 
 The case is still monitored. But now, so is the person behind it. Mansakha. Mind matters. And now — someone is actually listening."
 
-[ON SCREEN: App logo / splash screen, slow fade — mobile splash, then web splash]
-Files, in order: `mansakha_splash_logo.png` (4.5s) → `mansakha_splash_logo_web.png` (4.5s) — two separate shots back to back, not a composite
+[ON SCREEN: App logo / splash screen, slow fade — editor's choice of ONE]
+Pick whichever of these two suits the final cut better, don't use both: `mansakha_splash_logo.png` (mobile) OR `mansakha_splash_logo_web.png` (web, full-bleed on a 16:9 canvas) — hold for the full 9.0s
 
 ---
 
