@@ -394,7 +394,6 @@ export default function RequestInterventionScreen({ navigation, route }) {
               <Feather name="shield" size={22} color={colors.primaryDark} />
             </View>
             <View style={styles.heroTextContainer}>
-              <Text style={styles.heroTitle}>Request Assistance</Text>
               <Text style={styles.heroSubtitle}>Choose the type of support you need.</Text>
             </View>
           </View>
@@ -485,7 +484,6 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   heroTextContainer: { flex: 1 },
-  heroTitle: { ...typography.h2, color: colors.primaryDark, fontWeight: '700', fontSize: 20 },
   heroSubtitle: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
 
   // Card Styling

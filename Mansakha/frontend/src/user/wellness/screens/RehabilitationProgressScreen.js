@@ -125,7 +125,7 @@ function PhaseCard({ phase }) {
           <View style={styles.topIconTile}>
             <Feather name="users" size={20} color="#1E293B" />
           </View>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.topCardTitle}>Rehabilitation Phase</Text>
             <Text style={styles.topCardSubtext}>
               Coordinated by Government Rehabilitation Center & NGO Partner
