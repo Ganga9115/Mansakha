@@ -4,6 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { radius } from '../../shared/theme/radius';
 import { Avatar3DController } from './Avatar3DController';
+import AvatarGLView from './AvatarGLView';
 import { ensureHelplineIfAtRisk, containsSelfHarmRisk } from '../../shared/services/ollamaClient';
 import { useReportSelfHarmRisk } from '../../shared/services/hooks';
 
@@ -447,7 +448,7 @@ export default function MansakhaCallModal({
 
   // 3D Avatar Controller Lifecycle (Active only when user clicks Video Call)
   useEffect(() => {
-    if (!visible || !isVideoMode || Platform.OS !== 'web') {
+    if (!visible || !isVideoMode) {
       if (avatarControllerRef.current) {
         avatarControllerRef.current.dispose();
         avatarControllerRef.current = null;
@@ -455,20 +456,33 @@ export default function MansakhaCallModal({
       return;
     }
 
-    const container = avatar3dContainerRef.current;
-    if (!container) return;
-
-    let controller = avatarControllerRef.current;
-    if (!controller) {
-      controller = new Avatar3DController(container);
-      avatarControllerRef.current = controller;
+    let controller;
+    if (Platform.OS === 'web') {
+      const container = avatar3dContainerRef.current;
+      if (!container) return;
+      controller = avatarControllerRef.current;
+      if (!controller) {
+        controller = new Avatar3DController(container);
+        avatarControllerRef.current = controller;
+      }
+    } else {
+      // Native: <AvatarGLView ref={avatarControllerRef}> below already
+      // populated avatarControllerRef.current (its imperative handle) as
+      // soon as it mounted - the handle itself queues loadModel until its
+      // internal GL context is actually ready, so there's nothing to
+      // construct here.
+      controller = avatarControllerRef.current;
+      if (!controller) return;
     }
 
     // Male: casual_male.glb (exact modern avatar: brown hair, blue shirt, no cowboy hat!)
     // Female: counselor_brunette.glb (warm brunette counselor)
-    const primaryModel = counsellorGender === 'male'
-      ? '/models/casual_male.glb'
-      : '/models/counselor_brunette.glb';
+    // Native has no web server to resolve a relative path against, so it
+    // loads the same files from the already-deployed web app instead.
+    const modelFile = counsellorGender === 'male' ? 'casual_male.glb' : 'counselor_brunette.glb';
+    const primaryModel = Platform.OS === 'web'
+      ? `/models/${modelFile}`
+      : `https://mansakha-app.web.app/models/${modelFile}`;
 
     controller.loadModel(primaryModel).catch((err) => {
       console.warn('Could not load 3D GLB model:', err);
@@ -818,8 +832,10 @@ export default function MansakhaCallModal({
     >
       <View style={styles.fullScreenOverlay}>
         {/* Tier 0: Full Screen 3D Avatar (Rendered only when Video Call is activated) */}
-        {isVideoMode && Platform.OS === 'web' && (
-          <div ref={avatar3dContainerRef} style={styles.fullscreenAvatarContainer} />
+        {isVideoMode && (
+          Platform.OS === 'web'
+            ? <div ref={avatar3dContainerRef} style={styles.fullscreenAvatarContainer} />
+            : <AvatarGLView ref={avatarControllerRef} style={styles.fullscreenAvatarContainer} />
         )}
 
         {/* Tier 1: Top Header Bar (Floating over avatar / voice screen) */}

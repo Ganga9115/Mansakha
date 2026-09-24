@@ -37,6 +37,7 @@
     "expo-location": "~57.0.19",
     "expo-speech": "~57.0.3",
     "expo-status-bar": "~57.0.1",
+    "expo-three": "^8.0.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-icons": "^5.7.0",
