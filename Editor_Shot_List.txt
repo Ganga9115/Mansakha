@@ -137,7 +137,7 @@ ON SCREEN:
 3:29 - 3:38   National admin dashboard.png
 3:38 - 3:47   Ministry Dashboard.png
 3:47 - 3:56   Ministry Report.png
-3:56 - 4:05   mansakha_splash_logo.png   (closing shot, slow fade out.
+3:56 - 4:05   mansakha_splash_logo_web.png   (closing shot, slow fade out.
               This is the app's actual splash/logo screen, not the Home
               screen. NOT YET IN DRIVE - only in Downloads/local right
               now, needs to be added to Screenshots/.)
@@ -147,7 +147,7 @@ number. Never a name."): punch in / crop tighter on Ministry Report.png
 during this line, framing just one row of the table so the docket
 number reads clearly and no name column is visible. This is the SAME
 file as the shot above it, not a new screenshot - just zoom in on it for
-this beat, then cut to mansakha_splash_logo.png for the closing.
+this beat, then cut to mansakha_splash_logo_web.png for the closing.
 
 ======================================================================
 KNOWN GAPS - no footage exists for these, don't go looking for them
@@ -163,7 +163,7 @@ KNOWN GAPS - no footage exists for these, don't go looking for them
 FILES STILL NEEDING UPLOAD TO DRIVE (all 3 are in Downloads already)
 ======================================================================
 - opening_home_mobile_web_split.png   -> add to Screenshots/ (new file)
-- mansakha_splash_logo.png            -> add to Screenshots/ (new file)
+- mansakha_splash_logo_web.png            -> add to Screenshots/ (new file)
 - v07_ai_chat_selfharm_helpline.png   -> REPLACE the existing copy in
   Victim SS/ - the AI's reply text was reworded (it used to say "I'm
   having trouble connecting right now," which read like a broken

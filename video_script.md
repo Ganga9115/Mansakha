@@ -107,7 +107,7 @@ Same file, cropped/zoomed on the docket-number row: `Ministry Report.png` (no se
 The case is still monitored. But now, so is the person behind it. Mansakha. Mind matters. And now — someone is actually listening."
 
 [ON SCREEN: App logo / splash screen, slow fade]
-File: `mansakha_splash_logo.png` (9.0s)
+File: `mansakha_splash_logo_web.png` (9.0s)
 
 ---
 
@@ -120,7 +120,7 @@ File: `mansakha_splash_logo.png` (9.0s)
   - The wellness push notification and "AI companion initiating contact" beats (tiered-response montage) — no OS-level push notification or dedicated proactive-contact recording exists; that cue now shows Check-in → AI Chat → Distress History → the Critical alert landing in the Counsellor's Alerts Feed instead.
 - **Two new files are not yet uploaded to Drive** — both are currently only in Downloads/local, add them to `Screenshots/` before the editor needs them:
   - `opening_home_mobile_web_split.png` — composited image, mobile + web side by side.
-  - `mansakha_splash_logo.png` — the app's actual splash/logo screen, used for the closing fade instead of the Home screen.
+  - `mansakha_splash_logo_web.png` — the app's actual splash/logo screen, used for the closing fade instead of the Home screen.
   - The counsellor opt-in toggle — the demo account used for filming is already opted in, so there's no way to show the pre-opt-in state without a fresh, never-opted-in test account. If you want this shot, flag it and a new demo account can be seeded specifically for it.
 - **Accuracy notes on claims in this script:**
 
