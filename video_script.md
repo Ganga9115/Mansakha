@@ -4,8 +4,8 @@
 
 "To see how Mansakha operates in the real world, let's follow a survivor's journey from the moment they enter the system to the moment crisis is prevented."
 
-[ON SCREEN: The AI Chat screen mid-conversation, a quick cut to the Check-in mood-tracker screen, then the victim's own Distress History/trend graph screen]
-Files, in order: `v06_ai_chat.png` (2.0s) → `AI checkin ques.mp4` (5.2s) → `v04_distress_history.png` (2.0s)
+[ON SCREEN: The Home screen, shown side by side — mobile app on the left, web app on the right — establishing that Mansakha is the same experience on both]
+File: `opening_home_mobile_web_split.png` (9.2s) — composited image, mobile (`v01_home.png`) on the left + web (`v01_home_web_desktop.png`) on the right
 
 [VOICEOVER] (Audio: 2nd.mpeg — 39.4s)
 
@@ -16,8 +16,8 @@ A moderate dip — a gentle wellness nudge, right inside the app.
 A high score — the AI companion itself reaches out, proactively, before anyone has to ask for help.
 And a critical score — an instant alert. If a counsellor is already assigned, they're notified immediately. If not, Mansakha instantly auto-assigns whoever's least overloaded — nationwide, not just this district, so no case ever waits on one district's own headcount. And either way, District Administration is looped in too. Zero delay."
 
-[ON SCREEN: The victim's Home screen, then a Critical alert landing in the Counsellor's Alerts Feed]
-Files, in order: `v01_home.png` (12.0s) → `Counsellor Alert.png` (27.4s)
+[ON SCREEN: The Check-in mood-tracker screen, the AI Chat screen mid-conversation, the victim's own Distress History/trend graph screen, then a Critical alert landing in the Counsellor's Alerts Feed]
+Files, in order: `AI checkin ques.mp4` (7.3s) → `v06_ai_chat.png` (4.0s) → `v04_distress_history.png` (4.0s) → `Counsellor Alert.png` (24.1s)
 
 [VOICEOVER] (Audio: 3rd.mpeg — 74.5s)
 
@@ -106,8 +106,8 @@ Same file, cropped/zoomed on the docket-number row: `Ministry Report.png` (no se
 
 The case is still monitored. But now, so is the person behind it. Mansakha. Mind matters. And now — someone is actually listening."
 
-[ON SCREEN: App logo / home screen, slow fade]
-File: `v01_home.png` (9.0s)
+[ON SCREEN: App logo / splash screen, slow fade]
+File: `mansakha_splash_logo.png` (9.0s)
 
 ---
 
@@ -117,7 +117,10 @@ File: `v01_home.png` (9.0s)
 - **Durations above are a starting assembly, not a locked edit** — they're evenly split within each voiceover segment as a first pass (verified by matching this session's own rough-cut assembly, `Mansakha_Pitch_Video.mp4`). Nudge them shot-by-shot to match where the voiceover actually lands on each beat once the editor is cutting to picture.
 - **All footage/screenshots for every ON SCREEN cue have been captured and are ready to hand to the editor**, except the two noted below. Every victim-facing beat (Compensation, Case Details, Get Help Now, Legal Aid, Rehabilitation Progress, Counsellor Chat) now has a matching victim-side screen shown right before the corresponding official's screen, so the case visibly flows from the survivor's own action to the person who receives it.
 - **Two shots have no footage and were deliberately dropped from the ON SCREEN cues** rather than left as unfillable placeholders:
-  - The wellness push notification and "AI companion initiating contact" beats (tiered-response montage) — no OS-level push notification or dedicated proactive-contact recording exists; that cue now just shows the Home screen into the Critical alert landing in the Counsellor's Alerts Feed.
+  - The wellness push notification and "AI companion initiating contact" beats (tiered-response montage) — no OS-level push notification or dedicated proactive-contact recording exists; that cue now shows Check-in → AI Chat → Distress History → the Critical alert landing in the Counsellor's Alerts Feed instead.
+- **Two new files are not yet uploaded to Drive** — both are currently only in Downloads/local, add them to `Screenshots/` before the editor needs them:
+  - `opening_home_mobile_web_split.png` — composited image, mobile + web side by side.
+  - `mansakha_splash_logo.png` — the app's actual splash/logo screen, used for the closing fade instead of the Home screen.
   - The counsellor opt-in toggle — the demo account used for filming is already opted in, so there's no way to show the pre-opt-in state without a fresh, never-opted-in test account. If you want this shot, flag it and a new demo account can be seeded specifically for it.
 - **Accuracy notes on claims in this script:**
 
