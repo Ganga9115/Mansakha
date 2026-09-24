@@ -120,7 +120,7 @@ export default function ChatScreen({ navigation }) {
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
-  const [status, setStatus] = useState('Connecting to Ollama...');
+  const [status, setStatus] = useState('Always here to listen.');
 
   // Live Voice Call State
   const [inCall, setInCall] = useState(false);
@@ -187,12 +187,12 @@ export default function ChatScreen({ navigation }) {
       setModels(availableModels.map(m => m.name));
       if (availableModels.length > 0) {
         setModel(availableModels[0].name);
-        setStatus(`● Ollama connected • ${availableModels[0].name}`);
-      } else {
-        setStatus("✕ No models found in Ollama.");
       }
+      // No models found, or the fetch itself failed (e.g. no local Ollama
+      // reachable from this device) - stay on the friendly default caption
+      // rather than surfacing a raw connectivity error to the survivor.
     } catch (e) {
-      setStatus("✕ Cannot connect to Ollama. Ensure Ollama is running.");
+      // Silent - see comment above.
     }
   };
 
@@ -240,12 +240,10 @@ export default function ChatScreen({ navigation }) {
         // zero safety response. Keep it visible and answer deterministically.
         const safetyReply = ensureHelplineIfAtRisk(text, "I'm having trouble connecting right now, but please don't wait for me.");
         setMessages([...newMessages, { role: "assistant", content: safetyReply }]);
-        setStatus("✕ Ollama error: " + e.message);
         reportSelfHarmRisk.mutate({ message: text, channel: 'text' });
         return safetyReply;
       }
       setMessages(currentMsgs);
-      setStatus("✕ Ollama error: " + e.message);
       throw e;
     }
   };
