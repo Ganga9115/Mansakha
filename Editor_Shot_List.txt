@@ -2,6 +2,26 @@ MANSAKHA — PITCH VIDEO
 SHOT LIST FOR THE EDITOR
 Total runtime: approx. 4:05
 
+STYLE DIRECTION - READ BEFORE CUTTING:
+
+1. GLASSMORPHISM. Frame every screenshot/clip in a glassmorphism-style
+   card, the frosted-glass look modern iPhone UI uses - a translucent
+   panel with a soft blur behind it, a subtle light border, and a gentle
+   shadow, rather than dropping the raw screenshot flat onto the
+   background. Apply this consistently to every shot in the video, not
+   just a few - it's a look for the whole piece, not an accent.
+
+2. MOBILE <-> WEB TRANSITIONS. Every time a cut moves from a victim
+   screenshot (mobile view, tall/narrow) to a staff/official screenshot
+   (laptop/web view, wide) - or back the other way - use a real
+   transition (a smooth cross-dissolve, a slide, or a device-frame morph
+   that resizes one into the other) instead of a hard cut. This happens
+   constantly and is the whole structure of BLOCK 3 (it alternates
+   victim-mobile -> official-web five times in a row), so treat this as
+   a consistent, deliberate transition style, not a one-off effect -
+   a hard cut between two different aspect ratios and device chrome will
+   read as a mistake, not a choice, if it isn't smoothed over every time.
+
 WHERE THE FILES ARE (Drive folder):
 - Audios/        -> 1st.mpeg through 6th.mpeg (the 6 recorded voiceover takes)
 - Screenshots/   -> all files WITHOUT a "v" prefix
@@ -127,7 +147,7 @@ number. Never a name."): punch in / crop tighter on Ministry Report.png
 during this line, framing just one row of the table so the docket
 number reads clearly and no name column is visible. This is the SAME
 file as the shot above it, not a new screenshot - just zoom in on it for
-this beat, then pull back out (or cut to v01_home.png) for the closing.
+this beat, then cut to mansakha_splash_logo.png for the closing.
 
 ======================================================================
 KNOWN GAPS - no footage exists for these, don't go looking for them
@@ -138,3 +158,14 @@ KNOWN GAPS - no footage exists for these, don't go looking for them
 - No footage of the counsellor opt-in TOGGLE itself exists (the demo
   account was already opted in when this was filmed). Block 4 above
   skips straight to the Counsellor's dashboard/chat screens instead.
+
+======================================================================
+FILES STILL NEEDING UPLOAD TO DRIVE (all 3 are in Downloads already)
+======================================================================
+- opening_home_mobile_web_split.png   -> add to Screenshots/ (new file)
+- mansakha_splash_logo.png            -> add to Screenshots/ (new file)
+- v07_ai_chat_selfharm_helpline.png   -> REPLACE the existing copy in
+  Victim SS/ - the AI's reply text was reworded (it used to say "I'm
+  having trouble connecting right now," which read like a broken
+  feature; the new version reads as an intentional response). Same
+  filename, new content.
