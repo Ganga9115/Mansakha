@@ -106,8 +106,8 @@ Same file, cropped/zoomed on the docket-number row: `Ministry Report.png` (no se
 
 The case is still monitored. But now, so is the person behind it. Mansakha. Mind matters. And now — someone is actually listening."
 
-[ON SCREEN: App logo / splash screen, slow fade]
-File: `mansakha_splash_logo_web.png` (9.0s)
+[ON SCREEN: App logo / splash screen, slow fade — mobile splash, then web splash]
+Files, in order: `mansakha_splash_logo.png` (4.5s) → `mansakha_splash_logo_web.png` (4.5s) — two separate shots back to back, not a composite
 
 ---
 
@@ -118,9 +118,10 @@ File: `mansakha_splash_logo_web.png` (9.0s)
 - **All footage/screenshots for every ON SCREEN cue have been captured and are ready to hand to the editor**, except the two noted below. Every victim-facing beat (Compensation, Case Details, Get Help Now, Legal Aid, Rehabilitation Progress, Counsellor Chat) now has a matching victim-side screen shown right before the corresponding official's screen, so the case visibly flows from the survivor's own action to the person who receives it.
 - **Two shots have no footage and were deliberately dropped from the ON SCREEN cues** rather than left as unfillable placeholders:
   - The wellness push notification and "AI companion initiating contact" beats (tiered-response montage) — no OS-level push notification or dedicated proactive-contact recording exists; that cue now shows Check-in → AI Chat → Distress History → the Critical alert landing in the Counsellor's Alerts Feed instead.
-- **Two new files are not yet uploaded to Drive** — both are currently only in Downloads/local, add them to `Screenshots/` before the editor needs them:
-  - `opening_home_mobile_web_split.png` — composited image, mobile + web side by side.
-  - `mansakha_splash_logo_web.png` — the app's actual splash/logo screen, used for the closing fade instead of the Home screen.
+- **Three new files are not yet uploaded to Drive** — all currently only in Downloads/local, add them to `Screenshots/` before the editor needs them:
+  - `opening_home_mobile_web_split.png` — composited image, mobile + web side by side (used for the opening shot only).
+  - `mansakha_splash_logo.png` — the app's actual mobile splash/logo screen.
+  - `mansakha_splash_logo_web.png` — the app's actual web splash/logo screen. These two closing shots are separate files shown back to back, not a composite - the opening uses a side-by-side composite, the closing uses two sequential full-frame shots.
   - The counsellor opt-in toggle — the demo account used for filming is already opted in, so there's no way to show the pre-opt-in state without a fresh, never-opted-in test account. If you want this shot, flag it and a new demo account can be seeded specifically for it.
 - **Accuracy notes on claims in this script:**
 
