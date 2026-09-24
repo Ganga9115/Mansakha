@@ -10,7 +10,7 @@
 
 "And Mansakha doesn't treat every score the same way.
 
-A low score — nothing happens. No unnecessary alarm.
+A low score —  Happy life
 A moderate dip — a gentle wellness nudge, right inside the app.
 A high score — the AI companion itself reaches out, proactively, before anyone has to ask for help.
 And a critical score — an instant alert. If a counsellor is already assigned, they're notified immediately. If not, Mansakha instantly auto-assigns whoever's least overloaded — nationwide, not just this district, so no case ever waits on one district's own headcount. And either way, District Administration is looped in too. Zero delay."
@@ -59,7 +59,7 @@ And it's never just company. The instant it hears any sign of self-harm — not 
 
 [VOICEOVER]
 
-"Remember Hathras — a family nobody checked on? With Mansakha, silence itself is a signal. If a survivor stops responding, a counsellor is sent to check in personally."
+"Remember Tamil Nadu — where cases were lost to follow-up because nobody checked on them? With Mansakha, silence itself is a signal. If a survivor stops responding, a counsellor is sent to check in personally."
 
 [ON SCREEN: Counsellor's Notification Bell dropdown, showing a "Disengagement Alert" notice, then a cut into that case's own Case Detail - the full picture the counsellor reviews before checking in]
 
@@ -98,6 +98,7 @@ The case is still monitored. But now, so is the person behind it. Mansakha. Mind
 ## Notes for the editor
 
 - **Confirm screens render real data before shooting** (going off code verified this session, not a fresh live click-through):
+
   - Victim's own Distress History / trend graph screen
   - Victim's Check-in mood-tracker screen
   - Victim's Rehabilitation opt-in toggle
@@ -108,8 +109,8 @@ The case is still monitored. But now, so is the person behind it. Mansakha. Mind
   - "Get Help Now" button (victim app) and the emergency referral landing in the Protection Officer's Protection Registry
   - Victim's own Counsellor Chat screen (text/voice message to their assigned counsellor) and the matching Counsellor's Case Chat, from the same conversation
   - Counsellor's Case Detail (the disengagement-alert case)
-
 - **Accuracy notes on claims in this script:**
+
   - eCourts CNR sync is real architecture (CNR number, hearing dates, chargesheet status are tracked and kept current), but the live government eCourts API itself is not connected — no free/official API exists. The script's phrasing ("synced by CNR number against the government's own eCourts system") is worded to stay accurate without overclaiming a live feed.
   - Sambal/NHAA portal: deliberately not claimed as a data source anywhere in this script. Mansakha reuses the real national helpline number (14566) and was UX-inspired by Sambal's registration flow, but does not fetch or sync data from it. If you want a forward-looking line about pulling in existing Sambal grievances, that would need to be framed explicitly as roadmap/vision, not a built feature.
   - Self-harm detection: now a real immediate escalation (helpline shown to the survivor + counsellor alerted, both immediately, not gated by the normal chat scoring threshold) — built this session, verified against the live database.
