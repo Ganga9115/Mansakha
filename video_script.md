@@ -78,7 +78,7 @@ Files, in order: `Counsellor -_notification_bell.png` (5.9s) → `Counsellor -_c
 "Now zoom out. A District Admin sees every vulnerable case in their district, live.
 
 [ON SCREEN: District Admin Dashboard — stat cards for Total/Vulnerable/High-Risk/Critical/Predicted Escalations]
-File: `district_admin_dashboard.png` (9.0s)
+File: `District admin dashboard.png` (9.0s)
 
 And one number here matters more than the rest: Predicted Escalations. Mansakha doesn't just report today's risk — it reads the trend line itself. If someone's distress score has been climbing, the system projects how many days until they cross into High or Critical risk. Not a diagnosis. A head start.
 
@@ -114,7 +114,6 @@ File: `v01_home.png` (9.0s)
 ## Notes for the editor
 
 - **File locations**: `1st.mpeg`–`6th.mpeg` are in the Drive folder's `Audios/` subfolder. Screenshot filenames without a `v` prefix (e.g. `Case Hearing.png`) are in `Screenshots/`. Filenames starting `v01`–`v11` and the 3 `.mp4` clips are in `Victim SS/`.
-- **`district_admin_dashboard.png` is not yet in the Drive folder** — it was captured after the last upload and currently only exists locally. It needs to be added to `Screenshots/` before the editor can use this reference sheet as-is.
 - **Durations above are a starting assembly, not a locked edit** — they're evenly split within each voiceover segment as a first pass (verified by matching this session's own rough-cut assembly, `Mansakha_Pitch_Video.mp4`). Nudge them shot-by-shot to match where the voiceover actually lands on each beat once the editor is cutting to picture.
 - **All footage/screenshots for every ON SCREEN cue have been captured and are ready to hand to the editor**, except the two noted below. Every victim-facing beat (Compensation, Case Details, Get Help Now, Legal Aid, Rehabilitation Progress, Counsellor Chat) now has a matching victim-side screen shown right before the corresponding official's screen, so the case visibly flows from the survivor's own action to the person who receives it.
 - **Two shots have no footage and were deliberately dropped from the ON SCREEN cues** rather than left as unfillable placeholders:
