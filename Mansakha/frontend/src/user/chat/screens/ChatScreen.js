@@ -238,7 +238,7 @@ export default function ChatScreen({ navigation }) {
         // user's own message from view) with no reply at all, which would
         // mean a dropped connection at exactly the wrong moment produces
         // zero safety response. Keep it visible and answer deterministically.
-        const safetyReply = ensureHelplineIfAtRisk(text, "I'm having trouble connecting right now, but please don't wait for me.");
+        const safetyReply = ensureHelplineIfAtRisk(text, "I hear you, and I don't want you to wait for a reply from me right now.");
         setMessages([...newMessages, { role: "assistant", content: safetyReply }]);
         reportSelfHarmRisk.mutate({ message: text, channel: 'text' });
         return safetyReply;
