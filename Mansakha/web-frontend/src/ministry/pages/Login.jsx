@@ -8,8 +8,11 @@ import { useToast } from '../../shared/context/ToastContext';
 export default function MinistryLogin() {
   const navigate = useNavigate();
   const toast = useToast();
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
+  // Demo sign-in shortcut, same idea as the other staff login pages'
+  // pre-filled credentials (Login.jsx, SignIn.jsx) and the victim app's
+  // pre-filled docket - single role here, so no dropdown-driven refill needed.
+  const [identifier, setIdentifier] = useState('superadmin@mansakha.gov.in');
+  const [password, setPassword] = useState('Mansakha@2026');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 

@@ -8,14 +8,14 @@ import GlideSelect from '../components/GlideSelect';
 
 // Demo sign-in shortcuts, same idea as the victim app's pre-filled docket -
 // keyed by the role currently selected in the dropdown below, all sharing
-// the one demo password reset across these accounts. Investigating Officer
-// and Public Prosecutor have no demo account yet, so they fall through to
-// blank fields.
+// the one demo password reset across these accounts.
 const ROLE_CREDENTIALS = {
   'Protection Officer': { identifier: 'porbandarsadarpolicestation.po.gu@mansakha.gov.in', password: 'Mansakha@2026' },
   'District Welfare Officer': { identifier: 'dwo.porbandar.gu@mansakha.gov.in', password: 'Mansakha@2026' },
   'DLSA Coordinator': { identifier: 'dlsa.porbandar.gu@mansakha.gov.in', password: 'Mansakha@2026' },
   'Rehabilitation Officer': { identifier: 'porbandar.ro.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'Investigating Officer': { identifier: 'porbandarsadarpolicestation.io.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'Public Prosecutor': { identifier: 'diyareddy.pp-521@mansakha.gov.in', password: 'Mansakha@2026' },
 };
 
 // The second deliberate "shared page" exception (see Login.jsx's own header
