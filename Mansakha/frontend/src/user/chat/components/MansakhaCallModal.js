@@ -835,7 +835,7 @@ export default function MansakhaCallModal({
         {isVideoMode && (
           Platform.OS === 'web'
             ? <div ref={avatar3dContainerRef} style={styles.fullscreenAvatarContainer} />
-            : <AvatarGLView ref={avatarControllerRef} style={styles.fullscreenAvatarContainer} />
+            : <AvatarGLView ref={avatarControllerRef} style={styles.fullscreenAvatarContainerNative} />
         )}
 
         {/* Tier 1: Top Header Bar (Floating over avatar / voice screen) */}
@@ -988,13 +988,18 @@ export default function MansakhaCallModal({
 
 const styles = StyleSheet.create({
   fullScreenOverlay: {
-    position: 'fixed',
+    // 'fixed' position and vw/dvh units are web-only - resolved via
+    // react-native-web's own CSS output there, but meaningless to React
+    // Native's native StyleSheet (silently dropped, not an error), which
+    // left this container's size undefined on native. 'absolute' + all 4
+    // offsets at 0 is the RN-native equivalent for filling the parent.
+    position: Platform.OS === 'web' ? 'fixed' : 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    width: '100vw',
-    height: '100dvh',
+    width: Platform.OS === 'web' ? '100vw' : '100%',
+    height: Platform.OS === 'web' ? '100dvh' : '100%',
     minHeight: '100%',
     backgroundColor: '#0B141A',
     zIndex: 999999,
@@ -1119,6 +1124,22 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100vw',
     height: '100dvh',
+    zIndex: 0,
+    overflow: 'hidden',
+    backgroundColor: '#0B141A',
+  },
+  // Native GLView needs its own variant - '100vw'/'100dvh' are web-only CSS
+  // units that React Native's StyleSheet doesn't understand (silently
+  // dropped, not an error), which left the GLView with no resolved
+  // width/height and an empty (0x0) GL drawing buffer - nothing rendered,
+  // even though the component mounted fine. Plain absolute-fill (all 4
+  // offsets at 0) is enough to size a child to its parent on native.
+  fullscreenAvatarContainerNative: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 0,
     overflow: 'hidden',
     backgroundColor: '#0B141A',
