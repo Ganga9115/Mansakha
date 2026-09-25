@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, Modal, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { radius } from '../../shared/theme/radius';
 import { Avatar3DController } from './Avatar3DController';
 import AvatarGLView from './AvatarGLView';
+import VoiceHologramGLView from './VoiceHologramGLView';
 import { ensureHelplineIfAtRisk, containsSelfHarmRisk } from '../../shared/services/ollamaClient';
 import { useReportSelfHarmRisk } from '../../shared/services/hooks';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const maleCounsellorAsset = require('../../../../assets/avatar_male_counsellor.png');
 
@@ -87,6 +90,7 @@ export default function MansakhaCallModal({
   const reportSelfHarmRisk = useReportSelfHarmRisk();
 
   const canvasRef = useRef(null);
+  const voiceHologramRef = useRef(null);
   const avatar3dContainerRef = useRef(null);
   const avatarControllerRef = useRef(null);
   const avatarCanvasRef = useRef(null);
@@ -533,6 +537,33 @@ export default function MansakhaCallModal({
     };
   }, [visible, isVideoMode, counsellorGender, aiSpeechState]);
 
+  // Native counterpart to the web-only Hologram Particle Sphere effect
+  // below (Canvas 2D doesn't exist on native) - drives VoiceHologramGLView's
+  // render loop the same way the avatar effect above drives AvatarGLView's,
+  // just with no model to load first.
+  useEffect(() => {
+    if (!visible || isVideoMode || Platform.OS === 'web') {
+      if (voiceHologramRef.current) {
+        voiceHologramRef.current.dispose();
+        voiceHologramRef.current = null;
+      }
+      return;
+    }
+
+    let animId = null;
+    const renderLoop = () => {
+      const controller = voiceHologramRef.current;
+      if (controller && !controller.isDisposed) {
+        controller.render();
+      }
+      animId = requestAnimationFrame(renderLoop);
+    };
+    animId = requestAnimationFrame(renderLoop);
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [visible, isVideoMode]);
+
   // 3D Animated Hologram Particle Sphere & Audio Frequency Equalizer (Voice Call Mode)
   useEffect(() => {
     if (!visible || isVideoMode || Platform.OS !== 'web') return;
@@ -888,8 +919,10 @@ export default function MansakhaCallModal({
 
         {/* Tier 2: Center Stage (3D Hologram Particle Sphere in Voice Call; User PiP in Video Call) */}
         <View style={styles.centerStage} pointerEvents="box-none">
-          {!isVideoMode && Platform.OS === 'web' && (
-            <canvas ref={canvasRef} style={styles.voiceHologramCanvas} />
+          {!isVideoMode && (
+            Platform.OS === 'web'
+              ? <canvas ref={canvasRef} style={styles.voiceHologramCanvas} />
+              : <VoiceHologramGLView ref={voiceHologramRef} style={styles.voiceHologramGLContainer} speechState={aiSpeechState} />
           )}
 
           {/* Floating Picture-in-Picture Card for User (WhatsApp Style in bottom-right corner) */}
@@ -1115,6 +1148,14 @@ const styles = StyleSheet.create({
     aspectRatio: 1,
     alignSelf: 'center',
     display: 'block',
+  },
+  // Native equivalent of voiceHologramCanvas - '94vw' is a web-only unit
+  // (see fullscreenAvatarContainerNative's own note), so this uses a plain
+  // numeric width capped by the device's own screen width instead.
+  voiceHologramGLContainer: {
+    width: Math.min(360, SCREEN_WIDTH * 0.94),
+    height: Math.min(360, SCREEN_WIDTH * 0.94),
+    alignSelf: 'center',
   },
   fullscreenAvatarContainer: {
     position: 'absolute',
