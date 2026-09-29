@@ -102,7 +102,7 @@ Once verified, downstream agency referrals and payment milestones unlock automat
 To prevent clinical trauma from being confused with physical witness intimidation, the system computes two completely independent risk metrics with mutually exclusive vocabularies:
 
 - **Axis A: AI-Derived Distress Score ($0-100$) — Mental Health State**:
-  - Risk Levels: **Low** ($0-29$), **Moderate** ($30-59$), **High** ($60-79$), **Critical** ($80-100$).
+  - Risk Levels: **Low** ($0-29$), **Moderate** ($30-54$), **High** ($55-79$), **Critical** ($80-100$).
   - Evaluates internal psychological trauma, depression, voice stress, and affective distress from check-ins, chats, voice notes, and IVRS calls.
   - Directly drives the **Counsellor** therapeutic care queue.
 - **Axis B: Rule-Based Threat Tier — Physical Security & Danger**:
@@ -128,8 +128,8 @@ Statutory compliance is enforced algorithmically. An automated escalation daemon
 
 Grounded directly in the **Dr. Ambedkar National Relief Scheme** and the PoA Act statutory compensation schedules, the victim interface displays an auditable 3-stage visual progress tracker:
 
-- **Stage 1 (Immediate Relief / 25%)**: Disbursed upon FIR registration and initial welfare verification.
-- **Stage 2 (Investigation Complete / 50%)**: Disbursed when the Investigating Officer files the chargesheet in the Special Court.
+- **Stage 1 (Immediate Relief / 50%)**: Disbursed upon FIR registration and initial welfare verification.
+- **Stage 2 (Investigation Complete / 25%)**: Disbursed when the Investigating Officer files the chargesheet in the Special Court.
 - **Stage 3 (Trial Conclusion / 25%)**: Disbursed upon trial verdict or final judicial pronouncement.
 
 ### 6. One-Tap Emergency Multi-Agency Fan-Out
@@ -138,22 +138,18 @@ Activating the emergency SOS trigger executes a coordinated parallel protocol:
 
 1. Opens the native device dialler directly to the **Police Control Room (PCR 100)** or **Atrocity Helpline (14566)**.
 2. Captures GPS coordinates (best-effort, with explicit user permission).
-3. Simultaneously broadcasts real-time high-priority alerts to the **Assigned Counsellor**, **District Administration**, **State Administration**, and **Protection Officer**.
+3. Simultaneously raises a real-time high-priority alert to the **Assigned Counsellor** (auto-assigning the least-loaded counsellor nationwide if none exists yet) and opens a real, actionable referral with the survivor's own **Protection Officer** — deliberately scoped to these two roles only, so the survivor's most sensitive moment reaches the people positioned to act immediately rather than being diffused across the full administrative chain.
 
 ### 7. Telephonic IVRS Outreach & Automated Disengagement Logic
 
-To ensure universal accessibility for rural, illiterate, or non-smartphone populations, the platform integrates automated Interactive Voice Response System (IVRS) telephony:
+To ensure universal accessibility for rural, illiterate, or non-smartphone populations, the platform is architected around a telecom-agnostic dispatch queue that every outbound IVRS call and SMS check-in prompt passes through — attempted, retried with backoff, and logged the same way for every channel, so plugging in a live telecom gateway is a credentials change, not a re-architecture:
 
-- **Automated Outbound Calling**: Outbound check-in calls are dispatched in the survivor's regional language via telecom gateways connected to the National Atrocity Prevention Helpline (14566).
-- **The 5-Second Disengagement Protocol**:
-  - If an IVRS check-in call is **unanswered**, OR
-  - If the survivor answers but disconnects within **$< 5$ seconds**,
-    the system algorithmically flags this as potential disengagement, silent distress, or active intimidation. It immediately assigns a human counsellor and issues a high-priority follow-up alert.
+- **Automated Outbound Calling (queued, gateway pending)**: The system already decides *when* a survivor is due for a check-in call and queues it for dispatch; placing the live call requires telephony credentials (e.g. Exotel) that are not yet provisioned in this build, so calls are queued and logged rather than actually placed today.
+- **Disengagement Detection — live today via check-ins, designed for IVRS**: The mechanism that is fully wired and running right now flags a survivor who has gone quiet for **7 days** across chat, check-ins, and calls — it auto-assigns a human counsellor (nationwide least-loaded, if none is assigned yet) and raises a high-priority follow-up alert. Once live telephony is connected, an **unanswered call, or one disconnected within 5 seconds**, is designed to feed the same signal immediately rather than waiting out the 7-day window.
 - **Multimodal Acoustic Scoring on Completed Calls**:
-  - When an IVRS call is completed, the voice audio is passed through local ASR and acoustic prosody models.
+  - When a call is completed, the voice audio is passed through local ASR and acoustic prosody models.
   - Extracts vocal tension ($F_0$ pitch instability, jitter, shimmer), transcribes text, evaluates trauma sentiment/emotion, and calculates the Dynamic Distress Score asynchronously.
-- **Ministry-Level Telephony Audit Log**:
-  - All queued, attempted, and completed IVRS calls are logged in a central registry accessible to State and National Ministry officials to monitor rural outreach parity.
+- **Ministry-Level Telephony Audit Log**: Every queued, attempted, retried, and delivered dispatch — IVRS calls and SMS prompts alike — is logged in a central registry the National Ministry dashboard already reads from, so outreach parity is auditable the moment the telecom gateway goes live.
 
 ---
 
@@ -212,7 +208,7 @@ graph TD
     AlertPO --> CaseProgress
   
     CaseProgress --> Chargesheet{"Chargesheet Filed in Court?"}
-    Chargesheet -->|Yes| UnlockStage2["case_stage: Investigation -> Trial<br/>Compensation Stage 2 Unlocked (50%)"]
+    Chargesheet -->|Yes| UnlockStage2["case_stage: Investigation -> Trial<br/>Compensation Stage 2 Unlocked (25%)"]
     Chargesheet -->|No| Investigate
   
     UnlockStage2 --> Trial["4. Special Court Trial Proceedings<br/>DLSA Panel Advocate Represents Victim"]
@@ -346,8 +342,10 @@ $$
 When communication is text-based only:
 
 $$
-\text{Distress Score} = \left( 0.50 \cdot \text{Sentiment}_{\text{raw}} + 0.35 \cdot \text{Emotion} + 0.15 \cdot \text{EngagementDrop} \right) \times 100
+\text{Distress Score} = \left( \frac{4}{7} \cdot \text{Sentiment}_{\text{raw}} + \frac{2}{7} \cdot \text{Emotion} + \frac{1}{7} \cdot \text{EngagementDrop} \right) \times 100
 $$
+
+(Voice Stress's $0.30$ share from the audio formula above is proportionally redistributed across the remaining three signals — $\approx 57.1\% / 28.6\% / 14.3\%$ — rather than dropped, so a Critical score stays reachable from text alone.)
 
 #### 3. Predictive Escalation Trajectory (OLS Linear Regression)
 
@@ -367,7 +365,7 @@ To ensure clinical staff and police units never conflate psychological trauma wi
 
 | Axis | Metric | Vocabulary Tiers | Primary Signals Evaluated | Responsible Authority & Queue |
 | :--- | :--- | :--- | :--- | :--- |
-| **Internal Mind** | **Dynamic Distress Score (0–100)** | • **Low** ($0-29$)<br>• **Moderate** ($30-59$)<br>• **High** ($60-79$)<br>• **Critical** ($80-100$) | Voice stress ($F_0$, jitter, shimmer), NLP trauma sentiment, multilingual emotion, engagement cadence from mobile check-ins & **IVRS calls**. | **Assigned Counsellor**<br>(Clinical care, therapeutic chat, case notes) |
+| **Internal Mind** | **Dynamic Distress Score (0–100)** | • **Low** ($0-29$)<br>• **Moderate** ($30-54$)<br>• **High** ($55-79$)<br>• **Critical** ($80-100$) | Voice stress ($F_0$, jitter, shimmer), NLP trauma sentiment, multilingual emotion, engagement cadence from mobile check-ins & **IVRS calls**. | **Assigned Counsellor**<br>(Clinical care, therapeutic chat, case notes) |
 | **External Safety** | **Rule-Based Threat Tier** | • **Routine**<br>• **Guarded**<br>• **Elevated**<br>• **Severe** | Investigating Officer's custody facts (`In Custody`, `Out on Bail`, `Absconding`), witness intimidation case tags, and 7-day SOS event history. | **Protection Officer & Police**<br>(Physical security, safe houses, police escorts) |
 
 ---
@@ -506,7 +504,7 @@ erDiagram
 ### 3. Rural & Low-Bandwidth Feasibility
 
 - **Low-Bandwidth Mobile Optimization**: The client application is optimized for low-bandwidth 2G/3G mobile networks, using compact JSON payloads and local state caching.
-- **SMS / Offline Fallback**: In remote areas lacking continuous mobile data, lightweight SMS-based check-in prompts provide an unobtrusive fallback channel to maintain baseline monitoring.
+- **SMS / Offline Fallback**: In remote areas lacking continuous mobile data, lightweight SMS-based check-in prompts are architected as an unobtrusive fallback channel (via the same dispatch queue as IVRS) — live the moment a telecom number is provisioned for this deployment.
 
 ### 4. Trauma-Informed Clinical Guardrails
 
