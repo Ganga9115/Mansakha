@@ -29,3 +29,21 @@ pitch_emotion_model*.pkl
 **/.cache/
 **/Voice Emotion Dataset/
 *.csv
+
+# Local-only tooling/config and video-production docs - kept on disk,
+# not pushed to GitHub (removed from tracking, this just stops them
+# from being re-added)
+/.agents/
+/.claude/
+/.mcp.json
+/skills-lock.json
+/package.json
+/package-lock.json
+/Documents/video_script.md
+/Documents/Editor_Shot_List.txt
+/Documents/YouTube_Description.txt
+
+# Pitch-video working assets - large/derived, not source
+/Documents/Mansakha.mp4
+/Mansakha/frontend/drive_downloads/
+/Mansakha/frontend/video_build/
