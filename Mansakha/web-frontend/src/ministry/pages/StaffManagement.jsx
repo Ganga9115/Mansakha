@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import {
   UserPlus,
   X,
@@ -8,10 +8,6 @@ import {
   Eye,
   EyeOff,
   Search,
-  Users,
-  Layers,
-  MapPin,
-  ChevronDown,
 } from 'lucide-react';
 import {
   useStaffList,
@@ -26,6 +22,7 @@ import {
   useDesignationOptions,
 } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Special Public Prosecutor stays retired (absorbed into DLSA Coordinator) -
 // the other 6 coordination roles built this session were, until now, only
@@ -95,6 +92,7 @@ function Pagination({ page, pageSize, total, onChange }) {
 }
 
 export default function StaffManagement() {
+  usePageHeader({ title: 'Staff Management' });
   const toast = useToast();
 
   // Filter states
@@ -331,24 +329,19 @@ export default function StaffManagement() {
     }
   };
 
-  // Human-readable labels for dropdown buttons
-  const selectedRoleLabel = roleFilter === 'users' ? 'Users' : roleFilter || 'All Roles';
-  const selectedLevelLabel = levelFilter ? levelFilter.charAt(0).toUpperCase() + levelFilter.slice(1) : 'All Levels';
-  const selectedDistrictLabel = districtFilter || 'All Districts';
-
   return (
-    <MinistryLayout title="Staff Management">
+    <>
       <div className="space-y-5">
         {/* Top Hero Card */}
-        <div className="bg-gradient-to-r from-[#EFF6FB] via-[#F4F8FC] to-[#E9F3F9] border border-[#DCE8F2] rounded-2xl p-6 sm:p-7 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
+        <div className="bg-gradient-to-r from-brand-50 via-brand-50 to-brand-100 border border-brand-200 rounded-2xl p-6 sm:p-7 relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm">
           <div className="max-w-xl z-10">
-            <span className="text-[11px] font-bold tracking-wider text-[#6B859E] uppercase block mb-1">
+            <span className="text-[11px] font-bold tracking-wider text-brand-500 uppercase block mb-1">
               MANAGE YOUR TEAM
             </span>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#1E293B] tracking-tight mb-2">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-brand-900 tracking-tight mb-2">
               Staff Management
             </h1>
-            <p className="text-xs sm:text-sm text-[#64748B] font-normal leading-relaxed">
+            <p className="text-xs sm:text-sm text-brand-600 font-normal leading-relaxed">
               Create and manage accounts for officials across different roles and administrative levels.
             </p>
           </div>
@@ -356,7 +349,7 @@ export default function StaffManagement() {
           {/* Right side illustration matching screenshot */}
           <div className="relative hidden md:flex items-center shrink-0 pr-2 select-none">
             {/* Dotted grid pattern */}
-            <svg className="w-16 h-12 text-[#BFD7EA] mr-4 opacity-75" viewBox="0 0 60 40" fill="currentColor">
+            <svg className="w-16 h-12 text-brand-300 mr-4 opacity-75" viewBox="0 0 60 40" fill="currentColor">
               <circle cx="5" cy="5" r="1.5" /><circle cx="20" cy="5" r="1.5" /><circle cx="35" cy="5" r="1.5" /><circle cx="50" cy="5" r="1.5" />
               <circle cx="5" cy="18" r="1.5" /><circle cx="20" cy="18" r="1.5" /><circle cx="35" cy="18" r="1.5" /><circle cx="50" cy="18" r="1.5" />
               <circle cx="5" cy="31" r="1.5" /><circle cx="20" cy="31" r="1.5" /><circle cx="35" cy="31" r="1.5" /><circle cx="50" cy="31" r="1.5" />
@@ -366,24 +359,24 @@ export default function StaffManagement() {
             <div className="relative flex items-center justify-center">
               <svg width="155" height="92" viewBox="0 0 155 92" fill="none" xmlns="http://www.w3.org/2000/svg">
                 {/* Background glow pill */}
-                <ellipse cx="90" cy="46" rx="46" ry="38" fill="#E2EDF6" />
+                <ellipse cx="90" cy="46" rx="46" ry="38" fill="#e2e3f4" />
                 {/* Left Avatar */}
                 <g opacity="0.88">
-                  <circle cx="50" cy="40" r="15" fill="#75A8CF" />
-                  <path d="M38 60C38 52.5 43.5 50 50 50C56.5 50 62 52.5 62 60" fill="#75A8CF" />
+                  <circle cx="50" cy="40" r="15" fill="#5b62c2" />
+                  <path d="M38 60C38 52.5 43.5 50 50 50C56.5 50 62 52.5 62 60" fill="#5b62c2" />
                 </g>
                 {/* Right Avatar */}
                 <g opacity="0.88">
-                  <circle cx="112" cy="40" r="15" fill="#75A8CF" />
-                  <path d="M100 60C100 52.5 105.5 50 112 50C118.5 50 124 52.5 124 60" fill="#75A8CF" />
+                  <circle cx="112" cy="40" r="15" fill="#5b62c2" />
+                  <path d="M100 60C100 52.5 105.5 50 112 50C118.5 50 124 52.5 124 60" fill="#5b62c2" />
                 </g>
                 {/* Center Avatar (Prominent) */}
                 <g>
-                  <circle cx="81" cy="33" r="19" fill="#4B8EBE" />
-                  <path d="M66 65C66 54 73 51 81 51C89 51 96 54 96 65" fill="#4B8EBE" />
+                  <circle cx="81" cy="33" r="19" fill="#2d337b" />
+                  <path d="M66 65C66 54 73 51 81 51C89 51 96 54 96 65" fill="#2d337b" />
                 </g>
                 {/* Overlapping Plus Badge */}
-                <circle cx="120" cy="56" r="13" fill="#1E3A5F" />
+                <circle cx="120" cy="56" r="13" fill="#242861" />
                 <path d="M120 50V62M114 56H126" stroke="white" strokeWidth="2.4" strokeLinecap="round" />
               </svg>
             </div>
@@ -405,80 +398,57 @@ export default function StaffManagement() {
           </div>
 
           {/* ROLE Filter */}
-          <div className="relative flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 pointer-events-none">
+          <div className="flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
               ROLE
             </span>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 pointer-events-none">
-              <Users size={13} className="text-gray-400 shrink-0" />
-              <span className="truncate">{selectedRoleLabel}</span>
-              <ChevronDown size={13} className="text-gray-400 ml-auto shrink-0" />
-            </div>
-            <select
+            <GlideSelect
+              options={[{ value: '', label: 'All Roles' }, ...ROLE_OPTIONS.map((r) => ({ value: r, label: r })), { value: 'users', label: 'Users (Beneficiaries)' }]}
               value={roleFilter}
-              onChange={(e) => { setRoleFilter(e.target.value); setPage(1); }}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              aria-label="Filter by role"
-            >
-              <option value="">All Roles</option>
-              {ROLE_OPTIONS.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-              <option value="users">Users (Beneficiaries)</option>
-            </select>
+              onChange={(val) => { setRoleFilter(val); setPage(1); }}
+              ariaLabel="Filter by role"
+              menuWidth={220}
+            />
           </div>
 
           {/* ADMINISTRATIVE LEVEL Filter */}
-          <div className="relative flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[155px]">
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 pointer-events-none">
+          <div className="flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[155px]">
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
               ADMINISTRATIVE LEVEL
             </span>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 pointer-events-none">
-              <Layers size={13} className="text-gray-400 shrink-0" />
-              <span className="truncate">{selectedLevelLabel}</span>
-              <ChevronDown size={13} className="text-gray-400 ml-auto shrink-0" />
-            </div>
-            <select
+            <GlideSelect
+              options={[
+                { value: '', label: 'All Levels' },
+                { value: 'national', label: 'National' },
+                { value: 'state', label: 'State' },
+                { value: 'district', label: 'District' },
+              ]}
               value={levelFilter}
-              onChange={(e) => { setLevelFilter(e.target.value); setPage(1); }}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              aria-label="Filter by administrative level"
-            >
-              <option value="">All Levels</option>
-              <option value="national">National</option>
-              <option value="state">State</option>
-              <option value="district">District</option>
-            </select>
+              onChange={(val) => { setLevelFilter(val); setPage(1); }}
+              ariaLabel="Filter by administrative level"
+              menuWidth={180}
+            />
           </div>
 
           {/* DISTRICT Filter */}
-          <div className="relative flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
-            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5 pointer-events-none">
+          <div className="flex flex-col justify-center px-4 py-1 border-l border-gray-200 min-w-[130px]">
+            <span className="text-[9px] font-bold text-gray-400 uppercase tracking-wider block mb-0.5">
               DISTRICT
             </span>
-            <div className="flex items-center gap-1.5 text-xs font-medium text-gray-700 pointer-events-none">
-              <MapPin size={13} className="text-gray-400 shrink-0" />
-              <span className="truncate">{selectedDistrictLabel}</span>
-              <ChevronDown size={13} className="text-gray-400 ml-auto shrink-0" />
-            </div>
-            <select
+            <GlideSelect
+              options={[{ value: '', label: 'All Districts' }, ...[...allDistricts].sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ value: d.name, label: d.name }))]}
               value={districtFilter}
-              onChange={(e) => { setDistrictFilter(e.target.value); setPage(1); }}
-              className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-              aria-label="Filter by district"
-            >
-              <option value="">All Districts</option>
-              {[...allDistricts].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                <option key={d.jurisdictionId} value={d.name}>{d.name}</option>
-              ))}
-            </select>
+              onChange={(val) => { setDistrictFilter(val); setPage(1); }}
+              ariaLabel="Filter by district"
+              menuWidth={200}
+            />
           </div>
 
           {/* Create Account Action Button */}
           {!isUsersView && (
             <button
               onClick={() => setShowForm((v) => !v)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition ml-auto shrink-0"
+              className="flex items-center gap-2 px-4 py-2.5 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold shadow-sm transition ml-auto shrink-0"
             >
               {showForm ? <X size={14} /> : <UserPlus size={14} />}
               <span>{showForm ? 'Cancel' : 'Create Account'}</span>
@@ -505,11 +475,11 @@ export default function StaffManagement() {
 
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Full Name</label>
-              <input value={fullName} onChange={(e) => setFullName(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none" />
+              <input value={fullName} onChange={(e) => setFullName(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none" />
             </div>
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Email</label>
-              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none" />
+              <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none" />
             </div>
 
             {roleName === 'Counsellor' && (
@@ -522,16 +492,20 @@ export default function StaffManagement() {
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   required
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
                 />
               </div>
             )}
 
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Role</label>
-              <select value={roleName} onChange={(e) => { setRoleName(e.target.value); if (e.target.value !== 'Counsellor') setPhone(''); }} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
-                {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
+              <GlideSelect
+                options={ROLE_OPTIONS}
+                value={roleName}
+                onChange={(val) => { setRoleName(val); if (val !== 'Counsellor') setPhone(''); }}
+                ariaLabel="New Staff Role"
+                menuWidth={240}
+              />
             </div>
 
             <div>
@@ -543,7 +517,7 @@ export default function StaffManagement() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   placeholder="Required"
-                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
+                  className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg text-sm bg-white focus:border-brand-800 focus:outline-none"
                 />
                 <button
                   type="button"
@@ -561,20 +535,22 @@ export default function StaffManagement() {
               <>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction Level</label>
-                  <select
+                  <GlideSelect
+                    options={JURISDICTION_LEVELS.map((l) => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))}
                     value={jurisdictionLevel}
-                    onChange={(e) => { setJurisdictionLevel(e.target.value); setJurisdictionId(''); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
-                  >
-                    {JURISDICTION_LEVELS.map((l) => <option key={l} value={l} className="capitalize">{l}</option>)}
-                  </select>
+                    onChange={(val) => { setJurisdictionLevel(val); setJurisdictionId(''); }}
+                    ariaLabel="New Staff Jurisdiction Level"
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction</label>
-                  <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
-                    <option value="">Select...</option>
-                    {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                  </select>
+                  <GlideSelect
+                    options={jurisdictionOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
+                    value={jurisdictionId}
+                    onChange={(val) => setJurisdictionId(val)}
+                    placeholder="Select..."
+                    ariaLabel="New Staff Jurisdiction"
+                  />
                 </div>
               </>
             )}
@@ -582,20 +558,26 @@ export default function StaffManagement() {
             {['Protection Officer', 'DLSA Coordinator', 'Public Prosecutor'].includes(roleName) && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                <select value={jurisdictionId} onChange={(e) => setJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
-                  <option value="">Select...</option>
-                  {jurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                </select>
+                <GlideSelect
+                  options={jurisdictionOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
+                  value={jurisdictionId}
+                  onChange={(val) => setJurisdictionId(val)}
+                  placeholder="Select..."
+                  ariaLabel="New Staff District"
+                />
               </div>
             )}
 
             {DESIGNATIONS_BY_ROLE[roleName] && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
-                <select value={designation} onChange={(e) => setDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
-                  <option value="">Not specified</option>
-                  {DESIGNATIONS_BY_ROLE[roleName].map((d) => <option key={d} value={d}>{d}</option>)}
-                </select>
+                <GlideSelect
+                  options={DESIGNATIONS_BY_ROLE[roleName]}
+                  value={designation}
+                  onChange={(val) => setDesignation(val)}
+                  placeholder="Not specified"
+                  ariaLabel="New Staff Designation"
+                />
                 {roleName === 'Investigating Officer' && (
                   <p className="text-[10px] text-gray-400 mt-1">
                     Rule 7, SC/ST (PoA) Rules 1995: an atrocity case must be investigated by an officer not below the rank of DySP.
@@ -607,10 +589,14 @@ export default function StaffManagement() {
             {roleName === 'Rehabilitation Officer' && (
               <div>
                 <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Rehabilitation Centre</label>
-                <select value={providerId} onChange={(e) => setProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none">
-                  <option value="">Select...</option>
-                  {providerOptions.map((p) => <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>)}
-                </select>
+                <GlideSelect
+                  options={providerOptions.map((p) => ({ value: p.providerId, label: `${p.name} (${p.providerType})` }))}
+                  value={providerId}
+                  onChange={(val) => setProviderId(val)}
+                  placeholder="Select..."
+                  ariaLabel="New Staff Rehabilitation Centre"
+                  menuWidth={260}
+                />
               </div>
             )}
 
@@ -618,42 +604,35 @@ export default function StaffManagement() {
               <>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">State</label>
-                  <select
+                  <GlideSelect
+                    options={[...stationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => ({ value: s.jurisdictionId, label: s.name }))}
                     value={stationStateId}
-                    onChange={(e) => { setStationStateId(e.target.value); setStationDistrictId(''); setStationId(''); }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:border-[#519BCE] focus:outline-none"
-                  >
-                    <option value="">Select...</option>
-                    {[...stationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((s) => (
-                      <option key={s.jurisdictionId} value={s.jurisdictionId}>{s.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => { setStationStateId(val); setStationDistrictId(''); setStationId(''); }}
+                    placeholder="Select..."
+                    ariaLabel="New Staff Investigating Officer State"
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                  <select
+                  <GlideSelect
+                    options={[...stationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ value: d.jurisdictionId, label: d.name }))}
                     value={stationDistrictId}
-                    onChange={(e) => { setStationDistrictId(e.target.value); setStationId(''); }}
+                    onChange={(val) => { setStationDistrictId(val); setStationId(''); }}
                     disabled={!stationStateId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-[#519BCE] focus:outline-none"
-                  >
-                    <option value="">{stationStateId ? 'Select...' : 'Select a state first'}</option>
-                    {[...stationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                      <option key={d.jurisdictionId} value={d.jurisdictionId}>{d.name}</option>
-                    ))}
-                  </select>
+                    placeholder={stationStateId ? 'Select...' : 'Select a state first'}
+                    ariaLabel="New Staff Investigating Officer District"
+                  />
                 </div>
                 <div>
                   <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Police Station</label>
-                  <select
+                  <GlideSelect
+                    options={stationOptions.map((s) => ({ value: s.stationId, label: s.name }))}
                     value={stationId}
-                    onChange={(e) => setStationId(e.target.value)}
+                    onChange={(val) => setStationId(val)}
                     disabled={!stationDistrictId}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50 focus:border-[#519BCE] focus:outline-none"
-                  >
-                    <option value="">{stationDistrictId ? (stationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}</option>
-                    {stationOptions.map((s) => <option key={s.stationId} value={s.stationId}>{s.name}</option>)}
-                  </select>
+                    placeholder={stationDistrictId ? (stationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}
+                    ariaLabel="New Staff Police Station"
+                  />
                 </div>
               </>
             )}
@@ -662,7 +641,7 @@ export default function StaffManagement() {
               <button
                 type="submit"
                 disabled={createStaff.loading}
-                className="px-5 py-2.5 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
+                className="px-5 py-2.5 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold shadow-sm transition disabled:opacity-60"
               >
                 {createStaff.loading ? 'Creating...' : 'Create Account'}
               </button>
@@ -683,7 +662,7 @@ export default function StaffManagement() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#F0F6FA] text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                  <tr className="bg-brand-50 text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                     <th className="py-3.5 px-6">Name</th>
                     <th className="py-3.5 px-4">Role</th>
                     <th className="py-3.5 px-4">Scope</th>
@@ -694,7 +673,7 @@ export default function StaffManagement() {
                   {loading ? (
                     <tr>
                       <td colSpan={4} className="py-14 text-center text-gray-400">
-                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-[#519BCE] mr-2 align-middle" />
+                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-brand-600 mr-2 align-middle" />
                         Loading staff accounts...
                       </td>
                     </tr>
@@ -707,15 +686,15 @@ export default function StaffManagement() {
                         <div className="flex flex-col items-center justify-center text-center">
                           <div className="relative mb-3 flex items-center justify-center">
                             {/* Soft circular background */}
-                            <div className="w-24 h-24 rounded-full bg-[#EDF5FB] flex items-center justify-center">
+                            <div className="w-24 h-24 rounded-full bg-brand-50 flex items-center justify-center">
                               {/* Document with magnifying glass */}
                               <svg width="62" height="62" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#90B7D6" strokeWidth="2.2" fill="#FFFFFF" />
-                                <line x1="24" y1="20" x2="34" y2="20" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="26" x2="40" y2="26" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="32" x2="36" y2="32" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <circle cx="39" cy="39" r="8" stroke="#7BA8CE" strokeWidth="2.5" fill="#EDF5FB" />
-                                <line x1="45" y1="45" x2="52" y2="52" stroke="#7BA8CE" strokeWidth="2.5" strokeLinecap="round" />
+                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#9398d7" strokeWidth="2.2" fill="#FFFFFF" />
+                                <line x1="24" y1="20" x2="34" y2="20" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="26" x2="40" y2="26" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="32" x2="36" y2="32" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <circle cx="39" cy="39" r="8" stroke="#5b62c2" strokeWidth="2.5" fill="#f2f3fa" />
+                                <line x1="45" y1="45" x2="52" y2="52" stroke="#5b62c2" strokeWidth="2.5" strokeLinecap="round" />
                               </svg>
                             </div>
                           </div>
@@ -725,7 +704,7 @@ export default function StaffManagement() {
                           </p>
                           <button
                             onClick={() => setShowForm(true)}
-                            className="flex items-center gap-1.5 px-4 py-2 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition"
+                            className="flex items-center gap-1.5 px-4 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold shadow-sm transition"
                           >
                             <UserPlus size={13} />
                             <span>Create Account</span>
@@ -808,70 +787,73 @@ export default function StaffManagement() {
                                   {JURISDICTION_SCOPED_ROLES_EXCL_ADMIN.includes(s.roleName) && (
                                     <div>
                                       <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                                      <select value={editJurisdictionId} onChange={(e) => setEditJurisdictionId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                        <option value="">{s.jurisdictionName ? `Currently: ${s.jurisdictionName}` : 'Not yet assigned - select...'}</option>
-                                        {editJurisdictionOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-                                      </select>
+                                      <GlideSelect
+                                        options={editJurisdictionOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
+                                        value={editJurisdictionId}
+                                        onChange={(val) => setEditJurisdictionId(val)}
+                                        placeholder={s.jurisdictionName ? `Currently: ${s.jurisdictionName}` : 'Not yet assigned - select...'}
+                                        ariaLabel="Edit Staff District"
+                                      />
                                     </div>
                                   )}
                                   {DESIGNATIONS_BY_ROLE[s.roleName] && (
                                     <div>
                                       <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Designation (optional)</label>
-                                      <select value={editDesignation} onChange={(e) => setEditDesignation(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                        <option value="">{s.designation ? `Currently: ${s.designation}` : 'Not specified'}</option>
-                                        {DESIGNATIONS_BY_ROLE[s.roleName].map((d) => <option key={d} value={d}>{d}</option>)}
-                                      </select>
+                                      <GlideSelect
+                                        options={DESIGNATIONS_BY_ROLE[s.roleName]}
+                                        value={editDesignation}
+                                        onChange={(val) => setEditDesignation(val)}
+                                        placeholder={s.designation ? `Currently: ${s.designation}` : 'Not specified'}
+                                        ariaLabel="Edit Staff Designation"
+                                      />
                                     </div>
                                   )}
                                   {s.roleName === 'Rehabilitation Officer' && (
                                     <div>
                                       <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Rehabilitation Centre</label>
-                                      <select value={editProviderId} onChange={(e) => setEditProviderId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-                                        <option value="">{s.providerName ? `Currently: ${s.providerName}` : 'Not yet assigned - select...'}</option>
-                                        {providerOptions.map((p) => <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>)}
-                                      </select>
+                                      <GlideSelect
+                                        options={providerOptions.map((p) => ({ value: p.providerId, label: `${p.name} (${p.providerType})` }))}
+                                        value={editProviderId}
+                                        onChange={(val) => setEditProviderId(val)}
+                                        placeholder={s.providerName ? `Currently: ${s.providerName}` : 'Not yet assigned - select...'}
+                                        ariaLabel="Edit Staff Rehabilitation Centre"
+                                        menuWidth={260}
+                                      />
                                     </div>
                                   )}
                                   {s.roleName === 'Investigating Officer' && (
                                     <>
                                       <div>
                                         <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">State</label>
-                                        <select
+                                        <GlideSelect
+                                          options={[...editStationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((st) => ({ value: st.jurisdictionId, label: st.name }))}
                                           value={editStationStateId}
-                                          onChange={(e) => { setEditStationStateId(e.target.value); setEditStationDistrictId(''); setEditStationId(''); }}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white"
-                                        >
-                                          <option value="">Select...</option>
-                                          {[...editStationStateOptions].sort((a, b) => a.name.localeCompare(b.name)).map((st) => (
-                                            <option key={st.jurisdictionId} value={st.jurisdictionId}>{st.name}</option>
-                                          ))}
-                                        </select>
+                                          onChange={(val) => { setEditStationStateId(val); setEditStationDistrictId(''); setEditStationId(''); }}
+                                          placeholder="Select..."
+                                          ariaLabel="Edit Staff Investigating Officer State"
+                                        />
                                       </div>
                                       <div>
                                         <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">District</label>
-                                        <select
+                                        <GlideSelect
+                                          options={[...editStationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => ({ value: d.jurisdictionId, label: d.name }))}
                                           value={editStationDistrictId}
-                                          onChange={(e) => { setEditStationDistrictId(e.target.value); setEditStationId(''); }}
+                                          onChange={(val) => { setEditStationDistrictId(val); setEditStationId(''); }}
                                           disabled={!editStationStateId}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
-                                        >
-                                          <option value="">{editStationStateId ? 'Select...' : 'Select a state first'}</option>
-                                          {[...editStationDistrictOptions].sort((a, b) => a.name.localeCompare(b.name)).map((d) => (
-                                            <option key={d.jurisdictionId} value={d.jurisdictionId}>{d.name}</option>
-                                          ))}
-                                        </select>
+                                          placeholder={editStationStateId ? 'Select...' : 'Select a state first'}
+                                          ariaLabel="Edit Staff Investigating Officer District"
+                                        />
                                       </div>
                                       <div>
                                         <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Police Station</label>
-                                        <select
+                                        <GlideSelect
+                                          options={editStationOptions.map((st) => ({ value: st.stationId, label: st.name }))}
                                           value={editStationId}
-                                          onChange={(e) => setEditStationId(e.target.value)}
+                                          onChange={(val) => setEditStationId(val)}
                                           disabled={!editStationDistrictId}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-50"
-                                        >
-                                          <option value="">{s.stationName && !editStationDistrictId ? `Currently: ${s.stationName}` : editStationDistrictId ? (editStationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}</option>
-                                          {editStationOptions.map((st) => <option key={st.stationId} value={st.stationId}>{st.name}</option>)}
-                                        </select>
+                                          placeholder={s.stationName && !editStationDistrictId ? `Currently: ${s.stationName}` : editStationDistrictId ? (editStationOptions.length ? 'Select...' : 'No stations set up here yet') : 'Select a district first'}
+                                          ariaLabel="Edit Staff Police Station"
+                                        />
                                       </div>
                                     </>
                                   )}
@@ -882,7 +864,7 @@ export default function StaffManagement() {
                                 <button
                                   onClick={() => handleSaveEdit(s.officialId)}
                                   disabled={updateStaff.loading}
-                                  className="px-4 py-2 bg-[#4F96C9] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                                  className="px-4 py-2 bg-brand-800 hover:bg-brand-900 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
                                 >
                                   {updateStaff.loading ? 'Saving...' : 'Save Changes'}
                                 </button>
@@ -917,7 +899,7 @@ export default function StaffManagement() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-[#F0F6FA] text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
+                  <tr className="bg-brand-50 text-gray-500 text-[11px] uppercase tracking-wider font-semibold border-b border-gray-100">
                     <th className="py-3.5 px-6">Name</th>
                     <th className="py-3.5 px-4">Docket</th>
                     <th className="py-3.5 px-4">Case Type</th>
@@ -931,7 +913,7 @@ export default function StaffManagement() {
                   {usersQuery.loading ? (
                     <tr>
                       <td colSpan={7} className="py-14 text-center text-gray-400">
-                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-[#519BCE] mr-2 align-middle" />
+                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-2 border-gray-300 border-t-brand-600 mr-2 align-middle" />
                         Loading user records...
                       </td>
                     </tr>
@@ -942,14 +924,14 @@ export default function StaffManagement() {
                       <td colSpan={7} className="py-12 px-4">
                         <div className="flex flex-col items-center justify-center text-center">
                           <div className="relative mb-3 flex items-center justify-center">
-                            <div className="w-24 h-24 rounded-full bg-[#EDF5FB] flex items-center justify-center">
+                            <div className="w-24 h-24 rounded-full bg-brand-50 flex items-center justify-center">
                               <svg width="62" height="62" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#90B7D6" strokeWidth="2.2" fill="#FFFFFF" />
-                                <line x1="24" y1="20" x2="34" y2="20" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="26" x2="40" y2="26" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <line x1="24" y1="32" x2="36" y2="32" stroke="#B8D5EB" strokeWidth="2" strokeLinecap="round" />
-                                <circle cx="39" cy="39" r="8" stroke="#7BA8CE" strokeWidth="2.5" fill="#EDF5FB" />
-                                <line x1="45" y1="45" x2="52" y2="52" stroke="#7BA8CE" strokeWidth="2.5" strokeLinecap="round" />
+                                <rect x="18" y="12" width="28" height="36" rx="4" stroke="#9398d7" strokeWidth="2.2" fill="#FFFFFF" />
+                                <line x1="24" y1="20" x2="34" y2="20" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="26" x2="40" y2="26" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <line x1="24" y1="32" x2="36" y2="32" stroke="#c0c2e8" strokeWidth="2" strokeLinecap="round" />
+                                <circle cx="39" cy="39" r="8" stroke="#5b62c2" strokeWidth="2.5" fill="#f2f3fa" />
+                                <line x1="45" y1="45" x2="52" y2="52" stroke="#5b62c2" strokeWidth="2.5" strokeLinecap="round" />
                               </svg>
                             </div>
                           </div>
@@ -982,6 +964,6 @@ export default function StaffManagement() {
           </div>
         )}
       </div>
-    </MinistryLayout>
+    </>
   );
 }

@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 import { useMe, useDesignationOptions, useUpdateDesignation } from '../services/hooks';
 import { Eye, EyeOff, User } from 'lucide-react';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Investigating Officer's own copy of the shared Settings/Profile screen -
 // mirrors dwo/pages/Profile.jsx (the template), reused as-is:
@@ -11,6 +12,7 @@ import { Eye, EyeOff, User } from 'lucide-react';
 // role-agnostic (see auth.staff.routes.js's own change-password route,
 // which only checks req.auth.type === 'official').
 export default function Profile() {
+  usePageHeader({ title: 'Profile' });
   const { data: me, refetch: refetchMe } = useMe();
   const fileInputRef = useRef(null);
   const [photoError, setPhotoError] = useState(null);
@@ -101,7 +103,7 @@ export default function Profile() {
   };
 
   return (
-    <StaffLayout title="Profile">
+    <>
       <div className="space-y-6">
 
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
@@ -115,8 +117,8 @@ export default function Profile() {
                 className="w-16 h-16 rounded-full object-cover"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
-                <User size={28} className="text-[#3D5A80]" />
+              <div className="w-16 h-16 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center shrink-0">
+                <User size={28} className="text-brand-900" />
               </div>
             )}
             <div>
@@ -132,7 +134,7 @@ export default function Profile() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={photoUploading}
-                className="text-xs text-[#519BCE] font-semibold mt-1 hover:underline disabled:opacity-60"
+                className="text-xs text-brand-600 font-semibold mt-1 hover:underline disabled:opacity-60"
               >
                 {photoUploading ? 'Uploading...' : 'Change Profile Photo'}
               </button>
@@ -146,22 +148,20 @@ export default function Profile() {
               type="email"
               value={me?.email || ''}
               readOnly
-              className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
+              className="w-full px-3.5 py-2 bg-brand-50 border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1.5">Designation</label>
-              <select
+              <GlideSelect
+                options={[{ value: '', label: 'Not specified' }, ...designationOptions.map((d) => ({ value: d, label: d }))]}
                 value={designation}
-                onChange={(e) => handleDesignationChange(e.target.value)}
+                onChange={(val) => handleDesignationChange(val)}
                 disabled={updateDesignation.loading}
-                className="w-full px-3.5 py-2 bg-white border border-gray-300 rounded-lg text-xs text-gray-800 disabled:opacity-60"
-              >
-                <option value="">Not specified</option>
-                {designationOptions.map((d) => <option key={d} value={d}>{d}</option>)}
-              </select>
+                ariaLabel="Designation"
+              />
               {designationSaved && <p className="text-[10px] text-emerald-600 mt-1">Designation saved.</p>}
               {designationError && <p className="text-[10px] text-rose-600 mt-1">{designationError}</p>}
               <p className="text-[10px] text-gray-400 mt-1">
@@ -174,7 +174,7 @@ export default function Profile() {
                 value={myRole?.stationName || 'Not yet assigned'}
                 readOnly
                 title="Set by Ministry at appointment - your case queue is scoped to this station"
-                className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
+                className="w-full px-3.5 py-2 bg-brand-50 border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
               />
               <p className="text-[10px] text-gray-400 mt-1">
                 Cases reach your queue automatically when their FIR is registered at this station.
@@ -195,7 +195,7 @@ export default function Profile() {
             </button>
 
             {showPasswordForm && (
-              <div className="p-4 bg-[#F8F9FA] rounded-lg space-y-3">
+              <div className="p-4 bg-brand-50 rounded-lg space-y-3">
                 <div className="relative">
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -237,7 +237,7 @@ export default function Profile() {
                 <button
                   onClick={handleChangePassword}
                   disabled={passwordLoading}
-                  className="w-full py-2.5 bg-[#519BCE] text-white rounded-lg text-xs font-semibold disabled:opacity-60"
+                  className="w-full py-2.5 bg-brand-700 text-white rounded-lg text-xs font-semibold disabled:opacity-60"
                 >
                   {passwordLoading ? 'Updating...' : 'Confirm New Password'}
                 </button>
@@ -247,6 +247,6 @@ export default function Profile() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

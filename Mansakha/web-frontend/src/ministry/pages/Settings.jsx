@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import MinistryLayout from '../layouts/MinistryLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
 import { useMe } from '../services/hooks';
@@ -9,6 +9,7 @@ import { Eye, EyeOff, User } from 'lucide-react';
 // MinistryLayout chrome directly (a Layout prop is no longer needed now
 // that this file only ever serves Ministry).
 export default function Settings() {
+  usePageHeader({ title: 'Profile' });
   const { data: me, refetch: refetchMe } = useMe();
   const fileInputRef = useRef(null);
   const [photoError, setPhotoError] = useState(null);
@@ -70,7 +71,7 @@ export default function Settings() {
   };
 
   return (
-    <MinistryLayout title="Profile">
+    <>
       <div className="space-y-6">
 
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
@@ -84,8 +85,8 @@ export default function Settings() {
                 className="w-16 h-16 rounded-full object-cover"
               />
             ) : (
-              <div className="w-16 h-16 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
-                <User size={28} className="text-[#3D5A80]" />
+              <div className="w-16 h-16 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center shrink-0">
+                <User size={28} className="text-brand-900" />
               </div>
             )}
             <div>
@@ -101,7 +102,7 @@ export default function Settings() {
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={photoUploading}
-                className="text-xs text-[#519BCE] font-semibold mt-1 hover:underline disabled:opacity-60"
+                className="text-xs text-brand-800 font-semibold mt-1 hover:underline disabled:opacity-60"
               >
                 {photoUploading ? 'Uploading...' : 'Change Profile Photo'}
               </button>
@@ -118,7 +119,7 @@ export default function Settings() {
               type="email"
               value={me?.email || ''}
               readOnly
-              className="w-full px-3.5 py-2 bg-[#F8F9FA] border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
+              className="w-full px-3.5 py-2 bg-brand-50 border border-transparent rounded-lg text-xs text-gray-800 focus:outline-none cursor-not-allowed"
             />
           </div>
         </div>
@@ -141,7 +142,7 @@ export default function Settings() {
             </button>
 
             {showPasswordForm && (
-              <div className="p-4 bg-[#F8F9FA] rounded-lg space-y-3">
+              <div className="p-4 bg-brand-50 rounded-lg space-y-3">
                 <div className="relative">
                   <input
                     type={showNewPassword ? 'text' : 'password'}
@@ -183,7 +184,7 @@ export default function Settings() {
                 <button
                   onClick={handleChangePassword}
                   disabled={passwordLoading}
-                  className="w-full py-2.5 bg-[#519BCE] text-white rounded-lg text-xs font-semibold disabled:opacity-60"
+                  className="w-full py-2.5 bg-brand-900 text-white rounded-lg text-xs font-semibold disabled:opacity-60"
                 >
                   {passwordLoading ? 'Updating...' : 'Confirm New Password'}
                 </button>
@@ -193,7 +194,7 @@ export default function Settings() {
         </div>
 
       </div>
-    </MinistryLayout>
+    </>
   );
 }
 

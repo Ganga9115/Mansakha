@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { CalendarClock, ArrowRight } from 'lucide-react';
 import { useUpcomingHearings } from '../services/hooks';
 
@@ -12,12 +12,13 @@ import { useUpcomingHearings } from '../services/hooks';
 // held (My Cases -> View -> Record Hearing Outcome), a different thing from
 // "what's coming up on the court's own schedule".
 export default function Hearings() {
+  usePageHeader({ title: 'Hearings' });
   const navigate = useNavigate();
   const query = useUpcomingHearings();
   const hearings = query.data?.upcomingHearings || [];
 
   return (
-    <StaffLayout title="Hearings">
+    <>
       <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
         <div>
           <h3 className="font-bold text-sm text-gray-800">Upcoming Hearings</h3>
@@ -55,7 +56,7 @@ export default function Hearings() {
                     <td className="px-6 py-3.5 text-xs text-gray-500">{h.caseStage || '—'}</td>
                     <td className="px-6 py-3.5 text-xs text-gray-700 font-semibold">
                       <span className="flex items-center gap-1.5">
-                        <CalendarClock size={13} className="text-[#3D5A80]" />
+                        <CalendarClock size={13} className="text-brand-900" />
                         {new Date(h.nextHearingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </span>
                     </td>
@@ -65,7 +66,7 @@ export default function Hearings() {
                     <td className="px-6 py-3.5 text-right">
                       <button
                         onClick={() => navigate(`/legalrepresentative/cases/${h.requestId}`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-semibold transition"
                       >
                         View Case <ArrowRight size={13} />
                       </button>
@@ -77,6 +78,6 @@ export default function Hearings() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

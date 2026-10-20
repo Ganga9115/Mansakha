@@ -1,10 +1,15 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, Modal } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, Modal, Dimensions } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../../shared/theme/colors';
 import { radius } from '../../shared/theme/radius';
 import { Avatar3DController } from './Avatar3DController';
-import { ensureHelplineIfAtRisk } from '../../shared/services/ollamaClient';
+import AvatarGLView from './AvatarGLView';
+import VoiceHologramGLView from './VoiceHologramGLView';
+import { ensureHelplineIfAtRisk, containsSelfHarmRisk } from '../../shared/services/ollamaClient';
+import { useReportSelfHarmRisk } from '../../shared/services/hooks';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const maleCounsellorAsset = require('../../../../assets/avatar_male_counsellor.png');
 
@@ -82,7 +87,10 @@ export default function MansakhaCallModal({
   const [counsellorGender, setCounsellorGender] = useState('male'); // 'male' | 'female'
   const [hasCameraFeed, setHasCameraFeed] = useState(false);
 
+  const reportSelfHarmRisk = useReportSelfHarmRisk();
+
   const canvasRef = useRef(null);
+  const voiceHologramRef = useRef(null);
   const avatar3dContainerRef = useRef(null);
   const avatarControllerRef = useRef(null);
   const avatarCanvasRef = useRef(null);
@@ -326,6 +334,11 @@ export default function MansakhaCallModal({
       // with this local model. Applied before both the spoken reply and the
       // transcript below, so a live call gets the same guarantee as text chat.
       aiReply = ensureHelplineIfAtRisk(userText, aiReply);
+      // Fire-and-forget, immediate, not gated by the normal chat word-count
+      // scoring threshold - see the backend route's own comment.
+      if (containsSelfHarmRisk(userText)) {
+        reportSelfHarmRisk.mutate({ message: userText, channel: isVideoMode ? 'video_call' : 'voice_call' });
+      }
 
       if (onNewMessage) {
         onNewMessage({ role: 'assistant', content: aiReply, channel: isVideoMode ? 'video_call' : 'voice_call' });
@@ -346,6 +359,9 @@ export default function MansakhaCallModal({
       });
     } catch (err) {
       const fallback = ensureHelplineIfAtRisk(userText, "I hear you. You are safe here, please take your time.");
+      if (containsSelfHarmRisk(userText)) {
+        reportSelfHarmRisk.mutate({ message: userText, channel: isVideoMode ? 'video_call' : 'voice_call' });
+      }
       if (avatarControllerRef.current) {
         avatarControllerRef.current.setEmotion('reassuring');
       }
@@ -436,7 +452,7 @@ export default function MansakhaCallModal({
 
   // 3D Avatar Controller Lifecycle (Active only when user clicks Video Call)
   useEffect(() => {
-    if (!visible || !isVideoMode || Platform.OS !== 'web') {
+    if (!visible || !isVideoMode) {
       if (avatarControllerRef.current) {
         avatarControllerRef.current.dispose();
         avatarControllerRef.current = null;
@@ -444,20 +460,33 @@ export default function MansakhaCallModal({
       return;
     }
 
-    const container = avatar3dContainerRef.current;
-    if (!container) return;
-
-    let controller = avatarControllerRef.current;
-    if (!controller) {
-      controller = new Avatar3DController(container);
-      avatarControllerRef.current = controller;
+    let controller;
+    if (Platform.OS === 'web') {
+      const container = avatar3dContainerRef.current;
+      if (!container) return;
+      controller = avatarControllerRef.current;
+      if (!controller) {
+        controller = new Avatar3DController(container);
+        avatarControllerRef.current = controller;
+      }
+    } else {
+      // Native: <AvatarGLView ref={avatarControllerRef}> below already
+      // populated avatarControllerRef.current (its imperative handle) as
+      // soon as it mounted - the handle itself queues loadModel until its
+      // internal GL context is actually ready, so there's nothing to
+      // construct here.
+      controller = avatarControllerRef.current;
+      if (!controller) return;
     }
 
     // Male: casual_male.glb (exact modern avatar: brown hair, blue shirt, no cowboy hat!)
     // Female: counselor_brunette.glb (warm brunette counselor)
-    const primaryModel = counsellorGender === 'male'
-      ? '/models/casual_male.glb'
-      : '/models/counselor_brunette.glb';
+    // Native has no web server to resolve a relative path against, so it
+    // loads the same files from the already-deployed web app instead.
+    const modelFile = counsellorGender === 'male' ? 'casual_male.glb' : 'counselor_brunette.glb';
+    const primaryModel = Platform.OS === 'web'
+      ? `/models/${modelFile}`
+      : `https://mansakha-app.web.app/models/${modelFile}`;
 
     controller.loadModel(primaryModel).catch((err) => {
       console.warn('Could not load 3D GLB model:', err);
@@ -507,6 +536,33 @@ export default function MansakhaCallModal({
       if (animId) cancelAnimationFrame(animId);
     };
   }, [visible, isVideoMode, counsellorGender, aiSpeechState]);
+
+  // Native counterpart to the web-only Hologram Particle Sphere effect
+  // below (Canvas 2D doesn't exist on native) - drives VoiceHologramGLView's
+  // render loop the same way the avatar effect above drives AvatarGLView's,
+  // just with no model to load first.
+  useEffect(() => {
+    if (!visible || isVideoMode || Platform.OS === 'web') {
+      if (voiceHologramRef.current) {
+        voiceHologramRef.current.dispose();
+        voiceHologramRef.current = null;
+      }
+      return;
+    }
+
+    let animId = null;
+    const renderLoop = () => {
+      const controller = voiceHologramRef.current;
+      if (controller && !controller.isDisposed) {
+        controller.render();
+      }
+      animId = requestAnimationFrame(renderLoop);
+    };
+    animId = requestAnimationFrame(renderLoop);
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+    };
+  }, [visible, isVideoMode]);
 
   // 3D Animated Hologram Particle Sphere & Audio Frequency Equalizer (Voice Call Mode)
   useEffect(() => {
@@ -807,8 +863,10 @@ export default function MansakhaCallModal({
     >
       <View style={styles.fullScreenOverlay}>
         {/* Tier 0: Full Screen 3D Avatar (Rendered only when Video Call is activated) */}
-        {isVideoMode && Platform.OS === 'web' && (
-          <div ref={avatar3dContainerRef} style={styles.fullscreenAvatarContainer} />
+        {isVideoMode && (
+          Platform.OS === 'web'
+            ? <div ref={avatar3dContainerRef} style={styles.fullscreenAvatarContainer} />
+            : <AvatarGLView ref={avatarControllerRef} style={styles.fullscreenAvatarContainerNative} />
         )}
 
         {/* Tier 1: Top Header Bar (Floating over avatar / voice screen) */}
@@ -861,8 +919,10 @@ export default function MansakhaCallModal({
 
         {/* Tier 2: Center Stage (3D Hologram Particle Sphere in Voice Call; User PiP in Video Call) */}
         <View style={styles.centerStage} pointerEvents="box-none">
-          {!isVideoMode && Platform.OS === 'web' && (
-            <canvas ref={canvasRef} style={styles.voiceHologramCanvas} />
+          {!isVideoMode && (
+            Platform.OS === 'web'
+              ? <canvas ref={canvasRef} style={styles.voiceHologramCanvas} />
+              : <VoiceHologramGLView ref={voiceHologramRef} style={styles.voiceHologramGLContainer} speechState={aiSpeechState} />
           )}
 
           {/* Floating Picture-in-Picture Card for User (WhatsApp Style in bottom-right corner) */}
@@ -961,13 +1021,18 @@ export default function MansakhaCallModal({
 
 const styles = StyleSheet.create({
   fullScreenOverlay: {
-    position: 'fixed',
+    // 'fixed' position and vw/dvh units are web-only - resolved via
+    // react-native-web's own CSS output there, but meaningless to React
+    // Native's native StyleSheet (silently dropped, not an error), which
+    // left this container's size undefined on native. 'absolute' + all 4
+    // offsets at 0 is the RN-native equivalent for filling the parent.
+    position: Platform.OS === 'web' ? 'fixed' : 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    width: '100vw',
-    height: '100dvh',
+    width: Platform.OS === 'web' ? '100vw' : '100%',
+    height: Platform.OS === 'web' ? '100dvh' : '100%',
     minHeight: '100%',
     backgroundColor: '#0B141A',
     zIndex: 999999,
@@ -1084,6 +1149,14 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     display: 'block',
   },
+  // Native equivalent of voiceHologramCanvas - '94vw' is a web-only unit
+  // (see fullscreenAvatarContainerNative's own note), so this uses a plain
+  // numeric width capped by the device's own screen width instead.
+  voiceHologramGLContainer: {
+    width: Math.min(360, SCREEN_WIDTH * 0.94),
+    height: Math.min(360, SCREEN_WIDTH * 0.94),
+    alignSelf: 'center',
+  },
   fullscreenAvatarContainer: {
     position: 'absolute',
     top: 0,
@@ -1092,6 +1165,22 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: '100vw',
     height: '100dvh',
+    zIndex: 0,
+    overflow: 'hidden',
+    backgroundColor: '#0B141A',
+  },
+  // Native GLView needs its own variant - '100vw'/'100dvh' are web-only CSS
+  // units that React Native's StyleSheet doesn't understand (silently
+  // dropped, not an error), which left the GLView with no resolved
+  // width/height and an empty (0x0) GL drawing buffer - nothing rendered,
+  // even though the component mounted fine. Plain absolute-fill (all 4
+  // offsets at 0) is enough to size a child to its parent on native.
+  fullscreenAvatarContainerNative: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 0,
     overflow: 'hidden',
     backgroundColor: '#0B141A',

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft, CheckCircle2, XCircle, FileText, User, Phone, Home } from 'lucide-react';
 import { useInterventionRequestDetail, useReviewInterventionRequest } from '../services/hooks';
 
@@ -27,7 +27,7 @@ function ContactDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <User size={15} className="text-[#3D5A80]" />
+        <User size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Contact Details</h3>
       </div>
       <p className="text-[11px] text-gray-400">
@@ -42,7 +42,7 @@ function ContactDetailsCard({ r }) {
       {r.victimContactNumber && (
         <div>
           <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
-          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
             <Phone size={12} /> {r.victimContactNumber}
           </a>
         </div>
@@ -63,7 +63,7 @@ function ProofDocumentsCard({ documents }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <FileText size={15} className="text-[#3D5A80]" />
+        <FileText size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Proof Documents</h3>
       </div>
       {documents?.length > 0 ? (
@@ -96,18 +96,18 @@ export default function InterventionRequestDetail() {
   const [reason, setReason] = useState('');
   const [actionError, setActionError] = useState(null);
 
+  usePageHeader({ title: 'Intervention Request' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Intervention Request"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Intervention Request">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This request could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This request could not be located.'}
+      </div>
     );
   }
 
@@ -133,7 +133,7 @@ export default function InterventionRequestDetail() {
   };
 
   return (
-    <StaffLayout title="Intervention Request">
+    <>
       <div className="space-y-6">
         <button onClick={() => navigate('/protectionofficer/intervention-requests')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 transition">
           <ArrowLeft size={14} /> Back to Intervention Requests
@@ -237,6 +237,6 @@ export default function InterventionRequestDetail() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

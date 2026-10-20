@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useCounsellorDashboard, useReportsAnalytics } from '../services/hooks';
 
 // Counsellor's own Analysis page - simplified to just Counsellor's own
@@ -24,6 +24,7 @@ const RANGE_MAP = {
 };
 
 export default function Analysis() {
+  usePageHeader({ title: 'Analysis' });
   const [timeRange, setTimeRange] = useState('Last 30 Days');
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
@@ -53,7 +54,7 @@ export default function Analysis() {
   const moderate = counsellorData?.moderate || 0;
 
   return (
-    <StaffLayout title="Analysis">
+<>
       <div className="space-y-6">
 
         {/* TOP CONTROLS & DATE FILTER */}
@@ -65,7 +66,7 @@ export default function Analysis() {
                 onClick={() => setTimeRange(r)}
                 className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs font-semibold transition ${
                   timeRange === r
-                    ? 'bg-[#519BCE]/15 text-[#519BCE]'
+                    ? 'bg-brand-700/15 text-brand-600'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
@@ -189,7 +190,7 @@ export default function Analysis() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }
 
@@ -366,7 +367,7 @@ function InterventionDonut({ interventionPhases }) {
             cy="18"
             r="15.91549430918954"
             fill="none"
-            stroke="#3B82F6"
+            stroke="#5b62c2"
             strokeWidth="4"
             strokeDasharray={`${inProgressPct}, 100`}
             strokeDashoffset={`${-completedPct}`}
@@ -399,7 +400,7 @@ function InterventionDonut({ interventionPhases }) {
           <span>Completed Actions <span className="text-gray-400 ml-2">{Math.round(completedPct)}%</span></span>
         </div>
         <div className="flex items-center gap-3">
-          <div className="w-3 h-3 rounded-full bg-blue-500 shadow-sm ring-2 ring-blue-100"></div>
+          <div className="w-3 h-3 rounded-full bg-brand-500 shadow-sm ring-2 ring-brand-100"></div>
           <span>In Progress Queue <span className="text-gray-400 ml-2">{Math.round(inProgressPct)}%</span></span>
         </div>
         <div className="flex items-center gap-3">
@@ -413,7 +414,7 @@ function InterventionDonut({ interventionPhases }) {
 
 function StatCard({ title, value, subtitle, accent = 'gray' }) {
   const accents = {
-    blue: 'border-blue-200 bg-blue-50/50 text-blue-600',
+    blue: 'border-brand-200 bg-brand-50/50 text-brand-600',
     amber: 'border-amber-200 bg-amber-50/50 text-amber-600',
     orange: 'border-orange-200 bg-orange-50/50 text-orange-600',
     red: 'border-red-200 bg-red-50/50 text-red-600',

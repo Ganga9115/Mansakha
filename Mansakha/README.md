@@ -45,18 +45,18 @@ Under the **Scheduled Castes and the Scheduled Tribes (Prevention of Atrocities)
 **Mansakha (मानसखा — *"Mind Matters — We Are Listening"*)** resolves PS 094 by replacing disconnected physical paper trails with a synchronized dual-interface ecosystem:
 
 - **For the Beneficiary / Survivor**: A single, continuous mobile companion providing 24/7 empathetic conversational grounding, proactive distress monitoring, a real-time 3-stage compensation tracker, and one-tap emergency SOS dispatch.
-- **For Government Stakeholders**: Ten role-scoped web portals connected to a single continuous case docket (`DOC-XXXXXX`). Every agency works from its own specialized queue while reading from and writing to a single shared truth.
+- **For Government Stakeholders**: Eleven role-scoped web portals connected to a single continuous case docket (`DOC-XXXXXX`). Every agency works from its own specialized queue while reading from and writing to a single shared truth.
 
 ---
 
 ## 2. Core Architectural Innovations & System Logics
 
-The architecture is built upon six foundational structural logics designed to resolve the systemic delays and institutional trauma of atrocity case management:
+The architecture is built upon seven foundational structural logics designed to resolve the systemic delays and institutional trauma of atrocity case management:
 
 ```mermaid
 graph TD
     subgraph "Logic 1: Single Continuous Docket"
-        DOC["Master Docket Number: DOC-XXXXXX<br/>One Unified Record Across All 10 Government Desks"]
+        DOC["Master Docket Number: DOC-XXXXXX<br/>One Unified Record Across Every Government Desk"]
     end
 
     subgraph "Logic 2: Proof Travels With The Case"
@@ -71,11 +71,11 @@ graph TD
         Threat["Rule-Based Threat Tier<br/>Tiers: Routine | Guarded | Elevated | Severe<br/>External Physical Danger -> Police / Protection"]
     end
 
-    subgraph "Logic 4: Structural DVMC Escalation"
-        SLA["Statutory Deadlines (48h DLSA Counsel SLA, Compensation Milestones)"]
-        Checker["Automated Background Escalation Daemon"]
-        Collector["Direct Task Placement on District Collector Desk (DVMC)"]
-        SLA --> Checker --> Collector
+    subgraph "Logic 4: Overdue-Referral Visibility"
+        SLA["Tracked Deadlines (48h DLSA Counsel Deadline, 7-Day Open-Referral Threshold)"]
+        Roster["Coordination Roster Flags Overdue Referrals"]
+        Admin["District / State / National Administration & Ministry Review"]
+        SLA --> Roster --> Admin
     end
 
     DOC --- Upload
@@ -102,7 +102,7 @@ Once verified, downstream agency referrals and payment milestones unlock automat
 To prevent clinical trauma from being confused with physical witness intimidation, the system computes two completely independent risk metrics with mutually exclusive vocabularies:
 
 - **Axis A: AI-Derived Distress Score ($0-100$) — Mental Health State**:
-  - Risk Levels: **Low** ($0-29$), **Moderate** ($30-59$), **High** ($60-79$), **Critical** ($80-100$).
+  - Risk Levels: **Low** ($0-29$), **Moderate** ($30-54$), **High** ($55-79$), **Critical** ($80-100$).
   - Evaluates internal psychological trauma, depression, voice stress, and affective distress from check-ins, chats, voice notes, and IVRS calls.
   - Directly drives the **Counsellor** therapeutic care queue.
 - **Axis B: Rule-Based Threat Tier — Physical Security & Danger**:
@@ -115,45 +115,41 @@ To prevent clinical trauma from being confused with physical witness intimidatio
     - *Not Yet Assessed*: Initial state before IO status entry and SOS logs.
   - Directly drives the **Protection Officer** and **Police** physical security queue.
 
-### 4. Structural Escalation to the District Collector (DVMC Oversight)
+### 4. Overdue-Referral Visibility for Administration
 
-Statutory compliance is enforced algorithmically. An automated escalation daemon continuously scans all active cases against statutory timelines:
+Delays are made visible rather than left buried in paper registers:
 
-- If DLSA fails to assign panel counsel within the mandatory **48-hour SLA**,
-- If chargesheet status is not updated within statutory periods, or
-- If approved compensation stages remain undisbursed,
-  the task automatically elevates onto the **District Collector’s** dashboard, operationalizing the statutory oversight mandate of the District Vigilance & Monitoring Committee (DVMC).
+- Every inter-agency referral carries its open date; any referral left **open for more than 7 days** is flagged as overdue on the **Coordination Roster** that District, State, and National Administration and the Ministry all review.
+- When a DLSA Coordinator assigns panel counsel, a **48-hour deadline** is recorded against that referral.
+
+Overdue items are surfaced for human oversight and directives — the system flags them; an official decides what happens next.
 
 ### 5. Transparent 3-Stage Statutory Compensation Tracker
 
 Grounded directly in the **Dr. Ambedkar National Relief Scheme** and the PoA Act statutory compensation schedules, the victim interface displays an auditable 3-stage visual progress tracker:
 
-- **Stage 1 (Immediate Relief / 25%)**: Disbursed upon FIR registration and initial welfare verification.
-- **Stage 2 (Investigation Complete / 50%)**: Disbursed when the Investigating Officer files the chargesheet in the Special Court.
+- **Stage 1 (Immediate Relief / 50%)**: Disbursed upon FIR registration and initial welfare verification.
+- **Stage 2 (Investigation Complete / 25%)**: Disbursed when the Investigating Officer files the chargesheet in the Special Court.
 - **Stage 3 (Trial Conclusion / 25%)**: Disbursed upon trial verdict or final judicial pronouncement.
 
 ### 6. One-Tap Emergency Multi-Agency Fan-Out
 
 Activating the emergency SOS trigger executes a coordinated parallel protocol:
 
-1. Opens the native device dialler directly to the **Police Control Room (PCR 100)** or **Atrocity Helpline (14566)**.
+1. Opens the native device dialler directly to the **Police Control Room (100)**.
 2. Captures GPS coordinates (best-effort, with explicit user permission).
-3. Simultaneously broadcasts real-time high-priority alerts to the **Assigned Counsellor**, **District Administration**, **State Administration**, and **Protection Officer**.
+3. Simultaneously raises a real-time high-priority alert to the **Assigned Counsellor** (auto-assigning the least-loaded counsellor nationwide if none exists yet) and opens a real, actionable referral with the survivor's own **Protection Officer** — deliberately scoped to these two roles only, so the survivor's most sensitive moment reaches the people positioned to act immediately rather than being diffused across the full administrative chain.
 
 ### 7. Telephonic IVRS Outreach & Automated Disengagement Logic
 
-To ensure universal accessibility for rural, illiterate, or non-smartphone populations, the platform integrates automated Interactive Voice Response System (IVRS) telephony:
+To ensure universal accessibility for rural, illiterate, or non-smartphone populations, the platform is architected around a telecom-agnostic dispatch queue that every outbound IVRS call and SMS check-in prompt passes through — attempted, retried with backoff, and logged the same way for every channel, so plugging in a live telecom gateway is a credentials change, not a re-architecture:
 
-- **Automated Outbound Calling**: Outbound check-in calls are dispatched in the survivor's regional language via telecom gateways connected to the National Atrocity Prevention Helpline (14566).
-- **The 5-Second Disengagement Protocol**:
-  - If an IVRS check-in call is **unanswered**, OR
-  - If the survivor answers but disconnects within **$< 5$ seconds**,
-    the system algorithmically flags this as potential disengagement, silent distress, or active intimidation. It immediately assigns a human counsellor and issues a high-priority follow-up alert.
+- **Automated Outbound Calling (queued, gateway pending)**: The system already decides *when* a survivor is due for a check-in call and queues it for dispatch; placing the live call requires telephony credentials (e.g. Exotel) that are not yet provisioned in this build, so calls are queued and logged rather than actually placed today.
+- **Disengagement Detection — live today via check-ins, designed for IVRS**: The mechanism that is fully wired and running right now flags a survivor who has gone quiet for **7 days** across chat, check-ins, and calls — it auto-assigns a human counsellor (nationwide least-loaded, if none is assigned yet) and raises a high-priority follow-up alert. Once live telephony is connected, an **unanswered call, or one disconnected within 5 seconds**, is designed to feed the same signal immediately rather than waiting out the 7-day window.
 - **Multimodal Acoustic Scoring on Completed Calls**:
-  - When an IVRS call is completed, the voice audio is passed through local ASR and acoustic prosody models.
+  - When a call is completed, the voice audio is passed through local ASR and acoustic prosody models.
   - Extracts vocal tension ($F_0$ pitch instability, jitter, shimmer), transcribes text, evaluates trauma sentiment/emotion, and calculates the Dynamic Distress Score asynchronously.
-- **Ministry-Level Telephony Audit Log**:
-  - All queued, attempted, and completed IVRS calls are logged in a central registry accessible to State and National Ministry officials to monitor rural outreach parity.
+- **Ministry-Level Telephony Audit Log**: Every queued, attempted, retried, and delivered dispatch — IVRS calls and SMS prompts alike — is logged in a central registry the National Ministry dashboard already reads from, so outreach parity is auditable the moment the telecom gateway goes live.
 
 ---
 
@@ -165,11 +161,11 @@ The platform is structured into four sovereign tiers, ensuring data privacy and 
 graph TD
     subgraph "Client Layer"
         MobileApp["Victim Mobile Application<br/>24/7 AI Companion, 3D Avatar, Check-Ins, SOS"]
-        WebPortal["Multi-Agency Governance Portals<br/>10 Specialized Official Role Interfaces"]
+        WebPortal["Multi-Agency Governance Portals<br/>11 Specialized Official Role Interfaces"]
     end
 
     subgraph "Central Orchestration Gateway"
-        Gateway["API Orchestrator & Rule Engine<br/>Auth, RBAC, Dispatch Workers, Background Daemons"]
+        Gateway["API Orchestrator & Rule Engine<br/>Auth, RBAC, Dispatch & Sync Workers"]
         Database[("Relational Case Data Store<br/>Cases, Proofs, Distress Scores, Referrals, Audit Logs")]
     end
 
@@ -178,8 +174,8 @@ graph TD
         LocalLLM["Local Quantized LLM Daemon (gemma3:4b)<br/>Empathetic Grounding, Check-in Logic, Case Note Summaries"]
     end
 
-    MobileApp <-->|Encrypted REST / WebSockets| Gateway
-    WebPortal <-->|Encrypted REST / WebSockets| Gateway
+    MobileApp <-->|HTTPS REST| Gateway
+    WebPortal <-->|HTTPS REST| Gateway
     Gateway <-->|Relational Queries & Auth| Database
     Gateway <-->|Internal Service Calls| MLMicroservice
     Gateway <-->|Local Inference Prompts| LocalLLM
@@ -189,8 +185,8 @@ graph TD
 
 | System Layer                             | Architectural Role & Scope | Key Operational Responsibilities                                                                                                                                                     |
 | :--------------------------------------- | :------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Client Experience Layer**        | Mobile & Web Interfaces    | Native mobile experience for victims (Android/iOS/Web); ten dedicated, role-scoped browser portals for government officials.                                                         |
-| **Central Orchestration Gateway**  | API & Rules Engine         | Enforces Role-Based Access Control (RBAC), manages the single case docket lifecycle, executes automated background escalation daemons, and maintains immutable audit logs.           |
+| **Client Experience Layer**        | Mobile & Web Interfaces    | Native mobile experience for victims (Android/iOS/Web); eleven dedicated, role-scoped browser portals for government officials.                                                      |
+| **Central Orchestration Gateway**  | API & Rules Engine         | Enforces Role-Based Access Control (RBAC), manages the single case docket lifecycle, runs background dispatch and court-status sync workers, and writes an audit log of every change. |
 | **Relational Data Store**          | Relational Database        | Secure persistence for multi-agency case records, evidence documents (behind time-limited signed URLs), longitudinal distress timeseries, and inter-agency referral logs.            |
 | **Speech & Acoustic Microservice** | Edge ML Inference          | Local execution of Indian-accented speech-to-text transcription, acoustic vocal prosody extraction ($F_0$ pitch, jitter, shimmer), and multilingual trauma emotion classification. |
 | **Local LLM Daemon**               | Generative Reasoning       | Sovereign, on-premises language model generating empathetic conversational therapy turns, adaptive check-in questions, clinical rationales, and objective case notes.                |
@@ -203,7 +199,7 @@ graph TD
 
 ```mermaid
 graph TD
-    Reg["1. Case Registration (Data Operator)<br/>Master Docket DOC-XXXXXX Issued"] --> AssignIO["2. Auto-Assignment to Police Station IO<br/>(Station with FIR Jurisdiction)"]
+    Reg["1. Case Registration (Victim Self-Registration or District Administration Intake)<br/>Master Docket DOC-XXXXXX + Login Credentials Issued"] --> AssignIO["2. Auto-Assignment to Police Station IO<br/>(Station with FIR Jurisdiction)"]
     AssignIO --> Investigate["3. IO Investigation Phase<br/>Arrest, Bail, and Witness Threat Tracking"]
   
     Investigate --> ThreatCheck{"Witness Threat Detected?"}
@@ -212,15 +208,16 @@ graph TD
     AlertPO --> CaseProgress
   
     CaseProgress --> Chargesheet{"Chargesheet Filed in Court?"}
-    Chargesheet -->|Yes| UnlockStage2["case_stage: Investigation -> Trial<br/>Compensation Stage 2 Unlocked (50%)"]
+    Chargesheet -->|Yes| UnlockStage2["case_stage: Investigation -> Trial<br/>Compensation Stage 2 Unlocked (25%)"]
     Chargesheet -->|No| Investigate
   
     UnlockStage2 --> Trial["4. Special Court Trial Proceedings<br/>DLSA Panel Advocate Represents Victim"]
-    Trial --> CaseClose["5. Case Verdict & Formal Closure (Data Operator)<br/>Compensation Stage 3 Unlocked (25%)"]
+    Trial --> CaseClose["5. Court Disposes the Case (tracked by CNR)<br/>case_stage: Trial -> Compensation<br/>Compensation Stage 3 Unlocked (25%)"]
   
     CaseClose --> RehabOptIn{"Victim Opts into Rehabilitation?"}
     RehabOptIn -->|Yes| RehabCentre["Rehabilitation Officer Manages Centre Recovery<br/>(Vocational Skills / Housing / DMHP Therapy)"]
-    RehabOptIn -->|No| Deactivate["Account Securely Archived on Victim Request"]
+    RehabOptIn -->|No| Complete["6. Case Completed Automatically<br/>Compensation fully paid + rehabilitation resolved<br/>-> docket credentials expire"]
+    RehabCentre -->|Closed by Rehabilitation Officer| Complete
 ```
 
 ### B. Proof Routing & Downstream Agency Activation
@@ -235,7 +232,7 @@ graph LR
     TypeSplit -->|Rehabilitation| Admin["District Administration<br/>Approves Centre Placement"]
   
     DWO -->|Verified| RefDWO["Referral Activated:<br/>Immediate Relief & Compensation Tracked"]
-    DLSA -->|Verified| RefDLSA["Referral Activated:<br/>Panel Counsel Assigned within 48h SLA"]
+    DLSA -->|Verified| RefDLSA["Referral Activated:<br/>Panel Counsel Assigned (48h Deadline Recorded)"]
     PO -->|Verified| RefPO["Referral Activated:<br/>Threat Tier & Escort Deployment Tracked"]
     Admin -->|Verified| RefAdmin["Referral Activated:<br/>Rehabilitation Officer Assigned"]
   
@@ -247,38 +244,39 @@ graph LR
 
 ---
 
-## 5. Directory of the 10 Specialized Government Portals
+## 5. Directory of the 11 Specialized Government Portals
 
 Each official portal is scoped to a single-purpose statutory queue, preventing cognitive overload and ensuring clear accountability:
 
 ```
-National Super Admin (Ministry of Social Justice and Empowerment)
- └── State Administrator (State Social Welfare & Home Departments)
-      └── District Administrator (District Magistrate / Social Welfare Office)
-           ├── Assigned Counsellor (Clinical Psychologist / DMHP Specialist)
-           ├── Investigating Officer (Police Station / DSP Investigating Unit)
-           ├── District Welfare Officer (Disbursing Authority for Compensation)
-           ├── DLSA Coordinator (District Legal Services Authority / NALSA)
-           ├── Protection Officer (Witness & Victim Protection Cell)
-           ├── District Collector (Chair, District Vigilance & Monitoring Committee)
-           ├── Rehabilitation Officer (DMHP / Centre-Specific Recovery Staff)
-           └── Data Operator (Front-Desk Registration & Formal Case Closure)
+Ministry of Social Justice and Empowerment (Super Admin: Accounts, Configuration, Audit Log)
+ └── National Administration (Nationwide Oversight Across States)
+      └── State Administration (State Social Welfare & Home Departments)
+           └── District Administration (District Magistrate / Social Welfare Office)
+                ├── Assigned Counsellor (Clinical Psychologist / DMHP Specialist)
+                ├── Investigating Officer (Police Station / DSP Investigating Unit)
+                ├── District Welfare Officer (Disbursing Authority for Compensation)
+                ├── DLSA Coordinator (District Legal Services Authority / NALSA)
+                │    └── Legal Representative (DLSA-Assigned Panel Advocate)
+                ├── Protection Officer (Witness & Victim Protection Cell)
+                └── Rehabilitation Officer (DMHP / Centre-Specific Recovery Staff)
 ```
+
+Survivors register themselves through the mobile app (or are registered by District Administration), and a case completes automatically once its compensation is fully paid and rehabilitation is resolved — so no separate front-desk registration or case-closure role is needed.
 
 | Portal Role                              | Jurisdictional Level | Statutory Function under the Act                           | Core Responsibilities & Queue Scope                                                                                                                 |
 | :--------------------------------------- | :------------------- | :--------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Ministry (MoSJE)**               | National             | National nodal authority under PoA Act.                    | Configures nationwide relief rules, provisions official accounts, audits compliance across states, inspects immutable audit logs.                   |
+| **Ministry (MoSJE)**               | National             | National nodal authority under PoA Act.                    | Provisions official accounts, configures system reference data (case types, intervention types, languages, channels, police stations), reviews counsellor and coordination-role performance, and inspects the audit log. |
+| **National Administration**        | National             | Nationwide oversight across states.                        | State-by-state dashboards, nationwide distress analysis and alerts, coordination-role performance, and report generation.                          |
 | **State Administration**           | State                | State Social Welfare & Home oversight.                     | Analyzes cross-district distress heatmaps, identifies systemic atrocity spikes, balances inter-district counsellor and protection resources.        |
-| **District Administration**        | District             | District Magistrate administrative machinery.              | Oversees all district queues, reviews cross-agency bottlenecks, and approves specialized rehabilitation placements.                                 |
-| **Data Operator**                  | Desk / Helpline      | Front-desk intake & helpline registration.                 | Registers incoming cases, issues master docket numbers (`DOC-XXXXXX`), and holds exclusive auditable authority to formally mark cases `Closed`. |
-| **Assigned Counsellor**            | Clinical             | Mental health professional (DMHP / clinical).              | 24/7 empathetic chat monitoring, reviews 4-signal explainable distress triage, and reviews/signs AI-drafted clinical case notes.                    |
+| **District Administration**        | District             | District Magistrate administrative machinery.              | Registers survivors, oversees all district queues, reviews overdue cross-agency referrals, and refers survivors to rehabilitation.                  |
+| **Assigned Counsellor**            | Clinical             | Mental health professional (DMHP / clinical).              | Monitors assigned survivors' check-ins and chats, messages them in-app, reviews the 4-signal explainable distress breakdown, and reviews AI-drafted case notes alongside their own. |
 | **Investigating Officer (IO)**     | Police Station       | Investigating Police Officer (DSP rank).                   | Maintains custody of arrest, bail, and chargesheet facts; alerts Protection Officer on witness intimidation; advances stage to`Trial`.            |
 | **District Welfare Officer (DWO)** | District             | Disbursing authority for statutory relief.                 | Approves fast Immediate Relief and verifies + disburses 3-stage statutory compensation directly to victim bank accounts.                            |
-| **DLSA Coordinator**               | District             | District Legal Services Authority (NALSA).                 | Administers free legal aid gated on caste proof; enforces the**48-hour SLA** for panel counsel assignment; monitors trial hearings.           |
-| **Protection Officer**             | District / Division  | Witness and victim protection cell.                        | Evaluates physical threat tiers, deploys police escorts and safe houses, and coordinates rapid emergency SOS interventions.                         |
-| **District Collector**             | District             | Chair of District Vigilance & Monitoring Committee (DVMC). | Automatically receives all escalated tasks—missed 48h legal SLAs, stale referrals, unpaid compensation stages—and issues binding directives.      |
+| **DLSA Coordinator**               | District             | District Legal Services Authority (NALSA).                 | Administers free legal aid gated on caste proof; assigns panel counsel and records a **48-hour deadline** on each assignment; monitors trial hearings. |
+| **Protection Officer**             | District / Division  | Witness and victim protection cell.                        | Evaluates physical threat tiers, arranges escort or relocation support, and responds to emergency SOS referrals.                                    |
 | **Rehabilitation Officer**         | Centre-Specific      | Government (DMHP) or NGO rehabilitation centre.            | Manages post-verdict long-term recovery plans, skill training, psychosocial rehabilitation, and tracks victim progress until completion.            |
-| **Legal Representative**           | Judicial             | DLSA-assigned panel advocate / Special PP.                 | Accesses legal case files, records court hearing outcomes, and files bail objections on behalf of the victim.                                       |
+| **Legal Representative**           | Judicial             | DLSA-assigned panel advocate / Special PP.                 | Accepts or declines DLSA assignments, accesses legal case files, records hearing notes, and tracks upcoming hearings.                               |
 
 ---
 
@@ -346,8 +344,10 @@ $$
 When communication is text-based only:
 
 $$
-\text{Distress Score} = \left( 0.50 \cdot \text{Sentiment}_{\text{raw}} + 0.35 \cdot \text{Emotion} + 0.15 \cdot \text{EngagementDrop} \right) \times 100
+\text{Distress Score} = \left( \frac{4}{7} \cdot \text{Sentiment}_{\text{raw}} + \frac{2}{7} \cdot \text{Emotion} + \frac{1}{7} \cdot \text{EngagementDrop} \right) \times 100
 $$
+
+(Voice Stress's $0.30$ share from the audio formula above is proportionally redistributed across the remaining three signals — $\approx 57.1\% / 28.6\% / 14.3\%$ — rather than dropped, so a Critical score stays reachable from text alone.)
 
 #### 3. Predictive Escalation Trajectory (OLS Linear Regression)
 
@@ -358,8 +358,10 @@ $$
 $$
 
 $$
-\text{Estimated Days to Critical Threshold} = \frac{80 - S_{\text{latest}}}{m} \quad (\text{when } m > 0)
+\text{Estimated Days to Next Risk Tier} = \frac{T_{\text{next}} - S_{\text{latest}}}{m} \quad (\text{when } m > 0.5 \text{ pts/day},\ T_{\text{next}} \in \{30, 55, 80\})
 $$
+
+The fit uses the case's most recent 3–8 readings, and a crossing is surfaced as a **Predicted Escalation** only when it falls within the next 14 days.
 
 ### Clinical Distress Thresholds vs. Statutory Threat Tiers
 
@@ -367,7 +369,7 @@ To ensure clinical staff and police units never conflate psychological trauma wi
 
 | Axis | Metric | Vocabulary Tiers | Primary Signals Evaluated | Responsible Authority & Queue |
 | :--- | :--- | :--- | :--- | :--- |
-| **Internal Mind** | **Dynamic Distress Score (0–100)** | • **Low** ($0-29$)<br>• **Moderate** ($30-59$)<br>• **High** ($60-79$)<br>• **Critical** ($80-100$) | Voice stress ($F_0$, jitter, shimmer), NLP trauma sentiment, multilingual emotion, engagement cadence from mobile check-ins & **IVRS calls**. | **Assigned Counsellor**<br>(Clinical care, therapeutic chat, case notes) |
+| **Internal Mind** | **Dynamic Distress Score (0–100)** | • **Low** ($0-29$)<br>• **Moderate** ($30-54$)<br>• **High** ($55-79$)<br>• **Critical** ($80-100$) | Voice stress ($F_0$, jitter, shimmer), NLP trauma sentiment, multilingual emotion, engagement cadence from mobile check-ins & **IVRS calls**. | **Assigned Counsellor**<br>(Clinical care, therapeutic chat, case notes) |
 | **External Safety** | **Rule-Based Threat Tier** | • **Routine**<br>• **Guarded**<br>• **Elevated**<br>• **Severe** | Investigating Officer's custody facts (`In Custody`, `Out on Bail`, `Absconding`), witness intimidation case tags, and 7-day SOS event history. | **Protection Officer & Police**<br>(Physical security, safe houses, police escorts) |
 
 ---
@@ -388,7 +390,7 @@ graph TD
     subgraph "Procedural Kinematic Controller"
         Breathing["Physiological Breathing Sway (0.28 Hz)"]
         Blinking["Natural Saccadic Blinking Intervals"]
-        EmpathyPose["Affective 5° Head Tilt + Affirmative Nodding"]
+        EmpathyPose["Affective ~3° Head Tilt + Affirmative Nodding"]
         ThinkingPose["Cognitive Lateral Gaze during AI Reasoning"]
     end
 
@@ -414,7 +416,7 @@ graph TD
 - **3D ReadyPlayerMe Male Counsellor**: Professional male model with short hair, trimmed beard, and blue collared polo shirt matching administrative iconography.
 - **Natural Bone Kinematics**: Procedural micro-movements simulating physiological breathing ($0.28\text{ Hz}$), random natural blinking intervals, and eye gaze saccades.
 - **Affective Emotional States**:
-  - **Empathy Mode**: Triggers a gentle $5^\circ$ lateral head tilt ($Z = +0.055\text{ rad}$) and slow affirmative nodding ($0.4\text{ Hz}$) when pain, fear, or trauma keywords are detected.
+  - **Empathy Mode**: Triggers a gentle $\approx 3^\circ$ lateral head tilt ($Z = +0.055\text{ rad}$) and slow affirmative nodding ($0.4\text{ Hz}$) when pain, fear, or trauma keywords are detected.
   - **Thinking Mode**: Slight upward tilt and lateral cognitive glance during AI reasoning turns.
   - **Reassuring Mode**: Direct forward gaze with supportive facial smile morphs.
 - **Boundary-Driven Lip-Sync**: Phonetic mouth shapes dynamically synchronized with speech synthesis syllable boundaries.
@@ -428,63 +430,77 @@ The relational data tier enforces multi-tenant jurisdictional isolation and stri
 
 ```mermaid
 erDiagram
-    JURISDICTIONS ||--o{ PROFILES : contains
-    PROFILES ||--o{ CASES : manages_or_owns
-    CASES ||--o{ DISTRESS_SCORES : tracks
-    CASES ||--o{ CASE_NOTES : contains
-    CASES ||--o{ INTERVENTIONS : requests
-    CASES ||--o{ THREAT_REPORTS : files
-    CASES ||--o{ AGENCY_REFERRALS : routes
-    CASES ||--o{ CASE_DOCUMENTS : stores_proof
-    CASES ||--o{ ALERTS : triggers
+    JURISDICTIONS ||--o{ JURISDICTIONS : "national > state > district"
+    JURISDICTIONS ||--o{ USERS : "case registered in"
+    JURISDICTIONS ||--o{ OFFICIAL_ROLES : scopes
+    OFFICIALS ||--o{ OFFICIAL_ROLES : holds
+    USERS ||--|| USER_IDENTITY : "PII kept separately"
+    USERS ||--o{ INTERACTIONS : "check-ins, chats, calls"
+    INTERACTIONS ||--o{ INTERACTION_SIGNALS : "4 scored signals"
+    INTERACTIONS ||--o{ DISTRESS_SCORES : "scored as"
+    DISTRESS_SCORES ||--o{ ALERTS : "Critical raises"
+    USERS ||--o{ SOS_EVENTS : "Get Help Now"
+    USERS ||--o{ CASE_NOTES : has
+    USERS ||--o{ INTERVENTION_REQUESTS : "relief + proof"
+    USERS ||--o{ AGENCY_REFERRALS : "routed to"
     AGENCY_REFERRALS ||--o{ AGENCY_TASKS : delegates
 
-    PROFILES {
-        uuid id PK
-        string role "victim | counsellor | io | dwo | dlsa | po | dc | ro"
-        string full_name
-        string phone
+    USERS {
+        uuid user_id PK
+        text docket_number "DOC-XXXXXX"
+        uuid case_type_id FK
         uuid jurisdiction_id FK
+        text case_stage "Investigation | Trial | Compensation"
+        uuid assigned_counsellor_id FK
+        uuid station_id FK
+        text cnr_number
+        uuid linked_to_user_id FK "multi-case anchor"
+        timestamptz case_completed_at
     }
 
-    CASES {
-        uuid id PK
-        string docket_number "DOC-XXXXXX"
-        uuid victim_id FK
-        uuid counsellor_id FK
-        string fir_number
-        string police_station
-        string case_stage "investigation | trial | closed | rehab"
-        string current_risk_tier
-        timestamp created_at
+    OFFICIAL_ROLES {
+        uuid official_id FK
+        uuid role_id FK
+        uuid jurisdiction_id FK
+        timestamptz revoked_at
     }
 
     AGENCY_REFERRALS {
-        uuid id PK
-        uuid case_id FK
-        string target_agency "io | dwo | dlsa | protection_officer | collector"
-        string status "pending | verified | escalated | completed"
-        timestamp sla_deadline
+        uuid referral_id PK
+        uuid user_id FK
+        text referred_to_role
+        text status "Open | Resolved"
+        jsonb metadata "assigned lawyer, 48h deadline, compensation stages"
+        timestamptz created_at
+        timestamptz resolved_at
     }
 
     DISTRESS_SCORES {
-        uuid id PK
-        uuid case_id FK
-        float score
-        string risk_level
-        float sentiment_score
-        float voice_stress_score
-        float emotion_score
-        float engagement_drop
-        timestamp created_at
+        uuid score_id PK
+        uuid user_id FK
+        uuid interaction_id FK
+        numeric score_value "0-100"
+        uuid risk_level_id FK
+        text explanation
+        text model_version
     }
 
     ALERTS {
-        uuid id PK
-        uuid case_id FK
-        string alert_type "spike | critical | sos | sla_breach"
-        boolean resolved
-        timestamp created_at
+        uuid alert_id PK
+        uuid user_id FK
+        uuid distress_score_id FK
+        uuid alert_status_id FK
+        timestamptz triggered_at
+        timestamptz resolved_at
+    }
+
+    SOS_EVENTS {
+        uuid sos_event_id PK
+        uuid user_id FK
+        jsonb location
+        timestamptz triggered_at
+        timestamptz acknowledged_at
+        timestamptz resolved_at
     }
 ```
 
@@ -492,21 +508,22 @@ erDiagram
 
 ## 9. Sovereign Edge Deployment, Privacy & Feasibility Plan
 
-### 1. 100% Sovereign Edge Deployment (Zero External Cloud LLM Costs)
+### 1. Sovereign AI Deployment Model (No Commercial LLM APIs)
 
-- **Local On-Premises Execution**: All language modeling (`gemma3:4b`), speech-to-text transcription (`faster-whisper`), and prosody extraction execute on local government hardware (e.g., State Data Centres or local edge servers).
-- **DPDP Act 2023 Compliance**: Zero victim transcripts, voice recordings, or clinical assessments ever leave Indian territorial jurisdiction or traverse third-party commercial APIs.
+- **On-Premises AI Layer**: The language model (`gemma3:4b` via Ollama) and the acoustic/emotion analysis service are built to run on government-controlled hardware (e.g., State Data Centres or district edge servers) instead of a commercial cloud LLM API.
+- **Indian-Language Speech-to-Text**: Voice input is transcribed through IIT Madras SpeechLab's ASR service, falling back to an on-premises `faster-whisper` model.
+- **DPDP Act 2023 Alignment**: No victim transcripts, voice recordings, or clinical assessments are sent to commercial LLM providers.
 
 ### 2. PII Separation & Evidence Security
 
-- **Data Isolation**: Personally Identifiable Information (names, phone numbers, addresses) is stored in isolated tables separated from analytical scoring pipelines.
-- **Short-Lived Signed URLs**: Evidence documents (caste certificates, FIR copies, bank passbooks) are held in encrypted object storage accessible solely via short-lived, time-limited signed URLs.
-- **Immutable Audit Logging**: Every administrative action, case transition, referral verification, and record access is cryptographically recorded in an immutable audit ledger.
+- **Data Isolation**: Personally Identifiable Information (names, phone numbers, addresses) is stored in a separate identity table, apart from the case and scoring records.
+- **Time-Limited Signed URLs**: Evidence documents (caste certificates, FIR copies, bank passbooks) and voice messages are held in encrypted object storage and reached only through signed URLs that expire within an hour.
+- **Audit Logging**: Every create, update, revoke, and export action on cases, referrals, and official accounts is written to an audit log the Ministry can inspect.
 
 ### 3. Rural & Low-Bandwidth Feasibility
 
-- **Low-Bandwidth Mobile Optimization**: The client application is optimized for low-bandwidth 2G/3G mobile networks, using compact JSON payloads and local state caching.
-- **SMS / Offline Fallback**: In remote areas lacking continuous mobile data, lightweight SMS-based check-in prompts provide an unobtrusive fallback channel to maintain baseline monitoring.
+- **Lightweight Data Usage**: Compact JSON payloads, brotli-compressed app bundles, and client-side query caching keep repeat loads small on constrained mobile networks.
+- **SMS / Offline Fallback**: In remote areas lacking continuous mobile data, lightweight SMS-based check-in prompts are architected as an unobtrusive fallback channel (via the same dispatch queue as IVRS) — live the moment a telecom number is provisioned for this deployment.
 
 ### 4. Trauma-Informed Clinical Guardrails
 
@@ -524,17 +541,17 @@ Mansakha Platform
 │
 ├── 1. Client Experience Subsystem (Mobile & Web)
 │   ├── Victim Mobile App (24/7 AI Chat, 3D Avatar Kinematics, Journaling, SOS)
-│   └── Multi-Agency Web Portal (10 Role-Scoped Queues & Administrative Dashboards)
+│   └── Multi-Agency Web Portal (11 Role-Scoped Queues & Administrative Dashboards)
 │
 ├── 2. Central Orchestration & Governance Subsystem
 │   ├── API Gateway, RBAC Security & Session Token Handlers
 │   ├── Multi-Agency Referral Router & Task Dispatch Engine
-│   └── Background SLA Escalation Daemon (DVMC District Collector Integration)
+│   └── Background Workers (Check-in Reminders, Disengagement Detection, Court-Status Sync)
 │
 ├── 3. Relational Data & Compliance Subsystem
 │   ├── Multi-Tenant Jurisdictional Database Schema
 │   ├── Time-Limited Signed Evidence Object Storage
-│   └── Cryptographic Audit Ledger & Compliance Logging
+│   └── Audit Log & Compliance Logging
 │
 ├── 4. Speech & Acoustic Intelligence Subsystem
 │   ├── Indian-Accented Automatic Speech Recognition (ASR)

@@ -99,7 +99,7 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={containerRef}>
-      <button onClick={toggleOpen} className="relative p-1 text-[#3D5A80] hover:opacity-70">
+      <button onClick={toggleOpen} className="relative p-1 text-brand-900 hover:opacity-70">
         <Bell size={20} />
         {unreadCount > 0 && (
           <span className="absolute top-0 right-0 h-2 w-2 bg-red-500 rounded-full"></span>
@@ -208,7 +208,7 @@ export default function NotificationBell() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleViewCase}
-                className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-[#3D5A80] hover:bg-[#31496a] transition"
+                className="flex-1 min-w-[140px] flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-brand-800 hover:bg-[#1a1d45] transition"
               >
                 <ExternalLink size={16} /> View Case
               </button>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, Pressable, StyleSheet, Image } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, Pressable, StyleSheet, Image, Animated } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { spacing } from '../theme/spacing';
@@ -21,11 +21,39 @@ const SIDEBAR = {
   pressedOverlay: 'rgba(255,255,255,0.1)',
 };
 
+// Same gliding-pill mechanism as web-frontend's SidebarGlideNav.jsx /
+// GlideSelect.jsx (one highlight element, animated to whichever row is
+// active, instead of each row just snapping a background color on and off)
+// - Animated.Value + Animated.timing here since there's no CSS transition on
+// native. Fixed row height (not measured) keeps the translateY math exact,
+// same convention as the web version's 44px row + 8px gap.
+const ROW_HEIGHT = 44;
+const ROW_GAP = spacing.sm; // 8
+const STEP = ROW_HEIGHT + ROW_GAP;
+
 // Desktop-tier navigation chrome, rendered as a permanent drawer's
 // `drawerContent`. Receives the same { state, descriptors, navigation }
 // shape react-navigation gives any custom nav surface, so route state
 // stays driven by the navigator - this only renders the chrome.
 export default function SidebarNav({ state, descriptors, navigation, icons = {}, showMyCounsellor = false }) {
+  const visibleRoutes = (state?.routes || []).filter((route) => {
+    if (!icons[route.name]) return false;
+    if (route.name === 'mycounsellor' && !showMyCounsellor) return false;
+    return true;
+  });
+  const activeRouteKey = state?.routes?.[state.index]?.key;
+  const activeIndex = visibleRoutes.findIndex((route) => route.key === activeRouteKey);
+
+  const pillY = useRef(new Animated.Value(Math.max(0, activeIndex) * STEP)).current;
+  const pillOpacity = useRef(new Animated.Value(activeIndex >= 0 ? 1 : 0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(pillY, { toValue: Math.max(0, activeIndex) * STEP, duration: 220, useNativeDriver: false }),
+      Animated.timing(pillOpacity, { toValue: activeIndex >= 0 ? 1 : 0, duration: 150, useNativeDriver: false }),
+    ]).start();
+  }, [activeIndex]);
+
   return (
     <View style={styles.container}>
       {/* Corner cell - pinned to topBarHeight, matching each screen's own
@@ -44,17 +72,15 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
 
       <View style={styles.body}>
         <View style={styles.items}>
-          {state?.routes?.map((route, index) => {
-            // Hide secondary/internal screens that aren't mapped in TAB_ICONS
-            if (!icons[route.name]) return null;
-            
-            // Hide 'mycounsellor' if the user isn't opted in or assigned
-            if (route.name === 'mycounsellor' && !showMyCounsellor) return null;
-
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.pill, { transform: [{ translateY: pillY }], opacity: pillOpacity }]}
+          />
+          {visibleRoutes.map((route, index) => {
             const descriptor = descriptors?.[route.key];
             const options = descriptor?.options || {};
             const label = options.title ?? route.name;
-            const isActive = state.index === index;
+            const isActive = index === activeIndex;
             const iconName = icons[route.name];
 
             return (
@@ -63,7 +89,6 @@ export default function SidebarNav({ state, descriptors, navigation, icons = {},
                 onPress={() => navigation.navigate(route.name)}
                 style={({ pressed }) => [
                   styles.item,
-                  isActive && styles.itemActive,
                   pressed && !isActive && styles.itemPressed,
                 ]}
               >
@@ -119,20 +144,27 @@ const styles = StyleSheet.create({
   },
 
   items: {
+    position: 'relative',
     padding: spacing.xxl,
-    gap: spacing.sm,
+    gap: ROW_GAP,
+  },
+
+  pill: {
+    position: 'absolute',
+    top: spacing.xxl,
+    left: spacing.xxl,
+    right: spacing.xxl,
+    height: ROW_HEIGHT,
+    borderRadius: radius.md,
+    backgroundColor: SIDEBAR.active,
   },
 
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    height: ROW_HEIGHT,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
-  },
-
-  itemActive: {
-    backgroundColor: SIDEBAR.active,
   },
 
   itemPressed: {

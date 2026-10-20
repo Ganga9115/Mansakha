@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight, AlertTriangle } from 'lucide-react';
 import { useLegalAidRequestsList } from '../services/hooks';
 
@@ -36,6 +36,7 @@ function bucketOf(r) {
 }
 
 export default function LegalAidQueue() {
+  usePageHeader({ title: 'Legal Aid Requests' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('New Legal Aid');
   const query = useLegalAidRequestsList();
@@ -44,7 +45,7 @@ export default function LegalAidQueue() {
   const jurisdictionAssigned = query.data?.jurisdictionAssigned !== false;
 
   return (
-    <StaffLayout title="Legal Aid Requests">
+    <>
       <div className="space-y-4">
         {!query.loading && !jurisdictionAssigned && (
           <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm px-4 py-3 rounded-lg">
@@ -64,7 +65,7 @@ export default function LegalAidQueue() {
                 key={s}
                 onClick={() => setTab(s)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  tab === s ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  tab === s ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 {s}
@@ -111,7 +112,7 @@ export default function LegalAidQueue() {
                       <td className="px-6 py-3.5 text-right">
                         <button
                           onClick={() => navigate(`/dlsa/legal-aid-requests/${r.requestId}`)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-semibold transition"
                         >
                           View <ArrowRight size={13} />
                         </button>
@@ -124,6 +125,6 @@ export default function LegalAidQueue() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

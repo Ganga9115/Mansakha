@@ -29,3 +29,17 @@ pitch_emotion_model*.pkl
 **/.cache/
 **/Voice Emotion Dataset/
 *.csv
+
+# Local-only tooling/config - kept on disk, not pushed to GitHub
+# (removed from tracking, this just stops them from being re-added)
+/.agents/
+/.claude/
+/.mcp.json
+/skills-lock.json
+/package.json
+/package-lock.json
+
+# Local reference material and working assets - kept on disk, not tracked
+/Documents/
+/Mansakha/frontend/drive_downloads/
+/Mansakha/frontend/video_build/

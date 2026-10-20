@@ -1,9 +1,22 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { setToken } from '../services/auth';
 import { User, Lock, HeartHandshake, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../context/ToastContext';
+import GlideSelect from '../components/GlideSelect';
+
+// Demo sign-in shortcuts, same idea as the victim app's pre-filled docket -
+// keyed by the role currently selected in the dropdown below, all sharing
+// the one demo password reset across these accounts.
+const ROLE_CREDENTIALS = {
+  'Protection Officer': { identifier: 'porbandarsadarpolicestation.po.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'District Welfare Officer': { identifier: 'dwo.porbandar.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'DLSA Coordinator': { identifier: 'dlsa.porbandar.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'Rehabilitation Officer': { identifier: 'porbandar.ro.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'Investigating Officer': { identifier: 'porbandarsadarpolicestation.io.gu@mansakha.gov.in', password: 'Mansakha@2026' },
+  'Public Prosecutor': { identifier: 'diyareddy.pp-521@mansakha.gov.in', password: 'Mansakha@2026' },
+};
 
 // The second deliberate "shared page" exception (see Login.jsx's own header
 // comment for the first) - a pre-role entry point for the coordination
@@ -43,6 +56,15 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [roleName, setRoleName] = useState(SIGNIN_ROLES[0]);
   const [loading, setLoading] = useState(false);
+
+  // Re-fill the demo credentials whenever the selected role changes, so the
+  // Role dropdown always shows a working default for that role instead of
+  // stale creds left over from the previous selection.
+  useEffect(() => {
+    const creds = ROLE_CREDENTIALS[roleName];
+    setIdentifier(creds?.identifier || '');
+    setPassword(creds?.password || '');
+  }, [roleName]);
 
   const [requirePasswordChange, setRequirePasswordChange] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -115,7 +137,7 @@ export default function SignIn() {
 
   return (
     <div className="flex h-screen w-full font-sans overflow-hidden">
-      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 xl:px-24 bg-gradient-to-br from-[#3D5A80] to-[#519BCE] text-white h-full relative">
+      <div className="hidden lg:flex lg:w-1/2 flex-col justify-center px-16 xl:px-24 bg-gradient-to-br from-brand-900 to-brand-800 text-white h-full relative">
         <div className="mb-12">
           <img src="/logo-3.png" alt="Mansakha" className="h-auto w-64" />
         </div>
@@ -123,11 +145,11 @@ export default function SignIn() {
         <div className="space-y-3 max-w-sm">
           <div className="flex items-center gap-4 p-3.5 rounded-xl bg-white/10 border border-white/10 backdrop-blur-sm">
             <div className="p-2.5 bg-white/10 rounded-lg shrink-0">
-              <HeartHandshake className="w-5 h-5 text-blue-50" />
+              <HeartHandshake className="w-5 h-5 text-brand-50" />
             </div>
             <div>
               <h3 className="font-semibold text-white text-sm mb-0.5">Agency Coordination</h3>
-              <p className="text-xs text-blue-100/80 leading-snug">Work the referrals a District Admin sends your agency for a case they've already reviewed.</p>
+              <p className="text-xs text-brand-100/80 leading-snug">Work the referrals a District Admin sends your agency for a case they've already reviewed.</p>
             </div>
           </div>
         </div>
@@ -146,17 +168,13 @@ export default function SignIn() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-                    <select
+                    <GlideSelect
+                      options={SIGNIN_ROLES}
                       value={roleName}
-                      onChange={(e) => setRoleName(e.target.value)}
-                      onKeyDown={focusOnEnter(emailRef)}
-                      required
-                      className="block w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 bg-white transition-colors focus:outline-none"
-                    >
-                      {SIGNIN_ROLES.map((role) => (
-                        <option key={role} value={role}>{role}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setRoleName(val)}
+                      ariaLabel="Role"
+                      menuWidth={280}
+                    />
                   </div>
 
                   <div>
@@ -173,7 +191,7 @@ export default function SignIn() {
                         onKeyDown={focusOnEnter(passwordRef)}
                         required
                         autoComplete="username"
-                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
                     </div>
                   </div>
@@ -191,7 +209,7 @@ export default function SignIn() {
                         onChange={(e) => setPassword(e.target.value)}
                         onKeyDown={submitOnEnter}
                         required
-                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
                       <button
                         type="button"
@@ -209,7 +227,7 @@ export default function SignIn() {
                     ref={submitButtonRef}
                     type="submit"
                     disabled={loading}
-                    className="w-full bg-[#519BCE] hover:bg-[#4686b3] text-white py-3 rounded-lg text-sm font-semibold shadow-sm shadow-[#519BCE]/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 mt-2"
+                    className="w-full bg-brand-900 hover:bg-brand-800 text-white py-3 rounded-lg text-sm font-semibold shadow-sm shadow-brand-900/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-200 mt-2"
                   >
                     {loading ? 'Signing In...' : 'Sign In'}
                   </button>
@@ -235,7 +253,7 @@ export default function SignIn() {
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
                         minLength={8}
-                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-[#519BCE] focus:border-[#519BCE] text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
+                        className="block w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-800 focus:border-brand-800 text-sm text-gray-800 placeholder-gray-400 transition-colors focus:outline-none"
                       />
                       <button
                         type="button"

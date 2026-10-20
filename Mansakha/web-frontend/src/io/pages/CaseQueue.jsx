@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight } from 'lucide-react';
 import { useCasesList } from '../services/hooks';
 
@@ -29,6 +29,7 @@ const THREAT_TIER_BADGE = {
 };
 
 export default function CaseQueue() {
+  usePageHeader({ title: 'Case Queue' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('Active');
   const query = useCasesList(tab);
@@ -36,7 +37,7 @@ export default function CaseQueue() {
   const stationAssigned = query.data?.stationAssigned !== false;
 
   return (
-    <StaffLayout title="Case Queue">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -56,7 +57,7 @@ export default function CaseQueue() {
                     key={s}
                     onClick={() => setTab(s)}
                     className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                      tab === s ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                      tab === s ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                     }`}
                   >
                     {s === 'Active' ? 'Active' : 'Handed Off'}
@@ -102,7 +103,7 @@ export default function CaseQueue() {
                           <td className="px-6 py-3.5 text-right">
                             <button
                               onClick={() => navigate(`/io/cases/${c.userId}`)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-semibold transition"
                             >
                               View <ArrowRight size={13} />
                             </button>
@@ -117,6 +118,6 @@ export default function CaseQueue() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

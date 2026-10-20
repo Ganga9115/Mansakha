@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { useCounsellorDashboard, useCounsellorAlerts, useScheduledSessions } from '../services/hooks';
 import { Calendar } from 'lucide-react';
 
@@ -21,6 +21,7 @@ function timeAgo(iso) {
 }
 
 export default function CounsellorDashboard() {
+  usePageHeader({ title: 'Counsellor Dashboard' });
   const navigate = useNavigate();
   const { data: counts, loading: countsLoading, error: countsError } = useCounsellorDashboard();
   const { data: alertsData, loading: alertsLoading } = useCounsellorAlerts();
@@ -29,7 +30,7 @@ export default function CounsellorDashboard() {
   const openAlertCount = alertsData?.openCount ?? (alertsData?.alerts || []).filter((a) => a.status === 'Open').length;
 
   return (
-    <StaffLayout title="Counsellor Dashboard">
+    <>
       <div className="space-y-6">
 
         {countsError && (
@@ -80,7 +81,7 @@ export default function CounsellorDashboard() {
             </div>
             <button 
               onClick={() => navigate('/counsellor/alerts')} 
-              className="px-3.5 py-1.5 text-xs font-semibold text-blue-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer shrink-0"
+              className="px-3.5 py-1.5 text-xs font-semibold text-brand-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shadow-xs cursor-pointer shrink-0"
             >
               View All Alerts
             </button>
@@ -99,7 +100,7 @@ export default function CounsellorDashboard() {
                 >
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="font-bold text-gray-900 text-sm truncate">
-                      Case {a.userId.slice(0, 8)}
+                      {a.docketNumber ? `Docket ${a.docketNumber}` : `Case ${a.userId.slice(0, 8)}`}
                     </span>
                   </div>
 
@@ -128,8 +129,8 @@ export default function CounsellorDashboard() {
             <p className="text-xs text-gray-400 py-4">Loading...</p>
           ) : (scheduledData?.sessions || []).length === 0 ? (
             <div className="flex items-center gap-4 py-2">
-              <div className="p-3 bg-blue-50/70 rounded-2xl flex items-center justify-center">
-                <Calendar className="w-6 h-6 text-blue-500" />
+              <div className="p-3 bg-brand-50/70 rounded-2xl flex items-center justify-center">
+                <Calendar className="w-6 h-6 text-brand-500" />
               </div>
               <p className="text-xs text-gray-400 font-medium">No upcoming sessions.</p>
             </div>
@@ -137,7 +138,7 @@ export default function CounsellorDashboard() {
             <div className="divide-y divide-gray-100">
               {scheduledData.sessions.map((s) => (
                 <div key={s.sessionId} className="py-3.5 flex items-center justify-between gap-3 text-xs">
-                  <span className="font-bold text-gray-800 text-sm truncate">Case {s.userId.slice(0, 8)}</span>
+                  <span className="font-bold text-gray-800 text-sm truncate">{s.docketNumber ? `Docket ${s.docketNumber}` : `Case ${s.userId.slice(0, 8)}`}</span>
                   <span className="text-gray-500 font-medium shrink-0">{new Date(s.scheduledAt).toLocaleString()}</span>
                 </div>
               ))}
@@ -146,7 +147,7 @@ export default function CounsellorDashboard() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }
 

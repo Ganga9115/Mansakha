@@ -10,7 +10,7 @@ import { formContentWidth } from '../../shared/theme/layout';
 import { useResponsive } from '../../shared/hooks/useResponsive';
 import Svg, { Path } from 'react-native-svg';
 import TopRightActions from '../../shared/components/TopRightActions';
-import { useCheckin, useLogChatTurn, useChatHistory } from '../../shared/services/hooks';
+import { useCheckin, useLogChatTurn, useChatHistory, useReportSelfHarmRisk } from '../../shared/services/hooks';
 import MansakhaCallModal from '../components/MansakhaCallModal';
 import { useSpeechToText } from '../../shared/hooks/useSpeechToText';
 import { ensureHelplineIfAtRisk, containsSelfHarmRisk } from '../../shared/services/ollamaClient';
@@ -107,6 +107,7 @@ export default function ChatScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const submitMutation = useCheckin();
   const logChatTurn = useLogChatTurn();
+  const reportSelfHarmRisk = useReportSelfHarmRisk();
   const chatHistory = useChatHistory('text');
   // useSpeechToText takes onResult as a plain function argument (see
   // JournalScreen.js's own call, or the hook's own signature) - this used
@@ -119,7 +120,7 @@ export default function ChatScreen({ navigation }) {
   const [models, setModels] = useState([]);
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState('');
-  const [status, setStatus] = useState('Connecting to Ollama...');
+  const [status, setStatus] = useState('Always here to listen.');
 
   // Live Voice Call State
   const [inCall, setInCall] = useState(false);
@@ -186,12 +187,12 @@ export default function ChatScreen({ navigation }) {
       setModels(availableModels.map(m => m.name));
       if (availableModels.length > 0) {
         setModel(availableModels[0].name);
-        setStatus(`● Ollama connected • ${availableModels[0].name}`);
-      } else {
-        setStatus("✕ No models found in Ollama.");
       }
+      // No models found, or the fetch itself failed (e.g. no local Ollama
+      // reachable from this device) - stay on the friendly default caption
+      // rather than surfacing a raw connectivity error to the survivor.
     } catch (e) {
-      setStatus("✕ Cannot connect to Ollama. Ensure Ollama is running.");
+      // Silent - see comment above.
     }
   };
 
@@ -224,6 +225,11 @@ export default function ChatScreen({ navigation }) {
       setStatus(`● Connected • ${model}`);
 
       logChatTurn.mutate({ userMessage: text, aiMessage: reply });
+      // Fire-and-forget, immediate, not gated by logChatTurn's 5000-word
+      // scoring threshold - see the backend route's own comment.
+      if (containsSelfHarmRisk(text)) {
+        reportSelfHarmRisk.mutate({ message: text, channel: 'text' });
+      }
       return reply;
     } catch (e) {
       if (containsSelfHarmRisk(text)) {
@@ -232,13 +238,12 @@ export default function ChatScreen({ navigation }) {
         // user's own message from view) with no reply at all, which would
         // mean a dropped connection at exactly the wrong moment produces
         // zero safety response. Keep it visible and answer deterministically.
-        const safetyReply = ensureHelplineIfAtRisk(text, "I'm having trouble connecting right now, but please don't wait for me.");
+        const safetyReply = ensureHelplineIfAtRisk(text, "I hear you, and I don't want you to wait for a reply from me right now.");
         setMessages([...newMessages, { role: "assistant", content: safetyReply }]);
-        setStatus("✕ Ollama error: " + e.message);
+        reportSelfHarmRisk.mutate({ message: text, channel: 'text' });
         return safetyReply;
       }
       setMessages(currentMsgs);
-      setStatus("✕ Ollama error: " + e.message);
       throw e;
     }
   };

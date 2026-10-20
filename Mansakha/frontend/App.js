@@ -12,6 +12,7 @@ import {
   PublicSans_600SemiBold,
   PublicSans_700Bold,
 } from '@expo-google-fonts/public-sans';
+import { Caveat_600SemiBold, Caveat_700Bold } from '@expo-google-fonts/caveat';
 import { AuthProvider } from './src/user/shared/context/AuthContext';
 import { ToastProvider } from './src/user/shared/context/ToastContext';
 import { LanguageProvider } from './src/user/shared/context/LanguageContext';
@@ -84,6 +85,8 @@ export default function App() {
     PublicSans_500Medium,
     PublicSans_600SemiBold,
     PublicSans_700Bold,
+    Caveat_600SemiBold,
+    Caveat_700Bold,
   });
 
   // Display continuous loading state until fonts load

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { IndianRupee, ShieldCheck, AlertTriangle, CircleCheck } from 'lucide-react';
@@ -98,7 +98,7 @@ function ImmediateReliefCard({ r, referralId, onChanged }) {
           <button
             onClick={handleApprove}
             disabled={approve.loading || assistanceTypes.length === 0 || (assistanceTypes.includes('Financial') && !financialAmount) || (assistanceTypes.includes('Essential Support') && !essentialSupportNotes.trim())}
-            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+            className="px-4 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
           >
             {approve.loading ? 'Approving...' : 'Approve Relief'}
           </button>
@@ -120,7 +120,7 @@ function ImmediateReliefCard({ r, referralId, onChanged }) {
             <button
               onClick={handleMarkProvided}
               disabled={markProvided.loading}
-              className="px-4 py-2 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+              className="px-4 py-2 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
             >
               {markProvided.loading ? 'Updating...' : 'Mark as Provided'}
             </button>
@@ -149,18 +149,18 @@ export default function ReferralRelief() {
   const detailQuery = useReferralDetail(referralId);
   const resolve = useResolveReferral();
 
+  usePageHeader({ title: 'Immediate Relief' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Immediate Relief"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Immediate Relief">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -175,7 +175,7 @@ export default function ReferralRelief() {
   };
 
   return (
-    <StaffLayout title="Immediate Relief">
+    <>
       <div className="space-y-4">
         <ReferralHeader r={r} backTo="/dwo" backLabel="Back to Referral Queue" onResolve={handleResolve} resolveLoading={resolve.loading} />
         <ReferralSubNav base={`/dwo/referrals/${referralId}`} />
@@ -186,6 +186,6 @@ export default function ReferralRelief() {
           <ImmediateReliefCard r={r} referralId={referralId} onChanged={detailQuery.refetch} />
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

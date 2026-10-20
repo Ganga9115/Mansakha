@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft, CheckCircle2, Send, ClipboardList } from 'lucide-react';
 import { useReferralDetail, useAddReferralNote, useResolveReferral } from '../services/hooks';
 import {  } from '../services/taskHooks';
@@ -28,18 +28,18 @@ export default function ReferralDetail() {
   const addNote = useAddReferralNote();
   const resolve = useResolveReferral();
 
+  usePageHeader({ title: 'Referral Detail' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Referral Detail"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Referral Detail">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -66,7 +66,7 @@ export default function ReferralDetail() {
   };
 
   return (
-    <StaffLayout title="Referral Detail">
+    <>
       <div className="space-y-6">
         <button onClick={() => navigate('/rehabilitationofficer')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 transition">
           <ArrowLeft size={14} /> Back to Rehabilitation Plans
@@ -141,7 +141,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleAddNote}
                     disabled={!noteText.trim() || addNote.loading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     <Send size={13} />
                     {addNote.loading ? 'Posting...' : 'Post Update'}
@@ -155,6 +155,6 @@ export default function ReferralDetail() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

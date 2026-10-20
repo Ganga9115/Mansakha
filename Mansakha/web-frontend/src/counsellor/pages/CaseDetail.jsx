@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowUpRight, ArrowDownRight, Minus, MessageCircle, CalendarPlus, ChevronRight, ChevronDown, Repeat, Phone } from 'lucide-react';
 import {
   useCaseDetail,
@@ -61,7 +61,7 @@ function CaseTrendChart({ history }) {
         </div>
         <svg className="flex-1 min-w-0 h-32 overflow-visible" viewBox="0 0 500 100">
           <line x1="0" y1="50" x2="500" y2="50" stroke="#E5E7EB" strokeDasharray="4 4" />
-          <path d={path} fill="none" stroke="#519BCE" strokeWidth="2.5" />
+          <path d={path} fill="none" stroke="#5b62c2" strokeWidth="2.5" />
           {points.map((p, i) => (
             <circle key={i} cx={p.x} cy={p.y} r="4" fill={RISK_DOT_COLOR[p.riskLevel] || '#9CA3AF'}>
               <title>{`${p.label} · ${p.source || 'Unknown source'}`}</title>
@@ -135,6 +135,8 @@ export default function CaseDetail() {
   const [scheduleDate, setScheduleDate] = useState('');
   const toast = useToast();
 
+  usePageHeader({ title: loading || error ? 'Case File' : `Case File: ${data.docketNumber || userId.slice(0, 8)}` });
+
   const handleSchedule = async () => {
     if (!scheduleDate) return;
     try {
@@ -147,10 +149,10 @@ export default function CaseDetail() {
   };
 
   if (loading) {
-    return <StaffLayout title="Case File"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (error) {
-    return <StaffLayout title="Case File"><div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div></StaffLayout>;
+    return <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div>;
   }
 
   const trend = TREND_META[data.trend] || TREND_META.insufficient_data;
@@ -176,14 +178,14 @@ export default function CaseDetail() {
   const allLinkedCases = linkedCasesQuery.data?.cases || [];
   const otherLinkedCases = allLinkedCases.filter((c) => !c.isCurrent);
 
-  // Solid blue (not outline) per explicit request - this is the page's
+  // Solid navy (not outline) per explicit request - this is the page's
   // primary action, so it should read as such against the search bar it
   // now sits next to.
   const chatWithUserButton = (
     <div className="relative inline-block shrink-0">
       <button
         onClick={() => navigate(`/counsellor/case-detail/${userId}/chat`)}
-        className="px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition flex items-center gap-2"
+        className="px-4 py-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition flex items-center gap-2"
       >
         <MessageCircle size={14} /> Chat with User
       </button>
@@ -214,7 +216,7 @@ export default function CaseDetail() {
   );
 
   return (
-    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
+    <>
       <div className="space-y-6">
 
         {/* CASE ACTION BAR */}
@@ -235,8 +237,8 @@ export default function CaseDetail() {
         {/* TOP SUMMARY HEADER */}
         <div className="bg-white p-4 sm:p-5 rounded-xl border border-gray-200/80 shadow-sm grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4 sm:gap-6">
           <div>
-            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case ID</span>
-            <span className="text-sm sm:text-base font-bold text-gray-800 truncate block">{userId.slice(0, 8)}</span>
+            <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Docket Number</span>
+            <span className="text-sm sm:text-base font-bold text-gray-800 truncate block">{data.docketNumber || userId.slice(0, 8)}</span>
           </div>
           <div>
             <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block">Case Stage</span>
@@ -301,14 +303,14 @@ export default function CaseDetail() {
                 </div>
               )}
               {data.explanation && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg text-xs text-gray-700 leading-relaxed">
-                  <span className="font-bold text-[#3D5A80] block mb-1">AI explanation</span>
+                <div className="mt-4 p-3 bg-brand-50 rounded-lg text-xs text-gray-700 leading-relaxed">
+                  <span className="font-bold text-brand-900 block mb-1">AI explanation</span>
                   {data.explanation}
                 </div>
               )}
               {data.suggestedInterventionType && (
-                <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-gray-700">
-                  <span className="font-bold text-[#3D5A80]">AI-suggested intervention:</span> {data.suggestedInterventionType.name} - review before acting.
+                <div className="mt-3 p-3 bg-brand-50 rounded-lg text-xs text-gray-700">
+                  <span className="font-bold text-brand-900">AI-suggested intervention:</span> {data.suggestedInterventionType.name} - review before acting.
                 </div>
               )}
             </div>
@@ -354,7 +356,7 @@ export default function CaseDetail() {
               <button
                 onClick={handleSchedule}
                 disabled={scheduleSession.loading || !scheduleDate}
-                className="w-full px-3 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                className="w-full px-3 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
               >
                 {scheduleSession.loading ? 'Scheduling...' : 'Schedule'}
               </button>
@@ -365,6 +367,6 @@ export default function CaseDetail() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

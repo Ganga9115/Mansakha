@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, ScrollView } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { View, Text, StyleSheet, Pressable, TextInput, Platform, ActivityIndicator, KeyboardAvoidingView, ScrollView, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import {
   useAudioRecorder,
   useAudioRecorderState,
@@ -23,8 +24,33 @@ import { generateInteractiveQuestion, analyzeConversation, OPENING_GREETING, SEC
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import TopRightActions from '../../shared/components/TopRightActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
+import { pickSupportiveQuote } from '../data/supportiveQuotes';
+import { transcribeAudioBlob } from '../../shared/hooks/useSpeechToText';
 
 const TOTAL_QUESTIONS = 15;
+
+// Real Apple emoji artwork (from emoji-datasource-apple), bundled locally so
+// it renders identically on web/Android/iOS instead of relying on each
+// platform's own emoji font - Windows' Segoe UI Emoji looks nothing like
+// Apple's style, which is what these are standing in for everywhere.
+const EMOJI = {
+  pensive: require('../../../../assets/emoji-pensive.png'),
+  confused: require('../../../../assets/emoji-confused.png'),
+  neutral: require('../../../../assets/emoji-neutral.png'),
+  slightlySmiling: require('../../../../assets/emoji-slightly_smiling.png'),
+  grinning: require('../../../../assets/emoji-grinning.png'),
+  handshake: require('../../../../assets/emoji-handshake.png'),
+  speechBalloon: require('../../../../assets/emoji-speech_balloon.png'),
+  thinking: require('../../../../assets/emoji-thinking.png'),
+  sleeping: require('../../../../assets/emoji-sleeping.png'),
+  relieved: require('../../../../assets/emoji-relieved.png'),
+  crying: require('../../../../assets/emoji-crying.png'),
+  angry: require('../../../../assets/emoji-angry.png'),
+  fearful: require('../../../../assets/emoji-fearful.png'),
+  pray: require('../../../../assets/emoji-pray.png'),
+  disappointed: require('../../../../assets/emoji-disappointed.png'),
+  strong: require('../../../../assets/emoji-strong.png'),
+};
 
 export default function CheckinScreen({ navigation }) {
   const toast = useToast();
@@ -49,17 +75,51 @@ export default function CheckinScreen({ navigation }) {
   const [isFinished, setIsFinished] = useState(false);
   const [pastContext, setPastContext] = useState('');
 
-  // One optional voice note for the whole check-in (not per-question - the
-  // backend only accepts a single audioBase64 per submission, same as
-  // ChatScreen.js's own voice-note handling). Recording anywhere in the
-  // flow replaces any earlier clip, since only the most recent one is ever
-  // sent. This is what feeds the Voice Stress signal a real value instead
-  // of the permanent 0 a text/option-only check-in produces - see
-  // analyzeInteractionFromClientAi's own comment on the backend.
+  // Recording is per-question - each question gets its own voice answer,
+  // transcribed to text via transcribeAudioBlob (IIT Madras Speech Lab ASR,
+  // falling back to the local Django/IndicWhisper pipeline - see
+  // useSpeechToText.js) and folded into that question's combinedAnswer, so
+  // it flows through the exact same conversation/analysis pipeline as a
+  // typed or tapped answer - no backend change needed for the text side.
+  // The raw clip (voiceAudioBase64) is still kept and sent once at final
+  // submission for the separate acoustic Voice Stress signal - the backend
+  // only accepts a single audioBase64 per check-in, so whichever question
+  // was recorded most recently is the one that feeds that signal, same as
+  // before.
   const [voiceAudioBase64, setVoiceAudioBase64] = useState(null);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
   const [isTranscribingVoice, setIsTranscribingVoice] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(recorder, 200);
+
+  // The Check-in tab stays mounted under React Navigation's bottom-tab
+  // navigator, so without this, finishing a check-in left isFinished stuck
+  // at true forever - the very next visit to this tab showed the
+  // "Analyzing your responses..." spinner permanently (and hid the quote
+  // box, gated on the same condition) instead of a fresh question 1,
+  // because nothing ever set isFinished back to false. Resetting on focus,
+  // but only when isFinished is already true, means an accidental tab
+  // switch mid check-in doesn't wipe in-progress answers - only returning
+  // after an actual completed submission starts over.
+  useFocusEffect(
+    useCallback(() => {
+      if (isFinished) {
+        setResponses([]);
+        setCurrentQuestion({
+          text: OPENING_GREETING,
+          type: 'single',
+          options: ['I am doing okay', 'I am feeling anxious', 'I need some help', 'Other...']
+        });
+        setSelectedOptions([]);
+        setDraft('');
+        setVoiceAudioBase64(null);
+        setVoiceTranscript('');
+        setSubmitting(false);
+        setIsFinished(false);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isFinished])
+  );
 
   useEffect(() => {
     if (historyQuery.data?.history) {
@@ -111,15 +171,26 @@ export default function CheckinScreen({ navigation }) {
       });
       const base64Data = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
       setVoiceAudioBase64(base64Data);
-      toast.success('Voice note attached to this check-in.');
+
+      // Transcription runs quietly in the background - no toast either way,
+      // success or failure. If it fails, the raw clip is still kept for the
+      // acoustic Voice Stress signal, so there's nothing the user needs to
+      // be alarmed about or act on.
+      const result = await transcribeAudioBlob(blob, 'english');
+      if (result && result.transcript) {
+        setVoiceTranscript(result.transcript);
+      }
     } catch (err) {
-      toast.error('Could not process the recording.');
+      // Silent - see comment above.
     } finally {
       setIsTranscribingVoice(false);
     }
   };
 
-  const discardVoiceNote = () => setVoiceAudioBase64(null);
+  const discardVoiceNote = () => {
+    setVoiceAudioBase64(null);
+    setVoiceTranscript('');
+  };
 
   // Only ever used from question 3 onward (questions 1-2 are fixed and
   // identical for every user - see OPENING_GREETING/SECOND_QUESTION) and
@@ -227,8 +298,11 @@ export default function CheckinScreen({ navigation }) {
       });
       setSelectedOptions([]);
       setDraft('');
+      setVoiceTranscript('');
     } catch (err) {
-      toast.error('Ollama is offline or slow. Using a fallback question so you can continue.');
+      // Silent fallback by design - a victim mid-check-in should never see a
+      // technical error about the AI backend, the check-in should just keep
+      // moving using a pre-written, case-appropriate question instead.
       // -2: the first two fixed questions never draw from this pool, so the
       // pool starts at question 3 (history.length === 2 at that point).
       const fallbackIndex = Math.max(0, history.length - 2) % fallbackQuestions.length;
@@ -240,6 +314,7 @@ export default function CheckinScreen({ navigation }) {
       });
       setSelectedOptions([]);
       setDraft('');
+      setVoiceTranscript('');
     } finally {
       setLoading(false);
     }
@@ -249,9 +324,19 @@ export default function CheckinScreen({ navigation }) {
     if (loading || submitting || isFinished || responses.length >= TOTAL_QUESTIONS) return;
 
     const isOtherSelected = selectedOptions.includes('Other...');
-    const combinedAnswer = isSkipped ? "Skipped." : 
-      (selectedOptions.filter(o => o !== 'Other...').join(', ') + (isOtherSelected && draft.trim() ? (selectedOptions.length > 1 ? ', ' : '') + draft.trim() : ''));
-      
+    let combinedAnswer = "Skipped.";
+    if (!isSkipped) {
+      const parts = [];
+      const optionText = selectedOptions.filter(o => o !== 'Other...').join(', ');
+      if (optionText) parts.push(optionText);
+      if (isOtherSelected && draft.trim()) parts.push(draft.trim());
+      // The transcribed voice answer is its own part of this question's
+      // answer, alongside (or instead of) any tapped options - this is what
+      // lets a question be answered purely by voice.
+      if (voiceTranscript.trim()) parts.push(voiceTranscript.trim());
+      combinedAnswer = parts.join(', ');
+    }
+
     if (!isSkipped && !combinedAnswer) return;
     
     const newHistory = [...responses, { q: currentQuestion.text, a: combinedAnswer }];
@@ -269,6 +354,7 @@ export default function CheckinScreen({ navigation }) {
       setCurrentQuestion(SECOND_QUESTION);
       setSelectedOptions([]);
       setDraft('');
+      setVoiceTranscript('');
     } else {
       await loadNextQuestion(newHistory);
     }
@@ -302,9 +388,12 @@ export default function CheckinScreen({ navigation }) {
       });
       
       navigation.navigate('CheckinConfirmation', {
+        scored: result.scored,
         riskLevel: result.riskLevel,
         summary: result.summary,
         alertTriggered: result.alertTriggered,
+        questionsAnswered: result.questionsAnswered,
+        questionsUntilFirstScore: result.questionsUntilFirstScore,
       });
     } catch (err) {
       toast.error(err.message || 'Could not submit your check-in.');
@@ -313,18 +402,96 @@ export default function CheckinScreen({ navigation }) {
     }
   };
 
-  const progressPercentage = Math.min((responses.length / TOTAL_QUESTIONS) * 100, 100);
+  // Matches the "current question number" shown in the fraction label
+  // (Math.min(responses.length + 1, TOTAL_QUESTIONS)) rather than
+  // "questions completed so far" - so question 1 of 15 shows a small
+  // visible sliver of fill instead of a fully empty bar, matching the
+  // reference design.
+  const progressPercentage = Math.min(((responses.length + 1) / TOTAL_QUESTIONS) * 100, 100);
 
+  // Emoji + a sentiment-tinted circle instead of a flat line icon, matching
+  // the reference design's mood-grid look. The fixed first question's 4
+  // options must reproduce the reference exactly: doing okay -> mint,
+  // feeling anxious -> pink, need some help -> peach, Other... -> lavender
+  // (the first three checks below, in that priority order). Below that,
+  // more specific topical buckets (sleep, fear, anger, grief, relief,
+  // gratitude, pride) run before the generic sentiment fallbacks, so
+  // Ollama's free-text options - which range far wider than "positive vs
+  // negative" - get a face that actually matches what they say instead of
+  // always collapsing to the same handful of generic ones.
   const getOptionIcon = (opt) => {
     const lower = opt.toLowerCase();
-    if (lower.includes('okay') || lower.includes('good') || lower === 'yes') return { name: 'smile', bg: colors.primaryLight, color: colors.primary };
-    if (lower.includes('anxious') || lower.includes('sad') || lower === 'no') return { name: 'frown', bg: colors.warningLight, color: colors.warning };
-    if (lower.includes('help') || lower.includes('support')) return { name: 'life-buoy', bg: colors.successLight, color: colors.success };
-    if (lower.includes('other') || lower.includes('more')) return { name: 'more-horizontal', bg: colors.primaryLight, color: colors.primaryDark };
-    return { name: 'check-circle', bg: colors.primaryLight, color: colors.textSecondary };
+    // Help / support-seeking - same worried face as anxious, on peach
+    // instead of pink, matching the reference's "I need some help" card.
+    if (/(help|support|someone|guidance|assist)/.test(lower)) {
+      return { image: EMOJI.confused, bg: '#FBF5EC' };
+    }
+    // Strongly negative / distressed (incl. anxious - reference's pink card)
+    if (/(very low|quite isolated|mostly difficult|not safe|not very|struggl|hard|worried|unsafe|quite a lot|quite a bit|significantly disrupted|no\b|nothing|anxious)/.test(lower)) {
+      return { image: EMOJI.confused, bg: '#FDF1F3' };
+    }
+    // Sleep / rest / tiredness
+    if (/(sleep|tired|rest|insomnia|exhausted|fatigue|yawn|nap)/.test(lower)) {
+      return { image: EMOJI.sleeping, bg: '#EEF1FA' };
+    }
+    // Fear / feeling unsafe or threatened
+    if (/(afraid|scared|fear|frighten|threat|danger|terrified)/.test(lower)) {
+      return { image: EMOJI.fearful, bg: '#F1ECFB' };
+    }
+    // Anger / frustration
+    if (/(angry|anger|frustrat|annoyed|irritat|furious|mad\b)/.test(lower)) {
+      return { image: EMOJI.angry, bg: '#FBEAE6' };
+    }
+    // Crying / grief / heartbreak
+    if (/(cry|crying|tearful|heartbroken|grief|grieving|devastat)/.test(lower)) {
+      return { image: EMOJI.crying, bg: '#EBF0FA' };
+    }
+    // Relief / calm / at ease
+    if (/(reliev|calmer|at ease|peaceful|settl|soothed)/.test(lower)) {
+      return { image: EMOJI.relieved, bg: '#EAF5F1' };
+    }
+    // Gratitude
+    if (/(grateful|thankful|blessed|appreciat)/.test(lower)) {
+      return { image: EMOJI.pray, bg: '#FBF3E3' };
+    }
+    // Disappointment / discouragement
+    if (/(disappoint|let down|discourag|disheartened)/.test(lower)) {
+      return { image: EMOJI.disappointed, bg: '#EEF0F5' };
+    }
+    // Pride / accomplishment / feeling capable
+    if (/(proud|accomplish|capable|achieved|overcome|resilient)/.test(lower)) {
+      return { image: EMOJI.strong, bg: '#EAF3E9' };
+    }
+    // Mildly negative / uncertain
+    if (/(low|sad|uncertain|distant|a bit|somewhat unsure|restless|difficult|isolated|disrupted)/.test(lower)) {
+      return { image: EMOJI.pensive, bg: '#FEF5F6' };
+    }
+    // Positive / calm / okay
+    if (/(okay|good|connected|supported|stable|hopeful|safe\b|fine|well|better|steady|normal|calm|confident|yes\b|helped|managing|fairly steady|sometimes)/.test(lower)) {
+      return { image: EMOJI.slightlySmiling, bg: '#EEF8F1' };
+    }
+    // Strongly positive
+    if (/(great|really|very connected|very safe|excellent|definitely)/.test(lower)) {
+      return { image: EMOJI.grinning, bg: '#E3F2E8' };
+    }
+    if (lower.includes('other') || lower.includes('rather')) {
+      return { image: EMOJI.speechBalloon, bg: colors.primaryLight + 'A0' };
+    }
+    // Neutral / mixed / "it varies"
+    if (/(somewhat|mixed|varies|some|a little)/.test(lower)) {
+      return { image: EMOJI.neutral, bg: '#F4F2FA' };
+    }
+    return { image: EMOJI.thinking, bg: colors.primaryLight };
   };
 
   const isLongOptions = currentQuestion.options.some(opt => opt.length > 25);
+  // Ollama picks anywhere from 2 to 6 options per question, and a flat
+  // 3-per-row grid leaves a lone orphan card whenever the count isn't a
+  // multiple of 3 (e.g. 4 options -> 3 then 1 alone). Switching to a 2-per-row
+  // grid exactly when that would happen (count % 3 === 1, or only 2 options
+  // to begin with) keeps every row visually full.
+  const optionCount = currentQuestion.options.length;
+  const useHalfWidthOptions = optionCount <= 2 || optionCount % 3 === 1;
 
   return (
     <View style={styles.screen}>
@@ -347,6 +514,7 @@ export default function CheckinScreen({ navigation }) {
             )}
             <View style={styles.headerInfo}>
               <Text style={styles.pageTitle}>Check-in</Text>
+              <Text style={styles.pageSubtitle}>A safe space for your thoughts</Text>
             </View>
           </View>
           <View style={styles.headerRight}>
@@ -362,7 +530,11 @@ export default function CheckinScreen({ navigation }) {
           </View>
         </View>
 
-        <ScrollView 
+        {!isDesktop && (
+          <Text style={styles.youMatterTextBelowHeader}>{'You Matter ♡'}</Text>
+        )}
+
+        <ScrollView
           style={{ flex: 1 }} 
           contentContainerStyle={{ 
             flexGrow: 1, 
@@ -370,22 +542,41 @@ export default function CheckinScreen({ navigation }) {
           }}
           showsVerticalScrollIndicator={false}
         >
-          <View
-            style={[
-              styles.contentBody,
-              isDesktop ? styles.contentBodyDesktop : styles.contentBodyMobile,
-              { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' },
-            ]}
-          >
-            {/* Progress Header */}
-            <View style={styles.progressContainer}>
-              <View style={styles.progressTextRow}>
-                <Text style={styles.progressLabel}>Question {Math.min(responses.length + 1, TOTAL_QUESTIONS)} of {TOTAL_QUESTIONS}</Text>
-                <Text style={styles.progressPercent}>{Math.round(progressPercentage)}%</Text>
+          <View style={styles.scrollInner}>
+            {/* Desktop-only decorative caption, top-right of the content
+                column - same "handwritten note" idea as mobile's "You
+                Matter" text under the help button, positioned to match the
+                desktop reference's top-right placement next to the
+                progress bar. */}
+            {isDesktop && (
+              <View style={styles.youMatterCloudWrap}>
+                <MaterialCommunityIcons
+                  name="cloud"
+                  size={130}
+                  color={colors.primary}
+                  style={styles.youMatterCloudIcon}
+                  pointerEvents="none"
+                />
+                <Text style={styles.youMatterTextDesktop}>{'You\nMatter ♡'}</Text>
               </View>
+            )}
+            <View
+              style={[
+                styles.contentBody,
+                isDesktop ? styles.contentBodyDesktop : styles.contentBodyMobile,
+                { maxWidth: formContentWidth[tier], width: '100%', alignSelf: 'center' },
+              ]}
+            >
+              {/* Progress Header - single compact row (bar + fraction), same
+                  density as the reference design instead of a separate
+                  "Question X of Y" label row plus a bar below it. */}
+              <View style={styles.progressContainer}>
               <View style={styles.progressTrack}>
                 <View style={[styles.progressFill, { width: `${progressPercentage}%` }]} />
               </View>
+              <Text style={styles.progressFraction}>
+                {Math.min(responses.length + 1, TOTAL_QUESTIONS)}/{TOTAL_QUESTIONS}
+              </Text>
             </View>
 
             {/* Main Question Card */}
@@ -399,24 +590,31 @@ export default function CheckinScreen({ navigation }) {
                 </View>
               ) : (
                 <View style={styles.questionArea}>
-                  {/* Header Row inside Card */}
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.aiBadge}>
-                      <Feather name="sparkles" size={14} color={colors.primary} style={{ marginRight: spacing.xs }} />
-                      <Text style={styles.aiBadgeText}>AI COMPANION</Text>
-                    </View>
-
-                    <View style={styles.botGraphicContainer}>
-                      <View style={styles.botAvatarCircle}>
-                        <Feather name="cpu" size={22} color={colors.primaryDark} />
-                      </View>
-                    </View>
+                  {/* Small, understated AI indicator - kept (it's real
+                      information: an AI, not a human, is asking) but no
+                      longer a large badge+avatar row competing with the
+                      question for visual weight, matching the reference's
+                      much quieter header treatment. */}
+                  <View style={styles.aiBadge}>
+                    <Feather name="sparkles" size={12} color={colors.primary} style={{ marginRight: 4 }} />
+                    <Text style={styles.aiBadgeText}>AI COMPANION</Text>
                   </View>
-                  
-                  <Text style={styles.mainTitle}>
-                    {responses.length === 0 ? "Hello. I'm here to listen." : `Question ${responses.length + 1}`}
-                  </Text>
-                  <Text style={styles.subQuestionText}>{currentQuestion.text}</Text>
+
+                  {/* Mobile splits the fixed opening greeting into a bold
+                      headline + lighter sub-line (per the mobile reference),
+                      without repeating any words. Desktop shows the whole
+                      question as one bold headline, greeting included (per
+                      the desktop reference) - every other question, fixed
+                      or Ollama-generated, is already a single short
+                      question either way. */}
+                  {!isDesktop && responses.length === 0 ? (
+                    <>
+                      <Text style={styles.mainTitle}>Hello. I'm here to listen.</Text>
+                      <Text style={styles.subQuestionText}>Take your time. How are you feeling today?</Text>
+                    </>
+                  ) : (
+                    <Text style={styles.mainTitle}>{currentQuestion.text}</Text>
+                  )}
 
                   {/* Dynamic Options Container */}
                   <View style={[styles.optionsGrid, isLongOptions && styles.optionsColumn]}>
@@ -428,18 +626,25 @@ export default function CheckinScreen({ navigation }) {
                           key={i}
                           style={[
                             styles.optionCard,
+                            isDesktop ? styles.optionCardDesktop : { backgroundColor: iconInfo.bg },
+                            useHalfWidthOptions ? styles.optionCardHalf : styles.optionCardThird,
                             isLongOptions && styles.optionCardFull,
                             !isDesktop && styles.optionCardMobile,
                             isSelected && styles.optionCardSelected
                           ]}
                           onPress={() => toggleOption(opt)}
                         >
-                          <View style={[styles.iconCircle, { backgroundColor: iconInfo.bg }]}>
-                            <Feather name={iconInfo.name} size={18} color={iconInfo.color} />
+                          {isSelected && (
+                            <View style={styles.selectedBadge}>
+                              <Feather name="check" size={11} color={colors.onPrimary} />
+                            </View>
+                          )}
+                          <View style={[styles.iconCircle, isDesktop && { backgroundColor: iconInfo.bg }]}>
+                            <Image source={iconInfo.image} style={styles.iconEmoji} resizeMode="contain" />
                           </View>
-                          <Text 
+                          <Text
                             style={[
-                              styles.optionCardText, 
+                              styles.optionCardText,
                               isSelected && styles.optionCardTextSelected
                             ]}
                           >
@@ -463,25 +668,24 @@ export default function CheckinScreen({ navigation }) {
                     />
                   )}
 
-                  {/* Optional voice note - the only way this check-in's
-                      Voice Stress signal ever gets a real value instead of
-                      0; entirely optional, available on any question, and
-                      only the most recently recorded clip is kept. */}
+                  {/* Voice answer for THIS question specifically - resets
+                      every question (see setVoiceTranscript('') alongside
+                      setDraft('') above). The clip is transcribed to text
+                      via transcribeAudioBlob and folded straight into this
+                      question's combinedAnswer, so it's analyzed exactly
+                      like a typed answer. The raw clip itself is also kept
+                      for the separate acoustic Voice Stress signal sent
+                      once at final submission. */}
                   <View style={styles.voiceNoteRow}>
                     {recorderState.isRecording ? (
                       <Pressable style={styles.voiceNoteRecording} onPress={stopVoiceNote}>
                         <View style={styles.recordingDot} />
                         <Text style={styles.voiceNoteRecordingText}>Recording... tap to stop</Text>
                       </Pressable>
-                    ) : isTranscribingVoice ? (
-                      <View style={styles.voiceNoteRecording}>
-                        <ActivityIndicator size="small" color={colors.primary} />
-                        <Text style={styles.voiceNoteRecordingText}>Processing voice note...</Text>
-                      </View>
-                    ) : voiceAudioBase64 ? (
-                      <View style={styles.voiceNoteAttached}>
-                        <Feather name="check-circle" size={16} color={colors.success} />
-                        <Text style={styles.voiceNoteAttachedText}>Voice note attached to this check-in</Text>
+                    ) : voiceTranscript ? (
+                      <View style={styles.voiceTranscriptBox}>
+                        <Feather name="mic" size={14} color={colors.success} style={{ marginTop: 2 }} />
+                        <Text style={styles.voiceTranscriptText}>{voiceTranscript}</Text>
                         <Pressable onPress={discardVoiceNote} hitSlop={8}>
                           <Feather name="x" size={16} color={colors.textSecondary} />
                         </Pressable>
@@ -489,7 +693,7 @@ export default function CheckinScreen({ navigation }) {
                     ) : (
                       <Pressable style={styles.voiceNoteBtn} onPress={startVoiceNote}>
                         <Feather name="mic" size={16} color={colors.primary} />
-                        <Text style={styles.voiceNoteBtnText}>Add an optional voice note</Text>
+                        <Text style={styles.voiceNoteBtnText}>{isDesktop ? 'Answer with your voice' : 'Add an optional voice note'}</Text>
                       </Pressable>
                     )}
                   </View>
@@ -499,14 +703,15 @@ export default function CheckinScreen({ navigation }) {
                   {/* Card Actions */}
                   <View style={styles.actionRow}>
                     <Pressable style={styles.skipBtn} onPress={() => handleNext(true)}>
+                      <Feather name="arrow-left" size={16} color={colors.textSecondary} style={{ marginRight: spacing.xs }} />
                       <Text style={styles.skipBtnText}>
                         {responses.length === TOTAL_QUESTIONS - 1 ? 'Skip & Submit' : 'Skip Question'}
                       </Text>
                     </Pressable>
-                    <Pressable 
-                      style={[styles.nextBtn, (!selectedOptions.length) && styles.nextBtnDisabled]} 
+                    <Pressable
+                      style={[styles.nextBtn, (!selectedOptions.length && !voiceTranscript.trim()) && styles.nextBtnDisabled]}
                       onPress={() => handleNext(false)}
-                      disabled={!selectedOptions.length}
+                      disabled={!selectedOptions.length && !voiceTranscript.trim()}
                     >
                       <Text style={styles.nextBtnText}>
                         {responses.length === TOTAL_QUESTIONS - 1 ? 'Finish & Submit' : 'Next'}
@@ -522,6 +727,30 @@ export default function CheckinScreen({ navigation }) {
                 </View>
               )}
             </View>
+
+            {/* Supportive quote - its own box below the question card, on
+                the page background, matching the reference design exactly
+                (not nested inside the card). Picked from a 500+ line bank
+                via a hash of the question text, so it's stable while this
+                question is on screen but varies question to question -
+                purely decorative, never referencing the case, the question,
+                or the person's actual answers. */}
+            {!(loading || submitting || isFinished) && (
+              <View style={styles.quoteCard}>
+                <View style={styles.quoteLeafCluster} pointerEvents="none">
+                  <MaterialCommunityIcons name="leaf" size={54} color={colors.primary} style={{ opacity: 0.12, transform: [{ rotate: '-12deg' }] }} />
+                  <MaterialCommunityIcons name="leaf" size={38} color={colors.primary} style={{ opacity: 0.16, marginLeft: -14, marginTop: 18, transform: [{ rotate: '24deg' }] }} />
+                </View>
+                <MaterialCommunityIcons name="leaf" size={36} color={colors.primary} style={styles.quoteLeafIcon} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.quoteText}>
+                    "{pickSupportiveQuote(currentQuestion.text)}"
+                  </Text>
+                  <Text style={styles.quoteAttribution}>— Mansakha —</Text>
+                </View>
+              </View>
+            )}
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -533,10 +762,11 @@ export default function CheckinScreen({ navigation }) {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryLight,
   },
   container: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   topHeader: {
     backgroundColor: colors.primaryLight,
@@ -546,6 +776,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    position: 'relative',
+    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.primary + '20',
+  },
+  pageSubtitle: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  youMatterTextBelowHeader: {
+    fontFamily: 'Caveat_700Bold',
+    fontSize: 26,
+    lineHeight: 26,
+    color: colors.primary,
+    textAlign: 'right',
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
   },
   topHeaderDesktop: {
     height: 64,
@@ -569,6 +817,38 @@ const styles = StyleSheet.create({
   pageTitle: { ...typography.h1, color: colors.primaryDark, fontSize: 24, fontWeight: '700' },
   headerRight: { marginLeft: spacing.md },
   
+  scrollInner: {
+    flex: 1,
+    position: 'relative',
+  },
+  // Fixed-size box so the icon and the text share the exact same center
+  // point, instead of the icon floating off to one side of wherever the
+  // text's own auto-sized bounds happened to land.
+  youMatterCloudWrap: {
+    position: 'absolute',
+    top: spacing.lg,
+    right: 20,
+    width: 150,
+    height: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // A real cloud glyph, not a hand-assembled shape - guarantees it actually
+  // reads as a cloud instead of an ambiguous blob/pill.
+  youMatterCloudIcon: {
+    position: 'absolute',
+    top: 0,
+    left: 15,
+    opacity: 0.16,
+  },
+  youMatterTextDesktop: {
+    fontFamily: 'Caveat_700Bold',
+    fontSize: 22,
+    lineHeight: 24,
+    color: colors.primary,
+    textAlign: 'center',
+    marginTop: 14,
+  },
   contentBody: {
     flex: 1,
   },
@@ -581,32 +861,28 @@ const styles = StyleSheet.create({
     paddingTop: spacing.md,
   },
   
-  progressContainer: { 
-    marginBottom: spacing.md 
+  progressContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  progressTextRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: spacing.xs 
+  progressTrack: {
+    flex: 1,
+    height: 10,
+    backgroundColor: colors.border,
+    borderRadius: radius.pill,
+    overflow: 'hidden'
   },
-  progressLabel: { 
-    ...typography.bodyStrong, 
-    color: colors.textPrimary 
+  progressFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill
   },
-  progressPercent: { 
-    ...typography.bodySmall, 
-    color: colors.textSecondary 
-  },
-  progressTrack: { 
-    height: 6, 
-    backgroundColor: colors.border, 
-    borderRadius: radius.pill, 
-    overflow: 'hidden' 
-  },
-  progressFill: { 
-    height: '100%', 
-    backgroundColor: colors.primary, 
-    borderRadius: radius.pill 
+  progressFraction: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '700',
   },
 
   card: {
@@ -636,53 +912,38 @@ const styles = StyleSheet.create({
   },
 
   questionArea: {},
-  cardHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.sm,
-  },
   aiBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    alignSelf: 'flex-start',
     backgroundColor: colors.primaryLight,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.pill,
+    marginBottom: spacing.sm,
   },
-  aiBadgeText: { 
-    ...typography.label, 
-    color: colors.primaryDark, 
-    fontSize: 11,
+  aiBadgeText: {
+    ...typography.label,
+    color: colors.primaryDark,
+    fontSize: 10,
     letterSpacing: 0.5,
   },
-  botGraphicContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  botAvatarCircle: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // The actual AI-generated question is the headline itself, not a small
+  // caption under a generic "Question X" label - matches the reference's
+  // single big-bold-question treatment.
   mainTitle: {
     ...typography.h2,
     color: colors.textPrimary,
-    fontSize: 18,
-    marginBottom: 2,
+    fontSize: 22,
+    lineHeight: 28,
+    fontWeight: '800',
+    marginBottom: 4,
   },
   subQuestionText: {
     ...typography.body,
     color: colors.textSecondary,
     fontSize: 14,
-    marginBottom: spacing.md,
+    marginBottom: spacing.lg,
   },
   optionsGrid: {
     flexDirection: 'row',
@@ -695,19 +956,28 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
   },
   optionCard: {
-    width: '48%',
-    backgroundColor: colors.surface,
+    position: 'relative',
     borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
+    borderColor: 'transparent',
+    borderRadius: 20,
+    paddingVertical: spacing.lg,
     paddingHorizontal: spacing.xs,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  optionCardThird: {
+    width: '31%',
+  },
+  optionCardHalf: {
+    width: '48%',
+  },
+  optionCardDesktop: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
   optionCardMobile: {
-    paddingVertical: spacing.md,
-    minHeight: 90,
+    paddingVertical: spacing.lg,
+    minHeight: 100,
   },
   optionCardFull: {
     width: '100%',
@@ -717,20 +987,43 @@ const styles = StyleSheet.create({
   },
   optionCardSelected: {
     borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
+    borderWidth: 2,
+    ...shadow.sm,
   },
   iconCircle: {
-    width: 34,
-    height: 34,
+    width: 48,
+    height: 48,
     borderRadius: radius.pill,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
   },
+  iconEmoji: {
+    width: 28,
+    height: 28,
+  },
+  // Small checkmark badge on the card's own top-right corner when an option
+  // is selected - matches the reference design's mood-grid affordance
+  // (badge sits on the card, not the emoji circle).
+  selectedBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
   optionCardText: {
     ...typography.bodyStrong,
     color: colors.textPrimary,
-    fontSize: 13,
+    fontSize: 12,
     textAlign: 'center',
   },
   optionCardTextSelected: {
@@ -748,6 +1041,43 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     marginBottom: spacing.md,
   },
+  // Supportive-line card - light lavender fill, a feather/leaf icon on the
+  // left, italic reassurance text on the right.
+  quoteCard: {
+    position: 'relative',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    // A solid, more saturated lavender than the page background (which is
+    // now the same base primaryLight tone) - the old alpha-blended version
+    // barely showed up against a page that's the same color underneath it.
+    backgroundColor: '#E4D9F7',
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginTop: spacing.lg,
+    overflow: 'hidden',
+    ...shadow.sm,
+  },
+  quoteLeafIcon: {
+    opacity: 0.85,
+  },
+  quoteLeafCluster: {
+    position: 'absolute',
+    bottom: -10,
+    right: -6,
+  },
+  quoteText: {
+    ...typography.body,
+    color: colors.primaryDark,
+    fontStyle: 'italic',
+    lineHeight: 21,
+  },
+  quoteAttribution: {
+    ...typography.caption,
+    color: colors.primary,
+    marginTop: spacing.xs,
+    letterSpacing: 0.5,
+  },
   divider: {
     height: 1,
     backgroundColor: colors.border,
@@ -759,14 +1089,12 @@ const styles = StyleSheet.create({
   voiceNoteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
+    alignSelf: 'stretch',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
+    backgroundColor: colors.primaryLight,
   },
   voiceNoteBtnText: {
     ...typography.bodySmall,
@@ -794,42 +1122,52 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.danger,
   },
-  voiceNoteAttached: {
+  voiceTranscriptBox: {
     flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
+    alignItems: 'flex-start',
     gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
+    borderRadius: radius.md,
     backgroundColor: colors.successLight,
   },
-  voiceNoteAttachedText: {
+  voiceTranscriptText: {
     ...typography.bodySmall,
-    color: colors.success,
-    fontWeight: '600',
+    color: colors.textPrimary,
+    flex: 1,
+    lineHeight: 18,
   },
   actionRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: spacing.sm,
     paddingTop: spacing.xs,
   },
-  skipBtn: { 
-    paddingVertical: spacing.sm,
-  },
-  skipBtnText: { 
-    ...typography.bodySmall, 
-    color: colors.textSecondary, 
-    textDecorationLine: 'underline',
-  },
-  nextBtn: {
+  skipBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  skipBtnText: {
+    ...typography.bodySmall,
+    color: colors.textSecondary,
+    fontWeight: '600',
+  },
+  nextBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    paddingVertical: spacing.md,
     borderRadius: radius.pill,
+    ...shadow.sm,
   },
   nextBtnDisabled: { 
     opacity: 0.4 

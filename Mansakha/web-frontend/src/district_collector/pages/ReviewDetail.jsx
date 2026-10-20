@@ -189,7 +189,7 @@ export default function ReviewDetail() {
                   <button
                     onClick={handleAddNote}
                     disabled={!noteText.trim() || addNote.loading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-blue-700 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     <Send size={13} />
                     {addNote.loading ? 'Logging...' : 'Log Directive'}

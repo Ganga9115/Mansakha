@@ -96,11 +96,11 @@ export default function MailThread() {
       headerAction={
         data && (
           <div className="flex items-center gap-1">
-            <button onClick={handleMarkUnread} className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-[#3D5A80] transition" title="Mark as unread" aria-label="Mark as unread">
+            <button onClick={handleMarkUnread} className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-brand-900 transition" title="Mark as unread" aria-label="Mark as unread">
               <MailX size={17} />
             </button>
             {data.archivedByMe !== null && (
-              <button onClick={handleToggleArchive} className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-[#3D5A80] transition" title={data.archivedByMe ? 'Move to Inbox' : 'Archive'} aria-label={data.archivedByMe ? 'Move to Inbox' : 'Archive'}>
+              <button onClick={handleToggleArchive} className="p-2 rounded-full text-gray-400 hover:bg-gray-100 hover:text-brand-900 transition" title={data.archivedByMe ? 'Move to Inbox' : 'Archive'} aria-label={data.archivedByMe ? 'Move to Inbox' : 'Archive'}>
                 {data.archivedByMe ? <ArchiveRestore size={17} /> : <Archive size={17} />}
               </button>
             )}
@@ -112,10 +112,10 @@ export default function MailThread() {
       }
     >
       <div className="flex flex-col h-full bg-white rounded-xl border border-gray-200/80 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-blue-50/60 shrink-0">
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-200 bg-brand-50/60 shrink-0">
           <button
             onClick={() => navigate('/ministry/mail')}
-            className="p-1.5 -ml-1 rounded-full hover:bg-white/70 transition text-[#3D5A80]"
+            className="p-1.5 -ml-1 rounded-full hover:bg-white/70 transition text-brand-900"
             aria-label="Back to Mail"
           >
             <ArrowLeft size={20} />
@@ -134,7 +134,7 @@ export default function MailThread() {
             const isMine = m.senderId === me?.officialId;
             return (
               <div key={m.messageId} className={`flex flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${isMine ? 'bg-[#519BCE] text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
+                <div className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${isMine ? 'bg-brand-900 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm'}`}>
                   {!isMine && <p className="text-xs font-bold mb-1 opacity-80">{m.senderName}</p>}
                   {m.body}
                   {m.attachments.length > 0 && (
@@ -172,7 +172,7 @@ export default function MailThread() {
             <button
               onClick={handleReply}
               disabled={sending || !reply.trim()}
-              className="shrink-0 p-2.5 rounded-full bg-[#519BCE] hover:bg-[#3d83b3] text-white disabled:opacity-40 transition"
+              className="shrink-0 p-2.5 rounded-full bg-brand-900 hover:bg-brand-900 text-white disabled:opacity-40 transition"
               aria-label="Send reply"
               title="Send reply"
             >

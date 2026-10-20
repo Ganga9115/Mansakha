@@ -63,7 +63,7 @@ function TaskRow({ t, onChanged }) {
           {canOpenReferral && (
             <button
               onClick={() => navigate(`/districtcollector/referrals/${t.sourceReferralId}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-[11px] font-semibold transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-blue-600 text-blue-600 hover:bg-blue-700 hover:text-white rounded-md text-[11px] font-semibold transition"
             >
               View Referral <ArrowRight size={12} />
             </button>
@@ -105,7 +105,7 @@ export default function MyTasks() {
                 key={s}
                 onClick={() => setTab(s)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  tab === s ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  tab === s ? 'bg-blue-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 {s}

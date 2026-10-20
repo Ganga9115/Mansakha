@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft, CheckCircle2, Send, Gavel, UserCheck, ClipboardList } from 'lucide-react';
 import { useReferralDetail, useAddReferralNote, useResolveReferral, useAssignLawyer, useMarkTrialReady } from '../services/hooks';
 import {  } from '../services/taskHooks';
@@ -31,18 +31,18 @@ export default function ReferralDetail() {
   const assignLawyer = useAssignLawyer();
   const markTrialReady = useMarkTrialReady();
 
+  usePageHeader({ title: 'Referral Detail' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Referral Detail"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Referral Detail">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -94,7 +94,7 @@ export default function ReferralDetail() {
   };
 
   return (
-    <StaffLayout title="Referral Detail">
+    <>
       <div className="space-y-6">
         <button onClick={() => navigate('/dlsa')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 transition">
           <ArrowLeft size={14} /> Back to Legal Aid Queue
@@ -169,7 +169,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleAddNote}
                     disabled={!noteText.trim() || addNote.loading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     <Send size={13} />
                     {addNote.loading ? 'Sending...' : 'Add'}
@@ -217,7 +217,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleMarkTrialReady}
                     disabled={markTrialReady.loading}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
                   >
                     <Gavel size={14} />
                     {markTrialReady.loading ? 'Handing off...' : 'Mark Trial-Ready (hand off to Prosecutor)'}
@@ -229,6 +229,6 @@ export default function ReferralDetail() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

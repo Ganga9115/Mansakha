@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft } from 'lucide-react';
-import { useCaseNotes, useAddCaseNote } from '../services/hooks';
+import { useCaseNotes, useAddCaseNote, useCaseDetail } from '../services/hooks';
 
 // Own page rather than an inline card on CaseDetail.jsx - a case can
 // accumulate many notes (including every AI-drafted one per check-in), and
@@ -11,6 +11,8 @@ import { useCaseNotes, useAddCaseNote } from '../services/hooks';
 // "Case Notes ->" row.
 export default function CaseNotes() {
   const { id: userId } = useParams();
+  const caseDetailQuery = useCaseDetail(userId);
+  usePageHeader({ title: `Case Notes: ${caseDetailQuery.data?.docketNumber || userId.slice(0, 8)}` });
   const navigate = useNavigate();
   const notesQuery = useCaseNotes(userId);
   const addNote = useAddCaseNote(userId);
@@ -24,11 +26,11 @@ export default function CaseNotes() {
   };
 
   return (
-    <StaffLayout title={`Case Notes: ${userId.slice(0, 8)}`}>
+    <>
       <div className="space-y-4">
         <button
           onClick={() => navigate(`/counsellor/case-detail/${userId}`)}
-          className="flex items-center gap-2 text-xs font-semibold text-[#519BCE] hover:underline"
+          className="flex items-center gap-2 text-xs font-semibold text-brand-600 hover:underline"
         >
           <ArrowLeft size={14} /> Back to Case File
         </button>
@@ -48,7 +50,7 @@ export default function CaseNotes() {
             <button
               onClick={handleAddNote}
               disabled={addNote.loading}
-              className="px-4 py-2 bg-[#519BCE] text-white rounded-lg text-xs font-medium disabled:opacity-60 shrink-0"
+              className="px-4 py-2 bg-brand-700 text-white rounded-lg text-xs font-medium disabled:opacity-60 shrink-0"
             >
               Add
             </button>
@@ -68,7 +70,7 @@ export default function CaseNotes() {
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-400 mb-1">
                     <span className="font-semibold text-gray-600">{n.authorName}</span>
                     {n.authoredBy === 'ai' && (
-                      <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#3D5A80] text-[9px] font-bold uppercase">AI-drafted</span>
+                      <span className="px-1.5 py-0.5 rounded bg-brand-50 text-brand-900 text-[9px] font-bold uppercase">AI-drafted</span>
                     )}
                     <span className="text-[11px]">{new Date(n.createdAt).toLocaleString()}</span>
                   </div>
@@ -79,6 +81,6 @@ export default function CaseNotes() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

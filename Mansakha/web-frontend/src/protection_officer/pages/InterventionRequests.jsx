@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight } from 'lucide-react';
 import { useInterventionRequestsList } from '../services/hooks';
 
@@ -20,6 +20,7 @@ const STATUS_BADGE = {
 };
 
 export default function InterventionRequests() {
+  usePageHeader({ title: 'Intervention Requests' });
   const navigate = useNavigate();
   const [tab, setTab] = useState('Pending');
   const query = useInterventionRequestsList(tab);
@@ -27,7 +28,7 @@ export default function InterventionRequests() {
   const jurisdictionAssigned = query.data?.jurisdictionAssigned !== false;
 
   return (
-    <StaffLayout title="Intervention Requests">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -47,7 +48,7 @@ export default function InterventionRequests() {
                 key={s}
                 onClick={() => setTab(s)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  tab === s ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  tab === s ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 {s}
@@ -89,7 +90,7 @@ export default function InterventionRequests() {
                       <td className="px-6 py-3.5 text-right">
                         <button
                           onClick={() => navigate(`/protectionofficer/intervention-requests/${r.requestId}`)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-semibold transition"
                         >
                           View <ArrowRight size={13} />
                         </button>
@@ -102,6 +103,6 @@ export default function InterventionRequests() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

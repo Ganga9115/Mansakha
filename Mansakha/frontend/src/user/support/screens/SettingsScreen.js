@@ -233,7 +233,7 @@ export default function SettingsScreen({ navigation }) {
 
             {/* DOCKET SELECTION UI */}
             {casesList.length > 0 && (
-              <View style={{ marginTop: spacing.md }}>
+              <View style={{ marginTop: spacing.xl }}>
                 <View style={[styles.docketSelectorHeader, !isDesktop && styles.docketSelectorHeaderMobile]}>
                   <View style={styles.docketSelectorLeft}>
                     <View style={styles.blueIconBox}>
@@ -267,38 +267,64 @@ export default function SettingsScreen({ navigation }) {
                   </ScrollView>
                 </View>
 
-                {/* Active Docket Details Grid */}
-                {selectedCase && (
-                  <View style={[styles.docketDetailGrid, !isDesktop && styles.docketDetailGridMobile]}>
-                    <View style={styles.docketGridCol}>
-                      <View style={styles.docketTextWrap}>
-                        <Text style={styles.fieldLabel}>Docket ID</Text>
-                        <Text style={styles.fieldValueBold}>
-                          {selectedCase.docketNumber || selectedCase.docketId || selectedCase.docketNo || selectedCase.caseNumber || 'N/A'}
-                        </Text>
-                      </View>
+                {/* Active Docket Details - mobile stacks label+value one per
+                    row (full card width, so a long docket number or "Compensation"
+                    never gets truncated); desktop keeps the original 3-column
+                    layout since it has the width to spare. */}
+                {selectedCase && !isDesktop && (
+                  <View style={styles.docketDetailGrid}>
+                    <View style={styles.docketDetailRow}>
+                      <Text style={styles.fieldLabel}>Docket ID</Text>
+                      <Text style={[styles.fieldValueBold, styles.docketRowValueMobile]}>
+                        {selectedCase.docketNumber || selectedCase.docketId || selectedCase.docketNo || selectedCase.caseNumber || 'N/A'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.docketRowDivider} />
+
+                    <View style={styles.docketDetailRow}>
+                      <Text style={styles.fieldLabel}>Case Type</Text>
+                      <Text style={[styles.fieldValueBold, styles.docketRowValueMobile]}>
+                        {selectedCase.caseType || selectedCase.type || 'N/A'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.docketRowDivider} />
+
+                    <View style={styles.docketDetailRow}>
+                      <Text style={styles.fieldLabel}>Case Stage</Text>
+                      <Text style={[styles.fieldValueBold, styles.docketRowValueMobile]}>
+                        {selectedCase.caseStage || selectedCase.stage || 'N/A'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {selectedCase && isDesktop && (
+                  <View style={styles.docketDetailGridDesktop}>
+                    <View style={[styles.docketGridCol, styles.docketGridColWide]}>
+                      <Text style={styles.fieldLabel}>Docket ID</Text>
+                      <Text style={styles.fieldValueBold} numberOfLines={1} ellipsizeMode="middle">
+                        {selectedCase.docketNumber || selectedCase.docketId || selectedCase.docketNo || selectedCase.caseNumber || 'N/A'}
+                      </Text>
                     </View>
 
                     <View style={styles.gridDivider} />
 
                     <View style={styles.docketGridCol}>
-                      <View style={styles.docketTextWrap}>
-                        <Text style={styles.fieldLabel}>Case Type</Text>
-                        <Text style={styles.fieldValueBold} numberOfLines={1}>
-                          {selectedCase.caseType || selectedCase.type || 'N/A'}
-                        </Text>
-                      </View>
+                      <Text style={styles.fieldLabel}>Case Type</Text>
+                      <Text style={styles.fieldValueBold} numberOfLines={1}>
+                        {selectedCase.caseType || selectedCase.type || 'N/A'}
+                      </Text>
                     </View>
 
                     <View style={styles.gridDivider} />
 
                     <View style={styles.docketGridCol}>
-                      <View style={styles.docketTextWrap}>
-                        <Text style={styles.fieldLabel}>Case Stage</Text>
-                        <Text style={styles.fieldValueBold} numberOfLines={1}>
-                          {selectedCase.caseStage || selectedCase.stage || 'N/A'}
-                        </Text>
-                      </View>
+                      <Text style={styles.fieldLabel}>Case Stage</Text>
+                      <Text style={styles.fieldValueBold} numberOfLines={1}>
+                        {selectedCase.caseStage || selectedCase.stage || 'N/A'}
+                      </Text>
                     </View>
                   </View>
                 )}
@@ -721,35 +747,27 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
 
-  /* Active Docket Detail Grid */
+  /* Active Docket Detail - stacked rows (label + value per row) instead of
+     side-by-side columns, so a long value always gets the card's full
+     width rather than a fixed fraction of it that forced truncation. */
   docketDetailGrid: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     backgroundColor: '#F8FAFC',
     borderRadius: radius.md,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.xs,
     paddingHorizontal: spacing.md,
     marginTop: spacing.md,
     borderWidth: 1,
     borderColor: '#F0EAFB',
   },
-  docketDetailGridMobile: {
-    paddingHorizontal: spacing.xs,
+  docketDetailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
   },
-  docketGridCol: {
-    flex: 1,
-    alignItems: 'flex-start',
-    paddingHorizontal: 4,
-  },
-  docketTextWrap: {
-    flexDirection: 'column',
-  },
-  gridDivider: {
-    width: 1,
-    height: 28,
+  docketRowDivider: {
+    height: 1,
     backgroundColor: '#E2E8F0',
-    marginHorizontal: 2,
   },
   fieldLabel: {
     ...typography.caption,
@@ -762,6 +780,53 @@ const styles = StyleSheet.create({
     color: '#4A3070',
     fontSize: 14,
     fontWeight: '700',
+  },
+  // Mobile-only: label sits left, value sits right on the same row, so this
+  // needs its own alignment on top of the shared fieldValueBold above -
+  // the desktop 3-column layout stacks label above value instead, where
+  // right-aligning and indenting the value would look wrong.
+  docketRowValueMobile: {
+    textAlign: 'right',
+    marginLeft: spacing.md,
+  },
+
+  /* Desktop-only: original 3-column side-by-side layout - there's enough
+     width here that a long docket number doesn't need the full-row space
+     mobile needs. */
+  docketDetailGridDesktop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderRadius: radius.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+    borderWidth: 1,
+    borderColor: '#F0EAFB',
+  },
+  docketGridCol: {
+    flex: 1,
+    // Flexbox's default min-width is "auto", meaning a flex item refuses to
+    // shrink below its content's intrinsic width - without this, widening a
+    // column's flex-basis does nothing to contain long text, it just grows
+    // past its share and collides with the next column.
+    minWidth: 0,
+    alignItems: 'flex-start',
+    paddingHorizontal: 4,
+  },
+  // Docket numbers (NHAA-2026-0000002) run far longer than a case type or
+  // stage word - an equal 3-way split forces this column to wrap across
+  // multiple lines while the other two sit mostly empty, so this one gets
+  // a larger share instead.
+  docketGridColWide: {
+    flex: 1.8,
+  },
+  gridDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#E2E8F0',
+    marginHorizontal: 2,
   },
 
   /* Preference Rows Layout */

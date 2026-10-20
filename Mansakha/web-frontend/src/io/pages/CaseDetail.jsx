@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import CaseHeader from '../components/CaseHeader';
 import CaseSubNav from '../components/CaseSubNav';
 import { ShieldAlert, FileText, Send, AlertTriangle, Upload, Download, ShieldOff } from 'lucide-react';
+import GlideSelect from '../../shared/components/GlideSelect';
 import {
   useCaseDetail, useSetAccusedStatus, useSetInvestigationProgress,
   useFileChargesheet, useMarkInvestigationComplete, useAlertProtectionOfficer,
@@ -40,19 +41,22 @@ function AccusedStatusCard({ c, userId, onChanged }) {
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <ShieldAlert size={15} className="text-[#3D5A80]" />
+        <ShieldAlert size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Accused Status</h3>
       </div>
       <p className="text-[11px] text-gray-400">The real signal Threat Tier is computed from - kindly keep this current as custody/bail status changes.</p>
       <div className="flex flex-wrap items-center gap-3">
-        <select value={accusedStatus} onChange={(e) => setAccusedStatus(e.target.value)} className="px-3 py-2 border border-gray-300 rounded-lg text-xs">
-          <option value="" disabled>Select status...</option>
-          {ACCUSED_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        <GlideSelect
+          options={ACCUSED_STATUSES}
+          value={accusedStatus}
+          onChange={(val) => setAccusedStatus(val)}
+          placeholder="Select status..."
+          ariaLabel="Accused Status"
+        />
         <button
           onClick={handleSave}
           disabled={!accusedStatus || accusedStatus === c.accusedStatus || setStatus.loading}
-          className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+          className="px-4 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
         >
           {setStatus.loading ? 'Saving...' : 'Save'}
         </button>
@@ -84,7 +88,7 @@ function InvestigationProgressCard({ c, userId, onChanged }) {
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <FileText size={15} className="text-[#3D5A80]" />
+        <FileText size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Investigation Progress</h3>
       </div>
       <p className="text-[11px] text-gray-400">Shown to the victim on their own Case Details - a plain summary only, never confidential evidence. Raw investigative detail belongs in the Activity Log instead.</p>
@@ -98,7 +102,7 @@ function InvestigationProgressCard({ c, userId, onChanged }) {
       <button
         onClick={handleSave}
         disabled={!text.trim() || setProgress.loading}
-        className="px-4 py-2 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+        className="px-4 py-2 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
       >
         {setProgress.loading ? 'Saving...' : 'Update Progress'}
       </button>
@@ -136,7 +140,7 @@ function ChargesheetCard({ c, userId, onChanged }) {
           <button
             onClick={handleFile}
             disabled={fileChargesheet.loading}
-            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+            className="px-4 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
           >
             {fileChargesheet.loading ? 'Filing...' : 'Mark Chargesheet as Filed'}
           </button>
@@ -183,7 +187,7 @@ function CaseDocumentRow({ label, documentType, existingUrl, userId, onChanged }
             href={existingUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#EBF4FA] rounded-md text-[11px] font-semibold transition"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-50 rounded-md text-[11px] font-semibold transition"
           >
             <Download size={12} /> View
           </a>
@@ -192,7 +196,7 @@ function CaseDocumentRow({ label, documentType, existingUrl, userId, onChanged }
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={upload.loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-md text-[11px] font-semibold transition disabled:opacity-60"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-md text-[11px] font-semibold transition disabled:opacity-60"
         >
           <Upload size={12} />
           {upload.loading ? 'Uploading...' : existingUrl ? 'Replace PDF' : 'Upload PDF'}
@@ -207,11 +211,11 @@ function CaseDocumentsCard({ c, userId, onChanged }) {
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <FileText size={15} className="text-[#3D5A80]" />
+        <FileText size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Case Documents</h3>
       </div>
       <p className="text-[11px] text-gray-400">
-        PDF only. Uploading here immediately gives the victim a Download button on their own Case Details - retrieval always goes through a short-lived signed link, never a permanent public URL.
+        PDF only. Uploading here immediately gives the victim a Download button on their own Case Details.
       </p>
       <CaseDocumentRow label="FIR Copy" documentType="fir" existingUrl={c.firDocumentUrl} userId={userId} onChanged={onChanged} />
       <CaseDocumentRow label="Chargesheet" documentType="chargesheet" existingUrl={c.chargesheetDocumentUrl} userId={userId} onChanged={onChanged} />
@@ -224,9 +228,9 @@ function CaseDocumentsCard({ c, userId, onChanged }) {
 // comment) - a case is identified by docket number alone.
 function PrivacyShieldNote() {
   return (
-    <div className="flex items-start gap-2 bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg px-3.5 py-2.5">
-      <ShieldOff size={14} className="text-[#3D5A80] mt-0.5 shrink-0" />
-      <p className="text-[11px] text-[#3D5A80] leading-relaxed">
+    <div className="flex items-start gap-2 bg-brand-50/60 border border-brand-100 rounded-lg px-3.5 py-2.5">
+      <ShieldOff size={14} className="text-brand-900 mt-0.5 shrink-0" />
+      <p className="text-[11px] text-brand-900 leading-relaxed">
         <span className="font-bold">Privacy Shield.</span> The victim's name, phone number and address are never sent to this portal - cases are identified by docket number only. Contact must be made through the assigned Counsellor or Protection Officer.
       </p>
     </div>
@@ -298,18 +302,18 @@ export default function CaseDetail() {
   const detailQuery = useCaseDetail(userId);
   const markComplete = useMarkInvestigationComplete();
 
+  usePageHeader({ title: 'Case Overview' });
+
   const c = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Case Overview"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !c) {
     return (
-      <StaffLayout title="Case Overview">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This case could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This case could not be located.'}
+      </div>
     );
   }
 
@@ -324,7 +328,7 @@ export default function CaseDetail() {
   };
 
   return (
-    <StaffLayout title="Case Overview">
+    <>
       <div className="space-y-4">
         <CaseHeader c={c} backTo="/io" backLabel="Back to Case Queue" onMarkComplete={handleMarkComplete} markCompleteLoading={markComplete.loading} />
         <CaseSubNav base={`/io/cases/${userId}`} />
@@ -336,14 +340,14 @@ export default function CaseDetail() {
             <AccusedStatusCard c={c} userId={userId} onChanged={detailQuery.refetch} />
             <InvestigationProgressCard c={c} userId={userId} onChanged={detailQuery.refetch} />
             <ChargesheetCard c={c} userId={userId} onChanged={detailQuery.refetch} />
-            <CaseDocumentsCard c={c} userId={userId} onChanged={detailQuery.refetch} />
           </div>
           <div className="space-y-6">
             <PrivacyShieldNote />
             <AlertProtectionOfficerCard c={c} userId={userId} onChanged={detailQuery.refetch} />
+            <CaseDocumentsCard c={c} userId={userId} onChanged={detailQuery.refetch} />
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

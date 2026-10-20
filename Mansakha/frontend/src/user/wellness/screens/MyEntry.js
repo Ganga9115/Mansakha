@@ -16,6 +16,26 @@ import TopRightActions from '../../shared/components/TopRightActions';
 import DesktopHeaderActions from '../../shared/components/DesktopHeaderActions';
 import BottomNavBar from '../../shared/components/BottomNavBar';
 
+// react-native-web's <Modal> portals to document.body, which is exactly
+// why it already centers correctly there - so web keeps using it,
+// unchanged. On native, a newer react-native-screens version is confining
+// Modal's own native window to the host screen's Fragment bounds instead of
+// the true device window (confirmed live: the overlay was only as tall as
+// the underlying screen's visible content, not the full screen), so native
+// renders a plain in-tree absolutely-positioned View instead - no native
+// portal involved, so there's no window/Fragment ambiguity to hit.
+function DialogPortal({ visible, onRequestClose, children }) {
+  if (Platform.OS === 'web') {
+    return (
+      <Modal visible={visible} transparent animationType="none" onRequestClose={onRequestClose}>
+        {children}
+      </Modal>
+    );
+  }
+  if (!visible) return null;
+  return children;
+}
+
 export default function MyEntry({ navigation }) {
   const { tier, isDesktop } = useResponsive();
   const insets = useSafeAreaInsets();
@@ -210,12 +230,7 @@ export default function MyEntry({ navigation }) {
       {!isDesktop && <BottomNavBar currentTab="Wellness" navigation={navigation} />}
 
       {/* Entry Details Modal */}
-      <Modal
-        visible={!!selectedEntry}
-        transparent
-        animationType="none"
-        onRequestClose={() => setSelectedEntry(null)}
-      >
+      <DialogPortal visible={!!selectedEntry} onRequestClose={() => setSelectedEntry(null)}>
         <View style={styles.inlineOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setSelectedEntry(null)} />
           <View style={styles.dialogBox}>
@@ -242,15 +257,10 @@ export default function MyEntry({ navigation }) {
             </View>
           </View>
         </View>
-      </Modal>
+      </DialogPortal>
 
       {/* Edit Entry Modal */}
-      <Modal
-        visible={!!entryToEdit}
-        transparent
-        animationType="none"
-        onRequestClose={() => setEntryToEdit(null)}
-      >
+      <DialogPortal visible={!!entryToEdit} onRequestClose={() => setEntryToEdit(null)}>
         <View style={styles.inlineOverlay}>
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setEntryToEdit(null)} />
           <View style={styles.dialogBox}>
@@ -295,15 +305,10 @@ export default function MyEntry({ navigation }) {
             </View>
           </View>
         </View>
-      </Modal>
+      </DialogPortal>
 
       {/* Delete Confirmation Modal */}
-      <Modal
-        visible={!!entryToDelete}
-        transparent
-        animationType="none"
-        onRequestClose={() => setEntryToDelete(null)}
-      >
+      <DialogPortal visible={!!entryToDelete} onRequestClose={() => setEntryToDelete(null)}>
         <View style={styles.confirmBackdrop}>
           <View style={styles.confirmCard}>
             <View style={styles.confirmIconTile}>
@@ -319,7 +324,7 @@ export default function MyEntry({ navigation }) {
             </Pressable>
           </View>
         </View>
-      </Modal>
+      </DialogPortal>
     </View>
   );
 }
@@ -538,11 +543,12 @@ const styles = StyleSheet.create({
 
   /* Delete confirmation */
   confirmBackdrop: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.xl,
+    zIndex: 50,
     ...Platform.select({
       web: { backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' },
       default: {},

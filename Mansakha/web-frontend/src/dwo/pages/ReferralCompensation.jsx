@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { IndianRupee, CircleCheck, Lock, Landmark, FileText, AlertCircle } from 'lucide-react';
@@ -44,7 +44,7 @@ function CompensationCard({ r, referralId, onChanged }) {
   return (
     <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4 max-w-2xl">
       <div className="flex items-center gap-1.5">
-        <Landmark size={15} className="text-[#3D5A80]" />
+        <Landmark size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Compensation Module</h3>
       </div>
       <p className="text-[11px] text-gray-400 -mt-2">
@@ -64,7 +64,7 @@ function CompensationCard({ r, referralId, onChanged }) {
           <button
             onClick={handleVerify}
             disabled={verify.loading || !verifiedAmount}
-            className="px-4 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+            className="px-4 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
           >
             {verify.loading ? 'Verifying...' : 'Verify & Track Compensation'}
           </button>
@@ -89,7 +89,7 @@ function CompensationCard({ r, referralId, onChanged }) {
                   <button
                     onClick={() => handleMarkPaid(idx)}
                     disabled={markPaid.loading}
-                    className="px-3 py-1.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-[11px] font-semibold transition disabled:opacity-60 shrink-0"
+                    className="px-3 py-1.5 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-[11px] font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     Mark as Paid
                   </button>
@@ -132,7 +132,7 @@ function BankDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <Landmark size={15} className="text-[#3D5A80]" />
+        <Landmark size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Disbursement Account</h3>
       </div>
       <p className="text-[11px] text-gray-400">
@@ -163,7 +163,7 @@ function BankDetailsCard({ r }) {
           href={b.proofUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#EBF4FA] rounded-md text-[11px] font-semibold transition"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-50 rounded-md text-[11px] font-semibold transition"
         >
           <FileText size={12} /> View passbook / cheque proof
         </a>
@@ -184,18 +184,18 @@ export default function ReferralCompensation() {
   const detailQuery = useReferralDetail(referralId);
   const resolve = useResolveReferral();
 
+  usePageHeader({ title: 'Compensation' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Compensation"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Compensation">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -210,7 +210,7 @@ export default function ReferralCompensation() {
   };
 
   return (
-    <StaffLayout title="Compensation">
+    <>
       <div className="space-y-4">
         <ReferralHeader r={r} backTo="/dwo" backLabel="Back to Referral Queue" onResolve={handleResolve} resolveLoading={resolve.loading} />
         <ReferralSubNav base={`/dwo/referrals/${referralId}`} />
@@ -222,6 +222,6 @@ export default function ReferralCompensation() {
           <BankDetailsCard r={r} />
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

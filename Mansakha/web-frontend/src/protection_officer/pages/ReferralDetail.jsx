@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft, CheckCircle2, Send, ShieldCheck, ShieldAlert, MapPin, AlertOctagon, User, Phone, Home } from 'lucide-react';
 import { useReferralDetail, useAddReferralNote, useResolveReferral, useSetManualThreatTier, useCompleteDirective } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Deliberately NOT the distress score's Low/Moderate/High/Critical palette -
 // Threat Tier is a different axis (external danger, not psychological
@@ -21,7 +22,7 @@ const THREAT_TIERS = ['Routine', 'Guarded', 'Elevated', 'Severe'];
 const ORIGIN_META = {
   sos_emergency: { label: 'Emergency SOS', className: 'bg-rose-100 text-rose-700' },
   io_threat_alert: { label: 'IO Threat Alert', className: 'bg-orange-100 text-orange-700' },
-  intervention_accepted: { label: 'Witness Protection/Relocation', className: 'bg-blue-100 text-blue-700' },
+  intervention_accepted: { label: 'Witness Protection/Relocation', className: 'bg-brand-100 text-brand-700' },
   self_reported_threat: { label: 'Self-Reported Threat', className: 'bg-amber-100 text-amber-700' },
 };
 
@@ -47,7 +48,7 @@ function ThreatAssessmentCard({ r, onChanged }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <ShieldAlert size={15} className="text-[#3D5A80]" />
+        <ShieldAlert size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Threat Assessment</h3>
       </div>
 
@@ -69,14 +70,17 @@ function ThreatAssessmentCard({ r, onChanged }) {
           Set this only if you know something the system can't see (e.g. a credible verbal threat with no SOS event yet). Never replaces the system assessment above - both are always kept visible.
         </p>
         <div className="flex items-center gap-2">
-          <select value={manualTier} onChange={(e) => setManualTier(e.target.value)} className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white">
-            <option value="">No override</option>
-            {THREAT_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
-          </select>
+          <GlideSelect
+            options={[{ value: '', label: 'No override' }, ...THREAT_TIERS.map((t) => ({ value: t, label: t }))]}
+            value={manualTier}
+            onChange={(val) => setManualTier(val)}
+            ariaLabel="Officer-Assessed Threat Tier Override"
+            className="flex-1"
+          />
           <button
             onClick={handleSave}
             disabled={setTier.loading || manualTier === (r.manualThreatTier || '')}
-            className="px-3 py-2 bg-[#3D5A80] hover:bg-[#2f4763] text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 shrink-0"
+            className="px-3 py-2 bg-brand-800 hover:bg-[#1a1d45] text-white rounded-lg text-xs font-semibold transition disabled:opacity-50 shrink-0"
           >
             {setTier.loading ? 'Saving...' : 'Save'}
           </button>
@@ -102,7 +106,7 @@ function DispatchDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <User size={15} className="text-[#3D5A80]" />
+        <User size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Dispatch Details</h3>
       </div>
       <p className="text-[11px] text-gray-400">
@@ -117,7 +121,7 @@ function DispatchDetailsCard({ r }) {
       {r.victimContactNumber && (
         <div>
           <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
-          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
             <Phone size={12} /> {r.victimContactNumber}
           </a>
         </div>
@@ -227,10 +231,14 @@ function ResolveDialog({ referralId, onResolved, onCancel }) {
         </p>
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Outcome</label>
-          <select value={category} onChange={(e) => setCategory(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white">
-            <option value="">Select...</option>
-            {OUTCOME_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
+          <GlideSelect
+            options={OUTCOME_CATEGORIES}
+            value={category}
+            onChange={(val) => setCategory(val)}
+            placeholder="Select..."
+            ariaLabel="Outcome"
+            menuWidth={300}
+          />
         </div>
         <div>
           <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">
@@ -277,18 +285,18 @@ export default function ReferralDetail() {
   const detailQuery = useReferralDetail(referralId);
   const addNote = useAddReferralNote();
 
+  usePageHeader({ title: 'Referral Detail' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Referral Detail"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Referral Detail">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -306,7 +314,7 @@ export default function ReferralDetail() {
   const origin = r.originType ? ORIGIN_META[r.originType] : null;
 
   return (
-    <StaffLayout title="Referral Detail">
+    <>
       <div className="space-y-6">
         <button onClick={() => navigate('/protectionofficer')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 transition">
           <ArrowLeft size={14} /> Back to Protection Registry
@@ -353,7 +361,7 @@ export default function ReferralDetail() {
             href={`https://www.google.com/maps?q=${r.location.lat},${r.location.lng}`}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-[#519BCE] bg-[#EBF4FA] border border-[#D6E8F5] rounded-lg px-3 py-2 w-fit text-xs font-semibold hover:bg-[#D6E8F5] transition"
+            className="inline-flex items-center gap-1.5 text-brand-600 bg-brand-50 border border-brand-100 rounded-lg px-3 py-2 w-fit text-xs font-semibold hover:bg-brand-100 transition"
           >
             <MapPin size={14} /> View live location on map
           </a>
@@ -414,7 +422,7 @@ export default function ReferralDetail() {
                   <button
                     onClick={handleVerify}
                     disabled={addNote.loading}
-                    className="flex items-center gap-1.5 px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
+                    className="flex items-center gap-1.5 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60 shrink-0"
                   >
                     <Send size={13} />
                     {addNote.loading ? 'Logging...' : 'Log Verification'}
@@ -438,6 +446,6 @@ export default function ReferralDetail() {
           onResolved={() => navigate('/protectionofficer')}
         />
       )}
-    </StaffLayout>
+    </>
   );
 }

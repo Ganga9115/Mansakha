@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { CheckCircle2, AlertTriangle, Bot, ArrowRight } from 'lucide-react';
 import { useTasksList, useCompleteTask } from '../services/taskHooks';
 
@@ -64,7 +64,7 @@ function TaskRow({ t, onChanged }) {
           {canOpenReferral && (
             <button
               onClick={() => navigate(`/dlsa/referrals/${t.sourceReferralId}`)}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-[11px] font-semibold transition"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-[11px] font-semibold transition"
             >
               View Referral <ArrowRight size={12} />
             </button>
@@ -87,12 +87,13 @@ function TaskRow({ t, onChanged }) {
 }
 
 export default function MyTasks() {
+  usePageHeader({ title: 'My Tasks' });
   const [tab, setTab] = useState('Pending');
   const query = useTasksList(tab);
   const tasks = query.data?.tasks || [];
 
   return (
-    <StaffLayout title="My Tasks">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -106,7 +107,7 @@ export default function MyTasks() {
                 key={s}
                 onClick={() => setTab(s)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  tab === s ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  tab === s ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 {s}
@@ -131,6 +132,6 @@ export default function MyTasks() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

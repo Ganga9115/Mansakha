@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { PenSquare, Inbox as InboxIcon, Send as SendIcon, Archive as ArchiveIcon } from 'lucide-react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import MailComposeModal from './MailComposeModal';
 import { useMailUnreadCount } from '../services/hooks';
 
@@ -17,16 +17,17 @@ const FOLDERS = [
 ];
 
 export default function MailShell({ basePath, title = 'Mail', headerAction, children, onComposed }) {
+  usePageHeader({ title, headerAction });
   const [composing, setComposing] = useState(false);
   const { data: unread, refetch: refetchUnread } = useMailUnreadCount();
 
   return (
-    <StaffLayout title={title} headerAction={headerAction}>
+    <>
       <div className="flex gap-5 h-[calc(100vh-8rem)]">
         <aside className="w-52 shrink-0 flex flex-col gap-5">
           <button
             onClick={() => setComposing(true)}
-            className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full bg-[#519BCE] text-white text-sm font-semibold shadow-sm hover:shadow-md hover:bg-[#3d83b3] transition w-fit"
+            className="flex items-center gap-2 pl-4 pr-5 py-3 rounded-full bg-brand-700 text-white text-sm font-semibold shadow-sm hover:shadow-md hover:bg-brand-700 transition w-fit"
           >
             <PenSquare size={16} /> Compose
           </button>
@@ -41,14 +42,14 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
                   end
                   className={({ isActive }) =>
                     `flex items-center gap-3 pl-4 pr-3 py-2 rounded-r-full text-sm transition ${
-                      isActive ? 'bg-[#D6E8F5] text-[#3D5A80] font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'
+                      isActive ? 'bg-brand-100 text-brand-900 font-bold' : 'text-gray-600 hover:bg-gray-100 font-medium'
                     }`
                   }
                 >
                   <Icon size={16} />
                   <span className="flex-1">{f.label}</span>
                   {f.key === 'inbox' && unread?.count > 0 && (
-                    <span className="text-xs font-bold text-[#3D5A80]">{unread.count}</span>
+                    <span className="text-xs font-bold text-brand-900">{unread.count}</span>
                   )}
                 </NavLink>
               );
@@ -65,6 +66,6 @@ export default function MailShell({ basePath, title = 'Mail', headerAction, chil
           onSent={() => { setComposing(false); refetchUnread(); onComposed?.(); }}
         />
       )}
-    </StaffLayout>
+    </>
   );
 }

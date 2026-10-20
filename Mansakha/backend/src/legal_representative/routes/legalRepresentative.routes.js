@@ -285,7 +285,16 @@ router.get('/hearings-upcoming', async (req, res) => {
       // Case details alongside the hearing itself - so this list stands on
       // its own for hearing prep without a click-through to My Cases first.
       caseTypeName: c.case_type_name,
-      caseStage: c.case_stage,
+      // The eCourt's own stage (e.g. "Awaiting First Hearing"), not NHAA's
+      // internal case_stage (Investigation/Trial/Compensation) - the two
+      // track different things and can legitimately diverge (a case can be
+      // past Compensation administratively while the court proceeding
+      // itself is still ongoing), so showing NHAA's stage next to a court
+      // hearing's own purpose/date read as contradictory (e.g. "Compensation"
+      // stage next to a hearing "For framing of charges"). This is a
+      // hearings list sourced entirely from eCourt data, so the eCourt's
+      // own stage is what belongs here.
+      caseStage: courtCase.row.case_stage_label,
       victimName: c.victim_full_name || null,
       nextHearingDate: courtCase.row.next_hearing_date,
       nextHearingPurpose: courtCase.row.next_hearing_purpose,

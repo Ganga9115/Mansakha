@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import ReferralHeader from '../components/ReferralHeader';
 import ReferralSubNav from '../components/ReferralSubNav';
 import { HeartHandshake } from 'lucide-react';
 import { useReferralDetail, useResolveReferral, useHandOffRehabilitation, useRehabilitationProviders } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // District Welfare Officer's Referral Overview - just the case context and
 // the Forward-to-Rehabilitation action. Immediate Relief and Compensation
@@ -38,25 +39,23 @@ function HandOffRehabCard({ referralId, onHandedOff }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <HeartHandshake size={15} className="text-[#3D5A80]" />
+        <HeartHandshake size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Forward to Rehabilitation Officer</h3>
       </div>
       <p className="text-[11px] text-gray-400">Select the government or NGO centre this case is being handed to.</p>
-      <select
+      <GlideSelect
+        options={providers.map((p) => ({ value: p.providerId, label: `${p.name} (${p.providerType})` }))}
         value={providerId}
-        onChange={(e) => setProviderId(e.target.value)}
+        onChange={(val) => setProviderId(val)}
+        placeholder={providersQuery.loading ? 'Loading centres...' : 'Select a centre...'}
         disabled={providersQuery.loading}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs"
-      >
-        <option value="" disabled>{providersQuery.loading ? 'Loading centres...' : 'Select a centre...'}</option>
-        {providers.map((p) => (
-          <option key={p.providerId} value={p.providerId}>{p.name} ({p.providerType})</option>
-        ))}
-      </select>
+        ariaLabel="Rehabilitation Centre"
+        menuWidth={260}
+      />
       <button
         onClick={handleSubmit}
         disabled={!providerId || handOffRehab.loading}
-        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-[#3D5A80] text-[#3D5A80] hover:bg-[#EBF4FA] rounded-lg text-xs font-semibold transition disabled:opacity-60"
+        className="w-full flex items-center justify-center gap-1.5 px-3 py-2.5 border border-brand-900 text-brand-900 hover:bg-brand-50 rounded-lg text-xs font-semibold transition disabled:opacity-60"
       >
         <HeartHandshake size={14} />
         {handOffRehab.loading ? 'Forwarding...' : 'Forward to Rehabilitation Officer'}
@@ -73,18 +72,18 @@ export default function ReferralDetail() {
   const detailQuery = useReferralDetail(referralId);
   const resolve = useResolveReferral();
 
+  usePageHeader({ title: 'Referral Overview' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Referral Overview"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Referral Overview">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This referral could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This referral could not be located.'}
+      </div>
     );
   }
 
@@ -99,7 +98,7 @@ export default function ReferralDetail() {
   };
 
   return (
-    <StaffLayout title="Referral Overview">
+    <>
       <div className="space-y-4">
         <ReferralHeader r={r} backTo="/dwo" backLabel="Back to Referral Queue" onResolve={handleResolve} resolveLoading={resolve.loading} />
         <ReferralSubNav base={`/dwo/referrals/${referralId}`} />
@@ -130,6 +129,6 @@ export default function ReferralDetail() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

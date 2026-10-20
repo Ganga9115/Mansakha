@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowRight, AlertTriangle } from 'lucide-react';
 import { useLegalAidRequestsList } from '../services/hooks';
 
@@ -16,6 +16,7 @@ const STATUS_BADGE = {
 };
 
 export default function AssignedCases() {
+  usePageHeader({ title: 'Assigned Cases' });
   const navigate = useNavigate();
   const activeQuery = useLegalAidRequestsList('Active');
   const completedQuery = useLegalAidRequestsList('Completed');
@@ -27,7 +28,7 @@ export default function AssignedCases() {
   const cases = [...activeCases, ...completedCases];
 
   return (
-    <StaffLayout title="Assigned Cases">
+    <>
       <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
         <div>
           <h3 className="font-bold text-sm text-gray-800">Assigned Cases</h3>
@@ -64,7 +65,7 @@ export default function AssignedCases() {
                     <td className="px-6 py-3.5 text-right">
                       <button
                         onClick={() => navigate(`/dlsa/legal-aid-requests/${r.requestId}`)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-[#519BCE] text-[#519BCE] hover:bg-[#519BCE] hover:text-white rounded-md text-xs font-semibold transition"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-brand-600 text-brand-600 hover:bg-brand-700 hover:text-white rounded-md text-xs font-semibold transition"
                       >
                         View <ArrowRight size={13} />
                       </button>
@@ -80,6 +81,6 @@ export default function AssignedCases() {
           <AlertTriangle size={12} /> Cases needing reassignment review (poor feedback awaiting your decision) are flagged on their own detail page.
         </p>
       </div>
-    </StaffLayout>
+    </>
   );
 }

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { LayoutDashboard, Bell, BarChart, FileText, UserPlus, User, LogOut, Menu, X, Mail, HeartHandshake, Network, Users2 } from 'lucide-react';
 import { logout } from '../services/auth';
 import { useMe, useMailUnreadCount } from '../services/hooks';
 import NotificationBell from '../components/NotificationBell';
+import SidebarGlideNav from '../../shared/components/SidebarGlideNav';
+import { usePageHeaderValue } from '../../shared/context/PageHeaderContext';
 
 // District Admin's own dedicated shell - own copy of what used to be the
 // shared StaffLayout, trimmed to just District Admin's nav. Analysis was
@@ -31,7 +33,8 @@ const NAV_ITEMS = [
   { name: 'Profile', icon: User, path: '/districtadmin/profile' },
 ];
 
-export default function StaffLayout({ children, title = 'Dashboard', headerAction = null }) {
+export default function StaffLayout() {
+  const { title, headerAction } = usePageHeaderValue();
   const navigate = useNavigate();
   const location = useLocation();
   const { data: me } = useMe();
@@ -43,9 +46,10 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
     .filter((item) => location.pathname === item.path || location.pathname.startsWith(`${item.path}/`))
     .sort((a, b) => b.path.length - a.path.length)[0];
   const TitleIcon = activeNavItem?.icon;
+  const navItemsWithBadge = NAV_ITEMS.map((item) => (item.name === 'Mail' ? { ...item, badge: mailUnread?.count } : item));
 
   return (
-    <div className="flex h-screen w-full bg-[#F8F9FA] text-gray-800 font-sans overflow-hidden">
+    <div className="flex h-screen w-full bg-brand-50 text-gray-800 font-sans overflow-hidden">
       {/* Backdrop - closes the drawer on tap, below lg where the sidebar is an overlay not a static rail */}
       {sidebarOpen && (
         <div
@@ -56,7 +60,7 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
       )}
 
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 max-w-[80vw] bg-[#3D5A80] text-white flex flex-col shrink-0 overflow-y-auto no-scrollbar transform transition-transform duration-200 ease-out ${
+        className={`fixed lg:static inset-y-0 left-0 z-40 w-64 max-w-[80vw] bg-brand-900 text-white flex flex-col shrink-0 overflow-y-auto no-scrollbar transform transition-transform duration-200 ease-out ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:translate-x-0`}
       >
@@ -65,55 +69,30 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
 
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-blue-100 hover:text-white"
+            className="lg:hidden text-brand-100 hover:text-white"
             aria-label="Close menu"
           >
             <X size={20} />
           </button>
         </div>
 
-        <nav className="space-y-2 p-6">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.name}
-                to={item.path}
-                end={item.name !== 'Mail'}
-                onClick={() => setSidebarOpen(false)}
-                className={({ isActive }) =>
-                  `w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition ${
-                    isActive
-                      ? 'bg-[#519BCE] text-white shadow-sm'
-                      : 'text-blue-100 hover:bg-white/10'
-                  }`
-                }
-              >
-                <Icon size={18} />
-                <span className="text-sm flex-1">{item.name}</span>
-                {item.name === 'Mail' && mailUnread?.count > 0 && (
-                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">
-                    {mailUnread.count > 99 ? '99+' : mailUnread.count}
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
-        </nav>
+        <div className="p-6">
+          <SidebarGlideNav items={navItemsWithBadge} activeName={activeNavItem?.name} onItemClick={() => setSidebarOpen(false)} />
+        </div>
       </aside>
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <header className="h-16 bg-[#EBF4FA] border-b border-[#D6E8F5] px-4 sm:px-8 flex items-center justify-between shrink-0 gap-3">
+        <header className="h-16 bg-brand-50 border-b border-brand-100 px-4 sm:px-8 flex items-center justify-between shrink-0 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-[#3D5A80] shrink-0"
+              className="lg:hidden text-brand-900 shrink-0"
               aria-label="Open menu"
             >
               <Menu size={22} />
             </button>
-            {TitleIcon && <TitleIcon size={20} className="text-[#3D5A80] shrink-0 hidden sm:block" />}
-            <h2 className="text-lg sm:text-xl font-bold text-[#3D5A80] truncate">{title}</h2>
+            {TitleIcon && <TitleIcon size={20} className="text-brand-900 shrink-0 hidden sm:block" />}
+            <h2 className="text-lg sm:text-xl font-bold text-brand-900 truncate">{title}</h2>
             {headerAction && <div className="ml-2 shrink-0">{headerAction}</div>}
           </div>
 
@@ -123,7 +102,7 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
 
             <button
               onClick={() => navigate(profilePath)}
-              className="flex items-center gap-3 sm:border-l border-[#D6E8F5] sm:pl-4 text-left focus:outline-none"
+              className="flex items-center gap-3 sm:border-l border-brand-100 sm:pl-4 text-left focus:outline-none"
             >
               {me?.profileImageUrl ? (
                 <img
@@ -132,13 +111,13 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
                   className="w-9 h-9 rounded-full object-cover shrink-0"
                 />
               ) : (
-                <div className="w-9 h-9 rounded-full bg-[#EBF4FA] border border-[#D6E8F5] flex items-center justify-center shrink-0">
-                  <User size={18} className="text-[#3D5A80]" />
+                <div className="w-9 h-9 rounded-full bg-brand-50 border border-brand-100 flex items-center justify-center shrink-0">
+                  <User size={18} className="text-brand-900" />
                 </div>
               )}
               <div className="text-xs hidden sm:block">
-                <p className="font-bold text-[#3D5A80]">{me?.fullName || 'Loading...'}</p>
-                <p className="text-[#3D5A80]/70">District Administration</p>
+                <p className="font-bold text-brand-900">{me?.fullName || 'Loading...'}</p>
+                <p className="text-brand-900/70">District Administration</p>
               </div>
             </button>
 
@@ -157,7 +136,7 @@ export default function StaffLayout({ children, title = 'Dashboard', headerActio
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-8">
-          {children}
+          <Outlet />
         </main>
       </div>
 

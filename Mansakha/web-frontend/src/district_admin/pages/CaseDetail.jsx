@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowUpRight, ArrowDownRight, Minus } from 'lucide-react';
 import { useCaseDetail, useCaseNotes } from '../services/hooks';
 
@@ -25,18 +25,20 @@ export default function CaseDetail() {
   const { data, loading, error } = useCaseDetail(userId);
   const notesQuery = useCaseNotes(userId);
 
+  usePageHeader({ title: loading || error ? 'Case File' : `Case File: ${userId.slice(0, 8)}` });
+
   if (loading) {
-    return <StaffLayout title="Case File"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (error) {
-    return <StaffLayout title="Case File"><div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div></StaffLayout>;
+    return <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">{error}</div>;
   }
 
   const trend = TREND_META[data.trend] || TREND_META.insufficient_data;
   const TrendIcon = trend.icon;
 
   return (
-    <StaffLayout title={`Case File: ${userId.slice(0, 8)}`}>
+    <>
       <div className="space-y-6">
 
         <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex items-center justify-between flex-wrap gap-4">
@@ -86,14 +88,14 @@ export default function CaseDetail() {
                 </div>
               )}
               {data.explanation && (
-                <div className="mt-4 p-3 bg-blue-50 rounded-lg text-xs text-gray-700 leading-relaxed">
-                  <span className="font-bold text-[#3D5A80] block mb-1">AI explanation</span>
+                <div className="mt-4 p-3 bg-brand-50 rounded-lg text-xs text-gray-700 leading-relaxed">
+                  <span className="font-bold text-brand-900 block mb-1">AI explanation</span>
                   {data.explanation}
                 </div>
               )}
               {data.suggestedInterventionType && (
-                <div className="mt-3 p-3 bg-blue-50 rounded-lg text-xs text-gray-700">
-                  <span className="font-bold text-[#3D5A80]">AI-suggested intervention:</span> {data.suggestedInterventionType.name} - review before acting.
+                <div className="mt-3 p-3 bg-brand-50 rounded-lg text-xs text-gray-700">
+                  <span className="font-bold text-brand-900">AI-suggested intervention:</span> {data.suggestedInterventionType.name} - review before acting.
                 </div>
               )}
             </div>
@@ -111,7 +113,7 @@ export default function CaseDetail() {
                       <div className="flex items-center gap-2 text-gray-400 mb-1">
                         <span className="font-semibold text-gray-600">{n.authorName}</span>
                         {n.authoredBy === 'ai' && (
-                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-[#3D5A80] text-[9px] font-bold uppercase">AI-drafted</span>
+                          <span className="px-1.5 py-0.5 rounded bg-brand-50 text-brand-900 text-[9px] font-bold uppercase">AI-drafted</span>
                         )}
                         <span>{new Date(n.createdAt).toLocaleString()}</span>
                       </div>
@@ -133,6 +135,6 @@ export default function CaseDetail() {
         </div>
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

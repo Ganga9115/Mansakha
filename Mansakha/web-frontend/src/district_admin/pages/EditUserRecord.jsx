@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Search } from 'lucide-react';
 import { useSearchUserByDocket, useUpdateUser } from '../services/hooks';
 import { useToast } from '../../shared/context/ToastContext';
@@ -11,7 +11,7 @@ import { useToast } from '../../shared/context/ToastContext';
 // number and address.
 const CASE_STAGE_TONE = {
   Investigation: 'bg-amber-50 text-amber-700',
-  Trial: 'bg-blue-50 text-blue-700',
+  Trial: 'bg-brand-50 text-brand-700',
   Rehabilitation: 'bg-violet-50 text-violet-700',
   Compensation: 'bg-teal-50 text-teal-700',
   'Case Closed': 'bg-gray-100 text-gray-600',
@@ -23,6 +23,7 @@ const CASE_STAGE_TONE = {
 // User") to match the PS's own division of labor: District Administration
 // oversees and corrects records, it doesn't do front-desk registration.
 export default function EditUserRecord() {
+  usePageHeader({ title: 'Edit User Record' });
   const toast = useToast();
   const searchUser = useSearchUserByDocket();
   const updateUser = useUpdateUser();
@@ -65,7 +66,7 @@ export default function EditUserRecord() {
   };
 
   return (
-    <StaffLayout title="Edit User Record">
+    <>
       <div className="max-w-lg">
         <div className="bg-white p-6 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <h3 className="font-bold text-sm text-gray-800">Edit User Record</h3>
@@ -122,7 +123,7 @@ export default function EditUserRecord() {
               <button
                 onClick={handleSaveEdit}
                 disabled={updateUser.loading}
-                className="w-full px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
+                className="w-full px-4 py-2.5 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
               >
                 {updateUser.loading ? 'Saving...' : 'Save Changes'}
               </button>
@@ -130,6 +131,6 @@ export default function EditUserRecord() {
           )}
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

@@ -25,7 +25,7 @@ const RECIPIENT_BADGE = {
 
 function MiniStat({ label, value, tone }) {
   const tones = {
-    total: 'text-[#3D5A80] bg-[#EBF4FA] border-[#D6E8F5]',
+    total: 'text-brand-900 bg-brand-50 border-brand-100',
     critical: 'text-[#b91c1c] bg-[#fee2e2] border-[#fca5a5]',
     high: 'text-[#ea580c] bg-[#ffedd5] border-[#fed7aa]',
     moderate: 'text-[#b8860b] bg-[#fdf3d9] border-[#f5e2ad]',
@@ -133,7 +133,7 @@ function DistressTrendMini({ trend }) {
         {trend.map((t, i) => (
           <div key={i} className="flex-1 h-full flex flex-col items-center justify-end">
             <div
-              className="w-full bg-[#519BCE] rounded-sm"
+              className="w-full bg-brand-700 rounded-sm"
               style={{ height: t.avgScore ? `${(t.avgScore / max) * 100}%` : '2px' }}
             />
           </div>

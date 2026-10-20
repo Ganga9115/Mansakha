@@ -1,11 +1,29 @@
+import { Platform } from 'react-native';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 
+const isWeb = Platform.OS === 'web';
+// OrbitControls/DRACOLoader are DOM-only (pointer events on a real
+// domElement; DRACOLoader's own Worker-based decode path) - `import` can't
+// take a conditional specifier, so these are `require`d only on web. Neither
+// is used by our two current avatar models (verified - no
+// KHR_draco_mesh_compression in either .glb), so native skips both rather
+// than risk a Worker() crash for a feature nothing here needs yet.
+const OrbitControls = isWeb ? require('three/examples/jsm/controls/OrbitControls').OrbitControls : null;
+const DRACOLoader = isWeb ? require('three/examples/jsm/loaders/DRACOLoader').DRACOLoader : null;
+const ExpoThreeRenderer = isWeb ? null : require('expo-three').Renderer;
+
+// Target passed in is a DOM container element on web, or an
+// ExpoWebGLRenderingContext (from expo-gl's GLView onContextCreate) on
+// native - everything below branches on that, once, in initScene/render/
+// dispose. The rest of this class (model loading, morph targets, emotion,
+// lip sync, idle motion) is pure three.js scene-graph manipulation with no
+// DOM dependency, so it's shared unchanged across both platforms.
 export class Avatar3DController {
-  constructor(containerElement) {
-    this.container = containerElement;
+  constructor(target) {
+    this.isNative = Platform.OS !== 'web';
+    this.container = target; // web: DOM container. native: unused (kept null-safe below)
+    this.gl = this.isNative ? target : null;
     this.scene = null;
     this.camera = null;
     this.renderer = null;
@@ -61,6 +79,31 @@ export class Avatar3DController {
   }
 
   initScene() {
+    if (this.isNative) {
+      this.initSceneNative();
+    } else {
+      this.initSceneWeb();
+    }
+    this.loader = new GLTFLoader();
+    if (!this.isNative && this.dracoLoader) {
+      this.loader.setDRACOLoader(this.dracoLoader);
+    }
+
+    // Studio Lighting
+    this.setupLighting();
+
+    if (this.isNative) return; // resize listeners below are DOM-only
+
+    this.resizeHandler = () => this.onWindowResize();
+    window.addEventListener('resize', this.resizeHandler);
+
+    if (typeof ResizeObserver !== 'undefined' && this.container) {
+      this.resizeObserver = new ResizeObserver(() => this.onWindowResize());
+      this.resizeObserver.observe(this.container);
+    }
+  }
+
+  initSceneWeb() {
     if (!this.container) return;
     const width = this.container.clientWidth || 360;
     const height = this.container.clientHeight || 450;
@@ -90,27 +133,41 @@ export class Avatar3DController {
     this.controls.maxPolarAngle = Math.PI / 1.7;
     this.controls.target.set(0, 0, 0);
 
-    // DRACOLoader configuration (using Google CDN with local fallback)
+    // DRACOLoader configuration (using Google CDN with local fallback) -
+    // web only; neither current avatar model actually needs it (verified),
+    // kept here in case a future model does.
     this.dracoLoader = new DRACOLoader();
     try {
       this.dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
     } catch (_) {
       this.dracoLoader.setDecoderPath('/draco/gltf/');
     }
+  }
 
-    this.loader = new GLTFLoader();
-    this.loader.setDRACOLoader(this.dracoLoader);
+  // Native: `target` passed to the constructor is the ExpoWebGLRenderingContext
+  // from expo-gl's <GLView onContextCreate>, not a DOM element - there is no
+  // container to measure, so size comes from the GL drawing buffer itself
+  // (already accounts for the device's pixel ratio, unlike web's raw
+  // clientWidth/Height). No OrbitControls (needs real pointer events on a
+  // domElement, which doesn't exist here) and no DRACOLoader (Worker-based
+  // decode isn't available on native, and isn't needed - see the web
+  // method's own note).
+  initSceneNative() {
+    if (!this.gl) return;
+    const width = this.gl.drawingBufferWidth;
+    const height = this.gl.drawingBufferHeight;
 
-    // Studio Lighting
-    this.setupLighting();
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0B141A);
 
-    this.resizeHandler = () => this.onWindowResize();
-    window.addEventListener('resize', this.resizeHandler);
+    this.camera = new THREE.PerspectiveCamera(34, width / height, 0.05, 50);
+    this.camera.position.set(0, 0, 0.88);
 
-    if (typeof ResizeObserver !== 'undefined' && this.container) {
-      this.resizeObserver = new ResizeObserver(() => this.onWindowResize());
-      this.resizeObserver.observe(this.container);
-    }
+    this.renderer = new ExpoThreeRenderer({ gl: this.gl, antialias: true, alpha: true });
+    this.renderer.setPixelRatio(1);
+    this.renderer.setSize(width, height);
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.15;
   }
 
   setupLighting() {
@@ -193,8 +250,10 @@ export class Avatar3DController {
           const distance = 0.78; // Pull camera back so avatar is smaller, nicely framed with shoulders
 
           this.camera.position.set(0, targetY, targetZ + distance);
-          this.controls.target.set(0, targetY, targetZ);
-          this.controls.update();
+          if (this.controls) {
+            this.controls.target.set(0, targetY, targetZ);
+            this.controls.update();
+          }
 
           if (this.onLoaded) this.onLoaded({ meshCount: this.morphMeshes.length, headCenter });
           resolve(this.currentModel);
@@ -407,8 +466,11 @@ export class Avatar3DController {
     const now = performance.now();
 
     this.updateIdleMotion(now, delta);
-    this.controls.update();
+    if (this.controls) this.controls.update();
     this.renderer.render(this.scene, this.camera);
+    // expo-gl requires an explicit frame present - there's no equivalent
+    // call on web, where the browser compositor does this implicitly.
+    if (this.isNative && this.gl) this.gl.endFrameEXP();
   }
 
   onWindowResize() {
@@ -424,17 +486,21 @@ export class Avatar3DController {
 
   dispose() {
     this.isDisposed = true;
-    if (this.resizeHandler) {
-      window.removeEventListener('resize', this.resizeHandler);
-    }
-    if (this.resizeObserver) {
-      this.resizeObserver.disconnect();
+    if (!this.isNative) {
+      if (this.resizeHandler) {
+        window.removeEventListener('resize', this.resizeHandler);
+      }
+      if (this.resizeObserver) {
+        this.resizeObserver.disconnect();
+      }
     }
     if (this.dracoLoader) {
       this.dracoLoader.dispose();
     }
-    if (this.renderer && this.renderer.domElement && this.renderer.domElement.parentElement) {
-      this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
+    if (this.renderer) {
+      if (!this.isNative && this.renderer.domElement && this.renderer.domElement.parentElement) {
+        this.renderer.domElement.parentElement.removeChild(this.renderer.domElement);
+      }
       this.renderer.dispose();
     }
   }

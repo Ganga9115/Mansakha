@@ -33,7 +33,9 @@
         {
           "photosPermission": "Mansakha uses your photos to attach proof documents to an assistance request."
         }
-      ]
+      ],
+      "expo-status-bar",
+      "expo-font"
     ]
   }
 }

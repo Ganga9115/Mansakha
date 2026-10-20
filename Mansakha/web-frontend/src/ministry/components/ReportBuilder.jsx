@@ -3,6 +3,7 @@ import { X, Sparkles } from 'lucide-react';
 import { useJurisdictionOptions, useGenerateAnalytics } from '../services/hooks';
 import { apiClient } from '../services/apiClient';
 import { getToken } from '../services/auth';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // Ministry Analytics & Workflow Task 2E - upward-routing report builder,
 // used as a MODAL from ReportsInbox.jsx (Ministry's console), not a route.
@@ -40,7 +41,7 @@ function AnalyticsSnapshotPanel({ jurisdictionId, insight, setInsight }) {
     <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5"><Sparkles size={13} className="text-[#519BCE]" /> AI Snapshot</p>
+          <p className="text-xs font-bold text-gray-700 flex items-center gap-1.5"><Sparkles size={13} className="text-brand-800" /> AI Snapshot</p>
           <p className="text-[11px] text-gray-400 mt-0.5">Optional - attaches an AI analytics read of this jurisdiction to the report.</p>
         </div>
         <button
@@ -162,30 +163,28 @@ export default function ReportBuilder({ onClose, onSubmitted, defaultJurisdictio
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction Level</label>
-              <select
+              <GlideSelect
+                options={LEVELS.map((l) => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))}
                 value={level}
-                onChange={(e) => handleLevelChange(e.target.value)}
+                onChange={(val) => handleLevelChange(val)}
                 disabled={!!defaultJurisdictionId}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100"
-              >
-                {LEVELS.map((l) => <option key={l} value={l} className="capitalize">{l}</option>)}
-              </select>
+                ariaLabel="Jurisdiction Level"
+              />
             </div>
             <div>
               <label className="text-[11px] font-bold text-gray-500 uppercase block mb-1">Jurisdiction</label>
-              <select
+              <GlideSelect
+                options={currentOptions.map((j) => ({ value: j.jurisdictionId, label: j.name }))}
                 value={jurisdictionId}
-                onChange={(e) => { setJurisdictionId(e.target.value); setInsight(undefined); }}
+                onChange={(val) => { setJurisdictionId(val); setInsight(undefined); }}
                 disabled={!!defaultJurisdictionId}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white disabled:bg-gray-100"
-              >
-                <option value="">Select...</option>
-                {currentOptions.map((j) => <option key={j.jurisdictionId} value={j.jurisdictionId}>{j.name}</option>)}
-              </select>
+                placeholder="Select..."
+                ariaLabel="Jurisdiction"
+              />
             </div>
           </div>
 
-          <div className="bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg px-4 py-2.5 text-[11px] text-[#3D5A80]">
+          <div className="bg-brand-50/60 border border-brand-100 rounded-lg px-4 py-2.5 text-[11px] text-brand-900">
             <span className="font-bold">Sends to:</span> {jurisdictionId ? targetLabel : 'Select a jurisdiction first'}
           </div>
 
@@ -223,7 +222,7 @@ export default function ReportBuilder({ onClose, onSubmitted, defaultJurisdictio
             <button
               type="submit"
               disabled={submitting || !jurisdictionId}
-              className="px-4 py-2.5 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
+              className="px-4 py-2.5 bg-brand-900 hover:bg-brand-900 text-white rounded-lg text-sm font-semibold transition disabled:opacity-60"
             >
               {submitting ? 'Submitting...' : targetJurisdictionId ? `Submit to ${targetLabel}` : 'Save as Draft'}
             </button>

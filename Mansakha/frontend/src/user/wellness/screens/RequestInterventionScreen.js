@@ -394,7 +394,6 @@ export default function RequestInterventionScreen({ navigation, route }) {
               <Feather name="shield" size={22} color={colors.primaryDark} />
             </View>
             <View style={styles.heroTextContainer}>
-              <Text style={styles.heroTitle}>Request Assistance</Text>
               <Text style={styles.heroSubtitle}>Choose the type of support you need.</Text>
             </View>
           </View>
@@ -485,7 +484,6 @@ const styles = StyleSheet.create({
     marginRight: spacing.md,
   },
   heroTextContainer: { flex: 1 },
-  heroTitle: { ...typography.h2, color: colors.primaryDark, fontWeight: '700', fontSize: 20 },
   heroSubtitle: { ...typography.bodySmall, color: colors.textSecondary, marginTop: 2 },
 
   // Card Styling
@@ -505,23 +503,23 @@ const styles = StyleSheet.create({
   },
   cardHeaderTitle: { ...typography.h3, color: colors.primaryDark, fontWeight: '700', fontSize: 16 },
 
-  // Grid for New Request Types
+  // New Request Types - one compact row per type, not a square-tile grid
+  // (was flex:1 tiles wrapped in a row, which on mobile were rendering one
+  // giant square per line instead of the intended small grid - a plain
+  // vertical list of short rows sidesteps that entirely).
   typeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
+    flexDirection: 'column',
+    gap: spacing.sm,
   },
   typeCard: {
-    flex: 1,
-    minWidth: 130,
+    flexDirection: 'row',
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   typeCardActive: {
     borderColor: colors.primary,
@@ -534,7 +532,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.xs,
+    marginRight: spacing.sm,
   },
   typeIconBoxActive: {
     backgroundColor: colors.primaryLight,
@@ -543,7 +541,6 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.textSecondary,
     fontWeight: '600',
-    textAlign: 'center',
   },
   typeCardTextActive: {
     color: colors.primaryDark,

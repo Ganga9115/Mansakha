@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ChevronDown, ChevronUp, CheckCircle2, XCircle, FileText } from 'lucide-react';
 import { useInterventionRequestsList, useInterventionRequestDetail, useReviewInterventionRequest } from '../services/hooks';
 
@@ -116,8 +116,8 @@ function RequestRow({ r, onDecided }) {
       {expanded && (
         <div className="px-6 pb-5 text-xs text-gray-600 space-y-3">
           {r.description && (
-            <div className="bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg p-3">
-              <p className="font-bold text-[#3D5A80] text-[11px] uppercase mb-1">Victim's Description</p>
+            <div className="bg-brand-50/60 border border-brand-100 rounded-lg p-3">
+              <p className="font-bold text-brand-900 text-[11px] uppercase mb-1">Victim's Description</p>
               <p className="whitespace-pre-wrap">{r.description}</p>
             </div>
           )}
@@ -161,12 +161,13 @@ function RequestRow({ r, onDecided }) {
 }
 
 export default function InterventionRequests() {
+  usePageHeader({ title: 'Intervention Requests' });
   const [tab, setTab] = useState('Pending');
   const query = useInterventionRequestsList(tab);
   const requests = query.data?.requests || [];
 
   return (
-    <StaffLayout title="Intervention Requests">
+    <>
       <div className="space-y-4">
         <div className="bg-white p-4 rounded-xl border border-gray-200/80 shadow-sm space-y-4">
           <div>
@@ -180,7 +181,7 @@ export default function InterventionRequests() {
                 key={s}
                 onClick={() => setTab(s)}
                 className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                  tab === s ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                  tab === s ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                 }`}
               >
                 {s}
@@ -205,6 +206,6 @@ export default function InterventionRequests() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }

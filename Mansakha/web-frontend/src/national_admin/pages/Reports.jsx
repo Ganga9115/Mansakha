@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { Download, FilePlus, ChevronDown, ChevronUp, CheckCircle2, Forward } from 'lucide-react';
 import {
   useMyJurisdiction, useReportsList, useUpdateReportStatus, useDownloadReportPdf, useForwardReport,
@@ -117,8 +117,8 @@ function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingI
       {expanded && (
         <div className="px-6 pb-5 text-xs text-gray-600 space-y-4">
           {r.commentary && (
-            <div className="bg-[#EBF4FA]/60 border border-[#D6E8F5] rounded-lg p-3">
-              <p className="font-bold text-[#3D5A80] text-[11px] uppercase mb-1">Commentary</p>
+            <div className="bg-brand-50/60 border border-brand-100 rounded-lg p-3">
+              <p className="font-bold text-brand-900 text-[11px] uppercase mb-1">Commentary</p>
               <p className="whitespace-pre-wrap">{r.commentary}</p>
             </div>
           )}
@@ -136,6 +136,7 @@ function ReportRow({ r, box, onMarkReviewed, markingId, onDownload, downloadingI
 }
 
 export default function Reports() {
+  usePageHeader({ title: 'State-Wise Reports' });
   const { jurisdictionId } = useMyJurisdiction();
 
   const [reportsTab, setReportsTab] = useState('inbox');
@@ -217,7 +218,7 @@ export default function Reports() {
   };
 
   return (
-    <StaffLayout title="State-Wise Reports">
+    <>
       <div className="space-y-6">
 
         {/* STATE-WISE REPORTS: Generate + My Reports (Inbox/Outbox) */}
@@ -229,7 +230,7 @@ export default function Reports() {
             </div>
             <button
               onClick={() => setShowGenerateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-[#519BCE] hover:bg-[#3d83b3] text-white rounded-lg text-xs font-semibold shadow-sm transition"
+              className="flex items-center gap-2 px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold shadow-sm transition"
             >
               <FilePlus size={14} />
               Generate Report
@@ -240,7 +241,7 @@ export default function Reports() {
             <button
               onClick={() => setReportsTab('inbox')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                reportsTab === 'inbox' ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                reportsTab === 'inbox' ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
               }`}
             >
               Inbox {inboxReports.length > 0 ? `(${inboxReports.length})` : ''}
@@ -248,7 +249,7 @@ export default function Reports() {
             <button
               onClick={() => setReportsTab('outbox')}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition ${
-                reportsTab === 'outbox' ? 'bg-[#519BCE] text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                reportsTab === 'outbox' ? 'bg-brand-700 text-white shadow-sm' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
               }`}
             >
               Outbox {outboxReports.length > 0 ? `(${outboxReports.length})` : ''}
@@ -322,6 +323,6 @@ export default function Reports() {
         )}
 
       </div>
-    </StaffLayout>
+    </>
   );
 }

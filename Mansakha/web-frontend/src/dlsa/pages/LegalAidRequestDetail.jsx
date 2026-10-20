@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import StaffLayout from '../layouts/StaffLayout';
+import { usePageHeader } from '../../shared/context/PageHeaderContext';
 import { ArrowLeft, FileText, User, Phone, Home, Gavel } from 'lucide-react';
 import {
   useLegalAidRequestDetail, useEligibleRepresentatives,
   useStartLegalAidReview, useRejectLegalAidRequest,
   useAssignRepresentative, useReassignRepresentative,
 } from '../services/hooks';
+import GlideSelect from '../../shared/components/GlideSelect';
 
 // The single action surface for one Legal Aid request - every status
 // transition (Start Review / Reject / Assign Public Prosecutor) lives here,
@@ -50,7 +51,7 @@ function ContactDetailsCard({ r }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <User size={15} className="text-[#3D5A80]" />
+        <User size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Victim Contact Details</h3>
       </div>
       <p className="text-[11px] text-gray-400">Every view of these details is recorded in the audit log.</p>
@@ -63,7 +64,7 @@ function ContactDetailsCard({ r }) {
       {r.victimContactNumber && (
         <div>
           <span className="text-[10px] font-bold tracking-wider text-gray-400 uppercase block mb-0.5">Contact</span>
-          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-[#519BCE] hover:underline">
+          <a href={`tel:${r.victimContactNumber}`} className="inline-flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:underline">
             <Phone size={12} /> {r.victimContactNumber}
           </a>
         </div>
@@ -84,7 +85,7 @@ function DocumentsCard({ documents }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <FileText size={15} className="text-[#3D5A80]" />
+        <FileText size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Documents</h3>
       </div>
       {documents?.length > 0 ? (
@@ -116,7 +117,7 @@ function HearingTimelineCard({ hearingTimeline }) {
   return (
     <div className="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm space-y-3">
       <div className="flex items-center gap-1.5">
-        <Gavel size={15} className="text-[#3D5A80]" />
+        <Gavel size={15} className="text-brand-900" />
         <h3 className="font-bold text-sm text-gray-800">Hearing Timeline</h3>
       </div>
       {!hearingTimeline?.available ? (
@@ -182,14 +183,19 @@ function StandaloneReassignPanel({ requestId, currentAssignment, onDone }) {
       {eligible.loading ? (
         <p className="text-xs text-gray-400">Loading eligible Public Prosecutors...</p>
       ) : (
-        <select value={newRepId} onChange={(e) => setNewRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-          <option value="">Select a new Public Prosecutor...</option>
-          {(eligible.data?.representatives || [])
+        <GlideSelect
+          options={(eligible.data?.representatives || [])
             .filter((rep) => rep.officialId !== currentAssignment?.representativeOfficialId)
-            .map((rep) => (
-              <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
-            ))}
-        </select>
+            .map((rep) => ({
+              value: rep.officialId,
+              label: `${rep.fullName} (${rep.designation || 'no designation'}) - ${rep.activeCaseCount} active case(s)`,
+            }))}
+          value={newRepId}
+          onChange={(val) => setNewRepId(val)}
+          placeholder="Select a new Public Prosecutor..."
+          ariaLabel="New Public Prosecutor"
+          menuWidth={320}
+        />
       )}
       <input type="text" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason for reassignment (required)" className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs" />
       {error && <p className="text-xs text-rose-700">{error}</p>}
@@ -218,18 +224,18 @@ export default function LegalAidRequestDetail() {
   const [repId, setRepId] = useState('');
   const [actionError, setActionError] = useState(null);
 
+  usePageHeader({ title: 'Legal Aid Request' });
+
   const r = detailQuery.data;
 
   if (detailQuery.loading) {
-    return <StaffLayout title="Legal Aid Request"><p className="text-sm text-gray-400">Loading...</p></StaffLayout>;
+    return <p className="text-sm text-gray-400">Loading...</p>;
   }
   if (detailQuery.error || !r) {
     return (
-      <StaffLayout title="Legal Aid Request">
-        <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
-          {detailQuery.error || 'This request could not be located.'}
-        </div>
-      </StaffLayout>
+      <div className="bg-rose-50 border border-rose-200 text-rose-700 text-sm px-4 py-3 rounded-lg">
+        {detailQuery.error || 'This request could not be located.'}
+      </div>
     );
   }
 
@@ -249,7 +255,7 @@ export default function LegalAidRequestDetail() {
   const needsReassignment = latestAssignment?.status === 'Rejected';
 
   return (
-    <StaffLayout title="Legal Aid Request">
+    <>
       <div className="space-y-6">
         <button onClick={() => navigate('/dlsa')} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-gray-700 transition">
           <ArrowLeft size={14} /> Back to Legal Aid Requests
@@ -281,13 +287,13 @@ export default function LegalAidRequestDetail() {
 
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
             {r.status === 'Submitted' && (
-              <button onClick={() => runAction(startReview.mutate, r.requestId)} disabled={startReview.loading} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
+              <button onClick={() => runAction(startReview.mutate, r.requestId)} disabled={startReview.loading} className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60">
                 {startReview.loading ? 'Working...' : 'Start Review'}
               </button>
             )}
             {r.status === 'Under Review' && !pendingAssignment && !showRejectReason && !showAssign && (
               <>
-                <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition">
+                <button onClick={() => setShowAssign(true)} className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition">
                   Assign Public Prosecutor
                 </button>
                 <button onClick={() => setShowRejectReason(true)} className="px-4 py-2 border border-rose-300 text-rose-700 hover:bg-rose-50 rounded-lg text-xs font-semibold transition">
@@ -341,18 +347,23 @@ export default function LegalAidRequestDetail() {
             ) : (eligible.data?.representatives || []).length === 0 ? (
               <p className="text-xs text-gray-400">No active Public Prosecutors are assigned to this jurisdiction yet.</p>
             ) : (
-              <select value={repId} onChange={(e) => setRepId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs">
-                <option value="">Select a Public Prosecutor...</option>
-                {eligible.data.representatives.map((rep) => (
-                  <option key={rep.officialId} value={rep.officialId}>{rep.fullName} ({rep.designation || 'no designation'}) - {rep.activeCaseCount} active case(s)</option>
-                ))}
-              </select>
+              <GlideSelect
+                options={eligible.data.representatives.map((rep) => ({
+                  value: rep.officialId,
+                  label: `${rep.fullName} (${rep.designation || 'no designation'}) - ${rep.activeCaseCount} active case(s)`,
+                }))}
+                value={repId}
+                onChange={(val) => setRepId(val)}
+                placeholder="Select a Public Prosecutor..."
+                ariaLabel="Public Prosecutor"
+                menuWidth={320}
+              />
             )}
             <div className="flex gap-2">
               <button
                 onClick={() => runAction(assign.mutate, r.requestId, { representativeOfficialId: repId }).then(() => setShowAssign(false))}
                 disabled={!repId || assign.loading}
-                className="px-4 py-2 bg-[#519BCE] hover:bg-[#4686b3] text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
+                className="px-4 py-2 bg-brand-700 hover:bg-brand-800 text-white rounded-lg text-xs font-semibold transition disabled:opacity-60"
               >
                 {assign.loading ? 'Working...' : 'Confirm Assignment'}
               </button>
@@ -391,6 +402,6 @@ export default function LegalAidRequestDetail() {
           </div>
         </div>
       </div>
-    </StaffLayout>
+    </>
   );
 }
