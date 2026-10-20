@@ -4,6 +4,7 @@ const cors = require('cors');
 const { ok } = require('./src/core/services/responseEnvelope');
 const { startDispatchWorker } = require('./src/core/services/dispatchWorker');
 const { startECourtSyncWorker } = require('./src/core/services/ecourtStageSync');
+const { startKeepAlive } = require('./src/core/services/keepAlive');
 
 // Defense-in-depth, not a substitute for fixing individual routes: Express 4
 // doesn't await async route handlers or catch their rejected promises, so an
@@ -121,4 +122,5 @@ app.listen(PORT, '0.0.0.0', () => {
   // Roster still reuses its STALE_REFERRAL_DAYS constant for a read-only
   // "already overdue" flag.
   startECourtSyncWorker();
+  startKeepAlive();
 });
