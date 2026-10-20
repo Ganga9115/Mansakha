@@ -1,4 +1,4 @@
-# Mansakha (मानसखा) — SIH26094
+# Mansakha (मानसखा) 
 
 ### *Mind Matters — We Are Listening*
 
@@ -8,7 +8,7 @@
 
 ---
 
-## 1. Problem Statement Mapping & Systemic Vision (PS 094)
+## 1. Problem Statement Mapping & Systemic Vision
 
 Under the **Scheduled Castes and the Scheduled Tribes (Prevention of Atrocities) Act, 1989 (PoA Act)**, an atrocity survivor must navigate a complex, fragmented network of separate government departments:
 
