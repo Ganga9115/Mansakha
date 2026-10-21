@@ -20,7 +20,7 @@ import { radius } from '../../shared/theme/radius';
 // @react-three/drei (an earlier attempt) separately crashed Metro's bundler
 // with an unrelated loader's import.meta usage. Plain three.js has neither
 // problem since nothing here asks React to manage the 3D scene graph.
-const MODEL_URL = 'https://sceidfabzqwidecszrlq.supabase.co/storage/v1/object/public/wellness-models/cesium-man.glb';
+const MODEL_URL = 'https://cmlbpokumpwrioibpgmd.supabase.co/storage/v1/object/public/wellness-models/cesium-man.glb';
 
 // Cesium Man's baked texture is a blue/green astronaut-style suit with the
 // Cesium logo on the chest - branding that has nothing to do with this app.
